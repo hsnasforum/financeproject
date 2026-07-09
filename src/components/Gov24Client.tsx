@@ -30,6 +30,12 @@ import {
 import { type Gov24OrgType } from "@/lib/gov24/orgClassifier";
 import { safeMark, safeMeasure } from "@/lib/perf/safeMeasure";
 import { type ApplyLink } from "@/lib/gov24/applyLinks";
+import {
+  BENEFITS_FLOW_COPY,
+  benefitResultSummary,
+  buildBenefitsSnapshotStatus,
+  readBenefitErrorMessage,
+} from "@/lib/publicApis/benefitsFlowContract";
 import { cn } from "@/lib/utils";
 
 type SyncState = "ready" | "syncing" | "needs_sync";
@@ -124,6 +130,16 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   const selectedSido = useMemo(() => getSidoByCode(selectedSidoCode), [selectedSidoCode]);
   const sigunguOptions = useMemo(() => SIGUNGU_BY_SIDO_CODE_2025[selectedSidoCode] ?? [], [selectedSidoCode]);
   const selectedSigungu = useMemo(() => getSigunguByCode(selectedSidoCode, selectedSigunguCode), [selectedSidoCode, selectedSigunguCode]);
+  const snapshotStatus = useMemo(() => buildBenefitsSnapshotStatus({
+    snapshot: {
+      totalItems: snapshotTotal ?? undefined,
+      completionRate: completionRate ?? undefined,
+      generatedAt: snapshotGeneratedAt || undefined,
+      uniqueCount: syncUniqueCount ?? undefined,
+    },
+    sync: { state: syncing ? "syncing" : syncState },
+    message: syncMetaNote || undefined,
+  }), [completionRate, snapshotGeneratedAt, snapshotTotal, syncMetaNote, syncState, syncing, syncUniqueCount]);
 
   const summaryLine = useMemo(() => {
     const incomeLabel = INCOME_OPTIONS.find((entry) => entry.value === incomeBracket)?.label ?? incomeBracket;
@@ -148,17 +164,25 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     const statusRes = await fetch("/api/gov24/search?q=&cursor=0&pageSize=1", { cache: "no-store" });
     const statusJson = await statusRes.json() as Gov24SearchStatusResponse;
     const snapshot = statusJson.meta?.snapshot ?? null;
+    const nextStatus = buildBenefitsSnapshotStatus({
+      snapshot: {
+        totalItems: snapshot?.totalItems,
+        completionRate: snapshot?.completionRate,
+        generatedAt: snapshot?.generatedAt,
+        uniqueCount: snapshot?.uniqueCount,
+        truncatedByHardCap: snapshot?.truncatedByHardCap,
+      },
+      sync: statusJson.meta?.sync,
+      message: (statusJson.meta as { message?: string } | undefined)?.message,
+      fallback: (statusJson.meta as { fallback?: { reason?: string } } | undefined)?.fallback,
+    });
     setSnapshotTotal(snapshot?.totalItems ?? null);
     setCompletionRate(typeof snapshot?.completionRate === "number" ? snapshot.completionRate : null);
     setSnapshotGeneratedAt(typeof snapshot?.generatedAt === "string" ? snapshot.generatedAt : "");
     setSyncUniqueCount(typeof snapshot?.uniqueCount === "number" ? snapshot.uniqueCount : null);
     setSyncState(statusJson.meta?.sync?.state ?? "needs_sync");
     setSyncing((statusJson.meta?.sync?.state ?? "needs_sync") === "syncing");
-    if (snapshot?.truncatedByHardCap) {
-      setSyncMetaNote(`일부 혜택은 순차 반영 중일 수 있습니다. 현재 반영 범위 ${snapshot.completionRate ? `${Math.round(snapshot.completionRate * 1000) / 10}%` : "?"}`);
-    } else {
-      setSyncMetaNote("");
-    }
+    setSyncMetaNote(nextStatus.notice ?? "");
     return { snapshot };
   }, []);
 
@@ -186,10 +210,10 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       const res = await fetch("/api/gov24/sync", { method: "POST" });
       const json = await res.json() as { ok?: boolean; error?: { message?: string } };
       if (!json.ok) {
-        setSyncError(json.error?.message ?? "동기화 실패");
+        setSyncError(readBenefitErrorMessage(json, BENEFITS_FLOW_COPY.requestFailed));
       }
     } catch {
-      setSyncError("동기화 실패");
+      setSyncError(BENEFITS_FLOW_COPY.requestFailed);
     } finally {
       setSyncing(false);
       await checkSnapshotStatus();
@@ -223,7 +247,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       });
       const json = await res.json();
       if (!json?.ok) {
-        setError(json?.error?.message ?? "보조금24 결과 조회 실패");
+        setError(readBenefitErrorMessage(json));
         return;
       }
       const nextItems = Array.isArray(json?.data?.items) ? (json.data.items as ResultItem[]) : [];
@@ -233,7 +257,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       setOrgTypeCounts(typeof json?.data?.facets?.orgTypeCounts === "object" && json?.data?.facets?.orgTypeCounts ? json.data.facets.orgTypeCounts : {});
       setStep(7);
     } catch {
-      setError("보조금24 결과 조회 실패");
+      setError(BENEFITS_FLOW_COPY.requestFailed);
     } finally {
       setLoading(false);
     }
@@ -290,7 +314,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
         action={
           <div className="flex items-center gap-2">
             <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border transition-all", syncing ? "bg-primary/5 text-primary border-primary/20 animate-pulse" : "bg-surface-muted text-slate-400 border-slate-200")}>
-              {syncing || syncState === "syncing" ? "기준 데이터 갱신 중" : "기준 데이터 확인됨"}
+              {snapshotStatus.stateLabel}
             </span>
             {process.env.NODE_ENV !== "production" && (
               <Button type="button" size="sm" variant="outline" className="rounded-xl font-black h-8" onClick={() => void runManualSync()} disabled={syncing}>
@@ -301,8 +325,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
         }
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
-        이 화면은 확정 수급 판정이 아니라, 입력한 조건을 기준으로 다시 읽을 혜택 후보를 찾는 단계입니다.
-        결과를 열면 신청 방법과 온라인 신청 가능 여부를 상세에서 다시 확인하세요.
+        {BENEFITS_FLOW_COPY.sharedDisclaimer}
       </p>
 
       <div className="space-y-6">
@@ -311,11 +334,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] font-bold text-slate-500">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              현재 참고 중인 혜택 <span className="text-navy font-black ml-0.5">{snapshotTotal?.toLocaleString() ?? "?"}건</span>
+              현재 참고 중인 혜택 <span className="text-navy font-black ml-0.5">{snapshotStatus.totalItems?.toLocaleString() ?? "?"}건</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-              반영 범위 <span className="text-navy font-black ml-0.5">{completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
+              반영 범위 <span className="text-navy font-black ml-0.5">{snapshotStatus.completionRate !== null ? `${Math.round(snapshotStatus.completionRate * 1000) / 10}%` : "?"}</span>
             </div>
             {syncUniqueCount !== null && (
               <div className="flex items-center gap-2 text-slate-400">
@@ -601,17 +624,17 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
             </Card>
 
             {loading && items.length === 0 ? (
-              <LoadingState title="현재 조건에 맞는 혜택 후보를 찾고 있습니다" description="오픈 API에서 최신 데이터를 가져오는 중입니다." />
+              <LoadingState title={BENEFITS_FLOW_COPY.loading} description="공공 혜택 기준 데이터를 읽는 중입니다." />
             ) : items.length === 0 ? (
               <Card className="rounded-[2rem] p-20 text-center border-dashed border-slate-200 bg-surface-muted/30">
                 <p className="text-lg font-black text-navy">검색된 혜택이 없습니다</p>
-                <p className="mt-2 text-sm font-medium text-slate-500">조건이나 키워드를 조금 바꿔서 혜택 후보를 다시 찾아보세요.</p>
+                <p className="mt-2 text-sm font-medium text-slate-500">{BENEFITS_FLOW_COPY.empty}</p>
                 <Button variant="outline" className="mt-8 rounded-2xl font-black" onClick={() => { setStep(1); setItems([]); }}>다시 찾기</Button>
               </Card>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between px-2">
-                  <p className="text-sm font-bold text-slate-500">현재 조건 기준 <span className="text-navy font-black">{totalMatched.toLocaleString()}건</span>의 혜택 후보를 읽는 중입니다.</p>
+                  <p className="text-sm font-bold text-slate-500">{benefitResultSummary({ surface: "gov24", totalMatched })}</p>
                 </div>
                 <div className="grid gap-4">
                   {items.map((item) => {

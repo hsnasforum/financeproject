@@ -10,17 +10,10 @@ import { runMonteCarlo, type MonteCarloInput } from "./monteCarlo";
 import { buildActionsFromPlan } from "./actions/buildActions";
 import { type ActionItemV2 } from "./actions/types";
 import { type DebtStrategyInput } from "./debt/types";
-import { createFileAssumptionsProvider, type AssumptionsProvider } from "../../providers/assumptionsProvider";
-import {
-  attachProductCandidatesToActions,
-  createFinlifeProductCandidatesProvider,
-  type ProductCandidatesProvider,
-} from "../../providers/productCandidatesProvider";
-import { createDebtStrategyProvider, type DebtStrategyProvider } from "../../providers/debtStrategyProvider";
-import {
-  createPlaceholderTaxPensionProvider,
-  type TaxPensionProvider,
-} from "../../providers/taxPensionProvider";
+import { type AssumptionsProvider } from "../../providers/assumptionsProvider";
+import { attachProductCandidatesToActions, type ProductCandidatesProvider } from "../../providers/productCandidatesProvider";
+import { type DebtStrategyProvider } from "../../providers/debtStrategyProvider";
+import { type TaxPensionProvider } from "../../providers/taxPensionProvider";
 import { type ProfileV2, type SimulationAssumptionsV2 } from "./types";
 import { type AllocationPolicyId } from "./policy/types";
 
@@ -31,11 +24,11 @@ type ResolveAssumptionsInput = {
   requestedSnapshotId?: string;
 };
 
-type PlanningServiceDependencies = {
-  assumptionsProvider?: AssumptionsProvider;
-  productCandidatesProvider?: ProductCandidatesProvider;
-  debtStrategyProvider?: DebtStrategyProvider;
-  taxPensionProvider?: TaxPensionProvider;
+export type PlanningServiceDependencies = {
+  assumptionsProvider: AssumptionsProvider;
+  productCandidatesProvider: ProductCandidatesProvider;
+  debtStrategyProvider: DebtStrategyProvider;
+  taxPensionProvider: TaxPensionProvider;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,11 +65,20 @@ function toScenarioOverrideForCache(overrides: Partial<AssumptionsV2>): Partial<
   };
 }
 
-export function createPlanningService(deps: PlanningServiceDependencies = {}) {
-  const assumptionsProvider = deps.assumptionsProvider ?? createFileAssumptionsProvider();
-  const productCandidatesProvider = deps.productCandidatesProvider ?? createFinlifeProductCandidatesProvider();
-  const debtStrategyProvider = deps.debtStrategyProvider ?? createDebtStrategyProvider();
-  const taxPensionProvider = deps.taxPensionProvider ?? createPlaceholderTaxPensionProvider();
+function requireDependency<T>(
+  value: T | undefined,
+  name: keyof PlanningServiceDependencies,
+): T {
+  if (value) return value;
+  throw new Error(`createPlanningService requires ${name}; use server/v2/service for default provider wiring.`);
+}
+
+export function createPlanningService(deps: PlanningServiceDependencies) {
+  const input = deps as Partial<PlanningServiceDependencies> | undefined;
+  const assumptionsProvider = requireDependency(input?.assumptionsProvider, "assumptionsProvider");
+  const productCandidatesProvider = requireDependency(input?.productCandidatesProvider, "productCandidatesProvider");
+  const debtStrategyProvider = requireDependency(input?.debtStrategyProvider, "debtStrategyProvider");
+  const taxPensionProvider = requireDependency(input?.taxPensionProvider, "taxPensionProvider");
 
   return {
     async resolveAssumptionsContext(input: ResolveAssumptionsInput) {

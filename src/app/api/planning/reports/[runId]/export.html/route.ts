@@ -1,11 +1,10 @@
 import {
   assertLocalHost,
   toGuardErrorResponse,
-} from "../../../../../../lib/dev/devGuards";
+  } from "../../../../../../lib/dev/devGuards";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../../lib/planning/api/routeAuth";
 import { getCurrentUserRunStandaloneReportHtml } from "../../../../../../lib/planning/server/reports/exportHtmlRouteService";
 
@@ -49,45 +48,45 @@ function withLocalReadGuard(request: Request): Response | null {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withLocalReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { runId } = await context.params;
-  const url = new URL(request.url);
-  const viewMode = (url.searchParams.get("view") ?? "").trim().toLowerCase();
-  const printView = viewMode === "print" || viewMode === "view";
-  const styleNonce = createStyleNonce();
-  try {
-    const reportHtml = await getCurrentUserRunStandaloneReportHtml({
-      runId,
-      printView,
-      styleNonce,
-    });
-    if (!reportHtml) {
+    const { runId } = await context.params;
+    const url = new URL(request.url);
+    const viewMode = (url.searchParams.get("view") ?? "").trim().toLowerCase();
+    const printView = viewMode === "print" || viewMode === "view";
+    const styleNonce = createStyleNonce();
+    try {
+      const reportHtml = await getCurrentUserRunStandaloneReportHtml({
+        runId,
+        printView,
+        styleNonce,
+      });
+      if (!reportHtml) {
+        return Response.json({
+          ok: false,
+          message: "실행 기록을 찾을 수 없습니다.",
+          meta: userMeta,
+        }, { status: 404 });
+      }
+
+      return new Response(reportHtml.html, {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "content-security-policy": buildStandaloneHtmlContentSecurityPolicy(printView, styleNonce),
+          "content-disposition": printView
+            ? `inline; filename=\"${reportHtml.filename}\"`
+            : `attachment; filename=\"${reportHtml.filename}\"`,
+        },
+      });
+    } catch {
       return Response.json({
         ok: false,
-        message: "실행 기록을 찾을 수 없습니다.",
+        message: "HTML export 생성에 실패했습니다.",
         meta: userMeta,
-      }, { status: 404 });
+      }, { status: 500 });
     }
-
-    return new Response(reportHtml.html, {
-      status: 200,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-        "content-security-policy": buildStandaloneHtmlContentSecurityPolicy(printView, styleNonce),
-        "content-disposition": printView
-          ? `inline; filename=\"${reportHtml.filename}\"`
-          : `attachment; filename=\"${reportHtml.filename}\"`,
-      },
-    });
-  } catch {
-    return Response.json({
-      ok: false,
-      message: "HTML export 생성에 실패했습니다.",
-      meta: userMeta,
-    }, { status: 500 });
-  }
+  });
 }

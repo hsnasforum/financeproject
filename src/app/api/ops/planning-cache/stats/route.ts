@@ -1,14 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 import {
   getOpsPlanningCacheStats,
   planningNamespaceMeta,
@@ -45,25 +49,25 @@ export async function GET(request: Request) {
       status: guard.status,
     });
   }
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  try {
-    const data = await getOpsPlanningCacheStats();
+    try {
+      const data = await getOpsPlanningCacheStats();
 
-    return NextResponse.json({
-      ok: true,
-      data,
-      meta: {
-        ...planningUserMeta(currentUser),
-        ...planningNamespaceMeta(),
-      },
-    });
-  } catch (error) {
-    return opsErrorResponse({
-      code: "STORAGE_CORRUPT",
-      message: error instanceof Error ? error.message : "캐시 통계 조회에 실패했습니다.",
-      status: 500,
-    });
-  }
+      return NextResponse.json({
+        ok: true,
+        data,
+        meta: {
+          ...planningUserMeta(currentUser),
+          ...planningNamespaceMeta(),
+        },
+      });
+    } catch (error) {
+      return opsErrorResponse({
+        code: "STORAGE_CORRUPT",
+        message: error instanceof Error ? error.message : "캐시 통계 조회에 실패했습니다.",
+        status: 500,
+      });
+    }
+  });
 }

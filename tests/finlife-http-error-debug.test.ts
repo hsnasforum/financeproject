@@ -107,4 +107,21 @@ describe("finlife http error debug gating", () => {
       pageSize: 50,
     });
   });
+
+  it("uses the shared HTTP gateway contract for credit-loan", async () => {
+    setEnv("NODE_ENV", "production");
+    setEnv("FINLIFE_API_KEY", undefined);
+    setEnv("FINLIFE_REPLAY", undefined);
+
+    const { getFinlifeProductsForHttp } = await import("../src/lib/finlife/productsHttp");
+    const request = new Request("http://localhost/api/finlife/credit-loan?force=1&pageNo=1&pageSize=50&topFinGrpNo=020000");
+    const result = await getFinlifeProductsForHttp("credit-loan", request);
+
+    expect(result.status).toBe(502);
+    expect(result.headers["x-finlife-mode"]).toBe("live");
+    expect(result.payload.ok).toBe(false);
+    expect(result.payload.meta.kind).toBe("credit-loan");
+    expect(result.payload.error?.code).toBe("CONFIG_MISSING");
+    expect(result.payload.error?.debug).toBeUndefined();
+  });
 });

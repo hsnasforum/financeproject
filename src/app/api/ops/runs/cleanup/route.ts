@@ -1,14 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   requireCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 import {
   auditOpsRunsCleanupError,
   cleanupOpsRuns,
@@ -58,41 +62,41 @@ export async function POST(request: Request) {
       status: guard.status,
     });
   }
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const profileId = asString(body?.profileId);
+    const profileId = asString(body?.profileId);
 
-  try {
-    const result = await cleanupOpsRuns({
-      keepDays: body?.keepDays,
-      keepCount: body?.keepCount,
-      profileId,
-      dryRun: body?.dryRun,
-    });
+    try {
+      const result = await cleanupOpsRuns({
+        keepDays: body?.keepDays,
+        keepCount: body?.keepCount,
+        profileId,
+        dryRun: body?.dryRun,
+      });
 
-    return NextResponse.json({
-      ok: true,
-      message: result.message,
-      data: result.data,
-      meta: {
-        ...planningUserMeta(currentUser),
-        ...opsRunsRouteMeta(),
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "runs cleanup 실행에 실패했습니다.";
-    await auditOpsRunsCleanupError({
-      profileId,
-      keepDays: body?.keepDays,
-      keepCount: body?.keepCount,
-      dryRun: body?.dryRun,
-      message,
-    });
-    return opsErrorResponse({
-      code: "INTERNAL",
-      message,
-      status: 500,
-    });
-  }
+      return NextResponse.json({
+        ok: true,
+        message: result.message,
+        data: result.data,
+        meta: {
+          ...planningUserMeta(currentUser),
+          ...opsRunsRouteMeta(),
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "runs cleanup 실행에 실패했습니다.";
+      await auditOpsRunsCleanupError({
+        profileId,
+        keepDays: body?.keepDays,
+        keepCount: body?.keepCount,
+        dryRun: body?.dryRun,
+        message,
+      });
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message,
+        status: 500,
+      });
+    }
+  });
 }

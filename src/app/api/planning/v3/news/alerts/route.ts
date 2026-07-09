@@ -1,16 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
-import { assertSameOrigin, requireCsrf, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { assertSameOrigin,
+  requireCsrf,
+  toGuardErrorResponse } from "@/lib/dev/devGuards";
 import {
   readAlertEventState,
   readRecentAlertEvents,
   updateAlertEventState,
-} from "@/lib/planning/v3/news/alerts";
+  } from "@/lib/planning/v3/news/alerts";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 function asNumber(value: unknown, fallback = 0): number {
@@ -173,20 +175,20 @@ function buildAlertsData(days: number) {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const url = new URL(request.url);
-  const days = Math.max(1, Math.min(90, Math.round(asNumber(url.searchParams.get("days"), 14))));
-  const data = buildAlertsData(days);
+    const url = new URL(request.url);
+    const days = Math.max(1, Math.min(90, Math.round(asNumber(url.searchParams.get("days"), 14))));
+    const data = buildAlertsData(days);
 
-  const payload = parseWithV3Whitelist(AlertsResponseSchema, {
-    ok: true,
-    data,
-    meta: userMeta,
-  }, { scope: "response", context: "api.v3.news.alerts" });
-  return NextResponse.json(payload);
+    const payload = parseWithV3Whitelist(AlertsResponseSchema, {
+      ok: true,
+      data,
+      meta: userMeta,
+    }, { scope: "response", context: "api.v3.news.alerts" });
+    return NextResponse.json(payload);
+  });
 }
 
 export async function POST(request: Request) {
@@ -199,39 +201,39 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = AlertsPostBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "알림 상태 입력 형식이 올바르지 않습니다." },
-        meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
+    const parsed = AlertsPostBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "알림 상태 입력 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
 
-  updateAlertEventState({
-    id: parsed.data.id,
-    action: parsed.data.action,
-  });
-  const days = Math.max(1, Math.min(90, Math.round(asNumber(parsed.data.days, 30))));
-  const data = {
-    ...buildAlertsData(days),
-    mutation: {
+    updateAlertEventState({
       id: parsed.data.id,
       action: parsed.data.action,
-    },
-  };
+    });
+    const days = Math.max(1, Math.min(90, Math.round(asNumber(parsed.data.days, 30))));
+    const data = {
+      ...buildAlertsData(days),
+      mutation: {
+        id: parsed.data.id,
+        action: parsed.data.action,
+      },
+    };
 
-  const payload = parseWithV3Whitelist(AlertsResponseSchema, {
-    ok: true,
-    data,
-    meta: userMeta,
-  }, { scope: "response", context: "api.v3.news.alerts.post" });
-  return NextResponse.json(payload);
+    const payload = parseWithV3Whitelist(AlertsResponseSchema, {
+      ok: true,
+      data,
+      meta: userMeta,
+    }, { scope: "response", context: "api.v3.news.alerts.post" });
+    return NextResponse.json(payload);
+  });
 }

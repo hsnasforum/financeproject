@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
-import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { assertSameOrigin,
+  toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
   readCurrentUserNewsSearchIndex,
@@ -9,12 +11,11 @@ import {
   writeCurrentUserNewsSearchIndex,
   writeNewsSearchIndexFromStore,
   type NewsSearchFilters,
-} from "@/lib/planning/v3/news/search";
+  } from "@/lib/planning/v3/news/search";
 import { readCurrentUserNewsState } from "@/lib/planning/v3/service/newsRepository";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
@@ -151,121 +152,121 @@ const SearchResponseSchema = z.object({
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const url = new URL(request.url);
-    const filters = normalizeFilters(url);
+    try {
+      const url = new URL(request.url);
+      const filters = normalizeFilters(url);
 
-    const lastRefreshedAt = readCurrentUserNewsState().lastRunAt ?? null;
-    const hasRefreshTimestamp = Number.isFinite(toDateMs(lastRefreshedAt));
-    let index = readCurrentUserNewsSearchIndex();
+      const lastRefreshedAt = readCurrentUserNewsState().lastRunAt ?? null;
+      const hasRefreshTimestamp = Number.isFinite(toDateMs(lastRefreshedAt));
+      let index = readCurrentUserNewsSearchIndex();
 
-    if (!index) {
-      index = hasRefreshTimestamp
-        ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
-        : writeCurrentUserNewsSearchIndex({ generatedAt: new Date().toISOString() });
-    } else if (isSearchIndexStale(index.generatedAt, lastRefreshedAt)) {
-      index = hasRefreshTimestamp
-        ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
-        : writeCurrentUserNewsSearchIndex({ generatedAt: new Date().toISOString() });
-    }
+      if (!index) {
+        index = hasRefreshTimestamp
+          ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
+          : writeCurrentUserNewsSearchIndex({ generatedAt: new Date().toISOString() });
+      } else if (isSearchIndexStale(index.generatedAt, lastRefreshedAt)) {
+        index = hasRefreshTimestamp
+          ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
+          : writeCurrentUserNewsSearchIndex({ generatedAt: new Date().toISOString() });
+      }
 
-    const freshnessStatus = isSearchIndexStale(index.generatedAt, lastRefreshedAt) ? "stale" : "current";
-    const burstByTopic = readCurrentUserNewsTopicBurstMap();
+      const freshnessStatus = isSearchIndexStale(index.generatedAt, lastRefreshedAt) ? "stale" : "current";
+      const burstByTopic = readCurrentUserNewsTopicBurstMap();
 
-    const searched = searchNewsIndex(index, filters);
-    const withBurst = searched.items.filter((row) => {
-      if (filters.burst === "all") return true;
-      return (burstByTopic.get(asString(row.topicId)) ?? "하") === filters.burst;
-    });
+      const searched = searchNewsIndex(index, filters);
+      const withBurst = searched.items.filter((row) => {
+        if (filters.burst === "all") return true;
+        return (burstByTopic.get(asString(row.topicId)) ?? "하") === filters.burst;
+      });
 
-    const reranked = [...withBurst].sort((a, b) => {
-      if (a.score !== b.score) return b.score - a.score;
-      if (a.publishedAt !== b.publishedAt) return b.publishedAt.localeCompare(a.publishedAt);
-      return a.title.localeCompare(b.title);
-    });
+      const reranked = [...withBurst].sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        if (a.publishedAt !== b.publishedAt) return b.publishedAt.localeCompare(a.publishedAt);
+        return a.title.localeCompare(b.title);
+      });
 
-    const start = Math.max(0, filters.offset ?? 0);
-    const end = start + Math.max(1, filters.limit ?? 100);
-    const sliced = reranked.slice(start, end);
+      const start = Math.max(0, filters.offset ?? 0);
+      const end = start + Math.max(1, filters.limit ?? 100);
+      const sliced = reranked.slice(start, end);
 
-    const topicMap = new Map<string, { topicId: string; topicLabel: string; count: number }>();
-    const sourceMap = new Map<string, { sourceId: string; sourceName: string; count: number }>();
-    for (const row of reranked) {
-      const topicId = asString(row.topicId);
-      const topic = topicMap.get(topicId) ?? { topicId, topicLabel: asString(row.topicLabel), count: 0 };
-      topic.count += 1;
-      topicMap.set(topicId, topic);
+      const topicMap = new Map<string, { topicId: string; topicLabel: string; count: number }>();
+      const sourceMap = new Map<string, { sourceId: string; sourceName: string; count: number }>();
+      for (const row of reranked) {
+        const topicId = asString(row.topicId);
+        const topic = topicMap.get(topicId) ?? { topicId, topicLabel: asString(row.topicLabel), count: 0 };
+        topic.count += 1;
+        topicMap.set(topicId, topic);
 
-      const sourceId = asString(row.sourceId);
-      const source = sourceMap.get(sourceId) ?? { sourceId, sourceName: asString(row.sourceName), count: 0 };
-      source.count += 1;
-      sourceMap.set(sourceId, source);
-    }
-    const topics = [...topicMap.values()].sort((a, b) => {
-      if (a.count !== b.count) return b.count - a.count;
-      return a.topicLabel.localeCompare(b.topicLabel);
-    });
-    const sources = [...sourceMap.values()].sort((a, b) => {
-      if (a.count !== b.count) return b.count - a.count;
-      return a.sourceName.localeCompare(b.sourceName);
-    });
+        const sourceId = asString(row.sourceId);
+        const source = sourceMap.get(sourceId) ?? { sourceId, sourceName: asString(row.sourceName), count: 0 };
+        source.count += 1;
+        sourceMap.set(sourceId, source);
+      }
+      const topics = [...topicMap.values()].sort((a, b) => {
+        if (a.count !== b.count) return b.count - a.count;
+        return a.topicLabel.localeCompare(b.topicLabel);
+      });
+      const sources = [...sourceMap.values()].sort((a, b) => {
+        if (a.count !== b.count) return b.count - a.count;
+        return a.sourceName.localeCompare(b.sourceName);
+      });
 
-    const payload = parseWithV3Whitelist(SearchResponseSchema, {
-      ok: true,
-      data: {
-        generatedAt: new Date().toISOString(),
-        indexGeneratedAt: index.generatedAt,
-        freshness: {
-          contract: "search_index",
-          status: freshnessStatus,
+      const payload = parseWithV3Whitelist(SearchResponseSchema, {
+        ok: true,
+        data: {
+          generatedAt: new Date().toISOString(),
           indexGeneratedAt: index.generatedAt,
-          lastRefreshedAt,
+          freshness: {
+            contract: "search_index",
+            status: freshnessStatus,
+            indexGeneratedAt: index.generatedAt,
+            lastRefreshedAt,
+          },
+          total: reranked.length,
+          filters: {
+            q: filters.q ?? "",
+            topics: filters.topics ?? [],
+            sources: filters.sources ?? [],
+            dateFrom: filters.dateFrom ?? null,
+            dateTo: filters.dateTo ?? null,
+            days: filters.days ?? 30,
+            minScore: Number.isFinite(filters.minScore ?? NaN) ? filters.minScore : null,
+            limit: filters.limit ?? 100,
+            offset: filters.offset ?? 0,
+            burst: filters.burst,
+          },
+          items: sliced.map((row) => ({
+            id: row.id,
+            title: row.title,
+            url: row.url,
+            publishedAt: row.publishedAt,
+            sourceId: row.sourceId,
+            sourceName: row.sourceName,
+            topicId: row.topicId,
+            topicLabel: row.topicLabel,
+            score: row.score,
+            rationale: row.rationale,
+            scoreParts: row.scoreParts,
+            burstLevel: burstByTopic.get(asString(row.topicId)) ?? "하",
+          })),
+          topics,
+          sources,
         },
-        total: reranked.length,
-        filters: {
-          q: filters.q ?? "",
-          topics: filters.topics ?? [],
-          sources: filters.sources ?? [],
-          dateFrom: filters.dateFrom ?? null,
-          dateTo: filters.dateTo ?? null,
-          days: filters.days ?? 30,
-          minScore: Number.isFinite(filters.minScore ?? NaN) ? filters.minScore : null,
-          limit: filters.limit ?? 100,
-          offset: filters.offset ?? 0,
-          burst: filters.burst,
-        },
-        items: sliced.map((row) => ({
-          id: row.id,
-          title: row.title,
-          url: row.url,
-          publishedAt: row.publishedAt,
-          sourceId: row.sourceId,
-          sourceName: row.sourceName,
-          topicId: row.topicId,
-          topicLabel: row.topicLabel,
-          score: row.score,
-          rationale: row.rationale,
-          scoreParts: row.scoreParts,
-          burstLevel: burstByTopic.get(asString(row.topicId)) ?? "하",
-        })),
-        topics,
-        sources,
-      },
-      meta: userMeta,
-    }, { scope: "response", context: "api.v3.news.search" });
-    return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INTERNAL", message: "뉴스 검색 인덱스를 불러오는 중 오류가 발생했습니다." },
         meta: userMeta,
-      },
-      { status: 500 },
-    );
-  }
+      }, { scope: "response", context: "api.v3.news.search" });
+      return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INTERNAL", message: "뉴스 검색 인덱스를 불러오는 중 오류가 발생했습니다." },
+          meta: userMeta,
+        },
+        { status: 500 },
+      );
+    }
+  });
 }

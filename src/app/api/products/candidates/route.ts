@@ -1,9 +1,11 @@
-import { assertSameOrigin, toGuardErrorResponse } from "../../../../lib/dev/devGuards";
-import { jsonError, jsonOk } from "../../../../lib/http/apiResponse";
 import {
-  isPlanningRouteUser,
+  assertSameOrigin,
+  toGuardErrorResponse } from "../../../../lib/dev/devGuards";
+import { jsonError,
+  jsonOk } from "../../../../lib/http/apiResponse";
+import {
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../lib/planning/api/routeAuth";
 import {
   DEFAULT_INTEREST_TAX_POLICY,
@@ -144,96 +146,96 @@ export async function GET(request: Request) {
   if (guardFailure) return guardFailure;
 
   try {
-    const currentUser = await requirePlanningRouteUser(request);
-    if (!isPlanningRouteUser(currentUser)) return currentUser;
+    return await withPlanningRouteUser(request, async (currentUser) => {
 
-    const url = new URL(request.url);
-    const runId = asString(url.searchParams.get("runId"));
-    if (!runId) {
-      return jsonError("INPUT", "runId가 필요합니다.", {
-        status: 400,
-        issues: ["runId: required"],
-      });
-    }
-
-    const run = await getCurrentUserRun(runId);
-    if (!run) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
-    }
-
-    const profileRecord = await getCurrentUserProfile(run.profileId);
-    if (!profileRecord) {
-      return jsonError("NO_DATA", "실행 기록에 연결된 프로필을 찾을 수 없습니다.", { status: 404 });
-    }
-
-    const kind = normalizeKind(asString(url.searchParams.get("kind")));
-    const q = asString(url.searchParams.get("q"));
-    const limit = clampInt(url.searchParams.get("limit"), 60, 1, 200);
-    const fetchedAt = new Date().toISOString();
-
-    const kinds: CandidateKind[] = kind === "all" ? ["deposit", "saving"] : [kind];
-    let candidates: CandidateVM[] = [];
-    let degradedReason = "";
-    try {
-      const rowsByKind = await Promise.all(
-        kinds.map(async (targetKind) => fetchCandidatesByKind(targetKind, q, limit, fetchedAt)),
-      );
-      candidates = rowsByKind.flat().slice(0, limit);
-    } catch (error) {
-      if (!isCatalogUnavailableError(error)) {
-        throw error;
-      }
-      degradedReason = "PRODUCT_CATALOG_UNAVAILABLE";
-      console.warn("[products/candidates] catalog unavailable; returning empty candidates", {
-        runId,
-        kind,
-        reason: toErrorMessage(error, "unknown"),
-      });
-    }
-
-    const profileContext: CandidateProfileContext = {
-      monthlyIncomeNet: profileRecord.profile.monthlyIncomeNet,
-      monthlyEssentialExpenses: profileRecord.profile.monthlyEssentialExpenses,
-      monthlyDiscretionaryExpenses: profileRecord.profile.monthlyDiscretionaryExpenses,
-      liquidAssets: profileRecord.profile.liquidAssets,
-    };
-    const goals: CandidateGoalContext[] = profileRecord.profile.goals.map((goal) => ({
-      id: goal.id,
-      name: goal.name,
-      targetAmount: goal.targetAmount,
-      ...(typeof goal.currentAmount === "number" ? { currentAmount: goal.currentAmount } : {}),
-      ...(typeof goal.targetMonth === "number" ? { targetMonth: goal.targetMonth } : {}),
-      ...(typeof goal.priority === "number" ? { priority: goal.priority } : {}),
-    }));
-    const primaryGoal = goals
-      .filter((goal) => typeof goal.targetMonth === "number" && goal.targetMonth > 0)
-      .sort((a, b) => (a.targetMonth ?? 0) - (b.targetMonth ?? 0))[0] ?? goals[0];
-
-    return jsonOk({
-      data: {
-        runId: run.id,
-        profileId: run.profileId,
-        kind,
-        candidates,
-        profileContext,
-        goals,
-        defaults: {
-          amountKrw: deriveDefaultComparisonAmountKrw(profileContext, primaryGoal),
-          termMonths: deriveDefaultComparisonTermMonths(primaryGoal),
-          taxRatePct: DEFAULT_INTEREST_TAX_POLICY.taxRatePct,
-        },
-        fetchedAt,
-      },
-    }, degradedReason
-      ? {
-          meta: {
-            ...planningUserMeta(currentUser),
-            degradedReason,
-          },
-        }
-      : {
-          meta: planningUserMeta(currentUser),
+      const url = new URL(request.url);
+      const runId = asString(url.searchParams.get("runId"));
+      if (!runId) {
+        return jsonError("INPUT", "runId가 필요합니다.", {
+          status: 400,
+          issues: ["runId: required"],
         });
+      }
+
+      const run = await getCurrentUserRun(runId);
+      if (!run) {
+        return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
+      }
+
+      const profileRecord = await getCurrentUserProfile(run.profileId);
+      if (!profileRecord) {
+        return jsonError("NO_DATA", "실행 기록에 연결된 프로필을 찾을 수 없습니다.", { status: 404 });
+      }
+
+      const kind = normalizeKind(asString(url.searchParams.get("kind")));
+      const q = asString(url.searchParams.get("q"));
+      const limit = clampInt(url.searchParams.get("limit"), 60, 1, 200);
+      const fetchedAt = new Date().toISOString();
+
+      const kinds: CandidateKind[] = kind === "all" ? ["deposit", "saving"] : [kind];
+      let candidates: CandidateVM[] = [];
+      let degradedReason = "";
+      try {
+        const rowsByKind = await Promise.all(
+          kinds.map(async (targetKind) => fetchCandidatesByKind(targetKind, q, limit, fetchedAt)),
+        );
+        candidates = rowsByKind.flat().slice(0, limit);
+      } catch (error) {
+        if (!isCatalogUnavailableError(error)) {
+          throw error;
+        }
+        degradedReason = "PRODUCT_CATALOG_UNAVAILABLE";
+        console.warn("[products/candidates] catalog unavailable; returning empty candidates", {
+          runId,
+          kind,
+          reason: toErrorMessage(error, "unknown"),
+        });
+      }
+
+      const profileContext: CandidateProfileContext = {
+        monthlyIncomeNet: profileRecord.profile.monthlyIncomeNet,
+        monthlyEssentialExpenses: profileRecord.profile.monthlyEssentialExpenses,
+        monthlyDiscretionaryExpenses: profileRecord.profile.monthlyDiscretionaryExpenses,
+        liquidAssets: profileRecord.profile.liquidAssets,
+      };
+      const goals: CandidateGoalContext[] = profileRecord.profile.goals.map((goal) => ({
+        id: goal.id,
+        name: goal.name,
+        targetAmount: goal.targetAmount,
+        ...(typeof goal.currentAmount === "number" ? { currentAmount: goal.currentAmount } : {}),
+        ...(typeof goal.targetMonth === "number" ? { targetMonth: goal.targetMonth } : {}),
+        ...(typeof goal.priority === "number" ? { priority: goal.priority } : {}),
+      }));
+      const primaryGoal = goals
+        .filter((goal) => typeof goal.targetMonth === "number" && goal.targetMonth > 0)
+        .sort((a, b) => (a.targetMonth ?? 0) - (b.targetMonth ?? 0))[0] ?? goals[0];
+
+      return jsonOk({
+        data: {
+          runId: run.id,
+          profileId: run.profileId,
+          kind,
+          candidates,
+          profileContext,
+          goals,
+          defaults: {
+            amountKrw: deriveDefaultComparisonAmountKrw(profileContext, primaryGoal),
+            termMonths: deriveDefaultComparisonTermMonths(primaryGoal),
+            taxRatePct: DEFAULT_INTEREST_TAX_POLICY.taxRatePct,
+          },
+          fetchedAt,
+        },
+      }, degradedReason
+        ? {
+            meta: {
+              ...planningUserMeta(currentUser),
+              degradedReason,
+            },
+          }
+        : {
+            meta: planningUserMeta(currentUser),
+          });
+    });
   } catch (error) {
     if (error instanceof UnifiedInputError) {
       return jsonError("INPUT", error.message, { status: 400 });

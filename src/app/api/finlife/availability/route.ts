@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { MemoryCache } from "@/lib/cache/memoryCache";
-import { getFinlifeProducts } from "@/lib/finlife/source";
+import { getFinlifeProductsForHttp } from "@/lib/finlife/productsHttp";
 import { FINLIFE_TOP_GROUPS } from "@/lib/finlife/topGroups";
 import { type FinlifeKind } from "@/lib/finlife/types";
 
@@ -47,21 +47,26 @@ export async function GET(request: Request) {
 
     for (const group of FINLIFE_TOP_GROUPS) {
       try {
-        const result = await getFinlifeProducts(kind, { topFinGrpNo: group.id, pageNo });
-        mode = result.mode;
+        const url = new URL(request.url);
+        url.searchParams.set("topFinGrpNo", group.id);
+        url.searchParams.set("pageNo", String(pageNo));
+        url.searchParams.delete("kind");
+        const result = await getFinlifeProductsForHttp(kind, new Request(url.toString()));
+        const payload = result.payload;
+        mode = payload.mode;
 
-        if (result.ok) {
+        if (payload.ok) {
           rows.push({
             topFinGrpNo: group.id,
             label: group.label,
             short: group.short,
-            totalCount: typeof result.meta.totalCount === "number" ? result.meta.totalCount : result.data.length,
+            totalCount: typeof payload.meta.totalCount === "number" ? payload.meta.totalCount : payload.data.length,
             status: "ok",
           });
           continue;
         }
 
-        if (result.error?.code === "FIXTURE_MISSING") {
+        if (payload.error?.code === "REPLAY_MISSING") {
           rows.push({
             topFinGrpNo: group.id,
             label: group.label,
@@ -79,7 +84,7 @@ export async function GET(request: Request) {
           short: group.short,
           totalCount: null,
           status: "error",
-          message: result.error?.message,
+          message: payload.error?.message,
         });
       } catch {
         rows.push({

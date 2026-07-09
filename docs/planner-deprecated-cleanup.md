@@ -24,6 +24,8 @@ Last updated: 2026-06-28
 - Compatibility route: `POST /api/planner/compute`
 - Runtime owner: Planning Reports / Architecture
 - Status: `deprecated-compatibility`
+- Canonical route policy: `PLANNING_DEPRECATED_API_ROUTES.plannerCompute`
+- Canonical route hint: `/api/planning/v2/runs`
 - Replacement: planning-v2 run/report APIs
 - Telemetry event: `legacy_planner_compute_called`
 - Sunset: `TBD-after-telemetry-inventory`
@@ -31,10 +33,27 @@ Last updated: 2026-06-28
 운영 원칙:
 
 - route는 same-origin 검증과 planning user scope 안에서만 계산한다.
-- 성공 응답 `meta.legacyApi`에 owner/status/replacement/sunset/telemetryEvent를 함께 실어 호출자가 compatibility API 사용을 식별할 수 있게 한다.
+- 응답 헤더에 `Deprecation: true`, `X-Planning-Canonical-Route`, `X-Planning-Route-Status`를 싣고, 응답 `meta.legacyApi`에 owner/status/canonicalRoute/replacement/sunset/telemetryEvent를 함께 실어 호출자가 compatibility API 사용을 식별할 수 있게 한다.
 - 호출 시 audit log에 `legacy_planner_compute_called`를 best-effort로 남긴다.
 - report production UI는 `@/lib/planner/*`를 직접 import하지 않고, action link는 `src/lib/planning/catalog/plannerActionLinks.ts`를 사용한다.
 - 제거 여부와 sunset 날짜는 telemetry inventory와 외부 호출자 확인 후 별도 PR에서 확정한다.
+
+## Legacy Planning Run Alias Boundary
+
+- Alias route: `POST /api/planning/run`
+- Alias route: `POST /api/planning/v2/run`
+- Runtime owner: Planning v2 Runs API
+- Status: `deprecated-alias`
+- Canonical route policy: `PLANNING_DEPRECATED_API_ROUTES.planningRun`, `PLANNING_DEPRECATED_API_ROUTES.planningV2Run`
+- Canonical route: `POST /api/planning/v2/runs`
+- Telemetry event: `planning_run_alias_called`, `planning_v2_run_alias_called`
+- Sunset: `TBD-after-telemetry-inventory`
+
+운영 원칙:
+
+- alias route는 canonical create-run adapter를 그대로 호출하되, 응답 헤더와 `meta.deprecatedApi`에 canonical route 정보를 싣는다.
+- alias 제거, redirect 전환, 410 전환은 telemetry/access log와 외부 호출자 확인 전까지 확정하지 않는다.
+- 신규 클라이언트와 문서는 `/api/planning/v2/runs`만 사용한다.
 
 ## Legacy Report Boundary
 

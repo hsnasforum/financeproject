@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import {
   getOpsSecurityStatusPayload,
   setOpsSecurityStatusCsrfCookie,
@@ -14,15 +15,15 @@ export async function GET(request: Request) {
   const guard = guardLocalRequest(request);
   if (guard) return withVaultCsrf(request, guard);
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const { status, csrfToken } = await getOpsSecurityStatusPayload(request);
-  const response = NextResponse.json({
-    ok: true,
-    data: status,
-    csrfToken,
-    meta: securityUserMeta(currentUser),
+    const { status, csrfToken } = await getOpsSecurityStatusPayload(request);
+    const response = NextResponse.json({
+      ok: true,
+      data: status,
+      csrfToken,
+      meta: securityUserMeta(currentUser),
+    });
+    return setOpsSecurityStatusCsrfCookie(response, csrfToken);
   });
-  return setOpsSecurityStatusCsrfCookie(response, csrfToken);
 }

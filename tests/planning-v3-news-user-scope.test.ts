@@ -113,6 +113,18 @@ function expectTrustedMeta(payload: unknown, userId: string): void {
   });
 }
 
+function expectScopedPath(
+  userId: string,
+  resolvePath: () => string,
+  expectedSuffix: string,
+): void {
+  runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
+    const scopedPath = resolvePath();
+    expect(scopedPath.replaceAll("\\", "/")).toContain(`/users/${userId}${expectedSuffix}`);
+    expect(fs.existsSync(scopedPath)).toBe(true);
+  });
+}
+
 function writeAlertEventFixture(userId = "default"): void {
   runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
     const eventsPath = resolveAlertEventsPath();
@@ -472,7 +484,7 @@ describe("planning v3 news user scope", () => {
     expect(alicePayload.data?.sources?.find((row) => row.id === sourceId)?.overrideEnabled).toBe(false);
     expect(alicePayload.data?.sources?.find((row) => row.id === sourceId)?.overrideWeight).toBe(0.91);
     expect(alicePayload.data?.topics?.find((row) => row.id === topicId)?.overrideKeywords).toEqual(["alice-keyword"]);
-    expect(resolveNewsSettingsPath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/settings.json");
+    expectScopedPath("alice", resolveNewsSettingsPath, "/planning-v3/news/settings.json");
   });
 
   it("keeps alert rule overrides isolated by planning user", async () => {
@@ -531,7 +543,7 @@ describe("planning v3 news user scope", () => {
     expectTrustedMeta(alicePayload, "alice");
     expect((alicePayload.data?.overrides?.rules ?? []).some((row) => row.id === ruleId && row.enabled === false)).toBe(true);
     expect(alicePayload.data?.effective?.find((row) => row.id === ruleId)?.enabled).toBe(false);
-    expect(resolveAlertRulesOverridePath().replaceAll("\\", "/")).toContain("/users/alice/news/alerts/rules.override.json");
+    expectScopedPath("alice", resolveAlertRulesOverridePath, "/news/alerts/rules.override.json");
   });
 
   it("isolates alert event feed and state by planning user", async () => {
@@ -573,8 +585,8 @@ describe("planning v3 news user scope", () => {
     expectTrustedMeta(alicePayload, "alice");
     const aliceEvent = alicePayload.data?.groups?.flatMap((group) => group.events ?? []).find((event) => event.id === "alice-news-alert-a1");
     expect(typeof aliceEvent?.state?.acknowledgedAt).toBe("string");
-    expect(resolveAlertEventsPath().replaceAll("\\", "/")).toContain("/users/alice/news/alerts/events.jsonl");
-    expect(resolveAlertEventStatePath().replaceAll("\\", "/")).toContain("/users/alice/news/alerts/event-state.json");
+    expectScopedPath("alice", resolveAlertEventsPath, "/news/alerts/events.jsonl");
+    expectScopedPath("alice", resolveAlertEventStatePath, "/news/alerts/event-state.json");
   });
 
   it("keeps news notes list, update, and delete scoped by planning user", async () => {
@@ -672,7 +684,7 @@ describe("planning v3 news user scope", () => {
     const aliceListPayload = await aliceListResponse.json() as { data?: { total?: number } };
     expect(aliceListResponse.status).toBe(200);
     expect(aliceListPayload.data?.total).toBe(0);
-    expect(resolveNewsNotesDir().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/notes");
+    expectScopedPath("alice", resolveNewsNotesDir, "/planning-v3/news/notes");
   });
 
   it("keeps weekly plan scoped by planning user", async () => {
@@ -692,7 +704,7 @@ describe("planning v3 news user scope", () => {
     expectTrustedMeta(postPayload, "alice");
     expect(postPayload.data?.topics).toEqual(["rates"]);
     expect(postPayload.data?.seriesIds).toEqual(["kr_base_rate"]);
-    expect(resolveWeeklyPlanPath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/weekly_plan.json");
+    expectScopedPath("alice", resolveWeeklyPlanPath, "/planning-v3/news/weekly_plan.json");
 
     const bobResponse = await weeklyPlanGET(requestGet(
       "/api/planning/v3/news/weekly-plan",
@@ -741,7 +753,7 @@ describe("planning v3 news user scope", () => {
     expectTrustedMeta(alicePayload, "alice");
     expect(alicePayload.data?.watchlist?.[0]?.label).toBe("alice 기준금리");
     expect(alicePayload.data?.watchlist?.[0]?.seriesId).toBe("kr_base_rate");
-    expect(resolveDigestPath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/digest.latest.json");
+    expectScopedPath("alice", resolveDigestPath, "/planning-v3/news/digest.latest.json");
   });
 
   it("keeps news items and search on user-scoped v3 read models when namespace is enabled", async () => {
@@ -854,7 +866,7 @@ describe("planning v3 news user scope", () => {
     expect(aliceProfileResponse.status).toBe(200);
     expectTrustedMeta(aliceProfilePayload, "alice");
     expect(aliceProfilePayload.data?.debt?.hasDebt).toBe("yes");
-    expect(resolveExposureProfilePath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/exposure/profile.json");
+    expectScopedPath("alice", resolveExposureProfilePath, "/planning-v3/exposure/profile.json");
 
     const bobProfileResponse = await newsExposurePOST(requestWrite(
       "POST",

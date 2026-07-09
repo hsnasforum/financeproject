@@ -1,17 +1,18 @@
-import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
+  fail,
+  ok } from "../../../../../lib/planning/server/v2/apiResponse";
+import {
   assertLocalHost,
-  assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import {
   readPlanningRouteCache,
   writePlanningRouteCache,
-} from "../../../../../lib/planning/server/cache/routeService";
+  } from "../../../../../lib/planning/server/cache/routeService";
 import { checkMonteCarloBudget } from "../../../../../lib/planning/server/v2/budget";
 import { recordMonteCarloBudgetRejection } from "../../../../../lib/planning/server/v2/monteCarloAuditRouteService";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
@@ -22,14 +23,15 @@ import {
   buildEnginePayloadFromProfile,
   resolveAssumptionsContextForProfile,
   type PlanningAssumptionsContext,
-} from "../../../../../lib/planning/server/v2/toEngineInput";
+  } from "../../../../../lib/planning/server/v2/toEngineInput";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
-import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
-import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { PlanningV2ValidationError,
+  type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
+import { validateHorizonMonths,
+  validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type MonteCarloRequestBody = {
@@ -132,18 +134,10 @@ function parseMonteCarloConfig(value: unknown): { paths: number; seed: number } 
   };
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
     assertLocalHost(request);
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -172,157 +166,157 @@ export async function POST(request: Request) {
   }
   const guardFailure = withLocalWriteGuard(request, body);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
-  const featureFlags = getPlanningFeatureFlags();
-  if (!featureFlags.monteCarloEnabled) {
-    return fail("INPUT", "서버 설정으로 Monte Carlo 기능이 비활성화되어 있습니다.", { status: 400 });
-  }
-
-  let profile: ProfileV2;
-  let horizonMonths: number;
-  let assumptionsOverrides: Record<string, unknown>;
-  let policyId: AllocationPolicyId;
-  let requestedSnapshotId: string | undefined;
-  let riskTolerance: RiskTolerance;
-  let monteCarloConfig: { paths: number; seed: number };
-  try {
-    riskTolerance = parseRiskTolerance(body.profile);
-    profile = validateProfileV2(body.profile);
-    horizonMonths = validateHorizonMonths(body.horizonMonths);
-    assumptionsOverrides = parseOverrides(body.assumptions);
-    policyId = parsePolicyId(body.policyId);
-    requestedSnapshotId = parseSnapshotId(body.snapshotId);
-    monteCarloConfig = parseMonteCarloConfig(body.monteCarlo);
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+    const featureFlags = getPlanningFeatureFlags();
+    if (!featureFlags.monteCarloEnabled) {
+      return fail("INPUT", "서버 설정으로 Monte Carlo 기능이 비활성화되어 있습니다.", { status: 400 });
     }
-    return fail("INPUT");
-  }
 
-  const budget = checkMonteCarloBudget({
-    paths: monteCarloConfig.paths,
-    horizonMonths,
-  });
-  if (!budget.ok) {
-    recordMonteCarloBudgetRejection(budget);
-    return fail("BUDGET_EXCEEDED", budget.message, {
-      status: 400,
-      meta: {
-        budget: budget.data,
-      },
-    });
-  }
-
-  let baseAssumptions: PlanningAssumptionsContext["assumptions"];
-  let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
-  let health: PlanningAssumptionsContext["health"];
-  let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
-  let snapshotId: string | undefined;
-  {
-    const resolvedContext = await resolveAssumptionsContextForProfile({
-      planningService,
-      profile,
-      riskTolerance,
-      assumptionsOverridesRaw: assumptionsOverrides,
-      requestedSnapshotId,
-    });
-    if (!resolvedContext.ok) {
-      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
-        return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+    let profile: ProfileV2;
+    let horizonMonths: number;
+    let assumptionsOverrides: Record<string, unknown>;
+    let policyId: AllocationPolicyId;
+    let requestedSnapshotId: string | undefined;
+    let riskTolerance: RiskTolerance;
+    let monteCarloConfig: { paths: number; seed: number };
+    try {
+      riskTolerance = parseRiskTolerance(body.profile);
+      profile = validateProfileV2(body.profile);
+      horizonMonths = validateHorizonMonths(body.horizonMonths);
+      assumptionsOverrides = parseOverrides(body.assumptions);
+      policyId = parsePolicyId(body.policyId);
+      requestedSnapshotId = parseSnapshotId(body.snapshotId);
+      monteCarloConfig = parseMonteCarloConfig(body.monteCarlo);
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, { issues: toIssueMessages(error) });
       }
-      return fail(resolvedContext.error.code, resolvedContext.error.message);
+      return fail("INPUT");
     }
-    baseAssumptions = resolvedContext.context.assumptions;
-    snapshotMeta = resolvedContext.context.snapshotMeta;
-    health = resolvedContext.context.health;
-    scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
-    snapshotId = resolvedContext.context.snapshotId;
-  }
 
-  const keyBundle = buildCacheKey({
-    kind: "monteCarlo",
-    profile,
-    snapshotMeta,
-    horizonMonths,
-    baseAssumptions,
-    overrides: scenarioOverrideForCache,
-    options: {
+    const budget = checkMonteCarloBudget({
       paths: monteCarloConfig.paths,
-      seed: monteCarloConfig.seed,
-      policyId,
-      snapshotId: snapshotId ?? null,
-    },
-    riskTolerance,
-  });
-  const keyPrefix = keyBundle.key.slice(0, 8);
-
-  try {
-    const cached = await readPlanningRouteCache<Record<string, unknown>>("monteCarlo", keyBundle.key);
-    if (cached) {
-      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
-      return ok(data, {
-        ...cached.meta,
-        ...userMeta,
-        cache: {
-          hit: true,
-          keyPrefix,
+      horizonMonths,
+    });
+    if (!budget.ok) {
+      recordMonteCarloBudgetRejection(budget);
+      return fail("BUDGET_EXCEEDED", budget.message, {
+        status: 400,
+        meta: {
+          budget: budget.data,
         },
       });
     }
 
-    const { data } = buildEnginePayloadFromProfile(
-      profile,
-      (engineResult) => ({
-        baseAssumptionsUsed: baseAssumptions,
-        monteCarlo: engineResult.core,
-        healthWarnings: health.warnings,
-      }),
-      {
-        runCore: () => planningService.monteCarlo({
-          profile,
-          horizonMonths,
-          baseAssumptions,
-          policyId,
-          paths: monteCarloConfig.paths,
-          seed: monteCarloConfig.seed,
-          riskTolerance,
-        }),
-      },
-    );
-
-    const payload = {
-      meta: {
-        generatedAt: new Date().toISOString(),
-        snapshot: snapshotMeta,
-        health: health.summary,
-      },
-      data,
-    };
-
-    await writePlanningRouteCache({
-      kind: "monteCarlo",
-      keyBundle,
-      horizonMonths,
-      ttlMs: MONTE_CARLO_CACHE_TTL_MS,
-      snapshotMeta,
-      payload,
-    });
-
-    return ok(payload.data, {
-      ...payload.meta,
-      ...userMeta,
-      cache: {
-        hit: false,
-        keyPrefix,
-      },
-    });
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+    let baseAssumptions: PlanningAssumptionsContext["assumptions"];
+    let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
+    let health: PlanningAssumptionsContext["health"];
+    let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
+    let snapshotId: string | undefined;
+    {
+      const resolvedContext = await resolveAssumptionsContextForProfile({
+        planningService,
+        profile,
+        riskTolerance,
+        assumptionsOverridesRaw: assumptionsOverrides,
+        requestedSnapshotId,
+      });
+      if (!resolvedContext.ok) {
+        if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+          return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+        }
+        return fail(resolvedContext.error.code, resolvedContext.error.message);
+      }
+      baseAssumptions = resolvedContext.context.assumptions;
+      snapshotMeta = resolvedContext.context.snapshotMeta;
+      health = resolvedContext.context.health;
+      scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
+      snapshotId = resolvedContext.context.snapshotId;
     }
-    return fail("INTERNAL");
-  }
+
+    const keyBundle = buildCacheKey({
+      kind: "monteCarlo",
+      profile,
+      snapshotMeta,
+      horizonMonths,
+      baseAssumptions,
+      overrides: scenarioOverrideForCache,
+      options: {
+        paths: monteCarloConfig.paths,
+        seed: monteCarloConfig.seed,
+        policyId,
+        snapshotId: snapshotId ?? null,
+      },
+      riskTolerance,
+    });
+    const keyPrefix = keyBundle.key.slice(0, 8);
+
+    try {
+      const cached = await readPlanningRouteCache<Record<string, unknown>>("monteCarlo", keyBundle.key);
+      if (cached) {
+        const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
+        return ok(data, {
+          ...cached.meta,
+          ...userMeta,
+          cache: {
+            hit: true,
+            keyPrefix,
+          },
+        });
+      }
+
+      const { data } = buildEnginePayloadFromProfile(
+        profile,
+        (engineResult) => ({
+          baseAssumptionsUsed: baseAssumptions,
+          monteCarlo: engineResult.core,
+          healthWarnings: health.warnings,
+        }),
+        {
+          runCore: () => planningService.monteCarlo({
+            profile,
+            horizonMonths,
+            baseAssumptions,
+            policyId,
+            paths: monteCarloConfig.paths,
+            seed: monteCarloConfig.seed,
+            riskTolerance,
+          }),
+        },
+      );
+
+      const payload = {
+        meta: {
+          generatedAt: new Date().toISOString(),
+          snapshot: snapshotMeta,
+          health: health.summary,
+        },
+        data,
+      };
+
+      await writePlanningRouteCache({
+        kind: "monteCarlo",
+        keyBundle,
+        horizonMonths,
+        ttlMs: MONTE_CARLO_CACHE_TTL_MS,
+        snapshotMeta,
+        payload,
+      });
+
+      return ok(payload.data, {
+        ...payload.meta,
+        ...userMeta,
+        cache: {
+          hit: false,
+          keyPrefix,
+        },
+      });
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+      }
+      return fail("INTERNAL");
+    }
+  });
 }

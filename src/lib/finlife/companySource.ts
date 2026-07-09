@@ -68,7 +68,7 @@ export async function getFinlifeCompanies(params: FinlifeParams = {}): Promise<F
           pageNo: required.pageNo,
           topFinGrpNo: required.topFinGrpNo,
           fallbackUsed: false,
-          message: `fixture missing: ${fixtureKey} (scripts/smoke/finlife-sample.mjs --record)`,
+          message: "오프라인 fixture 데이터가 준비되지 않았습니다.",
         },
         data: [],
         error: {

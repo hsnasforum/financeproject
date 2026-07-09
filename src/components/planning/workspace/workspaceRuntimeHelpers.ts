@@ -1,6 +1,12 @@
 import { type SnapshotSelection } from "@/app/planning/_lib/snapshotSelection";
 import { resolveWorkspaceSnapshotSelectionFallback } from "@/app/planning/_lib/workspaceSnapshotSelection";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
+import {
+  parsePlanningRunHorizonMonthsText,
+  parsePlanningRunMaxCandidatesPerAction,
+  parsePlanningRunMonteCarloPaths,
+  parsePlanningRunMonteCarloSeed,
+} from "@/lib/planning/v2/planningRunInputContract";
 import { type ScenarioPatch } from "@/lib/planning/v2/profilePatch";
 import { type PreflightIssue } from "@/lib/planning/v2/preflight";
 import { type PlanningRunRecord } from "@/lib/planning/store/types";
@@ -70,9 +76,19 @@ export function createScenarioPatchesFromTemplate(templateId: ScenarioTemplateId
 }
 
 export function parseHorizonMonths(value: string): number | null {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1200) return null;
-  return parsed;
+  return parsePlanningRunHorizonMonthsText(value);
+}
+
+export function parseMaxCandidatesPerAction(value: string): number | null {
+  return parsePlanningRunMaxCandidatesPerAction(value);
+}
+
+export function parseMonteCarloPaths(value: string): number | null {
+  return parsePlanningRunMonteCarloPaths(value);
+}
+
+export function parseMonteCarloSeed(value: string): number | null {
+  return parsePlanningRunMonteCarloSeed(value);
 }
 
 export function formatPreflightIssue(issue: PreflightIssue): string {

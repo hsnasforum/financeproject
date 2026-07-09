@@ -19,8 +19,8 @@ export const uiTextKo = {
     subtitle:
       "예금·적금 비교, 프로필 기반 추천, 간단 플래닝을 한 화면 흐름으로 점검할 수 있습니다.",
     cards: [
-      { href: "/products/deposit", title: "예금 상품 보기", desc: "최고금리와 기간별 옵션 확인" },
-      { href: "/products/saving", title: "적금 상품 보기", desc: "적립 방식과 우대금리 비교" },
+      { href: "/products/catalog?kind=deposit", title: "예금 상품 보기", desc: "최고금리와 기간별 옵션 확인" },
+      { href: "/products/catalog?kind=saving", title: "적금 상품 보기", desc: "적립 방식과 우대금리 비교" },
       { href: "/recommend", title: "추천 보기", desc: "점수 근거가 보이는 맞춤 추천" },
       { href: "/planning", title: "플래닝 보기", desc: "저축률과 목표 달성 시뮬레이션" },
       { href: "/help", title: "도움말", desc: "사용법, 계산 가정, 데이터 모드 안내" },

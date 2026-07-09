@@ -17,6 +17,7 @@ import {
   backfillLegacyRuns,
   createRun,
   deleteRun,
+  diagnoseRunRead,
   getRun,
   getRunBlob,
   listLegacyRunBackfillCandidates,
@@ -291,6 +292,40 @@ describe("planning store", () => {
       for (const dirPath of [path.dirname(indexPath), runDir, blobDir]) chmodIfExists(dirPath, 0o755);
       for (const filePath of [indexPath, metaPath, blobPath]) chmodIfExists(filePath, 0o644);
     }
+  });
+
+  it("diagnoses missing and unreadable run meta separately from getRun null", async () => {
+    const profile = await createProfile({
+      name: "diagnostic profile",
+      profile: sampleProfile(),
+    });
+    const created = await createRun({
+      id: "diagnostic-run",
+      profileId: profile.id,
+      title: "diagnostic run",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: simulateBlob({
+          summary: { endNetWorthKrw: 1_000 },
+          warnings: [],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+        }),
+      },
+    }, { enforceRetention: false });
+
+    const metaPath = resolveProfileRunMetaPath(profile.id, created.id);
+    fs.writeFileSync(metaPath, "{\n", "utf-8");
+
+    await expect(getRun(created.id)).resolves.toBeNull();
+    const unreadable = await diagnoseRunRead(created.id);
+    expect(unreadable.status).toBe("unreadable");
+    expect(unreadable.attempts.some((row) => row.status === "unreadable" && row.reason === "invalid-json")).toBe(true);
+
+    const missing = await diagnoseRunRead("missing-run");
+    expect(missing.status).toBe("missing");
+    expect(missing.attempts.every((row) => row.status === "missing")).toBe(true);
   });
 
   it("recovers default profile resolution when profile meta files are truncated", async () => {

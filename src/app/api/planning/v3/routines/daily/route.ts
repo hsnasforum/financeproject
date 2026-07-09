@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import {
   readCurrentUserDailyRoutineChecklist,
@@ -85,33 +85,33 @@ function asString(value: unknown): string {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const dateParam = asString(new URL(request.url).searchParams.get("date"));
-  try {
-    const date = DateParamSchema.parse(dateParam);
-    const checklist = readCurrentUserDailyRoutineChecklist(date);
-    const payload = parseWithV3Whitelist(DailyRoutineResponseSchema, {
-      ok: true,
-      meta: userMeta,
-      checklist: {
-        date: checklist.date,
-        savedAt: checklist.savedAt ?? null,
-        items: checklist.items,
-      },
-    }, {
-      scope: "response",
-      context: "api.v3.routines.daily.get",
-    });
-    return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "date 파라미터 형식이 올바르지 않습니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
+    const dateParam = asString(new URL(request.url).searchParams.get("date"));
+    try {
+      const date = DateParamSchema.parse(dateParam);
+      const checklist = readCurrentUserDailyRoutineChecklist(date);
+      const payload = parseWithV3Whitelist(DailyRoutineResponseSchema, {
+        ok: true,
+        meta: userMeta,
+        checklist: {
+          date: checklist.date,
+          savedAt: checklist.savedAt ?? null,
+          items: checklist.items,
+        },
+      }, {
+        scope: "response",
+        context: "api.v3.routines.daily.get",
+      });
+      return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "date 파라미터 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+  });
 }
 
 export async function POST(request: Request) {
@@ -124,30 +124,30 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const payload = body as { checklist?: unknown } | null;
-    const checklist = saveCurrentUserDailyRoutineChecklist(payload?.checklist ?? {});
-    const response = parseWithV3Whitelist(DailyRoutineResponseSchema, {
-      ok: true,
-      meta: userMeta,
-      checklist: {
-        date: checklist.date,
-        savedAt: checklist.savedAt ?? null,
-        items: checklist.items,
-      },
-    }, {
-      scope: "response",
-      context: "api.v3.routines.daily.post",
-    });
-    return NextResponse.json(response);
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "체크리스트 입력 형식이 올바르지 않습니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
+    try {
+      const payload = body as { checklist?: unknown } | null;
+      const checklist = saveCurrentUserDailyRoutineChecklist(payload?.checklist ?? {});
+      const response = parseWithV3Whitelist(DailyRoutineResponseSchema, {
+        ok: true,
+        meta: userMeta,
+        checklist: {
+          date: checklist.date,
+          savedAt: checklist.savedAt ?? null,
+          items: checklist.items,
+        },
+      }, {
+        scope: "response",
+        context: "api.v3.routines.daily.post",
+      });
+      return NextResponse.json(response);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "체크리스트 입력 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+  });
 }

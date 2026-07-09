@@ -1,18 +1,19 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   ApplyDraftPatchToProfileError,
   applyDraftPatchToProfile,
-} from "@/lib/planning/v3/draft/service";
-import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+  } from "@/lib/planning/v3/draft/service";
+import { ForbiddenDraftKeyError,
+  assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
@@ -78,50 +79,50 @@ export async function POST(request: Request, context: RouteContext) {
 
   const guarded = withGuard(request, body?.csrf);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const { id } = await context.params;
-    const result = await applyDraftPatchToProfile({
-      draftId: id,
-      baseProfileId: asString(body?.profileId) || undefined,
-    });
-    const payload = {
-      ok: true,
-      meta: userMeta,
-      data: {
-        profileId: result.createdProfileId,
-      },
-    };
-    assertNoForbiddenDraftKeys(payload);
-    return NextResponse.json(payload);
-  } catch (error) {
-    if (error instanceof ApplyDraftPatchToProfileError) {
-      const details = toSafeApplyDetails(error.details);
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: error.code,
-            message: toSafeApplyMessage(error),
-            ...(details ? { details } : {}),
-          },
-          meta: userMeta,
+    try {
+      const { id } = await context.params;
+      const result = await applyDraftPatchToProfile({
+        draftId: id,
+        baseProfileId: asString(body?.profileId) || undefined,
+      });
+      const payload = {
+        ok: true,
+        meta: userMeta,
+        data: {
+          profileId: result.createdProfileId,
         },
-        { status: error.status },
-      );
-    }
-    if (error instanceof ForbiddenDraftKeyError) {
+      };
+      assertNoForbiddenDraftKeys(payload);
+      return NextResponse.json(payload);
+    } catch (error) {
+      if (error instanceof ApplyDraftPatchToProfileError) {
+        const details = toSafeApplyDetails(error.details);
+        return NextResponse.json(
+          {
+            ok: false,
+            error: {
+              code: error.code,
+              message: toSafeApplyMessage(error),
+              ...(details ? { details } : {}),
+            },
+            meta: userMeta,
+          },
+          { status: error.status },
+        );
+      }
+      if (error instanceof ForbiddenDraftKeyError) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INTERNAL", message: "상담 정보 생성 결과를 확인하지 못했습니다." }, meta: userMeta },
+          { status: 500 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "상담 정보 생성 결과를 확인하지 못했습니다." }, meta: userMeta },
+        { ok: false, error: { code: "INTERNAL", message: "상담 정보 생성 처리에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "상담 정보 생성 처리에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

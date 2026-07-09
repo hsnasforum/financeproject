@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isDebugEnabled, makeHttpError } from "../../../../../lib/http/apiError";
+import { isSamplebankProductId, isSamplebankPublicAccessAllowed } from "@/lib/products/samplebankPolicy";
 import { getUnifiedProductById, UnifiedInputError } from "@/lib/sources/unified";
 
 export async function GET(request: Request) {
@@ -12,6 +13,17 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: makeHttpError("INPUT", "id는 필수입니다.", {
+          debugEnabled,
+        }),
+      },
+      { status: 400 },
+    );
+  }
+  if (isSamplebankProductId(id) && !isSamplebankPublicAccessAllowed()) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: makeHttpError("INPUT", "샘플 데이터 상품은 운영 공개 카탈로그에서 조회할 수 없습니다.", {
           debugEnabled,
         }),
       },

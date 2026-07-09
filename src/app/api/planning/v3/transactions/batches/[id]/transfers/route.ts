@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
 import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
 import { loadBatchVisiblePipeline } from "@/lib/planning/v3/service/loadBatchVisiblePipeline";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
@@ -55,52 +55,52 @@ export async function GET(request: Request, context: RouteContext) {
 
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id } = await context.params;
-  try {
-    const pipeline = await loadBatchVisiblePipeline(id, { includeRules: false });
+    const { id } = await context.params;
+    try {
+      const pipeline = await loadBatchVisiblePipeline(id, { includeRules: false });
 
-    const transactions = pipeline?.transactions ?? [];
-    if (transactions.length < 1) {
-      return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." }, meta: userMeta },
-        { status: 404 },
-      );
-    }
+      const transactions = pipeline?.transactions ?? [];
+      if (transactions.length < 1) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
 
-    const mapped = applyAccountMappingOverrides(transactions, pipeline?.accountOverrides ?? {});
-    const detected = detectTransfers({
-      batchId: id,
-      transactions: mapped,
-      overridesByTxnId: pipeline?.transferOverrides ?? {},
-    });
+      const mapped = applyAccountMappingOverrides(transactions, pipeline?.accountOverrides ?? {});
+      const detected = detectTransfers({
+        batchId: id,
+        transactions: mapped,
+        overridesByTxnId: pipeline?.transferOverrides ?? {},
+      });
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        detections: detected.detections,
-        stats: {
-          totalTxns: transactions.length,
-          candidates: detected.candidateCount,
-          transfers: detected.detections.length,
+      return NextResponse.json({
+        ok: true,
+        data: {
+          detections: detected.detections,
+          stats: {
+            totalTxns: transactions.length,
+            candidates: detected.candidateCount,
+            transfers: detected.detections.length,
+          },
+          unassignedCount: detected.unassignedCount,
         },
-        unassignedCount: detected.unassignedCount,
-      },
-      meta: userMeta,
-    });
-  } catch (error) {
-    if (isInvalidIdError(error)) {
+        meta: userMeta,
+      });
+    } catch (error) {
+      if (isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
-        { status: 400 },
+        { ok: false, error: { code: "INTERNAL", message: "이체 탐지 조회에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "이체 탐지 조회에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

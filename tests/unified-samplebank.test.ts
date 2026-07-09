@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
   getUnifiedProducts: vi.fn(),
@@ -15,9 +15,21 @@ vi.mock("@/lib/http/validate", async () => await import("../src/lib/http/validat
 
 import { GET } from "../src/app/api/products/unified/route";
 
+function setEnv(name: string, value: string | undefined): void {
+  const env = process.env as Record<string, string | undefined>;
+  if (value === undefined) {
+    delete env[name];
+    return;
+  }
+  env[name] = value;
+}
+
 describe("GET /api/products/unified samplebank", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
   beforeEach(() => {
     mocked.getUnifiedProducts.mockReset();
+    setEnv("NODE_ENV", "test");
     mocked.getUnifiedProducts.mockResolvedValue({
       kind: "deposit",
       sources: { samplebank: { count: 1 } },
@@ -53,7 +65,11 @@ describe("GET /api/products/unified samplebank", () => {
     });
   });
 
-  it("includes samplebank source when includeSources=samplebank", async () => {
+  afterEach(() => {
+    setEnv("NODE_ENV", originalNodeEnv);
+  });
+
+  it("includes samplebank source outside production when includeSources=samplebank", async () => {
     const req = new Request("http://localhost/api/products/unified?mode=merged&includeSources=samplebank&kind=deposit");
     const res = await GET(req);
     const json = await res.json() as {
@@ -71,5 +87,22 @@ describe("GET /api/products/unified samplebank", () => {
       kind: "deposit",
       mode: "merged",
     }));
+  });
+
+  it("keeps samplebank unavailable in production public catalog", async () => {
+    setEnv("NODE_ENV", "production");
+
+    const req = new Request("http://localhost/api/products/unified?mode=merged&includeSources=samplebank&kind=deposit");
+    const res = await GET(req);
+    const json = await res.json() as {
+      ok?: boolean;
+      error?: { code?: string; message?: string };
+    };
+
+    expect(res.status).toBe(400);
+    expect(json.ok).toBe(false);
+    expect(json.error?.code).toBe("INPUT");
+    expect(json.error?.message).toContain("샘플 데이터 소스");
+    expect(mocked.getUnifiedProducts).not.toHaveBeenCalled();
   });
 });

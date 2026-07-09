@@ -1,18 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   requireCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { refreshOpsAssumptions } from "../../../../../lib/ops/assumptions/assumptionsRefreshRouteService";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import {
-  isPlanningRouteUser,
-  requirePlanningRouteUser,
-} from "../../../../../lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { assumptionsUserMeta } from "../_lib";
 
 type RefreshBody = {
@@ -62,26 +60,26 @@ export async function POST(request: Request) {
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const result = await refreshOpsAssumptions({
-    currentUser,
-    startedAt: Date.now(),
-  });
-  if (result.kind === "internal-error") {
-    return opsErrorResponse({
-      code: "INTERNAL",
-      message: result.message,
-      status: 500,
+    const result = await refreshOpsAssumptions({
+      currentUser,
+      startedAt: Date.now(),
     });
-  }
+    if (result.kind === "internal-error") {
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: result.message,
+        status: 500,
+      });
+    }
 
-  return NextResponse.json({
-    ok: true,
-    latestId: result.latestId,
-    message: result.message,
-    meta: assumptionsUserMeta(currentUser, result.meta),
-    snapshot: result.snapshot,
+    return NextResponse.json({
+      ok: true,
+      latestId: result.latestId,
+      message: result.message,
+      meta: assumptionsUserMeta(currentUser, result.meta),
+      snapshot: result.snapshot,
+    });
   });
 }

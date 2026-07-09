@@ -3,20 +3,9 @@ import {
   PlanningRunAssumptionsResolveError,
   resolvePlanningRunAssumptions,
 } from "../v2/runAssumptionsRouteService";
-import { isAllocationPolicyId } from "../v2/policy/presets";
-import { type AllocationPolicyId } from "../v2/policy/types";
-import { runScenarios } from "../v2/runScenarios";
-import { type AssumptionsV2, type RiskTolerance } from "../v2/scenarios";
-import { simulateMonthly } from "../v2/simulateMonthly";
-import { runMonteCarlo } from "../v2/monteCarlo";
 import { checkMonteCarloBudget } from "../v2/budget";
-import { buildActionsFromPlan } from "../v2/actions/buildActions";
 import { matchCandidates } from "../v2/actions/matchFinlifeCandidates";
-import { computeDebtStrategy } from "../v2/debt/strategy";
-import { type LiabilityV2, type RefiOffer } from "../v2/debt/types";
-import { buildPlanningRunArtifacts } from "../v2/runArtifacts";
-import { PlanningV2ValidationError, type SimulationResultV2 } from "../v2/types";
-import { validateHorizonMonths } from "../v2/validate";
+import { PlanningV2ValidationError } from "../v2/types";
 import {
   createCurrentUserRunResponseData,
   getCurrentUserRunForRoute,
@@ -27,78 +16,48 @@ import {
   type CurrentUserRunStageResult,
 } from "./routeService";
 import { runStagePipeline } from "../../v2/stagePipeline";
-import { preflightRun } from "../../v2/preflight";
-import { decimalToAprPct, toEngineRateBoundary } from "../../v2/aprBoundary";
 import { loadCanonicalProfile } from "../../v2/loadCanonicalProfile";
-import { buildRunReproducibilityMeta } from "../../v2/reproducibility";
-import { applyProfilePatch, type ScenarioPatch } from "../../v2/profilePatch";
-import { roundKrw } from "../../calc/roundingPolicy";
+import { applyProfilePatch } from "../../v2/profilePatch";
 import {
   applyScenario,
   validateScenario,
-  type ScenarioMeta,
-  type ScenarioPatch as LegacyScenarioPatch,
 } from "../../v2/scenario";
-import { DEFAULT_PLANNING_POLICY } from "../../catalog/planningPolicy";
+import {
+  asString,
+  legacyScenarioToInputScenario,
+  parseRiskTolerance,
+  toLegacyScenarioMetaFromInput,
+  validationIssues,
+  type CreatePlanningRunCommand,
+  type CreatePlanningRunParseResult,
+} from "./createRunCommandParser";
+import {
+  assemblePlanningRunRecordInput,
+  buildCreatePlanningRunSuccessMeta,
+  totalStageDurationMs,
+} from "./createRunRecordAssembler";
+import {
+  recordCreateRunAuditSafely,
+  recordCreateRunStageMetricsSafely,
+} from "./createRunSideEffects";
+import { evaluateCreatePlanningRunPreflight } from "./createRunPreflight";
+import {
+  buildPlanningStagePlan,
+  createPlanningStagePlanState,
+  resolvePlanningStageOutputs,
+} from "./createRunStagePlan";
 
-export type RunsCreateBody = {
-  profileId?: unknown;
-  title?: unknown;
-  scenario?: unknown;
-  input?: {
-    horizonMonths?: unknown;
-    policyId?: unknown;
-    snapshotId?: unknown;
-    assumptionsOverride?: unknown;
-    runScenarios?: unknown;
-    getActions?: unknown;
-    analyzeDebt?: unknown;
-    debtStrategy?: unknown;
-    includeProducts?: unknown;
-    monteCarlo?: unknown;
-    scenario?: unknown;
-  } | null;
-  csrf?: unknown;
-} | null;
-
-type RunInputScenario = NonNullable<CurrentUserRunRecord["input"]["scenario"]>;
-
-export type CreatePlanningRunCommand = {
-  profileId: string;
-  runRequestId: string;
-  title: string;
-  horizonMonths: number;
-  policyId: AllocationPolicyId;
-  requestedSnapshotId?: string;
-  assumptionsOverride: Record<string, unknown>;
-  runScenariosEnabled: boolean;
-  getActionsEnabled: boolean;
-  analyzeDebtEnabled: boolean;
-  debtStrategyInput: {
-    offers: RefiOffer[];
-    options?: { extraPaymentKrw?: number; compareTermsMonths?: number[] };
-  };
-  includeProducts: boolean;
-  monteCarloConfig?: { paths: number; seed: number };
-  scenarioInput?: RunInputScenario;
-  scenarioMeta?: ScenarioMeta;
-};
+export {
+  parseCreatePlanningRunCommand,
+  type CreatePlanningRunCommand,
+  type CreatePlanningRunParseDependencies,
+  type CreatePlanningRunParseResult,
+  type RunsCreateBody,
+} from "./createRunCommandParser";
 
 export type CreatePlanningRunContext = {
   requestBaseUrl: string;
 };
-
-export type CreatePlanningRunParseResult =
-  | { ok: true; command: CreatePlanningRunCommand }
-  | {
-    ok: false;
-    code: string;
-    message: string;
-    status?: number;
-    issues?: string[];
-    auditMessage: string;
-    recordId?: string | null;
-  };
 
 export type CreatePlanningRunResult =
   | {
@@ -118,11 +77,6 @@ export type CreatePlanningRunResult =
     meta?: Record<string, unknown>;
   };
 
-export type CreatePlanningRunParseDependencies = {
-  randomUUID?: () => string;
-  now?: () => Date;
-};
-
 export type CreatePlanningRunDependencies = {
   getFeatureFlags?: typeof getPlanningFeatureFlags;
   getProfile?: typeof getCurrentUserRunProfileForRoute;
@@ -138,476 +92,6 @@ export type CreatePlanningRunDependencies = {
 };
 
 type ResolvedCreatePlanningRunDependencies = Required<CreatePlanningRunDependencies>;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function parseRiskTolerance(rawProfile: unknown): RiskTolerance {
-  if (!isRecord(rawProfile)) return "mid";
-
-  const direct = asString(rawProfile.riskTolerance).toLowerCase();
-  if (direct === "low" || direct === "mid" || direct === "high") return direct;
-
-  if (isRecord(rawProfile.risk)) {
-    const nested = asString(rawProfile.risk.riskTolerance).toLowerCase();
-    if (nested === "low" || nested === "mid" || nested === "high") return nested;
-  }
-  return "mid";
-}
-
-function parseAssumptionsOverride(value: unknown): Record<string, unknown> {
-  if (value === undefined) return {};
-  if (!isRecord(value)) {
-    throw new PlanningV2ValidationError("Invalid assumptions override", [
-      { path: "input.assumptionsOverride", message: "must be an object" },
-    ]);
-  }
-  return value;
-}
-
-function parseSnapshotId(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") {
-    throw new PlanningV2ValidationError("Invalid snapshot id", [
-      { path: "input.snapshotId", message: "must be a string" },
-    ]);
-  }
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (trimmed.toLowerCase() === "latest") return undefined;
-  return trimmed;
-}
-
-function parsePolicyId(value: unknown): AllocationPolicyId {
-  if (value === undefined || value === null || value === "") return "balanced";
-  if (!isAllocationPolicyId(value)) {
-    throw new PlanningV2ValidationError("Invalid policyId", [
-      { path: "input.policyId", message: "must be one of balanced|safety|growth" },
-    ]);
-  }
-  return value;
-}
-
-function parseIncludeProducts(value: unknown): boolean {
-  return value === true;
-}
-
-function parseRunScenarios(value: unknown): boolean {
-  if (value === undefined) return true;
-  return value !== false;
-}
-
-function parseGetActions(value: unknown): boolean {
-  if (value === undefined) return true;
-  return value !== false;
-}
-
-function parseAnalyzeDebt(value: unknown): boolean {
-  if (value === undefined) return true;
-  return value !== false;
-}
-
-function parseMonteCarloInput(value: unknown): { paths: number; seed: number } | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!isRecord(value)) {
-    throw new PlanningV2ValidationError("Invalid monteCarlo input", [
-      { path: "input.monteCarlo", message: "must be an object" },
-    ]);
-  }
-
-  const pathsRaw = value.paths;
-  const seedRaw = value.seed;
-  const paths = pathsRaw === undefined ? 2000 : Math.trunc(Number(pathsRaw));
-  const seed = seedRaw === undefined ? 12345 : Math.trunc(Number(seedRaw));
-
-  if (!Number.isFinite(paths) || paths < 1 || paths > 20000) {
-    throw new PlanningV2ValidationError("Invalid monteCarlo input", [
-      { path: "input.monteCarlo.paths", message: "must be between 1 and 20000" },
-    ]);
-  }
-  if (!Number.isFinite(seed)) {
-    throw new PlanningV2ValidationError("Invalid monteCarlo input", [
-      { path: "input.monteCarlo.seed", message: "must be a finite integer" },
-    ]);
-  }
-
-  return {
-    paths,
-    seed: seed >>> 0,
-  };
-}
-
-function parseScenarioMeta(
-  value: unknown,
-  dependencies: Required<CreatePlanningRunParseDependencies>,
-): ScenarioMeta | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!isRecord(value)) {
-    throw new PlanningV2ValidationError("Invalid scenario input", [
-      { path: "scenario", message: "must be an object" },
-    ]);
-  }
-
-  const name = asString(value.name);
-  const createdAtRaw = asString(value.createdAt);
-  const createdAt = createdAtRaw && Number.isFinite(Date.parse(createdAtRaw))
-    ? new Date(createdAtRaw).toISOString()
-    : dependencies.now().toISOString();
-  const id = asString(value.id) || dependencies.randomUUID();
-  const templateId = asString(value.templateId);
-  const baselineRunId = asString(value.baselineRunId);
-  const patchesRaw = value.patches;
-  if (!Array.isArray(patchesRaw) || patchesRaw.length < 1) {
-    throw new PlanningV2ValidationError("Invalid scenario input", [
-      { path: "scenario.patches", message: "must be a non-empty array" },
-    ]);
-  }
-
-  const patches: LegacyScenarioPatch[] = patchesRaw.map((entry, index) => {
-    if (!isRecord(entry)) {
-      throw new PlanningV2ValidationError("Invalid scenario input", [
-        { path: `scenario.patches[${index}]`, message: "must be an object" },
-      ]);
-    }
-    const path = asString(entry.path);
-    const op = asString(entry.op);
-    const valueNumber = Number(entry.value);
-    if (!path) {
-      throw new PlanningV2ValidationError("Invalid scenario input", [
-        { path: `scenario.patches[${index}].path`, message: "must be a non-empty string" },
-      ]);
-    }
-    if (!(op === "set" || op === "add" || op === "multiply")) {
-      throw new PlanningV2ValidationError("Invalid scenario input", [
-        { path: `scenario.patches[${index}].op`, message: "must be one of set|add|multiply" },
-      ]);
-    }
-    if (!Number.isFinite(valueNumber)) {
-      throw new PlanningV2ValidationError("Invalid scenario input", [
-        { path: `scenario.patches[${index}].value`, message: "must be a finite number" },
-      ]);
-    }
-    return {
-      path,
-      op,
-      value: valueNumber,
-    };
-  });
-
-  return {
-    id,
-    name: name || "What-if scenario",
-    ...(templateId ? { templateId } : {}),
-    ...(baselineRunId ? { baselineRunId } : {}),
-    createdAt,
-    patches,
-  };
-}
-
-function parseScenarioPatchInput(value: unknown, pathPrefix: string): ScenarioPatch {
-  if (!isRecord(value)) {
-    throw new PlanningV2ValidationError("Invalid scenario input", [
-      { path: pathPrefix, message: "must be an object" },
-    ]);
-  }
-  const opRaw = asString(value.op);
-  const valueNumber = Number(value.value);
-  if (!Number.isFinite(valueNumber)) {
-    throw new PlanningV2ValidationError("Invalid scenario input", [
-      { path: `${pathPrefix}.value`, message: "must be a finite number" },
-    ]);
-  }
-
-  if (opRaw === "mul" || opRaw === "set") {
-    const field = asString(value.field);
-    if (
-      field !== "monthlyIncomeNet"
-      && field !== "monthlyEssentialExpenses"
-      && field !== "monthlyDiscretionaryExpenses"
-    ) {
-      throw new PlanningV2ValidationError("Invalid scenario input", [
-        {
-          path: `${pathPrefix}.field`,
-          message: "must be one of monthlyIncomeNet|monthlyEssentialExpenses|monthlyDiscretionaryExpenses",
-        },
-      ]);
-    }
-    return {
-      op: opRaw,
-      field: field as "monthlyIncomeNet" | "monthlyEssentialExpenses" | "monthlyDiscretionaryExpenses",
-      value: valueNumber,
-    };
-  }
-
-  if (opRaw === "debt.mulMinimumPayment" || opRaw === "debt.setMinimumPayment") {
-    const debtId = asString(value.debtId);
-    if (!debtId) {
-      throw new PlanningV2ValidationError("Invalid scenario input", [
-        { path: `${pathPrefix}.debtId`, message: "must be a non-empty string" },
-      ]);
-    }
-    return {
-      op: opRaw,
-      debtId,
-      value: valueNumber,
-    };
-  }
-
-  throw new PlanningV2ValidationError("Invalid scenario input", [
-    {
-      path: `${pathPrefix}.op`,
-      message: "must be one of mul|set|debt.mulMinimumPayment|debt.setMinimumPayment",
-    },
-  ]);
-}
-
-function parseRunInputScenario(value: unknown): RunInputScenario | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!isRecord(value)) {
-    throw new PlanningV2ValidationError("Invalid scenario input", [
-      { path: "input.scenario", message: "must be an object" },
-    ]);
-  }
-  const title = asString(value.title);
-  const baseRunId = asString(value.baseRunId);
-  const patchRaw = value.patch;
-  if (!Array.isArray(patchRaw) || patchRaw.length < 1) {
-    throw new PlanningV2ValidationError("Invalid scenario input", [
-      { path: "input.scenario.patch", message: "must be a non-empty array" },
-    ]);
-  }
-  const patch = patchRaw.map((entry, index) => parseScenarioPatchInput(entry, `input.scenario.patch[${index}]`));
-  return {
-    ...(title ? { title } : {}),
-    ...(baseRunId ? { baseRunId } : {}),
-    patch,
-  };
-}
-
-function scenarioPatchToLegacyPatch(
-  patch: ScenarioPatch,
-): { path: string; op: "set" | "multiply"; value: number } {
-  if ("field" in patch) {
-    return {
-      path: `/${patch.field}`,
-      op: patch.op === "set" ? "set" : "multiply",
-      value: patch.value,
-    };
-  }
-  return {
-    path: `/debts/${patch.debtId}/minimumPayment`,
-    op: patch.op === "debt.setMinimumPayment" ? "set" : "multiply",
-    value: patch.value,
-  };
-}
-
-function toLegacyScenarioMetaFromInput(
-  inputScenario: RunInputScenario,
-  dependencies: Required<CreatePlanningRunParseDependencies>,
-): ScenarioMeta {
-  return {
-    id: dependencies.randomUUID(),
-    name: inputScenario.title || "What-if scenario",
-    ...(inputScenario.baseRunId ? { baselineRunId: inputScenario.baseRunId } : {}),
-    createdAt: dependencies.now().toISOString(),
-    patches: inputScenario.patch.map((patch) => scenarioPatchToLegacyPatch(patch)),
-  };
-}
-
-function legacyPatchToInputPatch(
-  patch: { path: string; op: "set" | "add" | "multiply"; value: number },
-): ScenarioPatch | null {
-  const normalizedPath = asString(patch.path);
-  if (patch.op === "add") return null;
-  if (
-    normalizedPath === "/monthlyIncomeNet"
-    || normalizedPath === "/monthlyEssentialExpenses"
-    || normalizedPath === "/monthlyDiscretionaryExpenses"
-  ) {
-    return {
-      op: patch.op === "set" ? "set" : "mul",
-      field: normalizedPath.slice(1) as "monthlyIncomeNet" | "monthlyEssentialExpenses" | "monthlyDiscretionaryExpenses",
-      value: patch.value,
-    };
-  }
-  const debtMatch = /^\/debts\/([^/]+)\/minimumPayment$/.exec(normalizedPath);
-  if (debtMatch) {
-    return {
-      op: patch.op === "set" ? "debt.setMinimumPayment" : "debt.mulMinimumPayment",
-      debtId: debtMatch[1],
-      value: patch.value,
-    };
-  }
-  return null;
-}
-
-function legacyScenarioToInputScenario(legacy: ScenarioMeta): RunInputScenario | undefined {
-  const patch: ScenarioPatch[] = [];
-  for (const entry of legacy.patches) {
-    const converted = legacyPatchToInputPatch(entry);
-    if (!converted) return undefined;
-    patch.push(converted);
-  }
-  if (patch.length < 1) return undefined;
-  return {
-    ...(legacy.name ? { title: legacy.name } : {}),
-    ...(legacy.baselineRunId ? { baseRunId: legacy.baselineRunId } : {}),
-    patch,
-  };
-}
-
-function parseDebtStrategyInput(
-  value: unknown,
-): {
-  offers: RefiOffer[];
-  options?: { extraPaymentKrw?: number; compareTermsMonths?: number[] };
-} {
-  if (value === undefined || value === null) return { offers: [] };
-  if (!isRecord(value)) {
-    throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-      { path: "input.debtStrategy", message: "must be an object" },
-    ]);
-  }
-
-  let offers: RefiOffer[] = [];
-  if (value.offers !== undefined) {
-    if (!Array.isArray(value.offers)) {
-      throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-        { path: "input.debtStrategy.offers", message: "must be an array" },
-      ]);
-    }
-    offers = value.offers.map((entry, index) => {
-      if (!isRecord(entry)) {
-        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-          { path: `input.debtStrategy.offers[${index}]`, message: "must be an object" },
-        ]);
-      }
-      const liabilityId = asString(entry.liabilityId);
-      if (!liabilityId) {
-        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-          { path: `input.debtStrategy.offers[${index}].liabilityId`, message: "must be a non-empty string" },
-        ]);
-      }
-      if (!isFiniteNumber(entry.newAprPct)) {
-        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-          { path: `input.debtStrategy.offers[${index}].newAprPct`, message: "must be a finite number" },
-        ]);
-      }
-      if (entry.feeKrw !== undefined && (!isFiniteNumber(entry.feeKrw) || entry.feeKrw < 0)) {
-        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-          { path: `input.debtStrategy.offers[${index}].feeKrw`, message: "must be >= 0 when provided" },
-        ]);
-      }
-      const title = asString(entry.title);
-      let normalizedRate;
-      try {
-        normalizedRate = toEngineRateBoundary(entry.newAprPct, "newAprPct");
-      } catch {
-        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-          {
-            path: `input.debtStrategy.offers[${index}].newAprPct`,
-            message: "must be 0, legacy decimal(0<x<=1), or percent(1<x<=100)",
-          },
-        ]);
-      }
-      return {
-        liabilityId,
-        newAprPct: normalizedRate.pct,
-        ...(entry.feeKrw !== undefined ? { feeKrw: roundKrw(entry.feeKrw) } : {}),
-        ...(title ? { title } : {}),
-      };
-    });
-  }
-
-  let options: { extraPaymentKrw?: number; compareTermsMonths?: number[] } | undefined;
-  if (value.options !== undefined) {
-    if (!isRecord(value.options)) {
-      throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-        { path: "input.debtStrategy.options", message: "must be an object" },
-      ]);
-    }
-    options = {};
-    if (value.options.extraPaymentKrw !== undefined) {
-      if (!isFiniteNumber(value.options.extraPaymentKrw) || value.options.extraPaymentKrw < 0) {
-        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-          { path: "input.debtStrategy.options.extraPaymentKrw", message: "must be >= 0" },
-        ]);
-      }
-      options.extraPaymentKrw = roundKrw(value.options.extraPaymentKrw);
-    }
-    if (value.options.compareTermsMonths !== undefined) {
-      if (!Array.isArray(value.options.compareTermsMonths)) {
-        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-          { path: "input.debtStrategy.options.compareTermsMonths", message: "must be an array" },
-        ]);
-      }
-      options.compareTermsMonths = value.options.compareTermsMonths.map((term, index) => {
-        const parsed = Math.trunc(Number(term));
-        if (!Number.isFinite(parsed) || parsed < 1) {
-          throw new PlanningV2ValidationError("Invalid debtStrategy input", [
-            { path: `input.debtStrategy.options.compareTermsMonths[${index}]`, message: "must be >= 1" },
-          ]);
-        }
-        return parsed;
-      });
-    }
-  }
-
-  return {
-    offers,
-    ...(options ? { options } : {}),
-  };
-}
-
-function toLiabilitiesFromProfile(profile: { debts: Array<{
-  id: string;
-  name: string;
-  balance: number;
-  minimumPayment: number;
-  aprPct?: number;
-  apr?: number;
-  remainingMonths?: number;
-  repaymentType?: "amortizing" | "interestOnly";
-}> }, fallbackMonths: number): LiabilityV2[] {
-  return profile.debts.map((debt) => ({
-    id: debt.id,
-    name: debt.name,
-    type: debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing",
-    principalKrw: Math.max(0, debt.balance),
-    aprPct: isFiniteNumber(debt.aprPct) ? debt.aprPct : decimalToAprPct(debt.apr ?? 0),
-    remainingMonths: Math.max(1, debt.remainingMonths ?? fallbackMonths),
-    minimumPaymentKrw: Math.max(0, debt.minimumPayment),
-  }));
-}
-
-function formatPreflightIssueLine(issue: {
-  code: string;
-  message: string;
-  fixHint?: string;
-}): string {
-  if (issue.fixHint && issue.fixHint.trim().length > 0) {
-    return `${issue.code}: ${issue.message} (${issue.fixHint})`;
-  }
-  return `${issue.code}: ${issue.message}`;
-}
-
-function resolveParseDependencies(
-  dependencies: CreatePlanningRunParseDependencies = {},
-): Required<CreatePlanningRunParseDependencies> {
-  return {
-    randomUUID: dependencies.randomUUID ?? (() => crypto.randomUUID()),
-    now: dependencies.now ?? (() => new Date()),
-  };
-}
 
 function resolveCreateDependencies(
   dependencies: CreatePlanningRunDependencies = {},
@@ -625,78 +109,6 @@ function resolveCreateDependencies(
     randomUUID: dependencies.randomUUID ?? (() => crypto.randomUUID()),
     now: dependencies.now ?? (() => new Date()),
   };
-}
-
-function validationIssues(error: PlanningV2ValidationError): string[] {
-  return error.issues.map((issue) => `${issue.path}: ${issue.message}`);
-}
-
-export function parseCreatePlanningRunCommand(
-  body: RunsCreateBody,
-  dependencies?: CreatePlanningRunParseDependencies,
-): CreatePlanningRunParseResult {
-  const deps = resolveParseDependencies(dependencies);
-  if (!isRecord(body) || !isRecord(body.input)) {
-    return {
-      ok: false,
-      code: "INPUT",
-      message: "Invalid request body",
-      auditMessage: "invalid request body",
-    };
-  }
-
-  const profileId = asString(body.profileId);
-  const runRequestId = deps.randomUUID();
-  const title = asString(body.title);
-  const inputRow = body.input;
-
-  if (!profileId) {
-    return {
-      ok: false,
-      code: "INPUT",
-      message: "profileId is required",
-      auditMessage: "missing profileId",
-    };
-  }
-
-  try {
-    return {
-      ok: true,
-      command: {
-        profileId,
-        runRequestId,
-        title,
-        horizonMonths: validateHorizonMonths(inputRow.horizonMonths),
-        policyId: parsePolicyId(inputRow.policyId),
-        requestedSnapshotId: parseSnapshotId(inputRow.snapshotId),
-        assumptionsOverride: parseAssumptionsOverride(inputRow.assumptionsOverride),
-        runScenariosEnabled: parseRunScenarios(inputRow.runScenarios),
-        getActionsEnabled: parseGetActions(inputRow.getActions),
-        analyzeDebtEnabled: parseAnalyzeDebt(inputRow.analyzeDebt),
-        debtStrategyInput: parseDebtStrategyInput(inputRow.debtStrategy),
-        includeProducts: parseIncludeProducts(inputRow.includeProducts),
-        monteCarloConfig: parseMonteCarloInput(inputRow.monteCarlo),
-        scenarioInput: parseRunInputScenario(inputRow.scenario),
-        scenarioMeta: parseScenarioMeta(body.scenario, deps),
-      },
-    };
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return {
-        ok: false,
-        code: "INPUT",
-        message: error.message,
-        issues: validationIssues(error),
-        auditMessage: "invalid run input",
-      };
-    }
-    return {
-      ok: false,
-      code: "INPUT",
-      message: "Invalid input",
-      auditMessage: "invalid input",
-    };
-  }
 }
 
 function errorResult(input: {
@@ -724,26 +136,18 @@ function recordCreateAudit(
     message: string;
   },
 ) {
-  try {
-    dependencies.recordAudit({
-      result: input.result,
-      recordId: input.recordId,
-      message: input.message,
-    });
-  } catch (error) {
-    console.error("[planning/runs] failed to record create audit", error);
-  }
+  recordCreateRunAuditSafely(dependencies.recordAudit, {
+    result: input.result,
+    recordId: input.recordId,
+    message: input.message,
+  });
 }
 
 async function recordStageMetricsSafely(
   dependencies: ResolvedCreatePlanningRunDependencies,
   input: Parameters<typeof recordCurrentUserRunStageMetrics>[0],
 ) {
-  try {
-    await dependencies.recordStageMetrics(input);
-  } catch (error) {
-    console.error("[planning/runs] failed to record stage metrics", error);
-  }
+  await recordCreateRunStageMetricsSafely(dependencies.recordStageMetrics, input);
 }
 
 export function recordCreatePlanningRunParseFailure(
@@ -930,46 +334,26 @@ export async function createPlanningRun(
       });
     }
   }
-  const debtLiabilities = toLiabilitiesFromProfile(canonicalProfile, horizonMonths);
-
-  const preflightIssues = preflightRun({
-    profile: canonicalProfile as unknown as Record<string, unknown>,
-    selectedSnapshot: requestedSnapshotId
-      ? { mode: "history", id: requestedSnapshotId }
-      : { mode: "latest" },
-    debtOffers: debtStrategyInput.offers.map((offer) => ({
-      liabilityId: offer.liabilityId,
-      newAprPct: offer.newAprPct,
-      ...(typeof offer.feeKrw === "number" ? { feeKrw: offer.feeKrw } : {}),
-    })),
+  const preflight = evaluateCreatePlanningRunPreflight({
+    profile: canonicalProfile,
+    requestedSnapshotId,
+    debtStrategyInput,
     assumptionsOverride,
-    ...(monteCarloConfig
-      ? {
-        monteCarlo: {
-          enabled: true,
-          paths: monteCarloConfig.paths,
-          horizonMonths,
-        },
-      }
-      : {}),
+    monteCarloConfig,
+    horizonMonths,
   });
-  const preflightBlockIssues = preflightIssues.filter((issue) => issue.severity === "block");
-  if (preflightBlockIssues.length > 0) {
+  if (!preflight.ok) {
     recordCreateAudit(deps, {
       result: "ERROR",
       recordId: profileId,
-      message: `preflight blocked (${preflightBlockIssues.map((issue) => issue.code).join(", ")})`,
+      message: `preflight blocked (${preflight.blockIssues.map((issue) => issue.code).join(", ")})`,
     });
     return errorResult({
       code: "INPUT",
       message: "실행 저장 사전 점검에 실패했습니다.",
       status: 400,
-      issues: preflightBlockIssues.map((issue) => formatPreflightIssueLine(issue)),
-      meta: {
-        preflight: {
-          blocks: preflightBlockIssues,
-        },
-      },
+      issues: preflight.responseIssues,
+      meta: preflight.meta,
     });
   }
 
@@ -1041,122 +425,39 @@ export async function createPlanningRun(
     })
     : null;
 
-  let plan: SimulationResultV2 | null = null;
-  let scenariosResult: ReturnType<typeof runScenarios> | null = null;
-  let monteCarloResult: ReturnType<typeof runMonteCarlo> | null = null;
-  let actionsResult: Awaited<ReturnType<typeof matchCandidates>> | ReturnType<typeof buildActionsFromPlan> | null = null;
-  let debtStrategyResult: ReturnType<typeof computeDebtStrategy> | null = null;
   let stages: CurrentUserRunStageResult[] = [];
 
   try {
-    const pipeline = await deps.runPipeline({
-      simulate: {
-        outputRefKey: "outputs.simulate",
-        run: () => {
-          plan = simulateMonthly(canonicalProfile, finalSimulationAssumptions, horizonMonths, { policyId });
-          return plan;
-        },
-      },
-      scenarios: {
-        enabled: runScenariosEnabled,
-        outputRefKey: "outputs.scenarios",
-        run: () => {
-          scenariosResult = runScenarios({
-            profile: canonicalProfile,
-            horizonMonths,
-            baseAssumptions,
-            riskTolerance,
-            policyId,
-          });
-          return scenariosResult;
-        },
-      },
-      monteCarlo: {
-        enabled: Boolean(monteCarloConfig),
-        ...(monteCarloConfig && monteCarloBudget && !monteCarloBudget.ok
-          ? {
-            preSkipped: {
-              reason: "BUDGET_EXCEEDED" as const,
-              message: monteCarloBudget.message,
-            },
-          }
-          : {}),
-        outputRefKey: "outputs.monteCarlo",
-        run: () => {
-          if (!monteCarloConfig) return null;
-          monteCarloResult = runMonteCarlo({
-            profile: canonicalProfile,
-            horizonMonths,
-            baseAssumptions,
-            policyId,
-            paths: monteCarloConfig.paths,
-            seed: monteCarloConfig.seed,
-            riskTolerance,
-          });
-          return monteCarloResult;
-        },
-      },
-      actions: {
-        enabled: getActionsEnabled,
-        outputRefKey: "outputs.actions",
-        run: async () => {
-          if (!plan) {
-            throw new Error("simulate result is not available");
-          }
-          const actionsBase = buildActionsFromPlan({
-            plan,
-            profile: canonicalProfile,
-            baseAssumptions,
-            snapshotMeta: {
-              asOf: snapshot?.asOf,
-              missing: !snapshot,
-            },
-            ...(monteCarloResult ? { monteCarlo: monteCarloResult } : {}),
-          });
-          actionsResult = includeProducts
-            ? await deps.matchCandidatesProvider(actionsBase, {
-              includeProducts: true,
-              requestBaseUrl: context.requestBaseUrl,
-            })
-            : actionsBase;
-          return actionsResult;
-        },
-      },
-      debtStrategy: {
-        enabled: analyzeDebtEnabled,
-        outputRefKey: "outputs.debtStrategy",
-        run: () => {
-          debtStrategyResult = computeDebtStrategy({
-            liabilities: debtLiabilities,
-            monthlyIncomeKrw: Math.max(
-              0,
-              canonicalProfile.cashflow?.monthlyIncomeKrw ?? canonicalProfile.monthlyIncomeNet,
-            ),
-            offers: debtStrategyInput.offers,
-            options: debtStrategyInput.options,
-            horizonMonths,
-            nowMonthIndex: 0,
-          });
-          return debtStrategyResult;
-        },
-      },
-    });
+    const stagePlanState = createPlanningStagePlanState();
+    const pipeline = await deps.runPipeline(buildPlanningStagePlan({
+      profile: canonicalProfile,
+      horizonMonths,
+      policyId,
+      baseAssumptions,
+      finalSimulationAssumptions,
+      riskTolerance,
+      snapshotAsOf: snapshot?.asOf,
+      runScenariosEnabled,
+      getActionsEnabled,
+      analyzeDebtEnabled,
+      includeProducts,
+      monteCarloConfig,
+      monteCarloBudget,
+      debtStrategyInput,
+      requestBaseUrl: context.requestBaseUrl,
+      matchCandidatesProvider: deps.matchCandidatesProvider,
+      state: stagePlanState,
+    }));
 
     stages = pipeline.stages;
-    const simulatePlan = (plan ?? pipeline.outputs.simulate) as SimulationResultV2 | null;
-    const scenariosOutput = (scenariosResult ?? pipeline.outputs.scenarios) as ReturnType<typeof runScenarios> | null;
-    const monteCarloOutput = (monteCarloResult ?? pipeline.outputs.monteCarlo) as ReturnType<typeof runMonteCarlo> | null;
-    const actionsOutput = (actionsResult ?? pipeline.outputs.actions) as Awaited<ReturnType<typeof matchCandidates>>
-      | ReturnType<typeof buildActionsFromPlan>
-      | null;
-    const debtStrategyOutput = (debtStrategyResult ?? pipeline.outputs.debtStrategy) as ReturnType<typeof computeDebtStrategy> | null;
-    if (!simulatePlan || pipeline.overallStatus === "FAILED") {
+    const stageOutputs = resolvePlanningStageOutputs(pipeline, stagePlanState);
+    if (!stageOutputs.simulatePlan || pipeline.overallStatus === "FAILED") {
       await recordStageMetricsSafely(deps, {
         requestId: runRequestId,
         profileId: profileRecord.id,
         overallStatus: pipeline.overallStatus,
         stages,
-        totalDurationMs: stages.reduce((sum, stage) => sum + (typeof stage.durationMs === "number" ? stage.durationMs : 0), 0),
+        totalDurationMs: totalStageDurationMs(stages),
       });
       recordCreateAudit(deps, {
         result: "ERROR",
@@ -1174,65 +475,30 @@ export async function createPlanningRun(
       });
     }
 
-    const { outputs, resultDto } = buildPlanningRunArtifacts({
+    const scenarioMetaForRecord = scenarioMeta ?? (scenarioInput ? toLegacyScenarioMetaFromInput(scenarioInput, deps) : undefined);
+    const { recordInput } = assemblePlanningRunRecordInput({
+      command,
+      profileId: profileRecord.id,
+      title,
+      scenarioInput,
+      scenarioMetaForRecord,
       profile: canonicalProfile,
-      policyId,
+      profileNormalization,
+      snapshotId,
+      snapshot,
       snapshotMeta,
       healthSummary: health.summary,
-      simulatePlan,
-      scenariosOutput,
-      monteCarloOutput,
-      actionsOutput: Array.isArray(actionsOutput) ? actionsOutput : null,
-      debtStrategyOutput,
-    });
-    const reproducibility = buildRunReproducibilityMeta({
-      profile: canonicalProfile,
-      assumptionsSnapshotId: snapshotId,
-      assumptionsSnapshot: snapshot,
-      effectiveAssumptions: baseAssumptions,
+      baseAssumptions,
       appliedOverrides,
-      policy: DEFAULT_PLANNING_POLICY,
-    });
-    const scenarioMetaForRecord = scenarioMeta ?? (scenarioInput ? toLegacyScenarioMetaFromInput(scenarioInput, deps) : undefined);
-
-    const created = await deps.createRunRecord({
-      profileId: profileRecord.id,
-      ...(title ? { title } : {}),
-      ...(scenarioMetaForRecord ? { scenario: scenarioMetaForRecord } : {}),
       overallStatus: pipeline.overallStatus,
       stages,
-      input: {
-        horizonMonths,
-        policyId,
-        ...(snapshotId ? { snapshotId } : {}),
-        ...(Object.keys(assumptionsOverride).length > 0 ? { assumptionsOverride: assumptionsOverride as Partial<AssumptionsV2> } : {}),
-        ...(runScenariosEnabled !== true ? { runScenarios: runScenariosEnabled } : {}),
-        ...(getActionsEnabled !== true ? { getActions: getActionsEnabled } : {}),
-        ...(analyzeDebtEnabled !== true ? { analyzeDebt: analyzeDebtEnabled } : {}),
-        ...(debtStrategyInput.offers.length > 0 || debtStrategyInput.options
-          ? { debtStrategy: debtStrategyInput }
-          : {}),
-        ...(includeProducts ? { includeProducts: true } : {}),
-        ...(monteCarloConfig ? { monteCarlo: monteCarloConfig } : {}),
-        ...(scenarioInput ? { scenario: scenarioInput } : {}),
+      stageOutputs: {
+        ...stageOutputs,
+        simulatePlan: stageOutputs.simulatePlan,
       },
-      meta: {
-        snapshot: snapshotMeta,
-        normalization: profileNormalization,
-        health: {
-          warningsCodes: health.summary.warningCodes,
-          criticalCount: health.summary.criticalCount,
-          ...(typeof health.summary.snapshotStaleDays === "number"
-            ? { snapshotStaleDays: health.summary.snapshotStaleDays }
-            : {}),
-        },
-      },
-      reproducibility,
-      outputs: {
-        resultDto,
-        ...outputs,
-      } as unknown as CurrentUserRunRecord["outputs"],
-    }, {
+    });
+
+    const created = await deps.createRunRecord(recordInput, {
       storeRawOutputs: asString(process.env.PLANNING_RUN_STORE_RAW_OUTPUTS).toLowerCase() === "true",
     });
     await recordStageMetricsSafely(deps, {
@@ -1241,7 +507,7 @@ export async function createPlanningRun(
       profileId: profileRecord.id,
       overallStatus: pipeline.overallStatus,
       stages,
-      totalDurationMs: stages.reduce((sum, stage) => sum + (typeof stage.durationMs === "number" ? stage.durationMs : 0), 0),
+      totalDurationMs: totalStageDurationMs(stages),
     });
 
     recordCreateAudit(deps, {
@@ -1254,14 +520,14 @@ export async function createPlanningRun(
       ok: true,
       status: 201,
       payload: {
-        meta: {
+        meta: buildCreatePlanningRunSuccessMeta({
           generatedAt: deps.now().toISOString(),
-          snapshot: snapshotMeta,
-          normalization: profileNormalization,
-          health: health.summary,
+          snapshotMeta,
+          profileNormalization,
+          healthSummary: health.summary,
           overallStatus: pipeline.overallStatus,
           stages,
-        },
+        }),
         data: created,
       },
     };
@@ -1273,7 +539,7 @@ export async function createPlanningRun(
         profileId: profileRecord.id,
         overallStatus: "FAILED",
         stages,
-        totalDurationMs: stages.reduce((sum, stage) => sum + (typeof stage.durationMs === "number" ? stage.durationMs : 0), 0),
+        totalDurationMs: totalStageDurationMs(stages),
       });
     }
     recordCreateAudit(deps, {

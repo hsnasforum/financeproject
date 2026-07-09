@@ -1,21 +1,24 @@
-import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
-  assertSameOrigin,
+  fail,
+  ok } from "../../../../../lib/planning/server/v2/apiResponse";
+import {
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { type DebtStrategyInput, type LiabilityV2, type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
+import { type DebtStrategyInput,
+  type LiabilityV2,
+  type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { buildEnginePayloadFromProfile } from "../../../../../lib/planning/server/v2/toEngineInput";
 import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
 import { validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
+import { decimalToAprPct,
+  toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
 import { validateProfile } from "../../../../../lib/planning/v2/profileValidation";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type DebtStrategyRequestBody = {
@@ -164,17 +167,9 @@ function assertOfferLiabilityIdsMatch(offers: RefiOffer[], liabilities: Liabilit
   ]);
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -201,39 +196,39 @@ export async function POST(request: Request) {
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const profile = validateProfileV2(body.profile);
-    const offers = parseOffers(body.offers);
-    const options = parseOptions(body.options);
-    const liabilities = toLiabilitiesFromProfile(profile);
-    assertOfferLiabilityIdsMatch(offers, liabilities);
+    try {
+      const profile = validateProfileV2(body.profile);
+      const offers = parseOffers(body.offers);
+      const options = parseOptions(body.options);
+      const liabilities = toLiabilitiesFromProfile(profile);
+      assertOfferLiabilityIdsMatch(offers, liabilities);
 
-    const { data } = buildEnginePayloadFromProfile(profile, (engineResult) => ({
-      ...planningService.computeDebtStrategy({
-        liabilities,
-        monthlyIncomeKrw: engineResult.input.monthlyIncome,
-        offers,
-        options,
-        nowMonthIndex: 0,
-        horizonMonths: DEFAULT_REMAINING_MONTHS,
-      }),
-    }));
+      const { data } = buildEnginePayloadFromProfile(profile, (engineResult) => ({
+        ...planningService.computeDebtStrategy({
+          liabilities,
+          monthlyIncomeKrw: engineResult.input.monthlyIncome,
+          offers,
+          options,
+          nowMonthIndex: 0,
+          horizonMonths: DEFAULT_REMAINING_MONTHS,
+        }),
+      }));
 
-    return ok(data, {
-      generatedAt: new Date().toISOString(),
-      ...userMeta,
-      snapshot: {
-        missing: true,
-      },
-    });
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+      return ok(data, {
+        generatedAt: new Date().toISOString(),
+        ...userMeta,
+        snapshot: {
+          missing: true,
+        },
+      });
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+      }
+      return fail("INTERNAL");
     }
-    return fail("INTERNAL");
-  }
+  });
 }

@@ -11,6 +11,7 @@ import {
 } from "./next_artifact_prune.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
 import { ensureStandaloneRuntimeAssets } from "./standalone_runtime_assets.mjs";
+import { assertPlanningStorageMode } from "./planning_storage_mode_guard.mjs";
 
 const FORCED_HOST = "127.0.0.1";
 const DEFAULT_PORT = 3100;
@@ -23,25 +24,6 @@ function parsePort(value, fallback = DEFAULT_PORT) {
   const intPort = Math.trunc(parsed);
   if (intPort < 1 || intPort > 65535) return fallback;
   return intPort;
-}
-
-function parseBoolean(value, fallback = false) {
-  if (typeof value !== "string") return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return fallback;
-  if (["1", "true", "yes", "on"].includes(normalized)) return true;
-  if (["0", "false", "no", "off"].includes(normalized)) return false;
-  return fallback;
-}
-
-function assertPlanningStorageMode(env) {
-  const nodeEnv = typeof env.NODE_ENV === "string" ? env.NODE_ENV.trim().toLowerCase() : "";
-  if (nodeEnv !== "production") return;
-  if (parseBoolean(env.PLANNING_NAMESPACE_ENABLED, false)) return;
-  if (parseBoolean(env.PLANNING_SINGLE_USER_MODE, false)) return;
-  throw new Error(
-    "invalid planning storage mode: set PLANNING_NAMESPACE_ENABLED=true for multi-user storage or PLANNING_SINGLE_USER_MODE=true for explicit single-user storage",
-  );
 }
 
 function parseCliArgs(argv) {

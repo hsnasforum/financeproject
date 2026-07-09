@@ -9,8 +9,8 @@ describe("data source user impact cards", () => {
     expect(card?.basis).toContain("비교용 정보");
     expect(card?.freshness).toContain("공시 시점");
     expect(card?.routes.map((route) => route.href)).toEqual([
-      "/products/deposit",
-      "/products/saving",
+      "/products/catalog?kind=deposit",
+      "/products/catalog?kind=saving",
       "/products/credit-loan",
     ]);
   });

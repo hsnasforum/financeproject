@@ -24,7 +24,6 @@ import {
   resolveProfileRunBlobsDir,
   resolveProfileRunDir,
   resolveProfileRunMetaPath,
-  resolveRunBlobsDir,
   resolveRunDir,
   resolveRunMetaPath,
   resolveRunPath,
@@ -40,19 +39,51 @@ import {
 } from "./trash";
 import { migrateLegacyRunToEngineEnvelope } from "./engineEnvelopeMigration";
 import {
+  normalizeRunBlobName,
+  pickRunBlobRef,
+  readRunBlobPayload,
+  withStageBlobRefs,
+  withStageOutputRefs,
+  writeStageBlobs,
+  type RunBlobName,
+  type RunBlobRef,
+} from "./runBlobStore";
+import {
+  backfillLegacyRunsWith,
+  listLegacyRunBackfillCandidatesWith,
+  summarizeLegacyRunBackfillWith,
+  type LegacyRunBackfillCandidate,
+  type LegacyRunBackfillResult,
+  type LegacyRunBackfillSummary,
+} from "./runLegacyBackfillService";
+import {
   fromStoredPayload,
   readJsonFile,
   toStoredPayload,
   writeJsonAtomic,
 } from "./runRecordCodec";
-import { type PlanningRunRecord, type PlanningRunStageId } from "./types";
+import {
+  buildRunIndexFile,
+  parseRunIndex,
+  sortRunIndexEntriesByCreatedAtDesc,
+  toRunIndexEntry,
+  type RunIndexEntry,
+} from "./runIndex";
+import { selectRunRetentionTargets } from "./runRetention";
+import { type PlanningRunRecord } from "./types";
+
+export type { RunBlobName } from "./runBlobStore";
+export type {
+  LegacyRunBackfillCandidate,
+  LegacyRunBackfillCandidateReason,
+  LegacyRunBackfillResult,
+  LegacyRunBackfillSummary,
+} from "./runLegacyBackfillService";
+export type { RunIndexEntry } from "./runIndex";
 
 export const DEFAULT_RUNS_PER_PROFILE_RETENTION = 50;
 
-const RUN_INDEX_VERSION = 1;
 const BLOB_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
-
-export type RunBlobName = "simulate" | "scenarios" | "monteCarlo" | "actions" | "debtStrategy" | "raw";
 
 type ListRunsOptions = {
   profileId?: string;
@@ -75,62 +106,6 @@ type CreateRunInput = Omit<PlanningRunRecord, "version" | "schemaVersion" | "id"
 type PurgeRunsOptions = {
   profileId?: string;
   maxPerProfile?: number;
-};
-
-export type RunIndexEntry = {
-  id: string;
-  profileId: string;
-  title?: string;
-  createdAt: string;
-  overallStatus?: PlanningRunRecord["overallStatus"];
-  snapshot?: {
-    id?: string;
-    asOf?: string;
-    missing?: boolean;
-  };
-  warningsCount?: number;
-  criticalCount?: number;
-};
-
-export type LegacyRunBackfillSummary = {
-  totalRuns: number;
-  opsDoctorRuns: number;
-  userRuns: number;
-  legacyCandidates: number;
-  opsDoctorLegacyCandidates: number;
-  userLegacyCandidates: number;
-  resultDtoOnlyCandidates: number;
-  missingResultDtoCandidates: number;
-  missingEngineSchemaCandidates: number;
-  unreadableCandidates: number;
-};
-
-export type LegacyRunBackfillCandidateReason =
-  | "resultDtoOnly"
-  | "missingResultDto"
-  | "missingEngineSchema"
-  | "unreadableMeta";
-
-export type LegacyRunBackfillCandidate = {
-  id: string;
-  profileId: string;
-  createdAt: string;
-  title?: string;
-  runKind: "opsDoctor" | "user";
-  reason: LegacyRunBackfillCandidateReason;
-};
-
-export type LegacyRunBackfillResult = {
-  selected: number;
-  migrated: number;
-  skipped: number;
-  failed: number;
-  candidates: LegacyRunBackfillCandidate[];
-};
-
-type RunIndexFile = {
-  version: typeof RUN_INDEX_VERSION;
-  entries: RunIndexEntry[];
 };
 
 function assertServerOnly(): void {
@@ -161,19 +136,6 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function pickBlobRef(value: unknown): { name: string; path?: string; sizeBytes?: number } | undefined {
-  if (!isRecord(value)) return undefined;
-  const name = asString(value.name);
-  if (!name) return undefined;
-  const pathValue = asString(value.path);
-  const sizeRaw = Number(value.sizeBytes);
-  return {
-    name,
-    ...(pathValue ? { path: pathValue } : {}),
-    ...(Number.isFinite(sizeRaw) ? { sizeBytes: Math.max(0, Math.trunc(sizeRaw)) } : {}),
-  };
-}
-
 function isRunRecord(value: unknown): value is PlanningRunRecord {
   if (!isRecord(value)) return false;
   if (value.version !== 1) return false;
@@ -200,22 +162,6 @@ function toSafeOffset(value: unknown): number {
   const parsed = Math.trunc(Number(value));
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, parsed);
-}
-
-function normalizeBlobName(name: unknown): RunBlobName | null {
-  const value = asString(name);
-  if (!BLOB_NAME_PATTERN.test(value)) return null;
-  if (
-    value === "simulate"
-    || value === "scenarios"
-    || value === "monteCarlo"
-    || value === "actions"
-    || value === "debtStrategy"
-    || value === "raw"
-  ) {
-    return value;
-  }
-  return null;
 }
 
 function isEngineEnvelopeLike(value: unknown): value is NonNullable<PlanningRunRecord["outputs"]["engine"]> {
@@ -278,7 +224,7 @@ function compactRunOutputs(
 
   const simulate = simulateSource;
   if (Object.keys(simulate).length > 0) {
-    const simulateRef = pickBlobRef(simulate.ref);
+    const simulateRef = pickRunBlobRef(simulate.ref);
     const timelineRows = asArray(simulate.timeline);
     const simulateOutput = {
       ...(simulateRef ? { ref: simulateRef } : {}),
@@ -302,7 +248,7 @@ function compactRunOutputs(
 
   const scenarios = asRecord(source.scenarios);
   if (Object.keys(scenarios).length > 0) {
-    const scenariosRef = pickBlobRef(scenarios.ref);
+    const scenariosRef = pickRunBlobRef(scenarios.ref);
     const scenariosOutput = {
       ...(scenariosRef ? { ref: scenariosRef } : {}),
       ...(Array.isArray(scenarios.table) ? { table: takeTop(scenarios.table, LIMITS.tracesTop) } : {}),
@@ -321,7 +267,7 @@ function compactRunOutputs(
 
   const monteCarlo = asRecord(source.monteCarlo);
   if (Object.keys(monteCarlo).length > 0) {
-    const monteCarloRef = pickBlobRef(monteCarlo.ref);
+    const monteCarloRef = pickRunBlobRef(monteCarlo.ref);
     const monteOutput = {
       ...(monteCarloRef ? { ref: monteCarloRef } : {}),
       ...(monteCarlo.probabilities !== undefined ? { probabilities: monteCarlo.probabilities } : {}),
@@ -335,7 +281,7 @@ function compactRunOutputs(
 
   const actions = asRecord(source.actions);
   if (Object.keys(actions).length > 0) {
-    const actionsRef = pickBlobRef(actions.ref);
+    const actionsRef = pickRunBlobRef(actions.ref);
     const actionRows = Array.isArray(actions.actions)
       ? takeTop(actions.actions, LIMITS.actionsTop)
       : [];
@@ -350,7 +296,7 @@ function compactRunOutputs(
 
   const debtStrategy = asRecord(source.debtStrategy);
   if (Object.keys(debtStrategy).length > 0) {
-    const debtStrategyRef = pickBlobRef(debtStrategy.ref);
+    const debtStrategyRef = pickRunBlobRef(debtStrategy.ref);
     const debtOutput = {
       ...(debtStrategyRef ? { ref: debtStrategyRef } : {}),
       ...(isRecord(debtStrategy.summary)
@@ -369,17 +315,6 @@ function compactRunOutputs(
   }
 
   return compacted;
-}
-
-function sortByCreatedAtDesc<T extends { id: string; createdAt: string }>(records: T[]): T[] {
-  return [...records].sort((a, b) => {
-    const aTs = Date.parse(a.createdAt);
-    const bTs = Date.parse(b.createdAt);
-    if (Number.isFinite(aTs) && Number.isFinite(bTs) && bTs !== aTs) {
-      return bTs - aTs;
-    }
-    return b.id.localeCompare(a.id);
-  });
 }
 
 function toMetaRecord(record: PlanningRunRecord): PlanningRunRecord {
@@ -450,43 +385,6 @@ function ensureCanonicalResultDtoWithSource(record: PlanningRunRecord): {
   };
 }
 
-function toRunIndexEntry(record: PlanningRunRecord): RunIndexEntry {
-  return {
-    id: record.id,
-    profileId: record.profileId,
-    ...(asString(record.title) ? { title: asString(record.title) } : {}),
-    createdAt: record.createdAt,
-    ...(record.overallStatus ? { overallStatus: record.overallStatus } : {}),
-    snapshot: {
-      ...(asString(record.meta.snapshot?.id) ? { id: asString(record.meta.snapshot?.id) } : {}),
-      ...(asString(record.meta.snapshot?.asOf) ? { asOf: asString(record.meta.snapshot?.asOf) } : {}),
-      ...(record.meta.snapshot?.missing === true ? { missing: true } : {}),
-    },
-    ...(typeof record.outputs?.resultDto?.summary?.totalWarnings === "number"
-      ? { warningsCount: record.outputs.resultDto.summary.totalWarnings }
-      : {}),
-    ...(typeof record.meta.health?.criticalCount === "number"
-      ? { criticalCount: record.meta.health.criticalCount }
-      : {}),
-  };
-}
-
-function isRunIndexEntry(value: unknown): value is RunIndexEntry {
-  if (!isRecord(value)) return false;
-  if (!asString(value.id)) return false;
-  if (!asString(value.profileId)) return false;
-  if (!asString(value.createdAt)) return false;
-  return true;
-}
-
-function parseRunIndex(payload: unknown): RunIndexEntry[] {
-  if (!isRecord(payload)) return [];
-  const version = Math.trunc(Number(payload.version));
-  if (version !== RUN_INDEX_VERSION) return [];
-  const rows = asArray(payload.entries).filter((entry) => isRunIndexEntry(entry)) as RunIndexEntry[];
-  return sortByCreatedAtDesc(rows).map((row) => ({ ...row }));
-}
-
 type RunPaths = {
   runId: string;
   profileId?: string;
@@ -505,6 +403,26 @@ type ReadRunMetaOptions = {
 type ReadRunIndexOptions = {
   repair?: boolean;
 };
+
+export type RunReadDiagnosticAttempt = {
+  source: "partition-hint" | "partition-scan" | "legacy-meta" | "legacy-file";
+  path: string;
+  status: "found" | "missing" | "unreadable";
+  reason?: string;
+};
+
+export type RunReadDiagnostic = {
+  id: string;
+  profileIdHint?: string;
+  status: "found" | "missing" | "unreadable";
+  attempts: RunReadDiagnosticAttempt[];
+  run?: PlanningRunRecord;
+};
+
+type ReadRunMetaByPathDetailedResult =
+  | { status: "found"; run: PlanningRunRecord }
+  | { status: "missing"; reason: string }
+  | { status: "unreadable"; reason: string };
 
 function getRunPaths(runId: string, profileId?: string): RunPaths {
   const safeRunId = sanitizeRecordId(runId);
@@ -538,11 +456,41 @@ async function readRunMetaByPath(
   filePath: string,
   options?: ReadRunMetaOptions,
 ): Promise<PlanningRunRecord | null> {
-  const loaded = await readJsonFile(filePath);
-  if (!loaded) return null;
-  const decoded = await fromStoredPayload(loaded);
+  const detailed = await readRunMetaByPathDetailed(filePath, options);
+  return detailed.status === "found" ? detailed.run : null;
+}
+
+async function readRunMetaByPathDetailed(
+  filePath: string,
+  options?: ReadRunMetaOptions,
+): Promise<ReadRunMetaByPathDetailedResult> {
+  let loaded: unknown;
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    loaded = JSON.parse(raw) as unknown;
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code === "ENOENT") {
+      return { status: "missing", reason: "file-missing" };
+    }
+    if (error instanceof SyntaxError) {
+      return { status: "unreadable", reason: "invalid-json" };
+    }
+    return {
+      status: "unreadable",
+      reason: nodeError?.code ? `read-failed:${nodeError.code}` : "read-failed",
+    };
+  }
+
+  let decoded: Awaited<ReturnType<typeof fromStoredPayload>>;
+  try {
+    decoded = await fromStoredPayload(loaded);
+  } catch {
+    return { status: "unreadable", reason: "decode-failed" };
+  }
+
   const parsed = decoded.payload;
-  if (!isRunRecord(parsed)) return null;
+  if (!isRunRecord(parsed)) return { status: "unreadable", reason: "invalid-run-record" };
   try {
     const canonical = loadCanonicalRun(parsed);
     const canonicalMeta = ensureCanonicalResultDtoWithSource(toMetaRecord(canonical.run));
@@ -564,9 +512,9 @@ async function readRunMetaByPath(
     if (options?.persistMigrations === true && (decoded.rewriteToVault || canonicalMeta.migrated || migration.migrated)) {
       await writeJsonAtomic(filePath, await toStoredPayload(migration.run));
     }
-    return migration.run;
+    return { status: "found", run: migration.run };
   } catch {
-    return null;
+    return { status: "unreadable", reason: "canonicalization-failed" };
   }
 }
 
@@ -582,27 +530,6 @@ async function readRawRunMetaByPath(filePath: string): Promise<PlanningRunRecord
   } catch {
     return null;
   }
-}
-
-function resolveBackfillRunKind(row: Pick<RunIndexEntry, "id" | "profileId">): "opsDoctor" | "user" {
-  return row.id.startsWith("ops-doctor-") || row.profileId === "ops-doctor"
-    ? "opsDoctor"
-    : "user";
-}
-
-function resolveLegacyCandidateReason(raw: PlanningRunRecord | null): LegacyRunBackfillCandidateReason | null {
-  if (!raw) return "unreadableMeta";
-
-  const hasEngine = isEngineEnvelopeLike(raw.outputs.engine);
-  const rawEngineSchemaVersion = Math.trunc(Number(raw.outputs.engineSchemaVersion));
-  const hasEngineSchema = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1;
-  const hasResultDto = raw.outputs.resultDto !== undefined;
-
-  if (hasEngine && hasEngineSchema) return null;
-  if (hasEngine && !hasEngineSchema) return "missingEngineSchema";
-  if (!hasEngine && hasResultDto) return "resultDtoOnly";
-  if (!hasEngine && !hasResultDto) return "missingResultDto";
-  return null;
 }
 
 async function findPartitionMetaPathByRunId(runId: string): Promise<string | null> {
@@ -719,7 +646,7 @@ async function scanRunsDirForIndex(): Promise<RunIndexEntry[]> {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return sortByCreatedAtDesc(out) as RunIndexEntry[];
+    if (nodeError?.code === "ENOENT") return sortRunIndexEntriesByCreatedAtDesc(out);
     throw error;
   }
 
@@ -750,7 +677,7 @@ async function scanRunsDirForIndex(): Promise<RunIndexEntry[]> {
   }
 
   const deduped = Array.from(new Map(out.map((row) => [row.id, row])).values());
-  return sortByCreatedAtDesc(deduped) as RunIndexEntry[];
+  return sortRunIndexEntriesByCreatedAtDesc(deduped);
 }
 
 async function writeRunIndex(
@@ -758,10 +685,7 @@ async function writeRunIndex(
   options?: { journal?: boolean; tx?: StorageTransactionContext },
 ): Promise<void> {
   const filePath = resolveRunsIndexPath();
-  const payload: RunIndexFile = {
-    version: RUN_INDEX_VERSION,
-    entries: sortByCreatedAtDesc(entries) as RunIndexEntry[],
-  };
+  const payload = buildRunIndexFile(entries);
   const shouldJournal = options?.journal !== false;
   const tx = options?.tx ?? (shouldJournal
     ? await beginStorageTransaction("RUN_INDEX_UPDATE", {
@@ -834,180 +758,6 @@ async function removeRunIndexEntry(id: string): Promise<void> {
   });
 }
 
-function stageIdToBlobName(id: PlanningRunStageId): RunBlobName | null {
-  if (id === "simulate") return "simulate";
-  if (id === "scenarios") return "scenarios";
-  if (id === "monteCarlo") return "monteCarlo";
-  if (id === "actions") return "actions";
-  if (id === "debt" || id === "debtStrategy") return "debtStrategy";
-  return null;
-}
-
-async function writeBlob(
-  profileId: string,
-  runId: string,
-  blobName: RunBlobName,
-  payload: unknown,
-): Promise<{ name: RunBlobName; path: string; sizeBytes: number } | null> {
-  if (!normalizeBlobName(blobName)) return null;
-  const blobPath = path.join(resolveProfileRunBlobsDir(profileId, runId), `${blobName}.json`);
-  await writeJsonAtomic(blobPath, await toStoredPayload(payload));
-  const stat = await fs.stat(blobPath).catch(() => null);
-  return {
-    name: blobName,
-    path: normalizeRelativePath(blobPath),
-    sizeBytes: stat?.size ?? 0,
-  };
-}
-
-async function readBlob(runId: string, blobName: RunBlobName): Promise<unknown | null> {
-  if (!normalizeBlobName(blobName)) return null;
-  const run = await getRun(runId);
-  const blobPath = run
-    ? path.join(resolveProfileRunBlobsDir(run.profileId, run.id), `${blobName}.json`)
-    : path.join(resolveRunBlobsDir(runId), `${blobName}.json`);
-  const loaded = await readJsonFile(blobPath);
-  if (loaded !== null) {
-    const decoded = await fromStoredPayload(loaded);
-    return decoded.payload;
-  }
-
-  const legacy = await readRunMeta(runId);
-  if (!legacy) return null;
-
-  if (blobName === "simulate") return legacy.outputs.simulate ?? null;
-  if (blobName === "scenarios") return legacy.outputs.scenarios ?? null;
-  if (blobName === "monteCarlo") return legacy.outputs.monteCarlo ?? null;
-  if (blobName === "actions") return legacy.outputs.actions ?? null;
-  if (blobName === "debtStrategy") return legacy.outputs.debtStrategy ?? null;
-  if (blobName === "raw") {
-    return {
-      run: legacy,
-      outputs: {
-        simulate: legacy.outputs.simulate,
-        scenarios: legacy.outputs.scenarios,
-        monteCarlo: legacy.outputs.monteCarlo,
-        actions: legacy.outputs.actions,
-        debtStrategy: legacy.outputs.debtStrategy,
-      },
-    };
-  }
-
-  return null;
-}
-
-function attachBlobRef<T extends Record<string, unknown>>(
-  value: T | undefined,
-  ref: { name: RunBlobName; path: string; sizeBytes: number } | null,
-): T | undefined {
-  if (!value) return undefined;
-  if (!ref) return value;
-  return {
-    ...value,
-    ref: {
-      name: ref.name,
-      path: ref.path,
-      ...(typeof ref.sizeBytes === "number" ? { sizeBytes: ref.sizeBytes } : {}),
-    },
-  };
-}
-
-function withStageBlobRefs(
-  outputs: PlanningRunRecord["outputs"],
-  refs: Partial<Record<RunBlobName, { name: RunBlobName; path: string; sizeBytes: number }>>,
-): PlanningRunRecord["outputs"] {
-  const source = asRecord(outputs);
-  const rawEngineSchemaVersion = Math.trunc(Number(source.engineSchemaVersion));
-  const engineSchemaVersion = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1
-    ? rawEngineSchemaVersion
-    : undefined;
-  const simulateRef = refs.simulate
-    ? { ref: { name: refs.simulate.name, path: refs.simulate.path, ...(typeof refs.simulate.sizeBytes === "number" ? { sizeBytes: refs.simulate.sizeBytes } : {}) } }
-    : undefined;
-  const scenariosRef = refs.scenarios
-    ? { ref: { name: refs.scenarios.name, path: refs.scenarios.path, ...(typeof refs.scenarios.sizeBytes === "number" ? { sizeBytes: refs.scenarios.sizeBytes } : {}) } }
-    : undefined;
-  const monteRef = refs.monteCarlo
-    ? { ref: { name: refs.monteCarlo.name, path: refs.monteCarlo.path, ...(typeof refs.monteCarlo.sizeBytes === "number" ? { sizeBytes: refs.monteCarlo.sizeBytes } : {}) } }
-    : undefined;
-  const actionsRef = refs.actions
-    ? { ref: { name: refs.actions.name, path: refs.actions.path, ...(typeof refs.actions.sizeBytes === "number" ? { sizeBytes: refs.actions.sizeBytes } : {}) } }
-    : undefined;
-  const debtRef = refs.debtStrategy
-    ? { ref: { name: refs.debtStrategy.name, path: refs.debtStrategy.path, ...(typeof refs.debtStrategy.sizeBytes === "number" ? { sizeBytes: refs.debtStrategy.sizeBytes } : {}) } }
-    : undefined;
-
-  return {
-    ...(typeof engineSchemaVersion === "number" ? { engineSchemaVersion } : {}),
-    ...(isEngineEnvelopeLike(source.engine) ? { engine: source.engine } : {}),
-    ...(source.resultDto !== undefined ? { resultDto: source.resultDto as PlanningRunRecord["outputs"]["resultDto"] } : {}),
-    ...(isRecord(source.simulate)
-      ? {
-        simulate: attachBlobRef(
-          source.simulate as PlanningRunRecord["outputs"]["simulate"],
-          refs.simulate ?? null,
-        ),
-      }
-      : (simulateRef ? { simulate: simulateRef } : {})),
-    ...(isRecord(source.scenarios)
-      ? {
-        scenarios: attachBlobRef(
-          source.scenarios as PlanningRunRecord["outputs"]["scenarios"],
-          refs.scenarios ?? null,
-        ),
-      }
-      : (scenariosRef ? { scenarios: scenariosRef } : {})),
-    ...(isRecord(source.monteCarlo)
-      ? {
-        monteCarlo: attachBlobRef(
-          source.monteCarlo as PlanningRunRecord["outputs"]["monteCarlo"],
-          refs.monteCarlo ?? null,
-        ),
-      }
-      : (monteRef ? { monteCarlo: monteRef } : {})),
-    ...(isRecord(source.actions)
-      ? {
-        actions: attachBlobRef(
-          source.actions as PlanningRunRecord["outputs"]["actions"],
-          refs.actions ?? null,
-        ),
-      }
-      : (actionsRef ? { actions: actionsRef } : {})),
-    ...(isRecord(source.debtStrategy)
-      ? {
-        debtStrategy: attachBlobRef(
-          source.debtStrategy as PlanningRunRecord["outputs"]["debtStrategy"],
-          refs.debtStrategy ?? null,
-        ),
-      }
-      : (debtRef ? { debtStrategy: debtRef } : {})),
-  };
-}
-
-function withStageOutputRefs(
-  stages: PlanningRunRecord["stages"],
-  refs: Partial<Record<RunBlobName, { name: RunBlobName; path: string; sizeBytes: number }>>,
-): PlanningRunRecord["stages"] {
-  if (!Array.isArray(stages)) return stages;
-  return stages.map((stage) => {
-    const blobName = stageIdToBlobName(stage.id);
-    if (!blobName) return stage;
-    const ref = refs[blobName];
-    if (!ref || !stage.outputRef) return stage;
-    return {
-      ...stage,
-      outputRef: {
-        ...stage.outputRef,
-        ref: {
-          name: ref.name,
-          path: ref.path,
-          ...(typeof ref.sizeBytes === "number" ? { sizeBytes: ref.sizeBytes } : {}),
-        },
-      },
-    };
-  });
-}
-
 export async function listRunIndexEntries(options?: {
   profileId?: string;
   limit?: number;
@@ -1071,48 +821,101 @@ export async function getRun(id: string): Promise<PlanningRunRecord | null> {
   return readRunMeta(safeId, hintedProfileId);
 }
 
-export async function summarizeLegacyRunBackfill(): Promise<LegacyRunBackfillSummary> {
+export async function diagnoseRunRead(id: string, profileIdHint?: string): Promise<RunReadDiagnostic> {
   assertServerOnly();
+  const safeId = sanitizeRecordId(id);
+  const explicitProfileIdHint = asString(profileIdHint);
+  const indexRows = explicitProfileIdHint ? [] : await readRunIndex();
+  const hintedProfileId = explicitProfileIdHint || indexRows.find((row) => row.id === safeId)?.profileId;
+  const attempts: RunReadDiagnosticAttempt[] = [];
 
-  const indexRows = await readRunIndex();
-  const summary: LegacyRunBackfillSummary = {
-    totalRuns: indexRows.length,
-    opsDoctorRuns: 0,
-    userRuns: 0,
-    legacyCandidates: 0,
-    opsDoctorLegacyCandidates: 0,
-    userLegacyCandidates: 0,
-    resultDtoOnlyCandidates: 0,
-    missingResultDtoCandidates: 0,
-    missingEngineSchemaCandidates: 0,
-    unreadableCandidates: 0,
-  };
+  async function attempt(source: RunReadDiagnosticAttempt["source"], filePath: string): Promise<PlanningRunRecord | null> {
+    const result = await readRunMetaByPathDetailed(filePath);
+    attempts.push({
+      source,
+      path: normalizeRelativePath(filePath),
+      status: result.status,
+      ...(result.status === "found" ? {} : { reason: result.reason }),
+    });
+    return result.status === "found" ? result.run : null;
+  }
 
-  for (const row of indexRows) {
-    const runKind = resolveBackfillRunKind(row);
-    if (runKind === "opsDoctor") {
-      summary.opsDoctorRuns += 1;
-    } else {
-      summary.userRuns += 1;
+  if (hintedProfileId) {
+    const paths = getRunPaths(safeId, hintedProfileId);
+    if (paths.partitionMetaPath) {
+      const fromHint = await attempt("partition-hint", paths.partitionMetaPath);
+      if (fromHint) {
+        return {
+          id: safeId,
+          profileIdHint: hintedProfileId,
+          status: "found",
+          attempts,
+          run: fromHint,
+        };
+      }
     }
-
-    const paths = getRunPaths(row.id, row.profileId);
-    const raw = await readRawRunMetaByPath(paths.partitionMetaPath ?? paths.legacyMetaPath)
-      ?? await readRawRunMetaByPath(paths.legacyMetaPath)
-      ?? await readRawRunMetaByPath(paths.legacyFilePath);
-    const reason = resolveLegacyCandidateReason(raw);
-    if (reason) {
-      summary.legacyCandidates += 1;
-      if (runKind === "opsDoctor") summary.opsDoctorLegacyCandidates += 1;
-      else summary.userLegacyCandidates += 1;
-      if (reason === "resultDtoOnly") summary.resultDtoOnlyCandidates += 1;
-      if (reason === "missingResultDto") summary.missingResultDtoCandidates += 1;
-      if (reason === "missingEngineSchema") summary.missingEngineSchemaCandidates += 1;
-      if (reason === "unreadableMeta") summary.unreadableCandidates += 1;
+  } else {
+    const partitionMetaPath = await findPartitionMetaPathByRunId(safeId);
+    if (partitionMetaPath) {
+      const fromPartitionScan = await attempt("partition-scan", partitionMetaPath);
+      if (fromPartitionScan) {
+        return {
+          id: safeId,
+          status: "found",
+          attempts,
+          run: fromPartitionScan,
+        };
+      }
     }
   }
 
-  return summary;
+  const paths = getRunPaths(safeId, hintedProfileId);
+  const fromLegacyMeta = await attempt("legacy-meta", paths.legacyMetaPath);
+  if (fromLegacyMeta) {
+    return {
+      id: safeId,
+      ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
+      status: "found",
+      attempts,
+      run: fromLegacyMeta,
+    };
+  }
+
+  const fromLegacyFile = await attempt("legacy-file", paths.legacyFilePath);
+  if (fromLegacyFile) {
+    return {
+      id: safeId,
+      ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
+      status: "found",
+      attempts,
+      run: fromLegacyFile,
+    };
+  }
+
+  return {
+    id: safeId,
+    ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
+    status: attempts.some((row) => row.status === "unreadable") ? "unreadable" : "missing",
+    attempts,
+  };
+}
+
+async function readRawRunMetaForIndexEntry(row: Pick<RunIndexEntry, "id" | "profileId">): Promise<PlanningRunRecord | null> {
+  const paths = getRunPaths(row.id, row.profileId);
+  return await readRawRunMetaByPath(paths.partitionMetaPath ?? paths.legacyMetaPath)
+    ?? await readRawRunMetaByPath(paths.legacyMetaPath)
+    ?? await readRawRunMetaByPath(paths.legacyFilePath);
+}
+
+export async function summarizeLegacyRunBackfill(): Promise<LegacyRunBackfillSummary> {
+  assertServerOnly();
+  return summarizeLegacyRunBackfillWith({
+    listIndexEntries: readRunIndex,
+    readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
+    readRunForCandidate: (candidate, options) => readRunMeta(candidate.id, candidate.profileId, options),
+    ensureStartupMigrations,
+    isEngineEnvelopeLike,
+  });
 }
 
 export async function listLegacyRunBackfillCandidates(options?: {
@@ -1120,31 +923,13 @@ export async function listLegacyRunBackfillCandidates(options?: {
   includeOpsDoctor?: boolean;
 }): Promise<LegacyRunBackfillCandidate[]> {
   assertServerOnly();
-
-  const indexRows = await readRunIndex();
-  const out: LegacyRunBackfillCandidate[] = [];
-  for (const row of indexRows) {
-    const runKind = resolveBackfillRunKind(row);
-    if (runKind === "opsDoctor" && options?.includeOpsDoctor !== true) continue;
-
-    const paths = getRunPaths(row.id, row.profileId);
-    const raw = await readRawRunMetaByPath(paths.partitionMetaPath ?? paths.legacyMetaPath)
-      ?? await readRawRunMetaByPath(paths.legacyMetaPath)
-      ?? await readRawRunMetaByPath(paths.legacyFilePath);
-    const reason = resolveLegacyCandidateReason(raw);
-    if (!reason) continue;
-    out.push({
-      id: row.id,
-      profileId: row.profileId,
-      createdAt: row.createdAt,
-      ...(asString(row.title) ? { title: asString(row.title) } : {}),
-      runKind,
-      reason,
-    });
-  }
-
-  const limit = toSafeLimit(options?.limit, 100);
-  return sortByCreatedAtDesc(out).slice(0, limit);
+  return listLegacyRunBackfillCandidatesWith({
+    listIndexEntries: readRunIndex,
+    readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
+    readRunForCandidate: (candidate, readOptions) => readRunMeta(candidate.id, candidate.profileId, readOptions),
+    ensureStartupMigrations,
+    isEngineEnvelopeLike,
+  }, options);
 }
 
 export async function backfillLegacyRuns(options?: {
@@ -1152,45 +937,13 @@ export async function backfillLegacyRuns(options?: {
   includeOpsDoctor?: boolean;
 }): Promise<LegacyRunBackfillResult> {
   assertServerOnly();
-  await ensureStartupMigrations();
-
-  const candidates = await listLegacyRunBackfillCandidates({
-    limit: options?.limit,
-    includeOpsDoctor: options?.includeOpsDoctor,
-  });
-
-  let migrated = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const candidate of candidates) {
-    if (candidate.reason === "unreadableMeta") {
-      skipped += 1;
-      continue;
-    }
-
-    try {
-      const loaded = await readRunMeta(candidate.id, candidate.profileId, { persistMigrations: true });
-      const hasEngine = Boolean(loaded && isEngineEnvelopeLike(loaded.outputs.engine));
-      const rawEngineSchemaVersion = Math.trunc(Number(loaded?.outputs.engineSchemaVersion));
-      const hasEngineSchema = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1;
-      if (hasEngine && hasEngineSchema) {
-        migrated += 1;
-      } else {
-        failed += 1;
-      }
-    } catch {
-      failed += 1;
-    }
-  }
-
-  return {
-    selected: candidates.length,
-    migrated,
-    skipped,
-    failed,
-    candidates,
-  };
+  return backfillLegacyRunsWith({
+    listIndexEntries: readRunIndex,
+    readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
+    readRunForCandidate: (candidate, readOptions) => readRunMeta(candidate.id, candidate.profileId, readOptions),
+    ensureStartupMigrations,
+    isEngineEnvelopeLike,
+  }, options);
 }
 
 type UpdateRunPatchBase = Partial<Pick<
@@ -1247,23 +1000,24 @@ export async function updateRun(id: string, patch: UpdateRunPatch): Promise<Plan
 export async function getRunBlob(id: string, name: string): Promise<unknown | null> {
   assertServerOnly();
   const safeId = sanitizeRecordId(id);
-  const blobName = normalizeBlobName(name);
+  const blobName = normalizeRunBlobName(name);
   if (!blobName) return null;
 
   if (blobName === "raw") {
     const run = await getRun(safeId);
     if (!run) return null;
     const outputs = {
-      simulate: await readBlob(safeId, "simulate"),
-      scenarios: await readBlob(safeId, "scenarios"),
-      monteCarlo: await readBlob(safeId, "monteCarlo"),
-      actions: await readBlob(safeId, "actions"),
-      debtStrategy: await readBlob(safeId, "debtStrategy"),
+      simulate: await readRunBlobPayload({ runId: safeId, blobName: "simulate", run, fallbackRun: run }),
+      scenarios: await readRunBlobPayload({ runId: safeId, blobName: "scenarios", run, fallbackRun: run }),
+      monteCarlo: await readRunBlobPayload({ runId: safeId, blobName: "monteCarlo", run, fallbackRun: run }),
+      actions: await readRunBlobPayload({ runId: safeId, blobName: "actions", run, fallbackRun: run }),
+      debtStrategy: await readRunBlobPayload({ runId: safeId, blobName: "debtStrategy", run, fallbackRun: run }),
     };
     return { run, outputs };
   }
 
-  return readBlob(safeId, blobName);
+  const run = await getRun(safeId);
+  return readRunBlobPayload({ runId: safeId, blobName, run, fallbackRun: run });
 }
 
 export async function purgeRunsByRetention(options?: PurgeRunsOptions): Promise<string[]> {
@@ -1271,25 +1025,14 @@ export async function purgeRunsByRetention(options?: PurgeRunsOptions): Promise<
 
   const maxPerProfile = toSafeLimit(options?.maxPerProfile, DEFAULT_RUNS_PER_PROFILE_RETENTION);
   const all = await readRunIndex();
-  const target = asString(options?.profileId)
-    ? all.filter((row) => row.profileId === asString(options?.profileId))
-    : all;
-
-  const grouped = new Map<string, RunIndexEntry[]>();
-  for (const row of target) {
-    const list = grouped.get(row.profileId) ?? [];
-    list.push(row);
-    grouped.set(row.profileId, list);
-  }
-
+  const purgeTargets = selectRunRetentionTargets(all, {
+    maxPerProfile,
+    ...(asString(options?.profileId) ? { profileId: asString(options?.profileId) } : {}),
+  });
   const removedIds: string[] = [];
-  for (const runs of grouped.values()) {
-    const sorted = sortByCreatedAtDesc(runs).map((row) => row as RunIndexEntry);
-    const purgeTargets = sorted.slice(maxPerProfile);
-    for (const row of purgeTargets) {
-      const removed = await deleteRun(row.id);
-      if (removed) removedIds.push(row.id);
-    }
+  for (const row of purgeTargets) {
+    const removed = await deleteRun(row.id);
+    if (removed) removedIds.push(row.id);
   }
 
   return removedIds;
@@ -1319,57 +1062,19 @@ export async function createRun(input: CreateRunInput, options?: CreateRunOption
   });
 
   try {
-    const blobRefs: Partial<Record<RunBlobName, { name: RunBlobName; path: string; sizeBytes: number }>> = {};
+    const blobRefs = await writeStageBlobs({
+      profileId,
+      runId,
+      outputs: sourceOutputs,
+    });
 
-    if (isRecord(sourceOutputs.simulate)) {
-      blobRefs.simulate = await writeBlob(profileId, runId, "simulate", sourceOutputs.simulate) ?? undefined;
-      if (blobRefs.simulate) {
-        await appendStorageTransactionStep(tx, "WRITE_BLOB", {
-          blob: "simulate",
-          path: blobRefs.simulate.path,
-          sizeBytes: blobRefs.simulate.sizeBytes,
-        });
-      }
-    }
-    if (isRecord(sourceOutputs.scenarios)) {
-      blobRefs.scenarios = await writeBlob(profileId, runId, "scenarios", sourceOutputs.scenarios) ?? undefined;
-      if (blobRefs.scenarios) {
-        await appendStorageTransactionStep(tx, "WRITE_BLOB", {
-          blob: "scenarios",
-          path: blobRefs.scenarios.path,
-          sizeBytes: blobRefs.scenarios.sizeBytes,
-        });
-      }
-    }
-    if (isRecord(sourceOutputs.monteCarlo)) {
-      blobRefs.monteCarlo = await writeBlob(profileId, runId, "monteCarlo", sourceOutputs.monteCarlo) ?? undefined;
-      if (blobRefs.monteCarlo) {
-        await appendStorageTransactionStep(tx, "WRITE_BLOB", {
-          blob: "monteCarlo",
-          path: blobRefs.monteCarlo.path,
-          sizeBytes: blobRefs.monteCarlo.sizeBytes,
-        });
-      }
-    }
-    if (isRecord(sourceOutputs.actions)) {
-      blobRefs.actions = await writeBlob(profileId, runId, "actions", sourceOutputs.actions) ?? undefined;
-      if (blobRefs.actions) {
-        await appendStorageTransactionStep(tx, "WRITE_BLOB", {
-          blob: "actions",
-          path: blobRefs.actions.path,
-          sizeBytes: blobRefs.actions.sizeBytes,
-        });
-      }
-    }
-    if (isRecord(sourceOutputs.debtStrategy)) {
-      blobRefs.debtStrategy = await writeBlob(profileId, runId, "debtStrategy", sourceOutputs.debtStrategy) ?? undefined;
-      if (blobRefs.debtStrategy) {
-        await appendStorageTransactionStep(tx, "WRITE_BLOB", {
-          blob: "debtStrategy",
-          path: blobRefs.debtStrategy.path,
-          sizeBytes: blobRefs.debtStrategy.sizeBytes,
-        });
-      }
+    for (const [blob, ref] of Object.entries(blobRefs) as Array<[RunBlobName, RunBlobRef | undefined]>) {
+      if (!ref) continue;
+      await appendStorageTransactionStep(tx, "WRITE_BLOB", {
+        blob,
+        path: ref.path,
+        sizeBytes: ref.sizeBytes,
+      });
     }
 
     const metaOutputs = withStageBlobRefs(

@@ -1,12 +1,12 @@
 import {
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../../../lib/dev/devGuards";
-import { jsonError, jsonOk } from "../../../../../../../lib/planning/api/response";
+  } from "../../../../../../../lib/dev/devGuards";
+import { jsonError,
+  jsonOk } from "../../../../../../../lib/planning/api/response";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../../../lib/planning/api/routeAuth";
 import { getCurrentUserRunActionPlan } from "../../../../../../../lib/planning/server/runs/routeService";
 
@@ -28,19 +28,19 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id } = await context.params;
-  try {
-    const plan = await getCurrentUserRunActionPlan(id);
-    if (!plan) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404, meta: userMeta });
+    const { id } = await context.params;
+    try {
+      const plan = await getCurrentUserRunActionPlan(id);
+      if (!plan) {
+        return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404, meta: userMeta });
+      }
+      return jsonOk({ data: plan }, { meta: userMeta });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "action-plan 조회에 실패했습니다.";
+      return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
     }
-    return jsonOk({ data: plan }, { meta: userMeta });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "action-plan 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
-  }
+  });
 }

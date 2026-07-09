@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+  } from "@/lib/dev/devGuards";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 import { IndicatorCatalogRowSchema, buildIndicatorCatalogRows } from "@/lib/planning/v3/indicators/annotations";
 import { SeriesSpecSchema } from "@/lib/planning/v3/indicators/contracts";
 import {
@@ -68,18 +72,18 @@ export async function GET(request: Request) {
     return toGuardResponse(error);
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const specs = exportSeriesSpecList();
-  const catalog = buildIndicatorCatalogRows(specs);
-  const payload = parseWithV3Whitelist(SpecsGetResponseSchema, {
-    ok: true,
-    meta: userMeta,
-    data: { specs, catalog },
-  }, { scope: "response", context: "api.v3.indicators.specs.get" });
-  return NextResponse.json(payload);
+    const specs = exportSeriesSpecList();
+    const catalog = buildIndicatorCatalogRows(specs);
+    const payload = parseWithV3Whitelist(SpecsGetResponseSchema, {
+      ok: true,
+      meta: userMeta,
+      data: { specs, catalog },
+    }, { scope: "response", context: "api.v3.indicators.specs.get" });
+    return NextResponse.json(payload);
+  });
 }
 
 export async function POST(request: Request) {
@@ -97,31 +101,31 @@ export async function POST(request: Request) {
     return toGuardResponse(error);
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = SpecsPostBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "지표 스펙 import 요청 형식이 올바르지 않습니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
+    const parsed = SpecsPostBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "지표 스펙 import 요청 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
 
-  const preview = previewImportSeriesSpecs(parsed.data.specs);
-  const applied = parsed.data.mode === "apply"
-    ? applyImportSeriesSpecs(parsed.data.specs)
-    : null;
+    const preview = previewImportSeriesSpecs(parsed.data.specs);
+    const applied = parsed.data.mode === "apply"
+      ? applyImportSeriesSpecs(parsed.data.specs)
+      : null;
 
-  const payload = parseWithV3Whitelist(SpecsPostResponseSchema, {
-    ok: true,
-    meta: userMeta,
-    data: {
-      mode: parsed.data.mode,
-      preview,
-      applied,
-    },
-  }, { scope: "response", context: "api.v3.indicators.specs.post" });
-  return NextResponse.json(payload);
+    const payload = parseWithV3Whitelist(SpecsPostResponseSchema, {
+      ok: true,
+      meta: userMeta,
+      data: {
+        mode: parsed.data.mode,
+        preview,
+        applied,
+      },
+    }, { scope: "response", context: "api.v3.indicators.specs.post" });
+    return NextResponse.json(payload);
+  });
 }

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertCsrf,
   assertDevUnlocked,
@@ -6,10 +7,10 @@ import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import {
   listRouteAssumptionsOverrides,
   patchRouteAssumptionsOverrides,
@@ -53,14 +54,14 @@ export async function GET(request: Request) {
   }
 
   try {
-    const currentUser = await requirePlanningRouteUser(request);
-    if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const result = await listRouteAssumptionsOverrides(requestedProfileId);
-    return NextResponse.json({
-      ok: true,
-      ...(result.profileId ? { profileId: result.profileId } : {}),
-      items: result.items,
-      meta: assumptionsUserMeta(currentUser),
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const result = await listRouteAssumptionsOverrides(requestedProfileId);
+      return NextResponse.json({
+        ok: true,
+        ...(result.profileId ? { profileId: result.profileId } : {}),
+        items: result.items,
+        meta: assumptionsUserMeta(currentUser),
+      });
     });
   } catch (error) {
     return opsErrorResponse({
@@ -109,15 +110,15 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const currentUser = await requirePlanningRouteUser(request);
-    if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const result = await replaceRouteAssumptionsOverrides(body);
-    return NextResponse.json({
-      ok: true,
-      ...(result.profileId ? { profileId: result.profileId } : {}),
-      items: result.items,
-      meta: assumptionsUserMeta(currentUser),
-      message: "가정 오버라이드를 저장했습니다.",
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const result = await replaceRouteAssumptionsOverrides(body);
+      return NextResponse.json({
+        ok: true,
+        ...(result.profileId ? { profileId: result.profileId } : {}),
+        items: result.items,
+        meta: assumptionsUserMeta(currentUser),
+        message: "가정 오버라이드를 저장했습니다.",
+      });
     });
   } catch (error) {
     return opsErrorResponse({
@@ -161,15 +162,15 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const currentUser = await requirePlanningRouteUser(request);
-    if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const result = await patchRouteAssumptionsOverrides(body);
-    return NextResponse.json({
-      ok: true,
-      ...(result.profileId ? { profileId: result.profileId } : {}),
-      items: result.items,
-      meta: assumptionsUserMeta(currentUser),
-      message: "가정 오버라이드를 업데이트했습니다.",
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const result = await patchRouteAssumptionsOverrides(body);
+      return NextResponse.json({
+        ok: true,
+        ...(result.profileId ? { profileId: result.profileId } : {}),
+        items: result.items,
+        meta: assumptionsUserMeta(currentUser),
+        message: "가정 오버라이드를 업데이트했습니다.",
+      });
     });
   } catch (error) {
     return opsErrorResponse({
@@ -213,15 +214,15 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const currentUser = await requirePlanningRouteUser(request);
-    if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const result = await resetRouteAssumptionsOverrides(body?.profileId);
-    return NextResponse.json({
-      ok: true,
-      ...(result.profileId ? { profileId: result.profileId } : {}),
-      items: [],
-      meta: assumptionsUserMeta(currentUser),
-      message: "가정 오버라이드를 초기화했습니다.",
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const result = await resetRouteAssumptionsOverrides(body?.profileId);
+      return NextResponse.json({
+        ok: true,
+        ...(result.profileId ? { profileId: result.profileId } : {}),
+        items: [],
+        meta: assumptionsUserMeta(currentUser),
+        message: "가정 오버라이드를 초기화했습니다.",
+      });
     });
   } catch (error) {
     return opsErrorResponse({

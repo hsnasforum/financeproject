@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+  } from "@/lib/dev/devGuards";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 import {
   RecoveryActionSchema,
   RecoveryExecutionSchema,
@@ -62,57 +66,57 @@ export async function POST(request: Request) {
     );
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = RecoveryBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "복구 요청 형식이 올바르지 않습니다." },
-        meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
+    const parsed = RecoveryBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "복구 요청 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
 
-  try {
-    const rootDir = resolveNewsRootDir();
-    const summary = previewRecoveryAction(parsed.data.action, { rootDir });
-    if (parsed.data.confirm !== true) {
+    try {
+      const rootDir = resolveNewsRootDir();
+      const summary = previewRecoveryAction(parsed.data.action, { rootDir });
+      if (parsed.data.confirm !== true) {
+        const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
+          ok: true,
+          data: {
+            requiresConfirmation: true,
+            summary,
+            execution: null,
+          },
+          meta: userMeta,
+        }, { scope: "response", context: "api.v3.news.recovery.preview" });
+        return NextResponse.json(payload);
+      }
+
+      const execution = runRecoveryAction(parsed.data.action, { rootDir });
       const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
         ok: true,
         data: {
-          requiresConfirmation: true,
+          requiresConfirmation: false,
           summary,
-          execution: null,
+          execution,
         },
         meta: userMeta,
-      }, { scope: "response", context: "api.v3.news.recovery.preview" });
+      }, { scope: "response", context: "api.v3.news.recovery.run" });
       return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INTERNAL", message: "뉴스 복구 작업 중 오류가 발생했습니다." },
+          meta: userMeta,
+        },
+        { status: 500 },
+      );
     }
-
-    const execution = runRecoveryAction(parsed.data.action, { rootDir });
-    const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
-      ok: true,
-      data: {
-        requiresConfirmation: false,
-        summary,
-        execution,
-      },
-      meta: userMeta,
-    }, { scope: "response", context: "api.v3.news.recovery.run" });
-    return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INTERNAL", message: "뉴스 복구 작업 중 오류가 발생했습니다." },
-        meta: userMeta,
-      },
-      { status: 500 },
-    );
-  }
+  });
 }

@@ -90,6 +90,13 @@ type RecommendApiJson = {
   meta?: {
     userId?: string;
     authSource?: string;
+    diagnosticId?: string;
+    debug?: {
+      opsDiagnostic?: {
+        diagnosticId?: string;
+        hint?: string;
+      };
+    };
     kind?: string;
     planning?: {
       runId?: string;
@@ -461,8 +468,42 @@ describe("POST /api/recommend", () => {
     expect(json.meta).toMatchObject({
       userId: "default",
       authSource: "local-namespace",
+      diagnosticId: "recommend.no_candidates",
     });
-    expect(typeof json.message === "string" || json.debug?.candidateCount === 0).toBe(true);
+    expect(json.message).toBe("현재 조건에 맞는 상품 후보를 찾지 못했습니다. 조건을 넓히거나 잠시 후 다시 조회해 주세요.");
+    expect(json.message ?? "").not.toMatch(/pnpm|\/api\/dev|Run /i);
+    expect(JSON.stringify(json.meta?.debug ?? {})).not.toMatch(/pnpm|\/api\/dev|Run /i);
+    expect(json.debug?.candidateCount).toBe(0);
+  });
+
+  it("keeps recommend ops hints behind explicit debug meta", async () => {
+    mocked.getUnifiedProducts.mockResolvedValue({
+      kind: "deposit",
+      sources: { finlife: { count: 0 } },
+      merged: [],
+      items: [],
+      pageInfo: {
+        hasMore: false,
+        nextCursor: null,
+        limit: 1000,
+        sourceId: "finlife",
+      },
+    });
+    mocked.externalProductFindMany.mockResolvedValue([]);
+
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+    }, "?debug=1");
+
+    expect(status).toBe(200);
+    expect(json.message ?? "").not.toMatch(/pnpm|\/api\/dev|Run /i);
+    expect(json.meta?.debug?.opsDiagnostic?.diagnosticId).toBe("recommend.no_candidates");
+    expect(json.meta?.debug?.opsDiagnostic?.hint ?? "").toContain("pnpm");
   });
 
   it("returns planningLinkage ready when all planning metrics are present", async () => {

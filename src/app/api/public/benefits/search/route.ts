@@ -6,6 +6,7 @@ import { getSnapshotOrNull } from "@/lib/publicApis/benefitsSnapshot";
 import { searchBenefits } from "@/lib/publicApis/providers/benefits";
 import { buildBenefitsSearchPayload, type SearchFilters } from "@/lib/publicApis/benefitsSearchView";
 import { parseTopicKeys } from "@/lib/publicApis/benefitsTopics";
+import { buildPublicDiagnosticMeta, logPublicApiDiagnostic, publicErrorMessage } from "@/lib/http/publicApiDiagnostics";
 import { getCachePolicy } from "../../../../../lib/dataSources/cachePolicy";
 
 const TTL_SECONDS = Math.max(1, Math.trunc(getCachePolicy("benefits").ttlMs / 1000));
@@ -70,6 +71,7 @@ export async function GET(request: Request) {
   const traceId = crypto.randomUUID();
   try {
     const { searchParams } = new URL(request.url);
+    const debugDiagnosticEnabled = searchParams.get("debug") === "1";
     const query = (searchParams.get("query") ?? "").trim();
     const mode = (searchParams.get("mode") ?? "search").trim().toLowerCase();
     const scanParam = (searchParams.get("scan") ?? "").trim().toLowerCase();
@@ -143,16 +145,25 @@ export async function GET(request: Request) {
     if (useSnapshotPath) {
       const snap = getSnapshotOrNull({ ttlMs: snapshotTtlMs });
       if (!snap) {
+        const diagnosticCode = "BENEFITS_SNAPSHOT_MISSING";
+        const status = 409;
+        logPublicApiDiagnostic({
+          route: "/api/public/benefits/search",
+          source: "benefits",
+          traceId,
+          status,
+          code: diagnosticCode,
+        });
         return NextResponse.json(
           {
             ok: false,
             error: {
               code: "SNAPSHOT_MISSING",
-              message: "보조금24 스냅샷이 없습니다. /api/dev/benefits/snapshot/refresh 를 먼저 실행하세요.",
-              traceId,
+              message: publicErrorMessage(diagnosticCode),
             },
+            meta: buildPublicDiagnosticMeta(diagnosticCode, { traceId, debug: debugDiagnosticEnabled }),
           },
-          { status: 409 },
+          { status },
         );
       }
       payload = buildBenefitsSearchPayload(snap.snapshot.items, filters, {

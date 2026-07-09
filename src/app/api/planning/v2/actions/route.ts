@@ -1,31 +1,34 @@
-import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
-  assertSameOrigin,
+  fail,
+  ok } from "../../../../../lib/planning/server/v2/apiResponse";
+import {
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import {
   readPlanningRouteCache,
   writePlanningRouteCache,
-} from "../../../../../lib/planning/server/cache/routeService";
+  } from "../../../../../lib/planning/server/cache/routeService";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import {
   buildEnginePayloadFromProfile,
   resolveAssumptionsContextForProfile,
   type PlanningAssumptionsContext,
-} from "../../../../../lib/planning/server/v2/toEngineInput";
+  } from "../../../../../lib/planning/server/v2/toEngineInput";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
-import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
-import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { PlanningV2ValidationError,
+  type ProfileV2,
+  type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
+import { validateHorizonMonths,
+  validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type ActionsRequestBody = {
@@ -114,17 +117,9 @@ function parseMaxCandidates(value: unknown): number {
   return parsed;
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -168,152 +163,152 @@ export async function POST(request: Request) {
   }
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  let profile: ProfileV2;
-  let horizonMonths: number;
-  let assumptionsOverrides: Record<string, unknown>;
-  let policyId: AllocationPolicyId;
-  let requestedSnapshotId: string | undefined;
-  let riskTolerance: RiskTolerance;
-  let includeProducts = false;
-  let maxCandidatesPerAction = 5;
-  try {
-    riskTolerance = parseRiskTolerance(body.profile);
-    profile = validateProfileV2(body.profile);
-    horizonMonths = validateHorizonMonths(body.horizonMonths);
-    assumptionsOverrides = parseOverrides(body.assumptions);
-    policyId = parsePolicyId(body.policyId);
-    requestedSnapshotId = parseSnapshotId(body.snapshotId);
-    includeProducts = parseIncludeProducts(body.includeProducts);
-    maxCandidatesPerAction = parseMaxCandidates(body.maxCandidatesPerAction);
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, { issues: toIssueMessages(error) });
-    }
-    return fail("INPUT");
-  }
-  const featureFlags = getPlanningFeatureFlags();
-  if (includeProducts && !featureFlags.includeProductsEnabled) {
-    return fail("INPUT", "서버 설정으로 includeProducts 기능이 비활성화되어 있습니다.", { status: 400 });
-  }
-
-  let finalSimulationAssumptions: PlanningAssumptionsContext["simulationAssumptions"];
-  let baseAssumptions: PlanningAssumptionsContext["assumptions"];
-  let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
-  let health: PlanningAssumptionsContext["health"];
-  let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
-  let snapshotId: string | undefined;
-  {
-    const resolvedContext = await resolveAssumptionsContextForProfile({
-      planningService,
-      profile,
-      riskTolerance,
-      assumptionsOverridesRaw: assumptionsOverrides,
-      requestedSnapshotId,
-    });
-    if (!resolvedContext.ok) {
-      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
-        return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+    let profile: ProfileV2;
+    let horizonMonths: number;
+    let assumptionsOverrides: Record<string, unknown>;
+    let policyId: AllocationPolicyId;
+    let requestedSnapshotId: string | undefined;
+    let riskTolerance: RiskTolerance;
+    let includeProducts = false;
+    let maxCandidatesPerAction = 5;
+    try {
+      riskTolerance = parseRiskTolerance(body.profile);
+      profile = validateProfileV2(body.profile);
+      horizonMonths = validateHorizonMonths(body.horizonMonths);
+      assumptionsOverrides = parseOverrides(body.assumptions);
+      policyId = parsePolicyId(body.policyId);
+      requestedSnapshotId = parseSnapshotId(body.snapshotId);
+      includeProducts = parseIncludeProducts(body.includeProducts);
+      maxCandidatesPerAction = parseMaxCandidates(body.maxCandidatesPerAction);
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, { issues: toIssueMessages(error) });
       }
-      return fail(resolvedContext.error.code, resolvedContext.error.message);
+      return fail("INPUT");
     }
-    finalSimulationAssumptions = resolvedContext.context.simulationAssumptions;
-    baseAssumptions = resolvedContext.context.assumptions;
-    snapshotMeta = resolvedContext.context.snapshotMeta;
-    health = resolvedContext.context.health;
-    scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
-    snapshotId = resolvedContext.context.snapshotId;
-  }
-
-  const keyBundle = buildCacheKey({
-    kind: "actions",
-    profile,
-    snapshotMeta,
-    horizonMonths,
-    baseAssumptions,
-    overrides: scenarioOverrideForCache,
-    options: {
-      includeProducts,
-      maxCandidatesPerAction,
-      policyId,
-      snapshotId: snapshotId ?? null,
-    },
-    riskTolerance,
-  });
-  const keyPrefix = keyBundle.key.slice(0, 8);
-
-  try {
-    const cached = await readPlanningRouteCache<Record<string, unknown>>("actions", keyBundle.key);
-    if (cached) {
-      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
-      return ok(
-        data,
-        {
-          ...cached.meta,
-          ...userMeta,
-          cache: {
-            hit: true,
-            keyPrefix,
-          },
-        },
-      );
+    const featureFlags = getPlanningFeatureFlags();
+    if (includeProducts && !featureFlags.includeProductsEnabled) {
+      return fail("INPUT", "서버 설정으로 includeProducts 기능이 비활성화되어 있습니다.", { status: 400 });
     }
 
-    const plan = planningService.simulate(profile, finalSimulationAssumptions, horizonMonths, { policyId });
-    const actions = planningService.buildActions({
-      plan,
-      profile,
-      baseAssumptions,
-      snapshotMeta: {
-        asOf: snapshotMeta.asOf,
-        missing: snapshotMeta.missing,
-      },
-    });
-    const actionsWithCandidates = await planningService.attachCandidates(actions, {
-      includeProducts,
-      maxCandidatesPerAction,
-      requestBaseUrl: new URL(request.url).origin,
-    });
+    let finalSimulationAssumptions: PlanningAssumptionsContext["simulationAssumptions"];
+    let baseAssumptions: PlanningAssumptionsContext["assumptions"];
+    let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
+    let health: PlanningAssumptionsContext["health"];
+    let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
+    let snapshotId: string | undefined;
+    {
+      const resolvedContext = await resolveAssumptionsContextForProfile({
+        planningService,
+        profile,
+        riskTolerance,
+        assumptionsOverridesRaw: assumptionsOverrides,
+        requestedSnapshotId,
+      });
+      if (!resolvedContext.ok) {
+        if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+          return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+        }
+        return fail(resolvedContext.error.code, resolvedContext.error.message);
+      }
+      finalSimulationAssumptions = resolvedContext.context.simulationAssumptions;
+      baseAssumptions = resolvedContext.context.assumptions;
+      snapshotMeta = resolvedContext.context.snapshotMeta;
+      health = resolvedContext.context.health;
+      scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
+      snapshotId = resolvedContext.context.snapshotId;
+    }
 
-    const payload = {
-      meta: {
-        generatedAt: new Date().toISOString(),
-        snapshot: snapshotMeta,
-        health: health.summary,
-      },
-      data: {
-        planSummary: summarizePlan(plan),
-        actions: actionsWithCandidates,
-        healthWarnings: health.warnings,
-      },
-    };
-    payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
-
-    const ttlMs = includeProducts ? ACTIONS_PRODUCTS_CACHE_TTL_MS : ACTIONS_CACHE_TTL_MS;
-    await writePlanningRouteCache({
+    const keyBundle = buildCacheKey({
       kind: "actions",
-      keyBundle,
-      horizonMonths,
-      ttlMs,
+      profile,
       snapshotMeta,
-      payload,
-    });
-
-    return ok(payload.data, {
-      ...payload.meta,
-      ...userMeta,
-      cache: {
-        hit: false,
-        keyPrefix,
+      horizonMonths,
+      baseAssumptions,
+      overrides: scenarioOverrideForCache,
+      options: {
+        includeProducts,
+        maxCandidatesPerAction,
+        policyId,
+        snapshotId: snapshotId ?? null,
       },
+      riskTolerance,
     });
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+    const keyPrefix = keyBundle.key.slice(0, 8);
+
+    try {
+      const cached = await readPlanningRouteCache<Record<string, unknown>>("actions", keyBundle.key);
+      if (cached) {
+        const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
+        return ok(
+          data,
+          {
+            ...cached.meta,
+            ...userMeta,
+            cache: {
+              hit: true,
+              keyPrefix,
+            },
+          },
+        );
+      }
+
+      const plan = planningService.simulate(profile, finalSimulationAssumptions, horizonMonths, { policyId });
+      const actions = planningService.buildActions({
+        plan,
+        profile,
+        baseAssumptions,
+        snapshotMeta: {
+          asOf: snapshotMeta.asOf,
+          missing: snapshotMeta.missing,
+        },
+      });
+      const actionsWithCandidates = await planningService.attachCandidates(actions, {
+        includeProducts,
+        maxCandidatesPerAction,
+        requestBaseUrl: new URL(request.url).origin,
+      });
+
+      const payload = {
+        meta: {
+          generatedAt: new Date().toISOString(),
+          snapshot: snapshotMeta,
+          health: health.summary,
+        },
+        data: {
+          planSummary: summarizePlan(plan),
+          actions: actionsWithCandidates,
+          healthWarnings: health.warnings,
+        },
+      };
+      payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
+
+      const ttlMs = includeProducts ? ACTIONS_PRODUCTS_CACHE_TTL_MS : ACTIONS_CACHE_TTL_MS;
+      await writePlanningRouteCache({
+        kind: "actions",
+        keyBundle,
+        horizonMonths,
+        ttlMs,
+        snapshotMeta,
+        payload,
+      });
+
+      return ok(payload.data, {
+        ...payload.meta,
+        ...userMeta,
+        cache: {
+          hit: false,
+          keyPrefix,
+        },
+      });
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+      }
+      return fail("INTERNAL");
     }
-    return fail("INTERNAL");
-  }
+  });
 }

@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { listTransactionBatchRows } from "@/lib/planning/v3/service/transactionBatchListRows";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
@@ -39,29 +39,29 @@ function withReadGuard(request: Request): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const url = new URL(request.url);
+    const url = new URL(request.url);
 
-  try {
-    const rows = await listTransactionBatchRows({
-      limit: url.searchParams.get("limit") ?? undefined,
-      cursor: url.searchParams.get("cursor") ?? undefined,
-    });
+    try {
+      const rows = await listTransactionBatchRows({
+        limit: url.searchParams.get("limit") ?? undefined,
+        cursor: url.searchParams.get("cursor") ?? undefined,
+      });
 
-    return NextResponse.json({
-      ok: true,
-      items: rows.items,
-      data: rows.data,
-      meta: userMeta,
-      ...(rows.nextCursor ? { nextCursor: rows.nextCursor } : {}),
-    });
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 목록 조회에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+      return NextResponse.json({
+        ok: true,
+        items: rows.items,
+        data: rows.data,
+        meta: userMeta,
+        ...(rows.nextCursor ? { nextCursor: rows.nextCursor } : {}),
+      });
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "배치 목록 조회에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
+    }
+  });
 }

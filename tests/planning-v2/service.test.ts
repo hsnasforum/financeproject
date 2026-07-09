@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { createPlanningService } from "../../src/lib/planning/v2/service";
+import { createPlanningCoreService, createPlanningService } from "../../src/lib/planning/v2/service";
 import { type ActionItemV2 } from "../../src/lib/planning/v2/actions/types";
 import { type DebtStrategyInput, type DebtStrategyResult } from "../../src/lib/planning/v2/debt/types";
 import { type AssumptionsProvider } from "../../src/lib/planning/providers/assumptionsProvider";
@@ -56,6 +58,27 @@ function stubAssumptionsProvider(): AssumptionsProvider {
 }
 
 describe("createPlanningService", () => {
+  it("keeps default provider wiring in the server composition wrapper", () => {
+    const coreSource = readFileSync(
+      fileURLToPath(new URL("../../src/lib/planning/core/v2/service.ts", import.meta.url)),
+      "utf8",
+    );
+    const serverSource = readFileSync(
+      fileURLToPath(new URL("../../src/lib/planning/server/v2/service.ts", import.meta.url)),
+      "utf8",
+    );
+
+    expect(coreSource).not.toContain("createFileAssumptionsProvider");
+    expect(coreSource).not.toContain("createFinlifeProductCandidatesProvider");
+    expect(coreSource).not.toContain("createDebtStrategyProvider");
+    expect(coreSource).not.toContain("createPlaceholderTaxPensionProvider");
+    expect(serverSource).toContain("createFileAssumptionsProvider");
+    expect(serverSource).toContain("createFinlifeProductCandidatesProvider");
+    expect(serverSource).toContain("createDebtStrategyProvider");
+    expect(serverSource).toContain("createPlaceholderTaxPensionProvider");
+    expect(() => createPlanningCoreService(undefined as never)).toThrow("use server/v2/service");
+  });
+
   it("normalizes override inputs and combines health warnings via assumptions provider", async () => {
     const provider: AssumptionsProvider = {
       getSnapshotRef: vi.fn().mockResolvedValue({ missing: true }),

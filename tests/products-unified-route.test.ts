@@ -178,7 +178,7 @@ describe("GET /api/products/unified", () => {
     expect(typeof json.diagnostics?.providerIndex?.finlifeProviders).toBe("number");
   });
 
-  it("accepts samplebank in includeSources query", async () => {
+  it("accepts samplebank in includeSources query outside production", async () => {
     const { status, json } = await callUnified("?mode=merged&includeSources=samplebank&kind=deposit");
 
     expect(status).toBe(200);
@@ -188,6 +188,16 @@ describe("GET /api/products/unified", () => {
       kind: "deposit",
       mode: "merged",
     }));
+  });
+
+  it("rejects samplebank source in production public catalog API", async () => {
+    setEnv("NODE_ENV", "production");
+
+    const { status, json } = await callUnified("?mode=merged&includeSources=samplebank&kind=deposit");
+
+    expect(status).toBe(400);
+    expect(json.ok).toBe(false);
+    expect(mocked.getUnifiedProducts).not.toHaveBeenCalled();
   });
 
   it("passes depositProtection mode to unified product service", async () => {

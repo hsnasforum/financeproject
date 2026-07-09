@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertLocalHost,
   assertSameOrigin,
   assertDevUnlocked,
   requireCsrf,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
 import { runOpsActionRoute } from "../../../../../lib/ops/actions/actionRunRouteService";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type ActionRunBody = {
@@ -64,61 +64,61 @@ export async function POST(request: Request) {
   const csrf = asString(body?.csrf);
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const startedAt = Date.now();
-  const result = await runOpsActionRoute({
-    actionId: body?.actionId,
-    params: body?.params,
-    previewToken: body?.previewToken,
-    startedAt,
-  });
-  if (result.kind === "not-implemented") {
-    return NextResponse.json({
-      ok: false,
-      error: {
-        code: "NOT_IMPLEMENTED",
-        message: result.message,
-      },
-    }, { status: 501 });
-  }
-
-  if (result.kind === "preview-required") {
-    return NextResponse.json({
-      ok: false,
-      error: {
-        code: "PREVIEW_REQUIRED",
-        message: result.message,
-      },
-    }, { status: 409 });
-  }
-
-  if (result.kind === "validation-error") {
-    return opsErrorResponse({
-      code: "VALIDATION",
-      message: result.message,
-      status: 400,
-      fixHref: "/ops",
+    const startedAt = Date.now();
+    const result = await runOpsActionRoute({
+      actionId: body?.actionId,
+      params: body?.params,
+      previewToken: body?.previewToken,
+      startedAt,
     });
-  }
+    if (result.kind === "not-implemented") {
+      return NextResponse.json({
+        ok: false,
+        error: {
+          code: "NOT_IMPLEMENTED",
+          message: result.message,
+        },
+      }, { status: 501 });
+    }
 
-  if (result.kind === "internal-error") {
-    return opsErrorResponse({
-      code: "INTERNAL",
+    if (result.kind === "preview-required") {
+      return NextResponse.json({
+        ok: false,
+        error: {
+          code: "PREVIEW_REQUIRED",
+          message: result.message,
+        },
+      }, { status: 409 });
+    }
+
+    if (result.kind === "validation-error") {
+      return opsErrorResponse({
+        code: "VALIDATION",
+        message: result.message,
+        status: 400,
+        fixHref: "/ops",
+      });
+    }
+
+    if (result.kind === "internal-error") {
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: result.message,
+        status: 500,
+        fixHref: "/ops",
+      });
+    }
+
+    return NextResponse.json({
+      ok: result.ok,
       message: result.message,
-      status: 500,
-      fixHref: "/ops",
+      meta: planningUserMeta(currentUser),
+      data: {
+        actionId: result.actionId,
+        ...(result.data ? result.data : {}),
+      },
     });
-  }
-
-  return NextResponse.json({
-    ok: result.ok,
-    message: result.message,
-    meta: planningUserMeta(currentUser),
-    data: {
-      actionId: result.actionId,
-      ...(result.data ? result.data : {}),
-    },
   });
 }

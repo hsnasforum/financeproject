@@ -8,16 +8,24 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import {
+  PLANNING_DEPRECATED_API_ROUTES,
+  planningDeprecatedApiMeta,
+  withPlanningDeprecationHeaders,
+} from "@/lib/planning/routes";
 import { issuesToApi as plannerIssuesToApi, parsePlannerInput } from "../../../../lib/schemas/plannerInput";
 
-const LEGACY_PLANNER_COMPUTE_CONTRACT = {
-  id: "planner-compute",
-  status: "deprecated-compatibility",
-  owner: "Planning Reports / Architecture",
-  sunset: "TBD-after-telemetry-inventory",
-  replacement: "planning-v2 run/report APIs",
-  telemetryEvent: "legacy_planner_compute_called",
-} as const;
+const LEGACY_PLANNER_COMPUTE_CONTRACT = PLANNING_DEPRECATED_API_ROUTES.plannerCompute;
+
+function legacyComputeMeta() {
+  return {
+    legacyApi: planningDeprecatedApiMeta(LEGACY_PLANNER_COMPUTE_CONTRACT),
+  };
+}
+
+function withLegacyComputeHeaders<T extends Response>(response: T): T {
+  return withPlanningDeprecationHeaders(response, LEGACY_PLANNER_COMPUTE_CONTRACT);
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -58,11 +66,12 @@ function recordLegacyPlannerComputeTelemetry(meta: ReturnType<typeof planningUse
   try {
     appendAuditLog({
       event: LEGACY_PLANNER_COMPUTE_CONTRACT.telemetryEvent,
-      route: "/api/planner/compute",
+      route: LEGACY_PLANNER_COMPUTE_CONTRACT.route,
       summary: "Legacy planner compute API called",
       details: {
         legacyApiId: LEGACY_PLANNER_COMPUTE_CONTRACT.id,
         status: LEGACY_PLANNER_COMPUTE_CONTRACT.status,
+        canonicalRoute: LEGACY_PLANNER_COMPUTE_CONTRACT.canonicalRoute,
         replacement: LEGACY_PLANNER_COMPUTE_CONTRACT.replacement,
         userId: meta.userId,
         authSource: meta.authSource,
@@ -77,45 +86,62 @@ function recordLegacyPlannerComputeTelemetry(meta: ReturnType<typeof planningUse
 
 export async function POST(request: Request) {
   const guardFailure = withComputeGuard(request);
-  if (guardFailure) return guardFailure;
+  if (guardFailure) return withLegacyComputeHeaders(guardFailure);
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
+      const userMeta = planningUserMeta(currentUser);
+      recordLegacyPlannerComputeTelemetry(userMeta);
       const body = await request.json().catch(() => ({}));
       const payload = isObject(body) ? body : {};
 
       const parsedInput = parsePlannerInput(payload.input);
       if (!parsedInput.ok) {
-        return jsonError("INPUT", "Invalid input", {
-          issues: plannerIssuesToApi(parsedInput.issues),
-        });
+        return withLegacyComputeHeaders(
+          jsonError("INPUT", "Invalid input", {
+            issues: plannerIssuesToApi(parsedInput.issues),
+            meta: {
+              ...userMeta,
+              ...legacyComputeMeta(),
+            },
+          }),
+        );
       }
 
       const assumptions = clampPlannerAssumptions(parseAssumptions(payload.assumptions));
       const result = computePlanner(parsedInput.value, assumptions);
-      const userMeta = planningUserMeta(currentUser);
-      recordLegacyPlannerComputeTelemetry(userMeta);
 
-      return jsonOk({
-        result,
-      }, {
-        meta: {
-          ...userMeta,
-          legacyApi: LEGACY_PLANNER_COMPUTE_CONTRACT,
-        },
-      });
+      return withLegacyComputeHeaders(
+        jsonOk({
+          result,
+        }, {
+          meta: {
+            ...userMeta,
+            ...legacyComputeMeta(),
+          },
+        }),
+      );
     });
   } catch (error) {
     const authError = toAuthErrorResponse(error);
-    if (authError) return authError;
+    if (authError) return withLegacyComputeHeaders(authError);
 
     if (error instanceof PlannerInputError) {
-      return jsonError("INPUT", error.message, { issues: error.issues });
+      return withLegacyComputeHeaders(
+        jsonError("INPUT", error.message, {
+          issues: error.issues,
+          meta: legacyComputeMeta(),
+        }),
+      );
     }
 
     console.error("[planner/compute] failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return jsonError("INTERNAL", "Internal error");
+    return withLegacyComputeHeaders(
+      jsonError("INTERNAL", "Internal error", {
+        meta: legacyComputeMeta(),
+      }),
+    );
   }
 }

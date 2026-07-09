@@ -190,6 +190,7 @@ test("planning runs selected and compare states show distinct report follow-thro
     await expect(page.getByText(/목록에서 실행 두 개를 선택하면 두 실행의 차이를 여기서 먼저 읽고, 필요하면 상세 비교 리포트로 이어갈 수 있습니다/)).toBeVisible({ timeout: 30_000 });
 
     const runsTable = page.getByTestId("planning-runs-table");
+    await expect(runsTable).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
     const selectedRow = runsTable.locator("tr", { hasText: selectedRunTitle });
     const compareRow = runsTable.locator("tr", { hasText: compareRunTitle });
     await selectedRow.locator('input[type="checkbox"]').check();

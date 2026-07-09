@@ -11,7 +11,10 @@ import {
   validateOpsBackupPreviewFile,
 } from "../../../../../lib/ops/backup/backupPreviewRouteService";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -58,57 +61,56 @@ export async function POST(request: Request) {
     ensureOpsBackupPreviewVaultCsrfCookie(request, response);
     return response;
   }
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) {
-    ensureOpsBackupPreviewVaultCsrfCookie(request, currentUser);
-    return currentUser;
-  }
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const fileResult = validateOpsBackupPreviewFile(formData.get("file"));
+    if (!fileResult.ok) {
+      const response = opsErrorResponse({
+        code: fileResult.error.code,
+        message: fileResult.error.message,
+        status: fileResult.error.status,
+      });
+      ensureOpsBackupPreviewVaultCsrfCookie(request, response);
+      return response;
+    }
 
-  const fileResult = validateOpsBackupPreviewFile(formData.get("file"));
-  if (!fileResult.ok) {
-    const response = opsErrorResponse({
-      code: fileResult.error.code,
-      message: fileResult.error.message,
-      status: fileResult.error.status,
-    });
+    const passphrase = asString(formData.get("passphrase"));
+
+    try {
+      const preview = await previewOpsBackupArchive({
+        request,
+        file: fileResult.file,
+        passphrase,
+        startedAt,
+      });
+      const response = NextResponse.json({
+        ok: true,
+        data: preview.summary,
+        previewToken: preview.previewToken,
+        meta: planningUserMeta(currentUser),
+      });
+      ensureOpsBackupPreviewVaultCsrfCookie(request, response);
+      setOpsBackupPreviewSessionCookie(response, preview.previewSessionToken);
+      return response;
+    } catch (error) {
+      const clientError = toOpsBackupPreviewClientError(error);
+      const contractError = toOpsContractError({
+        code: clientError.code,
+        message: clientError.message,
+        status: clientError.status,
+      });
+      await recordOpsBackupPreviewError({
+        file: fileResult.file,
+        message: contractError.body.error.message,
+        code: contractError.body.error.code,
+        status: contractError.status,
+        startedAt,
+      });
+      const response = NextResponse.json(contractError.body, { status: contractError.status });
+      ensureOpsBackupPreviewVaultCsrfCookie(request, response);
+      return response;
+    }
+  }, process.env, (response) => {
     ensureOpsBackupPreviewVaultCsrfCookie(request, response);
     return response;
-  }
-
-  const passphrase = asString(formData.get("passphrase"));
-
-  try {
-    const preview = await previewOpsBackupArchive({
-      request,
-      file: fileResult.file,
-      passphrase,
-      startedAt,
-    });
-    const response = NextResponse.json({
-      ok: true,
-      data: preview.summary,
-      previewToken: preview.previewToken,
-      meta: planningUserMeta(currentUser),
-    });
-    ensureOpsBackupPreviewVaultCsrfCookie(request, response);
-    setOpsBackupPreviewSessionCookie(response, preview.previewSessionToken);
-    return response;
-  } catch (error) {
-    const clientError = toOpsBackupPreviewClientError(error);
-    const contractError = toOpsContractError({
-      code: clientError.code,
-      message: clientError.message,
-      status: clientError.status,
-    });
-    await recordOpsBackupPreviewError({
-      file: fileResult.file,
-      message: contractError.body.error.message,
-      code: contractError.body.error.code,
-      status: contractError.status,
-      startedAt,
-    });
-    const response = NextResponse.json(contractError.body, { status: contractError.status });
-    ensureOpsBackupPreviewVaultCsrfCookie(request, response);
-    return response;
-  }
+  });
 }

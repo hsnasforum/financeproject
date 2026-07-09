@@ -144,6 +144,7 @@ pnpm e2e
   - 내부 `planning:v2:e2e:fast`는 기존 dev/e2e 서버를 재사용하지 않도록 전용 포트와 전용 e2e planning data dir로 실행합니다.
 - planning SSOT gate: `pnpm planning:ssot:check`
 - current screens gate: `pnpm planning:current-screens:guard`
+- package scripts 분류: `docs/package-scripts.md`
 
 ## 운영 보안
 

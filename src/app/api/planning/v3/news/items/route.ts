@@ -1,16 +1,17 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
-import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { assertSameOrigin,
+  toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
   readCurrentUserNewsItems,
   type BurstLevel,
   type NewsItemsFilters,
-} from "@/lib/planning/v3/service/newsItemsRepository";
+  } from "@/lib/planning/v3/service/newsItemsRepository";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 const ItemRowSchema = z.object({
@@ -118,45 +119,45 @@ function normalizeFilters(url: URL): NewsItemsFilters {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const url = new URL(request.url);
-  const filters = normalizeFilters(url);
+    const url = new URL(request.url);
+    const filters = normalizeFilters(url);
 
-  try {
-    const newsItems = readCurrentUserNewsItems(filters);
+    try {
+      const newsItems = readCurrentUserNewsItems(filters);
 
-    const payload = parseWithV3Whitelist(ItemsResponseSchema, {
-      ok: true,
-      data: {
-        generatedAt: new Date().toISOString(),
-        filters: {
-          q: filters.q,
-          topic: filters.topicId,
-          source: filters.sourceId,
-          burst: filters.burst,
-          days: filters.days,
-          limit: filters.limit,
-          offset: filters.offset,
+      const payload = parseWithV3Whitelist(ItemsResponseSchema, {
+        ok: true,
+        data: {
+          generatedAt: new Date().toISOString(),
+          filters: {
+            q: filters.q,
+            topic: filters.topicId,
+            source: filters.sourceId,
+            burst: filters.burst,
+            days: filters.days,
+            limit: filters.limit,
+            offset: filters.offset,
+          },
+          total: newsItems.total,
+          items: newsItems.items,
+          topics: newsItems.topics,
+          sources: newsItems.sources,
         },
-        total: newsItems.total,
-        items: newsItems.items,
-        topics: newsItems.topics,
-        sources: newsItems.sources,
-      },
-      meta: userMeta,
-    }, { scope: "response", context: "api.v3.news.items" });
-    return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INTERNAL", message: "뉴스 항목을 불러오는 중 오류가 발생했습니다." },
         meta: userMeta,
-      },
-      { status: 500 },
-    );
-  }
+      }, { scope: "response", context: "api.v3.news.items" });
+      return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INTERNAL", message: "뉴스 항목을 불러오는 중 오류가 발생했습니다." },
+          meta: userMeta,
+        },
+        { status: 500 },
+      );
+    }
+  });
 }

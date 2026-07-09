@@ -16,7 +16,7 @@ const categoryTiles: Tile[] = [
   {
     title: "예적금",
     description: "금리 비교 후 바로 플랜에 연결",
-    href: "/products/saving",
+    href: "/products/catalog?kind=saving",
     accent: "bg-[linear-gradient(145deg,#e0ecff_0%,#c7d6ff_100%)]",
     Icon: PiggyBank,
     iconClass: "text-primary",

@@ -33,7 +33,12 @@ function baseProfile() {
   };
 }
 
-function requestWithHost(host: string, origin: string): Request {
+function requestWithHost(
+  host: string,
+  origin: string,
+  body: Record<string, unknown> = {},
+  cookie?: string,
+): Request {
   return new Request(`${origin}/api/planning/v2/simulate`, {
     method: "POST",
     headers: {
@@ -41,10 +46,12 @@ function requestWithHost(host: string, origin: string): Request {
       origin,
       referer: `${origin}/planning`,
       "content-type": "application/json",
+      ...(cookie ? { cookie } : {}),
     },
     body: JSON.stringify({
       profile: baseProfile(),
       horizonMonths: 12,
+      ...body,
     }),
   });
 }
@@ -74,5 +81,15 @@ describe("planning v2 route guards", () => {
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
+  });
+
+  it("requires body csrf when a csrf cookie is present", async () => {
+    const response = await simulatePOST(
+      requestWithHost("localhost:3000", "http://localhost:3000", {}, "dev_csrf=test-token"),
+    );
+    const payload = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(403);
+    expect(payload.error?.code).toBe("CSRF");
   });
 });

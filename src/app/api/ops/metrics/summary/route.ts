@@ -1,17 +1,21 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import {
   parseOpsMetricsSummaryRange,
   readOpsMetricsSummaryPage,
   toOpsMetricsStorageErrorMessage,
-} from "@/lib/ops/metrics/metricsRouteService";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+  } from "@/lib/ops/metrics/metricsRouteService";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function guardReadRequest(request: Request): NextResponse | null {
   try {
@@ -41,28 +45,28 @@ export async function GET(request: Request) {
 
   const guard = guardReadRequest(request);
   if (guard) return guard;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const { searchParams } = new URL(request.url);
-  const rangeHours = parseOpsMetricsSummaryRange(searchParams.get("range"));
+    const { searchParams } = new URL(request.url);
+    const rangeHours = parseOpsMetricsSummaryRange(searchParams.get("range"));
 
-  try {
-    const page = await readOpsMetricsSummaryPage({ rangeHours });
+    try {
+      const page = await readOpsMetricsSummaryPage({ rangeHours });
 
-    return NextResponse.json({
-      ok: true,
-      data: page.data,
-      meta: {
-        range: page.range,
-        ...planningUserMeta(currentUser),
-      },
-    });
-  } catch (error) {
-    return opsErrorResponse({
-      code: "STORAGE_CORRUPT",
-      message: toOpsMetricsStorageErrorMessage(error, "metrics 요약을 불러오지 못했습니다."),
-      status: 500,
-    });
-  }
+      return NextResponse.json({
+        ok: true,
+        data: page.data,
+        meta: {
+          range: page.range,
+          ...planningUserMeta(currentUser),
+        },
+      });
+    } catch (error) {
+      return opsErrorResponse({
+        code: "STORAGE_CORRUPT",
+        message: toOpsMetricsStorageErrorMessage(error, "metrics 요약을 불러오지 못했습니다."),
+        status: 500,
+      });
+    }
+  });
 }

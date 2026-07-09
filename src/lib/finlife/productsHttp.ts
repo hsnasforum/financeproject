@@ -10,7 +10,7 @@ import {
 import { extractPagingMeta } from "@/lib/finlife/meta";
 import { resolveFinlifeMode } from "@/lib/finlife/mode";
 import { normalizeFinlifeProducts } from "@/lib/finlife/normalize";
-import { loadFinlifeSnapshot } from "@/lib/finlife/snapshot";
+import { loadFinlifeSnapshot, type FinlifeSnapshotKind } from "@/lib/finlife/snapshot";
 import { type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { isDebugEnabled } from "@/lib/http/apiError";
 import { attachFallback, type FallbackMeta } from "@/lib/http/fallbackMeta";
@@ -177,9 +177,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isFinlifeSnapshotKind(kind: FinlifeKind): kind is FinlifeSnapshotKind {
+  return kind === "deposit" || kind === "saving";
+}
+
+function loadFinlifeProductSnapshot(kind: FinlifeKind): ReturnType<typeof loadFinlifeSnapshot> | null {
+  return isFinlifeSnapshotKind(kind) ? loadFinlifeSnapshot(kind) : null;
+}
+
 function parseBaseAndOptions(input: {
   raw: unknown;
-  kind: Extract<FinlifeKind, "deposit" | "saving">;
+  kind: FinlifeKind;
   pageNo: number;
   topFinGrpNo: string;
   mode: "live" | "mock";
@@ -256,7 +264,7 @@ function extractRowsAndPaging(input: {
   raw: unknown;
   pageNo: number;
   pageSize: number;
-  kind: Extract<FinlifeKind, "deposit" | "saving">;
+  kind: FinlifeKind;
   topFinGrpNo: string;
   mode: "live" | "mock";
 }): {
@@ -343,7 +351,7 @@ function parseScanMode(searchParams: URLSearchParams): { scan: "page" | "all"; m
 }
 
 function fetchLiveFinlifeSingleflight(
-  kind: Extract<FinlifeKind, "deposit" | "saving">,
+  kind: FinlifeKind,
   params: Required<{ pageNo: number; topFinGrpNo: string; scan: "page"; scanMaxPages: "auto" }>,
 ) {
   return singleflight(
@@ -367,7 +375,7 @@ function parseFlags(searchParams: URLSearchParams): { debug: boolean; forceBypas
 }
 
 function buildSchemaMismatchPayload(input: {
-  kind: Extract<FinlifeKind, "deposit" | "saving">;
+  kind: FinlifeKind;
   pageNo: number;
   topFinGrpNo: string;
   mode: FinlifeSourceResult["mode"];
@@ -391,7 +399,7 @@ function buildSchemaMismatchPayload(input: {
 }
 
 function buildHttpErrorPayload(input: {
-  kind: Extract<FinlifeKind, "deposit" | "saving">;
+  kind: FinlifeKind;
   pageNo: number;
   topFinGrpNo: string;
   mode: FinlifeSourceResult["mode"];
@@ -420,7 +428,7 @@ function buildHttpErrorPayload(input: {
 
 function buildReplayPayload(input: {
   snapshot: NonNullable<ReturnType<typeof loadFinlifeSnapshot>>;
-  kind: Extract<FinlifeKind, "deposit" | "saving">;
+  kind: FinlifeKind;
   pageNo: number;
   pageSize: number;
   topFinGrpNo: string;
@@ -532,7 +540,7 @@ function attachDebugError(payload: FinlifeSourceResult, input: {
   };
 }
 
-export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "deposit" | "saving">, request: Request): Promise<RouteResult> {
+export async function getFinlifeProductsForHttp(kind: FinlifeKind, request: Request): Promise<RouteResult> {
   const { searchParams } = new URL(request.url);
   const mode = resolveFinlifeMode({ searchParams });
   const pageNoParsed = parsePositiveIntQueryField({
@@ -579,7 +587,7 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
   }
 
   if (mode === "replay") {
-    const snapshot = loadFinlifeSnapshot(kind);
+    const snapshot = loadFinlifeProductSnapshot(kind);
     if (!snapshot) {
       const payload = buildHttpErrorPayload({
         kind,
@@ -671,7 +679,7 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
         }),
       };
     }
-    const replay = loadFinlifeSnapshot(kind);
+    const replay = loadFinlifeProductSnapshot(kind);
     if (replay) {
       const replayPayload = buildReplayPayload({
         snapshot: replay,
@@ -696,7 +704,7 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
   }
 
   if (!process.env.FINLIFE_API_KEY || !process.env.FINLIFE_API_KEY.trim()) {
-    const replay = loadFinlifeSnapshot(kind);
+    const replay = loadFinlifeProductSnapshot(kind);
     if (replay) {
       const replayPayload = buildReplayPayload({
         snapshot: replay,
@@ -963,7 +971,7 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
       };
     }
 
-    const replay = loadFinlifeSnapshot(kind);
+    const replay = loadFinlifeProductSnapshot(kind);
     if (replay) {
       const replayPayload = buildReplayPayload({
         snapshot: replay,

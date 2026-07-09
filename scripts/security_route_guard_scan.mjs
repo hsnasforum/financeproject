@@ -136,7 +136,8 @@ function hasMutationGuard(content) {
 }
 
 function hasPublicMutationGuard(content) {
-  return (/assertSameOrigin\s*\(/.test(content) && (/(assertCsrf|requireCsrf)\s*\(/.test(content)))
+  return /assertPlanningWriteGuard\s*\(/.test(content)
+    || (/assertSameOrigin\s*\(/.test(content) && (/(assertCsrf|requireCsrf)\s*\(/.test(content)))
     || (/assertLocalHost\s*\(/.test(content) && /assertSameOrigin\s*\(/.test(content))
     || /decideTrustedOrigin\s*\(/.test(content)
     || /guardFeedbackMutationOrigin\s*\(/.test(content)

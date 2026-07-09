@@ -1,21 +1,22 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
-import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+  } from "@/lib/dev/devGuards";
+import { ForbiddenDraftKeyError,
+  assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
   getCsvDraft,
   isSaveDraftFromImportForbiddenError,
   isSaveDraftFromImportInputError,
   listCsvDrafts,
   saveDraftFromImport,
-} from "@/lib/planning/v3/draft/service";
+  } from "@/lib/planning/v3/draft/service";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type DraftBody = {
@@ -113,52 +114,52 @@ function summarizeDraft(cashflow: Array<{ incomeKrw: number; expenseKrw: number;
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const rows = await listCsvDrafts();
-    const details = await Promise.all(rows.map(async (row) => ({
-      id: row.id,
-      draft: await getCsvDraft(row.id),
-    })));
-    const detailById = new Map(details.map((entry) => [entry.id, entry.draft]));
-    const payload = {
-      ok: true,
-      drafts: rows.map((row) => {
-        const draft = detailById.get(row.id);
-        const summary = summarizeDraft(draft?.monthlyCashflow ?? []);
-        return {
-          id: row.id,
-          createdAt: row.createdAt,
-          source: {
-            kind: "csv" as const,
-            ...(row.source.filename ? { filename: row.source.filename } : {}),
-            rows: row.meta.rowsParsed,
-            columns: row.meta.columnsCount,
-            months: draft?.monthlyCashflow.length ?? 0,
-          },
-          summary,
-          meta: row.meta,
-        };
-      }),
-      meta: userMeta,
-    };
-    assertNoForbiddenDraftKeys(payload);
-    return NextResponse.json(payload, { status: 200 });
-  } catch (error) {
-    if (error instanceof ForbiddenDraftKeyError) {
+    try {
+      const rows = await listCsvDrafts();
+      const details = await Promise.all(rows.map(async (row) => ({
+        id: row.id,
+        draft: await getCsvDraft(row.id),
+      })));
+      const detailById = new Map(details.map((entry) => [entry.id, entry.draft]));
+      const payload = {
+        ok: true,
+        drafts: rows.map((row) => {
+          const draft = detailById.get(row.id);
+          const summary = summarizeDraft(draft?.monthlyCashflow ?? []);
+          return {
+            id: row.id,
+            createdAt: row.createdAt,
+            source: {
+              kind: "csv" as const,
+              ...(row.source.filename ? { filename: row.source.filename } : {}),
+              rows: row.meta.rowsParsed,
+              columns: row.meta.columnsCount,
+              months: draft?.monthlyCashflow.length ?? 0,
+            },
+            summary,
+            meta: row.meta,
+          };
+        }),
+        meta: userMeta,
+      };
+      assertNoForbiddenDraftKeys(payload);
+      return NextResponse.json(payload, { status: 200 });
+    } catch (error) {
+      if (error instanceof ForbiddenDraftKeyError) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." }, meta: userMeta },
+          { status: 500 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." }, meta: userMeta },
+        { ok: false, error: { code: "INTERNAL", message: "초안 목록을 조회하지 못했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "초안 목록을 조회하지 못했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }
 
 export async function POST(request: Request) {
@@ -171,58 +172,58 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const payload = isRecord(body?.payload)
-      ? body?.payload
-      : ({
-        cashflow: Array.isArray(body?.cashflow) ? body?.cashflow : [],
-        draftPatch: isRecord(body?.draftPatch) ? body?.draftPatch : {},
+    try {
+      const payload = isRecord(body?.payload)
+        ? body?.payload
+        : ({
+          cashflow: Array.isArray(body?.cashflow) ? body?.cashflow : [],
+          draftPatch: isRecord(body?.draftPatch) ? body?.draftPatch : {},
+        });
+      const created = await saveDraftFromImport({
+        source: body?.source,
+        payload,
+        meta: body?.meta,
       });
-    const created = await saveDraftFromImport({
-      source: body?.source,
-      payload,
-      meta: body?.meta,
-    });
 
-    const response = {
-      ok: true,
-      id: created.id,
-      draftId: created.id,
-      createdAt: created.createdAt,
-      data: {
+      const response = {
+        ok: true,
         id: created.id,
+        draftId: created.id,
         createdAt: created.createdAt,
-      },
-      meta: userMeta,
-    };
-    assertNoForbiddenDraftKeys(response);
-    return NextResponse.json(response, { status: 201 });
-  } catch (error) {
-    if (isSaveDraftFromImportForbiddenError(error) || error instanceof ForbiddenDraftKeyError) {
+        data: {
+          id: created.id,
+          createdAt: created.createdAt,
+        },
+        meta: userMeta,
+      };
+      assertNoForbiddenDraftKeys(response);
+      return NextResponse.json(response, { status: 201 });
+    } catch (error) {
+      if (isSaveDraftFromImportForbiddenError(error) || error instanceof ForbiddenDraftKeyError) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." }, meta: userMeta },
+          { status: 500 },
+        );
+      }
+      if (isSaveDraftFromImportInputError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: error.message }, meta: userMeta },
+          { status: 400 },
+        );
+      }
+      if (error instanceof Error && error.message === "Invalid record id") {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "초안 식별자 생성에 실패했습니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." }, meta: userMeta },
+        { ok: false, error: { code: "INTERNAL", message: "초안 저장에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
-    if (isSaveDraftFromImportInputError(error)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: error.message }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-    if (error instanceof Error && error.message === "Invalid record id") {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "초안 식별자 생성에 실패했습니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "초안 저장에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

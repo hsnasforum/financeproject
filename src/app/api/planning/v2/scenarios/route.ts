@@ -1,14 +1,15 @@
-import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
-  assertSameOrigin,
+  fail,
+  ok } from "../../../../../lib/planning/server/v2/apiResponse";
+import {
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import {
   readPlanningRouteCache,
   writePlanningRouteCache,
-} from "../../../../../lib/planning/server/cache/routeService";
+  } from "../../../../../lib/planning/server/cache/routeService";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
@@ -18,13 +19,16 @@ import {
   buildEnginePayloadFromProfile,
   resolveAssumptionsContextForProfile,
   type PlanningAssumptionsContext,
-} from "../../../../../lib/planning/server/v2/toEngineInput";
-import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
-import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+  } from "../../../../../lib/planning/server/v2/toEngineInput";
+import { PlanningV2ValidationError,
+  type ProfileV2,
+  type SimulationResultV2,
+  type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
+import { validateHorizonMonths,
+  validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type ScenariosRequestBody = {
@@ -110,17 +114,9 @@ function parsePolicyId(value: unknown): AllocationPolicyId {
   return value;
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -200,149 +196,149 @@ export async function POST(request: Request) {
   }
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  let profile: ProfileV2;
-  let horizonMonths: number;
-  let assumptionsOverrides: Record<string, unknown>;
-  let policyId: AllocationPolicyId;
-  let requestedSnapshotId: string | undefined;
-  let riskTolerance: RiskTolerance;
-  try {
-    riskTolerance = parseRiskTolerance(body.profile);
-    profile = validateProfileV2(body.profile);
-    horizonMonths = validateHorizonMonths(body.horizonMonths);
-    assumptionsOverrides = parseOverrides(body.assumptions);
-    policyId = parsePolicyId(body.policyId);
-    requestedSnapshotId = parseSnapshotId(body.snapshotId);
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, { issues: toIssueMessages(error) });
-    }
-    return fail("INPUT");
-  }
-
-  let baseAssumptions: PlanningAssumptionsContext["assumptions"];
-  let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
-  let health: PlanningAssumptionsContext["health"];
-  let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
-  let snapshotId: string | undefined;
-  let taxPensionExplain: PlanningAssumptionsContext["taxPensionExplain"];
-  {
-    const resolvedContext = await resolveAssumptionsContextForProfile({
-      planningService,
-      profile,
-      riskTolerance,
-      assumptionsOverridesRaw: assumptionsOverrides,
-      requestedSnapshotId,
-    });
-    if (!resolvedContext.ok) {
-      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
-        return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+    let profile: ProfileV2;
+    let horizonMonths: number;
+    let assumptionsOverrides: Record<string, unknown>;
+    let policyId: AllocationPolicyId;
+    let requestedSnapshotId: string | undefined;
+    let riskTolerance: RiskTolerance;
+    try {
+      riskTolerance = parseRiskTolerance(body.profile);
+      profile = validateProfileV2(body.profile);
+      horizonMonths = validateHorizonMonths(body.horizonMonths);
+      assumptionsOverrides = parseOverrides(body.assumptions);
+      policyId = parsePolicyId(body.policyId);
+      requestedSnapshotId = parseSnapshotId(body.snapshotId);
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, { issues: toIssueMessages(error) });
       }
-      return fail(resolvedContext.error.code, resolvedContext.error.message);
-    }
-    baseAssumptions = resolvedContext.context.assumptions;
-    snapshotMeta = resolvedContext.context.snapshotMeta;
-    health = resolvedContext.context.health;
-    scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
-    snapshotId = resolvedContext.context.snapshotId;
-    taxPensionExplain = resolvedContext.context.taxPensionExplain;
-  }
-
-  const keyBundle = buildCacheKey({
-    kind: "scenarios",
-    profile,
-    snapshotMeta,
-    horizonMonths,
-    baseAssumptions,
-    overrides: scenarioOverrideForCache,
-    options: {
-      includeFullTimeline,
-      policyId,
-      snapshotId: snapshotId ?? null,
-    },
-    riskTolerance,
-  });
-  const keyPrefix = keyBundle.key.slice(0, 8);
-
-  try {
-    const cached = await readPlanningRouteCache<Record<string, unknown>>("scenarios", keyBundle.key);
-    if (cached) {
-      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
-      return ok(
-        data,
-        {
-          ...cached.meta,
-          ...userMeta,
-          cache: {
-            hit: true,
-            keyPrefix,
-          },
-        },
-      );
+      return fail("INPUT");
     }
 
-    const { base, scenarios, specs } = planningService.scenarios({
+    let baseAssumptions: PlanningAssumptionsContext["assumptions"];
+    let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
+    let health: PlanningAssumptionsContext["health"];
+    let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
+    let snapshotId: string | undefined;
+    let taxPensionExplain: PlanningAssumptionsContext["taxPensionExplain"];
+    {
+      const resolvedContext = await resolveAssumptionsContextForProfile({
+        planningService,
+        profile,
+        riskTolerance,
+        assumptionsOverridesRaw: assumptionsOverrides,
+        requestedSnapshotId,
+      });
+      if (!resolvedContext.ok) {
+        if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+          return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+        }
+        return fail(resolvedContext.error.code, resolvedContext.error.message);
+      }
+      baseAssumptions = resolvedContext.context.assumptions;
+      snapshotMeta = resolvedContext.context.snapshotMeta;
+      health = resolvedContext.context.health;
+      scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
+      snapshotId = resolvedContext.context.snapshotId;
+      taxPensionExplain = resolvedContext.context.taxPensionExplain;
+    }
+
+    const keyBundle = buildCacheKey({
+      kind: "scenarios",
       profile,
+      snapshotMeta,
       horizonMonths,
       baseAssumptions,
+      overrides: scenarioOverrideForCache,
+      options: {
+        includeFullTimeline,
+        policyId,
+        snapshotId: snapshotId ?? null,
+      },
       riskTolerance,
-      policyId,
     });
+    const keyPrefix = keyBundle.key.slice(0, 8);
 
-    const baseSpec = specs.find((entry) => entry.id === "base");
-    const baseView = summarizeResult(base, includeFullTimeline);
+    try {
+      const cached = await readPlanningRouteCache<Record<string, unknown>>("scenarios", keyBundle.key);
+      if (cached) {
+        const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
+        return ok(
+          data,
+          {
+            ...cached.meta,
+            ...userMeta,
+            cache: {
+              hit: true,
+              keyPrefix,
+            },
+          },
+        );
+      }
 
-    const payload = {
-      meta: {
-        generatedAt: new Date().toISOString(),
-        snapshot: snapshotMeta,
-        health: health.summary,
-      },
-      data: {
-        healthWarnings: health.warnings,
-        precisionNotes: taxPensionExplain.notes,
-        base: {
-          id: "base",
-          title: "Base",
-          assumptionsUsed: baseSpec?.assumptions ?? baseAssumptions,
-          ...baseView,
+      const { base, scenarios, specs } = planningService.scenarios({
+        profile,
+        horizonMonths,
+        baseAssumptions,
+        riskTolerance,
+        policyId,
+      });
+
+      const baseSpec = specs.find((entry) => entry.id === "base");
+      const baseView = summarizeResult(base, includeFullTimeline);
+
+      const payload = {
+        meta: {
+          generatedAt: new Date().toISOString(),
+          snapshot: snapshotMeta,
+          health: health.summary,
         },
-        scenarios: scenarios.map((scenario) => ({
-          id: scenario.spec.id,
-          title: scenario.spec.title,
-          assumptionsUsed: scenario.spec.assumptions,
-          diffVsBase: scenario.diffVsBase,
-          ...summarizeResult(scenario.result, includeFullTimeline),
-        })),
-      },
-    };
-    payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
+        data: {
+          healthWarnings: health.warnings,
+          precisionNotes: taxPensionExplain.notes,
+          base: {
+            id: "base",
+            title: "Base",
+            assumptionsUsed: baseSpec?.assumptions ?? baseAssumptions,
+            ...baseView,
+          },
+          scenarios: scenarios.map((scenario) => ({
+            id: scenario.spec.id,
+            title: scenario.spec.title,
+            assumptionsUsed: scenario.spec.assumptions,
+            diffVsBase: scenario.diffVsBase,
+            ...summarizeResult(scenario.result, includeFullTimeline),
+          })),
+        },
+      };
+      payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
 
-    await writePlanningRouteCache({
-      kind: "scenarios",
-      keyBundle,
-      horizonMonths,
-      ttlMs: SCENARIOS_CACHE_TTL_MS,
-      snapshotMeta,
-      payload,
-    });
+      await writePlanningRouteCache({
+        kind: "scenarios",
+        keyBundle,
+        horizonMonths,
+        ttlMs: SCENARIOS_CACHE_TTL_MS,
+        snapshotMeta,
+        payload,
+      });
 
-    return ok(payload.data, {
-      ...payload.meta,
-      ...userMeta,
-      cache: {
-        hit: false,
-        keyPrefix,
-      },
-    });
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+      return ok(payload.data, {
+        ...payload.meta,
+        ...userMeta,
+        cache: {
+          hit: false,
+          keyPrefix,
+        },
+      });
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, { issues: toIssueMessages(error) });
+      }
+      return fail("INTERNAL");
     }
-    return fail("INTERNAL");
-  }
+  });
 }

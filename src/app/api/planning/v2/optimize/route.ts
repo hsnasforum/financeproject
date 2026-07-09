@@ -1,24 +1,26 @@
-import { getPlanningFeatureFlags } from "../../../../../lib/planning/config";
-import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
-  assertSameOrigin,
+  getPlanningFeatureFlags } from "../../../../../lib/planning/config";
+import { fail,
+  ok } from "../../../../../lib/planning/server/v2/apiResponse";
+import {
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import { generateCandidatePlans } from "../../../../../lib/planning/server/v2/optimizer/greedy";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import {
   buildEnginePayloadFromProfile,
   resolveAssumptionsContextForProfile,
-} from "../../../../../lib/planning/server/v2/toEngineInput";
+  } from "../../../../../lib/planning/server/v2/toEngineInput";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
-import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
-import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { PlanningV2ValidationError,
+  type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
+import { validateHorizonMonths,
+  validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type OptimizeRequestBody = {
@@ -210,17 +212,9 @@ function parseSearch(input: unknown): {
   };
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -251,80 +245,80 @@ export async function POST(request: Request) {
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  let profile: ProfileV2;
-  let horizonMonths: number;
-  let assumptionsOverrides: Record<string, unknown>;
-  let requestedSnapshotId: string | undefined;
-  let constraints:
-    ReturnType<typeof parseConstraints>;
-  let knobs:
-    ReturnType<typeof parseKnobs>;
-  let search:
-    ReturnType<typeof parseSearch>;
-  let riskTolerance: RiskTolerance;
-  try {
-    riskTolerance = parseRiskTolerance(body.profile);
-    profile = validateProfileV2(body.profile);
-    horizonMonths = validateHorizonMonths(body.horizonMonths);
-    assumptionsOverrides = parseAssumptionsOverrides(body.assumptions);
-    requestedSnapshotId = parseSnapshotId(body.snapshotId);
-    constraints = parseConstraints(body.constraints);
-    knobs = parseKnobs(body.knobs);
-    search = parseSearch(body.search);
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      return fail("INPUT", undefined, {
-        issues: toIssueMessages(error),
-      });
+    let profile: ProfileV2;
+    let horizonMonths: number;
+    let assumptionsOverrides: Record<string, unknown>;
+    let requestedSnapshotId: string | undefined;
+    let constraints:
+      ReturnType<typeof parseConstraints>;
+    let knobs:
+      ReturnType<typeof parseKnobs>;
+    let search:
+      ReturnType<typeof parseSearch>;
+    let riskTolerance: RiskTolerance;
+    try {
+      riskTolerance = parseRiskTolerance(body.profile);
+      profile = validateProfileV2(body.profile);
+      horizonMonths = validateHorizonMonths(body.horizonMonths);
+      assumptionsOverrides = parseAssumptionsOverrides(body.assumptions);
+      requestedSnapshotId = parseSnapshotId(body.snapshotId);
+      constraints = parseConstraints(body.constraints);
+      knobs = parseKnobs(body.knobs);
+      search = parseSearch(body.search);
+    } catch (error) {
+      if (error instanceof PlanningV2ValidationError) {
+        return fail("INPUT", undefined, {
+          issues: toIssueMessages(error),
+        });
+      }
+      return fail("INPUT");
     }
-    return fail("INPUT");
-  }
 
-  const resolvedContext = await resolveAssumptionsContextForProfile({
-    planningService,
-    profile,
-    riskTolerance,
-    assumptionsOverridesRaw: assumptionsOverrides,
-    requestedSnapshotId,
-  });
-  if (!resolvedContext.ok) {
-    if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
-      return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
-    }
-    return fail(resolvedContext.error.code, resolvedContext.error.message);
-  }
-
-  try {
-    const context = resolvedContext.context;
-    const { data } = buildEnginePayloadFromProfile(
+    const resolvedContext = await resolveAssumptionsContextForProfile({
+      planningService,
       profile,
-      (engineResult) => ({
-        candidates: engineResult.core,
-      }),
-      {
-        runCore: () => generateCandidatePlans({
-          profile,
-          horizonMonths,
-          baseAssumptions: context.assumptions,
-          constraints,
-          knobs,
-          search,
-        }),
-      },
-    );
-
-    return ok(data, {
-      generatedAt: new Date().toISOString(),
-      ...userMeta,
-      snapshot: context.snapshotMeta,
-      health: context.health.summary,
+      riskTolerance,
+      assumptionsOverridesRaw: assumptionsOverrides,
+      requestedSnapshotId,
     });
-  } catch (error) {
-    const normalized = toPlanningError(error);
-    return fail(normalized.code, normalized.message);
-  }
+    if (!resolvedContext.ok) {
+      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+        return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+      }
+      return fail(resolvedContext.error.code, resolvedContext.error.message);
+    }
+
+    try {
+      const context = resolvedContext.context;
+      const { data } = buildEnginePayloadFromProfile(
+        profile,
+        (engineResult) => ({
+          candidates: engineResult.core,
+        }),
+        {
+          runCore: () => generateCandidatePlans({
+            profile,
+            horizonMonths,
+            baseAssumptions: context.assumptions,
+            constraints,
+            knobs,
+            search,
+          }),
+        },
+      );
+
+      return ok(data, {
+        generatedAt: new Date().toISOString(),
+        ...userMeta,
+        snapshot: context.snapshotMeta,
+        health: context.health.summary,
+      });
+    } catch (error) {
+      const normalized = toPlanningError(error);
+      return fail(normalized.code, normalized.message);
+    }
+  });
 }

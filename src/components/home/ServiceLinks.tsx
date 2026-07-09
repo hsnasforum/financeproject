@@ -1,16 +1,27 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
+import { getPublicDesktopNavItems } from "@/lib/navigation/routeRegistry";
 import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
 
-const serviceLinks = [
-  { label: "홈/대시보드", description: "진단과 상품 비교 중 어디서 다시 시작할지 고르기", href: "/dashboard", badge: "시작" },
-  { label: "재무진단", description: "내 수입·지출·부채 흐름부터 먼저 보기", href: "/planning", badge: "진단" },
-  { label: "상품추천", description: "현재 조건으로 예적금·대출 후보 비교", href: "/recommend", badge: "추천" },
-  { label: "금융탐색", description: "상품·공시·혜택·주거·환율 정보 탐색", href: "/products", badge: "탐색" },
-  { label: "내 설정", description: "데이터 신뢰, 알림, 백업을 한 곳에서 관리", href: "/settings", badge: "설정" },
-];
+const serviceCopyById: Record<string, { label?: string; description: string; badge: string }> = {
+  dashboard: { label: "홈/대시보드", description: "진단과 상품 비교 중 어디서 다시 시작할지 고르기", badge: "시작" },
+  planning: { description: "내 수입·지출·부채 흐름부터 먼저 보기", badge: "진단" },
+  recommend: { description: "현재 조건으로 예적금·대출 후보 비교", badge: "추천" },
+  products: { description: "상품·공시·혜택·주거·환율 정보 탐색", badge: "탐색" },
+  settings: { description: "데이터 신뢰, 알림, 백업을 한 곳에서 관리", badge: "설정" },
+};
 
 export function ServiceLinks() {
+  const serviceLinks = getPublicDesktopNavItems().map((item) => {
+    const copy = serviceCopyById[item.id];
+    return {
+      label: copy?.label ?? item.label,
+      description: copy?.description ?? "",
+      href: item.href,
+      badge: copy?.badge ?? item.label,
+    };
+  });
+
   return (
     <section className="bg-[#f5f7fa] py-14">
       <Container className="px-4 sm:px-6 lg:px-8">

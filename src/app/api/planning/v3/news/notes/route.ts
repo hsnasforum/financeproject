@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   createNewsNote,
   listNewsNotes,
-} from "@/lib/planning/v3/news/notes";
+  } from "@/lib/planning/v3/news/notes";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 const CreateBodySchema = z.object({
@@ -65,26 +65,26 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const url = new URL(request.url);
-  const targetType = url.searchParams.get("targetType");
-  const targetId = url.searchParams.get("targetId");
+    const url = new URL(request.url);
+    const targetType = url.searchParams.get("targetType");
+    const targetId = url.searchParams.get("targetId");
 
-  const notes = listNewsNotes({
-    targetType: targetType === "item" || targetType === "topic" || targetType === "scenario" ? targetType : undefined,
-    targetId: typeof targetId === "string" && targetId.trim() ? targetId.trim() : undefined,
-  });
+    const notes = listNewsNotes({
+      targetType: targetType === "item" || targetType === "topic" || targetType === "scenario" ? targetType : undefined,
+      targetId: typeof targetId === "string" && targetId.trim() ? targetId.trim() : undefined,
+    });
 
-  return NextResponse.json({
-    ok: true,
-    data: {
-      notes,
-      total: notes.length,
-    },
-    meta: userMeta,
+    return NextResponse.json({
+      ok: true,
+      data: {
+        notes,
+        total: notes.length,
+      },
+      meta: userMeta,
+    });
   });
 }
 
@@ -98,32 +98,32 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = CreateBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "메모 입력 형식이 올바르지 않습니다." },
-        meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
+    const parsed = CreateBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "메모 입력 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
 
-  const created = createNewsNote({
-    targetType: parsed.data.targetType,
-    targetId: parsed.data.targetId,
-    tags: parsed.data.tags,
-    note: parsed.data.note,
-  });
+    const created = createNewsNote({
+      targetType: parsed.data.targetType,
+      targetId: parsed.data.targetId,
+      tags: parsed.data.tags,
+      note: parsed.data.note,
+    });
 
-  return NextResponse.json({
-    ok: true,
-    data: created,
-    meta: userMeta,
+    return NextResponse.json({
+      ok: true,
+      data: created,
+      meta: userMeta,
+    });
   });
 }

@@ -1,18 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { setOpsLatestAssumptionsFromHistory } from "@/lib/ops/assumptions/assumptionsSetLatestRouteService";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
-import {
-  isPlanningRouteUser,
-  requirePlanningRouteUser,
-} from "@/lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import { assumptionsUserMeta } from "../_lib";
 
 type SetLatestBody = {
@@ -67,46 +65,46 @@ export async function POST(request: Request) {
     });
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const confirm = asString(body?.confirm);
-  const result = await setOpsLatestAssumptionsFromHistory({
-    confirm,
-    currentUser,
-    snapshotId,
-  });
-  if (result.kind === "validation-error") {
-    return opsErrorResponse({
-      code: "VALIDATION",
-      message: result.message,
-      status: 400,
-      fixHref: "/ops/assumptions/history",
-      details: {
-        expectedConfirm: result.expectedConfirm,
-      },
+    const confirm = asString(body?.confirm);
+    const result = await setOpsLatestAssumptionsFromHistory({
+      confirm,
+      currentUser,
+      snapshotId,
     });
-  }
-  if (result.kind === "missing") {
-    return opsErrorResponse({
-      code: "STALE_ASSUMPTIONS",
-      message: result.message,
-      status: 404,
-      fixHref: "/ops/assumptions/history",
-    });
-  }
-  if (result.kind === "storage-corrupt") {
-    return opsErrorResponse({
-      code: "STORAGE_CORRUPT",
-      message: result.message,
-      status: 500,
-    });
-  }
+    if (result.kind === "validation-error") {
+      return opsErrorResponse({
+        code: "VALIDATION",
+        message: result.message,
+        status: 400,
+        fixHref: "/ops/assumptions/history",
+        details: {
+          expectedConfirm: result.expectedConfirm,
+        },
+      });
+    }
+    if (result.kind === "missing") {
+      return opsErrorResponse({
+        code: "STALE_ASSUMPTIONS",
+        message: result.message,
+        status: 404,
+        fixHref: "/ops/assumptions/history",
+      });
+    }
+    if (result.kind === "storage-corrupt") {
+      return opsErrorResponse({
+        code: "STORAGE_CORRUPT",
+        message: result.message,
+        status: 500,
+      });
+    }
 
-  return NextResponse.json({
-    ok: true,
-    message: result.message,
-    snapshotRef: result.snapshotRef,
-    meta: assumptionsUserMeta(currentUser, result.meta),
+    return NextResponse.json({
+      ok: true,
+      message: result.message,
+      snapshotRef: result.snapshotRef,
+      meta: assumptionsUserMeta(currentUser, result.meta),
+    });
   });
 }
