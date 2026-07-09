@@ -17,6 +17,10 @@ import {
   type CurrentUserPlanningRunActionProgressSummary,
   type CurrentUserPlanningRunRecord,
 } from "@/lib/planning/server/runs/repository";
+import {
+  getPlanningStartupMigrationGateSnapshot,
+  getPlanningStartupMigrationTelemetryContext,
+} from "@/lib/planning/store/startupMigrationGate";
 
 export type PlanningWorkspaceInitialProfileResult = CurrentUserPlanningProfileRecord | null;
 
@@ -66,6 +70,7 @@ export async function loadPlanningRunsPageInitialData(input: {
 }): Promise<PlanningRunsPageInitialData> {
   const fallbackNotice = "처음 상담 기록을 준비하는 중 일시적인 문제가 있어 화면에서 다시 불러옵니다.";
   let filterProfileId = input.initialFilterProfileId;
+  const startupMigrationSequenceAtStart = getPlanningStartupMigrationGateSnapshot()?.sequence ?? 0;
   const telemetry = createPlanningPageLoadTelemetry({
     context: {
       hasInitialFilterProfileId: Boolean(input.initialFilterProfileId),
@@ -127,6 +132,9 @@ export async function loadPlanningRunsPageInitialData(input: {
       runCount: loaded.runs.length,
       runsReady: loaded.runsReady,
       status: "ok",
+      ...getPlanningStartupMigrationTelemetryContext({
+        sinceSequence: startupMigrationSequenceAtStart,
+      }),
     });
 
     return loaded;
@@ -150,6 +158,9 @@ export async function loadPlanningRunsPageInitialData(input: {
       runCount: 0,
       runsReady: false,
       status: "fallback",
+      ...getPlanningStartupMigrationTelemetryContext({
+        sinceSequence: startupMigrationSequenceAtStart,
+      }),
     });
 
     return loaded;
