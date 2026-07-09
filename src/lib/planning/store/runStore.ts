@@ -46,7 +46,10 @@ import {
 } from "./runCreateStore";
 import { createRunDeleteStore } from "./runDeleteStore";
 import { writeRunMetaRecord } from "./runMetaWriter";
-import { selectRunRetentionTargets } from "./runRetention";
+import {
+  createRunRetentionStore,
+  type RunRetentionPurgeOptions,
+} from "./runRetentionStore";
 import { ensurePlanningStartupMigrations } from "./startupMigrationGate";
 import { type PlanningRunRecord } from "./types";
 
@@ -72,10 +75,7 @@ type CreateRunOptions = RunCreateStoreOptions;
 
 type CreateRunInput = RunCreateStoreSource;
 
-type PurgeRunsOptions = {
-  profileId?: string;
-  maxPerProfile?: number;
-};
+type PurgeRunsOptions = RunRetentionPurgeOptions;
 
 function assertServerOnly(): void {
   if (typeof window !== "undefined") {
@@ -145,6 +145,11 @@ const runDeleteStore = createRunDeleteStore({
   getRun: (id) => getRun(id),
   removeIndexEntry: (id) => runIndexStore.remove(id),
   upsertIndexEntry: (entry) => runIndexStore.upsert(entry),
+});
+const runRetentionStore = createRunRetentionStore({
+  defaultMaxPerProfile: DEFAULT_RUNS_PER_PROFILE_RETENTION,
+  deleteRun: (id) => runDeleteStore.deleteRun(id),
+  listIndexEntries: () => runIndexStore.read(),
 });
 
 const legacyRunBackfillStore = createRunLegacyBackfillStore({
@@ -331,20 +336,7 @@ export async function getRunBlob(id: string, name: string): Promise<unknown | nu
 
 export async function purgeRunsByRetention(options?: PurgeRunsOptions): Promise<string[]> {
   assertServerOnly();
-
-  const maxPerProfile = toSafeLimit(options?.maxPerProfile, DEFAULT_RUNS_PER_PROFILE_RETENTION);
-  const all = await runIndexStore.read();
-  const purgeTargets = selectRunRetentionTargets(all, {
-    maxPerProfile,
-    ...(asString(options?.profileId) ? { profileId: asString(options?.profileId) } : {}),
-  });
-  const removedIds: string[] = [];
-  for (const row of purgeTargets) {
-    const removed = await deleteRun(row.id);
-    if (removed) removedIds.push(row.id);
-  }
-
-  return removedIds;
+  return runRetentionStore.purgeRunsByRetention(options);
 }
 
 export async function createRun(input: CreateRunInput, options?: CreateRunOptions): Promise<PlanningRunRecord> {
