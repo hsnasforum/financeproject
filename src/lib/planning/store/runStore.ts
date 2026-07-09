@@ -17,15 +17,11 @@ import {
 import {
   isEngineEnvelopeLike,
   normalizeRawRunForBackfill,
-  toMetaRecord,
 } from "./runMetaRecord";
 import { type ReadRunMetaRecordOptions } from "./runMetaReader";
 import { type RunReadDiagnostic } from "./runReadObservability";
 import { createRunReadStore } from "./runReadStore";
-import {
-  toRunIndexEntry,
-  type RunIndexEntry,
-} from "./runIndex";
+import { type RunIndexEntry } from "./runIndex";
 import { createRunIndexStore } from "./runIndexStore";
 import {
   createRunInFileStore,
@@ -33,11 +29,14 @@ import {
   type RunCreateStoreSource,
 } from "./runCreateStore";
 import { createRunDeleteStore } from "./runDeleteStore";
-import { writeRunMetaRecord } from "./runMetaWriter";
 import {
   createRunRetentionStore,
   type RunRetentionPurgeOptions,
 } from "./runRetentionStore";
+import {
+  createRunUpdateStore,
+  type UpdateRunPatch,
+} from "./runUpdateStore";
 import { ensurePlanningStartupMigrations } from "./startupMigrationGate";
 import { type PlanningRunRecord } from "./types";
 
@@ -50,6 +49,7 @@ export type {
 } from "./runLegacyBackfillService";
 export type { RunIndexEntry } from "./runIndex";
 export type { RunReadDiagnostic, RunReadDiagnosticAttempt } from "./runReadObservability";
+export type { UpdateRunPatch } from "./runUpdateStore";
 
 export const DEFAULT_RUNS_PER_PROFILE_RETENTION = 50;
 
@@ -113,6 +113,10 @@ const runRetentionStore = createRunRetentionStore({
   defaultMaxPerProfile: DEFAULT_RUNS_PER_PROFILE_RETENTION,
   deleteRun: (id) => runDeleteStore.deleteRun(id),
   listIndexEntries: () => runIndexStore.read(),
+});
+const runUpdateStore = createRunUpdateStore({
+  getRun: (id) => getRun(id),
+  upsertIndexEntry: (entry) => runIndexStore.upsert(entry),
 });
 
 const legacyRunBackfillStore = createRunLegacyBackfillStore({
@@ -211,52 +215,11 @@ export async function backfillLegacyRuns(options?: {
   return legacyRunBackfillStore.backfill(options);
 }
 
-type UpdateRunPatchBase = Partial<Pick<
-  PlanningRunRecord,
-  "title" | "scenario" | "overallStatus" | "stages" | "input" | "meta" | "outputs" | "reproducibility"
->>;
-
-export type UpdateRunPatch = UpdateRunPatchBase & {
-  actionCenter?: PlanningRunRecord["actionCenter"] | null;
-};
-
-function mergeRunPatch(current: PlanningRunRecord, patch: UpdateRunPatch): PlanningRunRecord {
-  const next: PlanningRunRecord = {
-    ...current,
-    ...(patch.title !== undefined ? { title: patch.title } : {}),
-    ...(patch.scenario !== undefined ? { scenario: patch.scenario } : {}),
-    ...(patch.overallStatus !== undefined ? { overallStatus: patch.overallStatus } : {}),
-    ...(patch.stages !== undefined ? { stages: patch.stages } : {}),
-    ...(patch.input ? { input: { ...current.input, ...patch.input } } : {}),
-    ...(patch.meta ? { meta: { ...current.meta, ...patch.meta } } : {}),
-    ...(patch.outputs ? { outputs: { ...current.outputs, ...patch.outputs } } : {}),
-    ...(patch.reproducibility !== undefined ? { reproducibility: patch.reproducibility } : {}),
-  };
-  if (patch.actionCenter === null) {
-    delete next.actionCenter;
-  } else if (patch.actionCenter !== undefined) {
-    next.actionCenter = patch.actionCenter;
-  }
-  return next;
-}
-
 export async function updateRun(id: string, patch: UpdateRunPatch): Promise<PlanningRunRecord | null> {
   assertServerOnly();
   await ensureStartupMigrations();
   const safeId = sanitizeRecordId(id);
-  const current = await getRun(safeId);
-  if (!current) return null;
-
-  const next = toMetaRecord({
-    ...mergeRunPatch(current, patch),
-    id: current.id,
-    profileId: current.profileId,
-    createdAt: current.createdAt,
-    version: 1,
-  });
-  await writeRunMetaRecord(next);
-  await runIndexStore.upsert(toRunIndexEntry(next));
-  return next;
+  return runUpdateStore.updateRun(safeId, patch);
 }
 
 export async function getRunBlob(id: string, name: string): Promise<unknown | null> {
