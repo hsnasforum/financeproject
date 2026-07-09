@@ -458,6 +458,10 @@ function toResult(summary: PlanningMigrationReport["summary"]): "ok" | "partial"
   return "ok";
 }
 
+function shouldRetainStartupRunPromise(result: PlanningMigrationRunResult): boolean {
+  return result.result !== "failed";
+}
+
 function applyStateEntry(
   state: PlanningMigrationState,
   item: PlanningMigrationItem,
@@ -578,9 +582,10 @@ export async function runPlanningMigrationsOnStartup(options?: {
   if (existing) return existing;
 
   const created = runPlanningMigrations({
-      baseDir: options?.baseDir,
-      trigger: "startup",
-    }).catch((error) => {
+    baseDir: options?.baseDir,
+    trigger: "startup",
+  })
+    .catch((error) => {
       const nowIso = new Date().toISOString();
       const message = error instanceof Error ? error.message : "startup migration failed";
       return {
@@ -606,6 +611,12 @@ export async function runPlanningMigrationsOnStartup(options?: {
           },
         ],
       };
+    })
+    .then((result) => {
+      if (!shouldRetainStartupRunPromise(result)) {
+        startupRunPromises.delete(key);
+      }
+      return result;
     });
   startupRunPromises.set(key, created);
   return created;
