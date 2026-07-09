@@ -18,7 +18,6 @@ import {
   moveRunMetaToTrash,
   restoreRunMetaFromTrash,
 } from "./runTrashStore";
-import { migrateLegacyRunToEngineEnvelope } from "./engineEnvelopeMigration";
 import {
   normalizeRunBlobName,
   readRunBlobPayload,
@@ -42,15 +41,16 @@ import {
   buildCreateRunRecord,
   compactRawRunOutputs,
   isEngineEnvelopeLike,
-  isRunRecord,
-  normalizeRunMetaForRead,
   normalizeRawRunForBackfill,
   toMetaRecord,
 } from "./runMetaRecord";
 import {
+  readRunMetaRecordByPath,
+  readRunMetaRecordByPathDetailed,
+  type ReadRunMetaRecordOptions,
+} from "./runMetaReader";
+import {
   createRunReadDiagnosticRecorder,
-  recordRunReadFallbackUsage,
-  type ReadRunMetaByPathDetailedResult,
   type RunReadDiagnostic,
 } from "./runReadObservability";
 import { migrateLegacyRunToPartition } from "./runReadMigration";
@@ -133,66 +133,17 @@ function normalizeRelativePath(absPath: string, baseDir = process.cwd()): string
   return path.relative(baseDir, absPath).replaceAll("\\", "/");
 }
 
-type ReadRunMetaOptions = {
-  persistMigrations?: boolean;
-};
-
 async function readRunMetaByPath(
   filePath: string,
-  options?: ReadRunMetaOptions,
+  options?: ReadRunMetaRecordOptions,
 ): Promise<PlanningRunRecord | null> {
-  const detailed = await readRunMetaByPathDetailed(filePath, options);
-  return detailed.status === "found" ? detailed.run : null;
-}
-
-async function readRunMetaByPathDetailed(
-  filePath: string,
-  options?: ReadRunMetaOptions,
-): Promise<ReadRunMetaByPathDetailedResult> {
-  let loaded: unknown;
-  try {
-    const raw = await fs.readFile(filePath, "utf-8");
-    loaded = JSON.parse(raw) as unknown;
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") {
-      return { status: "missing", reason: "file-missing" };
-    }
-    if (error instanceof SyntaxError) {
-      return { status: "unreadable", reason: "invalid-json" };
-    }
-    return {
-      status: "unreadable",
-      reason: nodeError?.code ? `read-failed:${nodeError.code}` : "read-failed",
-    };
-  }
-
-  let decoded: Awaited<ReturnType<typeof fromStoredPayload>>;
-  try {
-    decoded = await fromStoredPayload(loaded);
-  } catch {
-    return { status: "unreadable", reason: "decode-failed" };
-  }
-
-  const parsed = decoded.payload;
-  if (!isRunRecord(parsed)) return { status: "unreadable", reason: "invalid-run-record" };
-  try {
-    const canonicalMeta = normalizeRunMetaForRead(parsed);
-    const migration = migrateLegacyRunToEngineEnvelope(canonicalMeta.run);
-    recordRunReadFallbackUsage({ canonicalMeta, migration });
-    if (options?.persistMigrations === true && (decoded.rewriteToVault || canonicalMeta.migrated || migration.migrated)) {
-      await writeJsonAtomic(filePath, await toStoredPayload(migration.run));
-    }
-    return { status: "found", run: migration.run };
-  } catch {
-    return { status: "unreadable", reason: "canonicalization-failed" };
-  }
+  return readRunMetaRecordByPath(filePath, options);
 }
 
 async function readRunMeta(
   id: string,
   profileIdHint?: string,
-  options?: ReadRunMetaOptions,
+  options?: ReadRunMetaRecordOptions,
 ): Promise<PlanningRunRecord | null> {
   const { sources } = await resolveRunReadSources(id, profileIdHint);
   for (const candidate of sources) {
@@ -295,7 +246,7 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
 
   const { sources } = await resolveRunReadSources(safeId, hintedProfileId);
   for (const candidate of sources) {
-    const result = await readRunMetaByPathDetailed(candidate.filePath);
+    const result = await readRunMetaRecordByPathDetailed(candidate.filePath);
     diagnostics.recordAttempt(candidate.source, candidate.filePath, result);
     if (result.status === "found") {
       return diagnostics.found(result.run);
