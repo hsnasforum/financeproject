@@ -1,8 +1,9 @@
 import { recordPlanningFallbackUsage } from "../engine";
+import { type RunReadSourceKind } from "./runReadSources";
 import { type PlanningRunRecord } from "./types";
 
 export type RunReadDiagnosticAttempt = {
-  source: "partition-hint" | "partition-scan" | "legacy-meta" | "legacy-file";
+  source: RunReadSourceKind;
   path: string;
   status: "found" | "missing" | "unreadable";
   reason?: string;
