@@ -321,10 +321,12 @@ describe("planning store", () => {
     await expect(getRun(created.id)).resolves.toBeNull();
     const unreadable = await diagnoseRunRead(created.id);
     expect(unreadable.status).toBe("unreadable");
+    expect(unreadable.attempts.map((row) => row.source)).toEqual(["partition-hint", "legacy-meta", "legacy-file"]);
     expect(unreadable.attempts.some((row) => row.status === "unreadable" && row.reason === "invalid-json")).toBe(true);
 
     const missing = await diagnoseRunRead("missing-run");
     expect(missing.status).toBe("missing");
+    expect(missing.attempts.map((row) => row.source)).toEqual(["legacy-meta", "legacy-file"]);
     expect(missing.attempts.every((row) => row.status === "missing")).toBe(true);
   });
 
