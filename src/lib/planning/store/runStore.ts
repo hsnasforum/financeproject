@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import path from "node:path";
 import { sanitizeRecordId } from "./paths";
 import {
   normalizeRunBlobName,
@@ -20,20 +19,9 @@ import {
   normalizeRawRunForBackfill,
   toMetaRecord,
 } from "./runMetaRecord";
-import {
-  readRunMetaRecordByPath,
-  readRunMetaRecordByPathDetailed,
-  type ReadRunMetaRecordOptions,
-} from "./runMetaReader";
-import {
-  createRunReadDiagnosticRecorder,
-  type RunReadDiagnostic,
-} from "./runReadObservability";
-import { migrateLegacyRunToPartition } from "./runReadMigration";
-import {
-  getRunPaths,
-  resolveRunReadSources,
-} from "./runReadSources";
+import { type ReadRunMetaRecordOptions } from "./runMetaReader";
+import { type RunReadDiagnostic } from "./runReadObservability";
+import { createRunReadStore } from "./runReadStore";
 import {
   toRunIndexEntry,
   type RunIndexEntry,
@@ -105,39 +93,14 @@ function toSafeOffset(value: unknown): number {
   return Math.max(0, parsed);
 }
 
-function normalizeRelativePath(absPath: string, baseDir = process.cwd()): string {
-  return path.relative(baseDir, absPath).replaceAll("\\", "/");
-}
-
-async function readRunMetaByPath(
-  filePath: string,
-  options?: ReadRunMetaRecordOptions,
-): Promise<PlanningRunRecord | null> {
-  return readRunMetaRecordByPath(filePath, options);
-}
+const runReadStore = createRunReadStore();
 
 async function readRunMeta(
   id: string,
   profileIdHint?: string,
   options?: ReadRunMetaRecordOptions,
 ): Promise<PlanningRunRecord | null> {
-  const { sources } = await resolveRunReadSources(id, profileIdHint);
-  for (const candidate of sources) {
-    const run = await readRunMetaByPath(candidate.filePath, options);
-    if (!run) continue;
-    if (
-      options?.persistMigrations === true
-      && (candidate.source === "legacy-meta" || candidate.source === "legacy-file")
-    ) {
-      await migrateLegacyRunToPartition({
-        record: run,
-        paths: getRunPaths(id, run.profileId),
-      });
-    }
-    return run;
-  }
-
-  return null;
+  return runReadStore.readRunMeta(id, profileIdHint, options);
 }
 
 const runIndexStore = createRunIndexStore({ readRunMeta });
@@ -224,22 +187,7 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
   const explicitProfileIdHint = asString(profileIdHint);
   const indexRows = explicitProfileIdHint ? [] : await runIndexStore.read();
   const hintedProfileId = explicitProfileIdHint || indexRows.find((row) => row.id === safeId)?.profileId;
-  const diagnostics = createRunReadDiagnosticRecorder({
-    id: safeId,
-    ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
-    normalizePath: normalizeRelativePath,
-  });
-
-  const { sources } = await resolveRunReadSources(safeId, hintedProfileId);
-  for (const candidate of sources) {
-    const result = await readRunMetaRecordByPathDetailed(candidate.filePath);
-    diagnostics.recordAttempt(candidate.source, candidate.filePath, result);
-    if (result.status === "found") {
-      return diagnostics.found(result.run);
-    }
-  }
-
-  return diagnostics.final();
+  return runReadStore.diagnoseRunRead(safeId, hintedProfileId);
 }
 
 export async function summarizeLegacyRunBackfill(): Promise<LegacyRunBackfillSummary> {
