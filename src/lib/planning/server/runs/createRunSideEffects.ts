@@ -31,6 +31,42 @@ export async function recordCreateRunStageMetricsSafely(
   }
 }
 
+export function recordCreateRunFailureAudit(input: {
+  recordAudit: RecordCreateRunAudit;
+  recordId?: string | null;
+  message: string;
+  logger?: CreateRunSideEffectLogger;
+}): void {
+  recordCreateRunAuditSafely(input.recordAudit, {
+    result: "ERROR",
+    ...(input.recordId !== undefined ? { recordId: input.recordId } : {}),
+    message: input.message,
+  }, input.logger);
+}
+
+export async function recordCreateRunFailureSideEffects(input: {
+  recordAudit: RecordCreateRunAudit;
+  recordStageMetrics: RecordCreateRunStageMetrics;
+  auditMessage: string;
+  recordId?: string | null;
+  stageMetrics?: Parameters<RecordCreateRunStageMetrics>[0];
+  logger?: CreateRunSideEffectLogger;
+}): Promise<void> {
+  if (input.stageMetrics) {
+    await recordCreateRunStageMetricsSafely(
+      input.recordStageMetrics,
+      input.stageMetrics,
+      input.logger,
+    );
+  }
+  recordCreateRunFailureAudit({
+    recordAudit: input.recordAudit,
+    ...(input.recordId !== undefined ? { recordId: input.recordId } : {}),
+    message: input.auditMessage,
+    ...(input.logger ? { logger: input.logger } : {}),
+  });
+}
+
 export async function recordCreateRunSuccessSideEffects(input: {
   recordAudit: RecordCreateRunAudit;
   recordStageMetrics: RecordCreateRunStageMetrics;

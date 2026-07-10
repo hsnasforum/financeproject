@@ -566,6 +566,58 @@ describe("planning v2 persistence routes", () => {
     expect(recordStageMetrics.mock.invocationCallOrder[0]).toBeLessThan(recordAudit.mock.invocationCallOrder[0]);
   });
 
+  it("records audit only and preserves the public error shape when the stage pipeline throws early", async () => {
+    const createProfileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Early pipeline failure profile",
+      profile: sampleProfile(),
+    }));
+    const createProfilePayload = await createProfileResponse.json() as {
+      data?: { id?: string };
+    };
+    const profileId = String(createProfilePayload.data?.id ?? "");
+    expect(profileId).toBeTruthy();
+
+    const parsed = parseCreatePlanningRunCommand({
+      profileId,
+      title: "early stage pipeline failure",
+      input: {
+        horizonMonths: 24,
+        runScenarios: false,
+        getActions: false,
+        analyzeDebt: false,
+      },
+    });
+    if (!parsed.ok) {
+      throw new Error(`unexpected parse failure: ${parsed.message}`);
+    }
+
+    const recordStageMetrics = vi.fn(async () => undefined);
+    const recordAudit = vi.fn();
+    const result = await createPlanningRun(parsed.command, {
+      requestBaseUrl: `http://${LOCAL_HOST}`,
+    }, {
+      runPipeline: async () => {
+        throw new Error("stage pipeline unavailable");
+      },
+      recordStageMetrics,
+      recordAudit,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      code: "INTERNAL",
+      message: "stage pipeline unavailable",
+      status: 500,
+      meta: {},
+    });
+    expect(recordStageMetrics).not.toHaveBeenCalled();
+    expect(recordAudit).toHaveBeenCalledWith({
+      result: "ERROR",
+      recordId: profileId,
+      message: "stage pipeline unavailable",
+    });
+  });
+
   it("rejects run save when debt offer liabilityId does not match profile debt ids", async () => {
     const createProfileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
       name: "Preflight mismatch profile",

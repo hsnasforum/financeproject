@@ -20,9 +20,9 @@ import {
 } from "./createRunRecordAssembler";
 import { persistCreatePlanningRunRecord } from "./createRunPersistence";
 import {
-  recordCreateRunAuditSafely,
+  recordCreateRunFailureAudit,
+  recordCreateRunFailureSideEffects,
   recordCreateRunSuccessSideEffects,
-  recordCreateRunStageMetricsSafely,
 } from "./createRunSideEffects";
 import {
   buildCreatePlanningRunSuccessResult,
@@ -110,35 +110,13 @@ function errorResult(input: {
   };
 }
 
-function recordCreateAudit(
-  dependencies: ResolvedCreatePlanningRunDependencies,
-  input: {
-    result: "SUCCESS" | "ERROR";
-    recordId?: string | null;
-    message: string;
-  },
-) {
-  recordCreateRunAuditSafely(dependencies.recordAudit, {
-    result: input.result,
-    recordId: input.recordId,
-    message: input.message,
-  });
-}
-
-async function recordStageMetricsSafely(
-  dependencies: ResolvedCreatePlanningRunDependencies,
-  input: Parameters<typeof recordCurrentUserRunStageMetrics>[0],
-) {
-  await recordCreateRunStageMetricsSafely(dependencies.recordStageMetrics, input);
-}
-
 export function recordCreatePlanningRunParseFailure(
   parseFailure: Exclude<CreatePlanningRunParseResult, { ok: true }>,
   dependencies?: Pick<CreatePlanningRunDependencies, "recordAudit">,
 ) {
   const deps = resolveCreateDependencies(dependencies);
-  recordCreateAudit(deps, {
-    result: "ERROR",
+  recordCreateRunFailureAudit({
+    recordAudit: deps.recordAudit,
     recordId: parseFailure.recordId,
     message: parseFailure.auditMessage,
   });
@@ -160,8 +138,8 @@ export async function createPlanningRun(
 
   const featureFlags = deps.getFeatureFlags();
   if (includeProducts && !featureFlags.includeProductsEnabled) {
-    recordCreateAudit(deps, {
-      result: "ERROR",
+    recordCreateRunFailureAudit({
+      recordAudit: deps.recordAudit,
       message: "includeProducts disabled by server feature flag",
     });
     return errorResult({
@@ -171,8 +149,8 @@ export async function createPlanningRun(
     });
   }
   if (monteCarloConfig && !featureFlags.monteCarloEnabled) {
-    recordCreateAudit(deps, {
-      result: "ERROR",
+    recordCreateRunFailureAudit({
+      recordAudit: deps.recordAudit,
       message: "monteCarlo disabled by server feature flag",
     });
     return errorResult({
@@ -187,8 +165,10 @@ export async function createPlanningRun(
     dependencies: deps,
   });
   if (!inputContext.ok) {
-    recordCreateAudit(deps, {
-      ...inputContext.audit,
+    recordCreateRunFailureAudit({
+      recordAudit: deps.recordAudit,
+      recordId: inputContext.audit.recordId,
+      message: inputContext.audit.message,
     });
     return errorResult({
       ...inputContext.error,
@@ -232,17 +212,18 @@ export async function createPlanningRun(
     const { pipeline, stageOutputs } = stagePipelineResult;
     stages = stagePipelineResult.stages;
     if (!stageOutputs.simulatePlan || pipeline.overallStatus === "FAILED") {
-      await recordStageMetricsSafely(deps, {
-        requestId: runRequestId,
-        profileId: profileRecord.id,
-        overallStatus: pipeline.overallStatus,
-        stages,
-        totalDurationMs: totalStageDurationMs(stages),
-      });
-      recordCreateAudit(deps, {
-        result: "ERROR",
+      await recordCreateRunFailureSideEffects({
+        recordAudit: deps.recordAudit,
+        recordStageMetrics: deps.recordStageMetrics,
         recordId: profileRecord.id,
-        message: "simulate stage failed",
+        auditMessage: "simulate stage failed",
+        stageMetrics: {
+          requestId: runRequestId,
+          profileId: profileRecord.id,
+          overallStatus: pipeline.overallStatus,
+          stages,
+          totalDurationMs: totalStageDurationMs(stages),
+        },
       });
       return errorResult({
         code: "INTERNAL",
@@ -310,19 +291,21 @@ export async function createPlanningRun(
       stages = error.stages;
     }
     const message = error instanceof Error ? error.message : "실행 기록 저장에 실패했습니다.";
-    if (stages.length > 0) {
-      await recordStageMetricsSafely(deps, {
+    const failureStageMetrics = stages.length > 0
+      ? {
         requestId: runRequestId,
         profileId: profileRecord.id,
         overallStatus: "FAILED",
         stages,
         totalDurationMs: totalStageDurationMs(stages),
-      });
-    }
-    recordCreateAudit(deps, {
-      result: "ERROR",
+      } satisfies Parameters<typeof recordCurrentUserRunStageMetrics>[0]
+      : undefined;
+    await recordCreateRunFailureSideEffects({
+      recordAudit: deps.recordAudit,
+      recordStageMetrics: deps.recordStageMetrics,
       recordId: profileRecord.id,
-      message,
+      auditMessage: message,
+      ...(failureStageMetrics ? { stageMetrics: failureStageMetrics } : {}),
     });
     return errorResult({
       code: "INTERNAL",
