@@ -42,4 +42,22 @@ describe("FINLIFE sync attempt marker", () => {
     expect(readSyncAttempt("deposit")).toBeNull();
     expect(loadFinlifeSyncAttempt("deposit")).toBeNull();
   });
+
+  it("keeps final completion evidence failures observable", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-finlife-sync-attempt-"));
+    tempRoots.push(root);
+    vi.spyOn(process, "cwd").mockReturnValue(root);
+    const attempt = {
+      status: "failed",
+      phase: "completion",
+      startedAt: "2026-07-10T00:00:00.000Z",
+      updatedAt: "2026-07-10T00:00:02.000Z",
+      errorCode: "COMPLETION_WRITE_FAILED",
+    } as const;
+
+    writeSyncAttempt("saving", attempt);
+
+    expect(readSyncAttempt("saving")).toEqual(attempt);
+    expect(loadFinlifeSyncAttempt("saving")).toEqual(attempt);
+  });
 });

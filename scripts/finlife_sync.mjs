@@ -95,6 +95,93 @@ async function getPrismaClient() {
   return prismaClient;
 }
 
+function nonNegativeCount(value) {
+  return Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+}
+
+export async function writeFinlifeCompletionEvidence(input, dependencies = {}) {
+  if (input.state !== "db-complete" && input.state !== "complete") {
+    throw new Error(`Invalid FINLIFE completion evidence state: ${input.state}`);
+  }
+  const getClient = dependencies.getPrismaClient ?? getPrismaClient;
+  const prisma = await getClient();
+  const dbCompletedAt = new Date(input.dbCompletedAt);
+  if (!Number.isFinite(dbCompletedAt.getTime())) {
+    throw new Error(`Invalid FINLIFE DB completion timestamp: ${input.dbCompletedAt}`);
+  }
+  const isComplete = input.state === "complete";
+  const snapshotCompletedAt = isComplete ? new Date(input.snapshotCompletedAt) : null;
+  if (isComplete && !Number.isFinite(snapshotCompletedAt.getTime())) {
+    throw new Error(`Invalid FINLIFE snapshot completion timestamp: ${input.snapshotCompletedAt}`);
+  }
+
+  const ttlMs = Number.isFinite(Number(input.ttlMs)) && Number(input.ttlMs) > 0
+    ? Math.trunc(Number(input.ttlMs))
+    : 43_200_000;
+  const fetchedItems = nonNegativeCount(input.fetchedItems);
+  const productsUpserted = nonNegativeCount(input.dbSync?.productsUpserted);
+  const observedAt = isComplete ? input.snapshotCompletedAt : input.dbCompletedAt;
+  const provenance = input.provenance?.mode === "replay"
+    ? {
+        mode: "replay",
+        replayFile: path.basename(String(input.provenance.replayFile || "unknown")),
+        ...(Number.isFinite(Number(input.provenance.dumpSchemaVersion))
+          ? { dumpSchemaVersion: Number(input.provenance.dumpSchemaVersion) }
+          : {}),
+      }
+    : { mode: "live" };
+  const metaJson = {
+    evidenceType: "finlife-prisma-product-sync",
+    completionState: isComplete ? "complete" : "db-complete",
+    dbCompletedAt: input.dbCompletedAt,
+    snapshotCompletedAt: isComplete ? input.snapshotCompletedAt : null,
+    provenance,
+    source: input.source === "mock" ? "mock" : "finlife",
+    fallbackUsed: Boolean(input.fallbackUsed),
+    ...(typeof input.snapshotGeneratedAt === "string" ? { snapshotGeneratedAt: input.snapshotGeneratedAt } : {}),
+    ...(typeof input.completionRate === "number" ? { completionRate: input.completionRate } : {}),
+    truncatedByHardCap: Boolean(input.truncatedByHardCap),
+    lastAttemptAt: observedAt,
+    lastRun: {
+      startedAt: input.startedAt,
+      ...(isComplete ? { finishedAt: input.snapshotCompletedAt } : {}),
+      fetchedItems,
+      upsertedItems: productsUpserted,
+      touchedItems: productsUpserted,
+      totalCount: fetchedItems,
+      providersUpserted: nonNegativeCount(input.dbSync?.providersUpserted),
+      optionsWritten: nonNegativeCount(input.dbSync?.optionsWritten),
+      skippedCrossKindDuplicates: nonNegativeCount(input.dbSync?.skippedCrossKindDuplicates),
+      replacedCrossKindDuplicates: nonNegativeCount(input.dbSync?.replacedCrossKindDuplicates),
+      resultCode: isComplete ? "OK" : "DB_COMPLETED",
+    },
+    ...(isComplete ? { lastError: null } : {}),
+  };
+
+  const update = {
+    ttlMs,
+    metaJson,
+    ...(isComplete ? { lastSyncedAt: snapshotCompletedAt } : {}),
+  };
+
+  return prisma.externalSourceSnapshot.upsert({
+    where: {
+      sourceId_kind: {
+        sourceId: "finlife",
+        kind: input.kind,
+      },
+    },
+    update,
+    create: {
+      sourceId: "finlife",
+      kind: input.kind,
+      lastSyncedAt: isComplete ? snapshotCompletedAt : new Date(0),
+      ttlMs,
+      metaJson,
+    },
+  });
+}
+
 async function syncFinlifeProductsToDb(kind, items, options = {}) {
   const prisma = await getPrismaClient();
   const priorityByKind = options.priorityByKind instanceof Map ? options.priorityByKind : KIND_PRIORITY;
@@ -192,12 +279,14 @@ async function syncFinlifeProductsToDb(kind, items, options = {}) {
 
 export async function persistFinlifeSyncKind(input, dependencies = {}) {
   const syncProductsToDb = dependencies.syncProductsToDb ?? syncFinlifeProductsToDb;
+  const saveCompletionEvidence = dependencies.writeCompletionEvidence ?? writeFinlifeCompletionEvidence;
   const saveSnapshot = dependencies.writeSnapshot ?? writeSnapshot;
   const saveAttempt = dependencies.writeSyncAttempt ?? writeSyncAttempt;
   const removeAttempt = dependencies.clearSyncAttempt ?? clearSyncAttempt;
   const nowIso = dependencies.nowIso ?? (() => new Date().toISOString());
   const startedAt = nowIso();
   let dbSync;
+  let dbCompletedAt;
 
   const recordAttempt = (status, phase, errorCode) => {
     saveAttempt(input.kind, {
@@ -226,6 +315,22 @@ export async function persistFinlifeSyncKind(input, dependencies = {}) {
     dbSync = await syncProductsToDb(input.kind, input.snapshot.items, {
       priorityByKind: input.priorityByKind ?? KIND_PRIORITY,
     });
+    dbCompletedAt = nowIso();
+    await saveCompletionEvidence({
+      state: "db-complete",
+      kind: input.kind,
+      ttlMs: input.snapshot.meta.ttlMs,
+      startedAt,
+      dbCompletedAt,
+      fetchedItems: input.snapshot.items.length,
+      snapshotGeneratedAt: input.snapshot.meta.generatedAt,
+      completionRate: input.snapshot.meta.completionRate,
+      truncatedByHardCap: input.snapshot.meta.truncatedByHardCap,
+      source: input.snapshot.meta.source,
+      fallbackUsed: input.snapshot.meta.fallbackUsed,
+      provenance: input.provenance,
+      dbSync,
+    });
   } catch (error) {
     recordFailure("db", "DB_SYNC_FAILED");
     throw new FinlifeSyncPersistenceError(input.kind, "db", error);
@@ -242,6 +347,34 @@ export async function persistFinlifeSyncKind(input, dependencies = {}) {
   } catch (error) {
     recordFailure("snapshot", "SNAPSHOT_WRITE_FAILED");
     throw new FinlifeSyncPersistenceError(input.kind, "snapshot", error);
+  }
+
+  try {
+    recordAttempt("running", "completion");
+  } catch (error) {
+    throw new FinlifeSyncPersistenceError(input.kind, "attempt", error);
+  }
+
+  try {
+    await saveCompletionEvidence({
+      state: "complete",
+      kind: input.kind,
+      ttlMs: input.snapshot.meta.ttlMs,
+      startedAt,
+      dbCompletedAt,
+      snapshotCompletedAt: nowIso(),
+      fetchedItems: input.snapshot.items.length,
+      snapshotGeneratedAt: input.snapshot.meta.generatedAt,
+      completionRate: input.snapshot.meta.completionRate,
+      truncatedByHardCap: input.snapshot.meta.truncatedByHardCap,
+      source: input.snapshot.meta.source,
+      fallbackUsed: input.snapshot.meta.fallbackUsed,
+      provenance: input.provenance,
+      dbSync,
+    });
+  } catch (error) {
+    recordFailure("completion", "COMPLETION_WRITE_FAILED");
+    throw new FinlifeSyncPersistenceError(input.kind, "completion", error);
   }
 
   try {
@@ -492,6 +625,13 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
       kind,
       snapshot: { meta, items: merged.items },
       priorityByKind: KIND_PRIORITY,
+      provenance: replay
+        ? {
+            mode: "replay",
+            replayFile: path.basename(replay.abs),
+            dumpSchemaVersion: replay.schemaVersion,
+          }
+        : { mode: "live" },
     });
     const dbSync = persisted.dbSync;
 

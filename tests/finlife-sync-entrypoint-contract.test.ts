@@ -12,9 +12,11 @@ function listScriptSources(dir: string): string[] {
 }
 
 function importedModuleSpecifiers(filePath: string): string[] {
+  const sourceText = fs.readFileSync(filePath, "utf-8");
+  if (!sourceText.includes("syncRunner")) return [];
   const source = ts.createSourceFile(
     filePath,
-    fs.readFileSync(filePath, "utf-8"),
+    sourceText,
     ts.ScriptTarget.Latest,
     true,
     filePath.endsWith(".tsx")

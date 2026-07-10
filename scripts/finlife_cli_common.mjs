@@ -401,7 +401,7 @@ export function readSyncAttempt(kind) {
     const parsed = JSON.parse(fs.readFileSync(syncAttemptFilePath(kind), "utf-8"));
     if (!parsed || typeof parsed !== "object") return null;
     if (parsed.status !== "running" && parsed.status !== "failed") return null;
-    if (parsed.phase !== "db" && parsed.phase !== "snapshot") return null;
+    if (parsed.phase !== "db" && parsed.phase !== "snapshot" && parsed.phase !== "completion") return null;
     if (typeof parsed.startedAt !== "string" || typeof parsed.updatedAt !== "string") return null;
     return parsed;
   } catch {
