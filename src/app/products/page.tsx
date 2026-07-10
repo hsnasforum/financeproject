@@ -1,19 +1,11 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
-import { Button } from "@/components/ui/Button";
 
-const PRODUCT_CARDS = [
-  {
-    href: "/products/catalog",
-    title: "통합 탐색",
-    description: "예금·적금 후보를 넓게 훑으며 비교 기준을 먼저 잡는 빠른 시작점",
-    entryLabel: "통합으로 시작",
-    badge: "Unified",
-    badgeClass: "bg-teal-50 text-teal-700 border-teal-100",
-  },
+const CATALOG_PRESET_CARDS = [
   {
     href: "/products/catalog?kind=deposit",
     title: "예금",
@@ -30,6 +22,9 @@ const PRODUCT_CARDS = [
     badge: "Saving",
     badgeClass: "bg-sky-50 text-sky-700 border-sky-100",
   },
+] as const;
+
+const SPECIALIZED_PRODUCT_LINKS = [
   {
     href: "/products/mortgage-loan",
     title: "주담대",
@@ -69,10 +64,13 @@ export default function ProductsHomePage() {
     <PageShell>
       <PageHeader 
         title="금융상품 탐색"
-        description="예적금과 대출 상품의 결론을 바로 고르는 화면이 아니라, 어디서 비교를 시작할지 정하는 입구입니다."
+        description="예금·적금은 통합 카탈로그에서 비교하고, 연금·대출은 상품군별 별도 화면에서 조건을 확인하는 시작점입니다."
       />
 
-      <Card className="mb-12 rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
+      <Card
+        className="mb-12 rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm"
+        data-products-entry-tier="primary"
+      >
         <div className="max-w-3xl">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">비교 시작점</p>
           <h2 className="mt-4 text-3xl font-black tracking-tight text-navy leading-tight">
@@ -82,13 +80,15 @@ export default function ProductsHomePage() {
           </h2>
           <p className="mt-4 text-base font-medium leading-relaxed text-slate-500">
             이 화면은 확정 결론이 아니라 비교 출발점을 고르는 단계입니다.
-            먼저 통합 카탈로그(`/products/catalog`)에서 후보를 넓게 본 뒤, 이미 볼 상품군이 정해졌다면 아래 바로가기로 바로 들어가세요.
+            예금·적금은 통합 카탈로그에서 후보를 넓게 본 뒤 기간, 우대조건, 보호 여부를 함께 비교하세요.
           </p>
           <div className="mt-10">
-            <Link href="/products/catalog">
-              <Button size="lg" variant="primary" className="h-14 rounded-2xl px-10 font-black shadow-xl shadow-navy/20">
-                통합 카탈로그에서 비교 시작
-              </Button>
+            <Link
+              href="/products/catalog"
+              className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl border border-transparent bg-primary px-10 text-base font-black text-white shadow-xl shadow-navy/20 transition-all duration-300 hover:scale-[1.02] hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 active:scale-95"
+            >
+              통합 카탈로그에서 비교 시작
+              <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </Link>
             <p className="mt-3 text-xs font-medium leading-relaxed text-slate-500">
               처음 시작할 때는 여기서 가장 넓게 비교 기준을 잡을 수 있습니다.
@@ -97,34 +97,62 @@ export default function ProductsHomePage() {
         </div>
       </Card>
 
-      <div className="space-y-8">
-        <SubSectionHeader 
-          title="카테고리 바로가기" 
-          description="이미 볼 상품군이 정해졌다면 아래에서 바로 들어가세요. 통합 카탈로그보다 범위를 좁혀 시작하는 바로가기입니다."
-        />
-        
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {PRODUCT_CARDS.map((item) => (
-            <Link key={item.href} href={item.href} className="group">
-              <Card className="flex flex-col h-full rounded-[2rem] p-8 border-slate-100 transition-all hover:border-primary/20 hover:shadow-xl hover:-translate-y-1 active:scale-[0.98]">
-                <div className="mb-6">
+      <div className="space-y-14">
+        <section aria-label="예금·적금 통합 카탈로그 바로가기" data-products-entry-tier="catalog-preset">
+          <SubSectionHeader
+            title="예금·적금 바로가기"
+            description="통합 카탈로그의 같은 비교 기준을 유지하면서 상품군 필터만 먼저 적용합니다."
+          />
+
+          <div className="mt-8 grid max-w-5xl gap-6 md:grid-cols-2">
+            {CATALOG_PRESET_CARDS.map((item) => (
+              <Link key={item.href} href={item.href} className="group">
+                <Card className="flex h-full flex-col rounded-[2rem] border-slate-100 p-8 transition-all hover:-translate-y-1 hover:border-primary/20 hover:shadow-xl active:scale-[0.98]">
+                  <div className="mb-6">
+                    <span className={`inline-flex rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${item.badgeClass}`}>
+                      {item.badge}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-black tracking-tight text-navy transition-colors group-hover:text-primary">{item.title} 상품</h3>
+                  <p className="mt-3 flex-1 text-sm font-medium leading-relaxed text-slate-500">{item.description}</p>
+                  <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
+                    {item.entryLabel}
+                    <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" strokeWidth={3} />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section aria-label="연금·대출 별도 상품군" data-products-entry-tier="specialized">
+          <SubSectionHeader
+            title="연금·대출 별도 탐색"
+            description="통합 카탈로그에 포함되지 않는 상품군입니다. 상품군별 데이터와 비교 조건을 별도 화면에서 확인하세요."
+          />
+
+          <div className="mt-8 divide-y divide-slate-100 border-y border-slate-200">
+            {SPECIALIZED_PRODUCT_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="group grid gap-4 py-6 transition-colors hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:items-center sm:px-4"
+              >
+                <div className="flex items-center gap-3">
                   <span className={`inline-flex rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${item.badgeClass}`}>
                     {item.badge}
                   </span>
+                  <h3 className="text-base font-black text-navy transition-colors group-hover:text-primary">{item.title}</h3>
                 </div>
-                <h3 className="text-xl font-black tracking-tight text-navy group-hover:text-primary transition-colors">{item.title} 상품</h3>
-                <p className="mt-3 text-sm font-medium text-slate-500 flex-1 leading-relaxed">{item.description}</p>
-                <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
-                  {item.entryLabel}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1">
-                    <path d="M5 12h14" />
-                    <path d="m12 5 7 7-7 7" />
-                  </svg>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+                <p className="text-sm font-medium leading-relaxed text-slate-500">{item.description}</p>
+                <span className="flex items-center gap-2 text-xs font-black text-primary">
+                  별도 화면 열기
+                  <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </PageShell>
   );

@@ -160,7 +160,7 @@
 - `/api/planning/run`과 `/api/planning/v2/run`은 `/api/planning/v2/runs`의 deprecated alias다. 제거 또는 redirect 전환은 telemetry/access log와 사용처 확인 후 별도 결정한다.
 - `/api/planner/compute`는 legacy planner 계산 API지만 개인 재무 입력을 받으므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다. `/api/planner/assumptions`는 저장소를 쓰지 않는 외부 가정값 조회 보조 API로 유지한다.
 - `/api/recommend`는 추천 입력과 planning context를 받는 계산 API이므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 기존 추천 trace/source meta에 `meta.userId`와 `meta.authSource`를 함께 유지한다.
-- 상품 탐색의 대표 사용자 화면은 `/products/catalog`다. 예금/적금 category URL은 catalog `kind` preset으로 유지하고, `samplebank`는 production public catalog UI/API에서 노출하지 않는다.
+- 금융탐색의 상위 public 진입점은 `/products`다. 이 게이트웨이 안에서 예금/적금의 대표 비교 화면은 `/products/catalog`이며, catalog `kind` preset과 연금/대출 별도 상품군 화면의 노출 수준을 구분한다. `samplebank`는 production public catalog UI/API에서 노출하지 않는다.
 - `/api/ops/actions/preview`와 `/api/ops/actions/run`처럼 planning 저장소 작업을 registry로 실행하는 ops action route도 local/dev unlock과 CSRF 외에 routeAuth current-user scope를 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다.
 
 ## 정합성 체크 규칙
