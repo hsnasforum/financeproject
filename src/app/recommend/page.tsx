@@ -6,21 +6,17 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
-import { SourceBadge } from "@/components/debug/SourceBadge";
-import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
+import { RecommendResultsPanel } from "@/components/recommend/RecommendResultsPanel";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FilterSelect } from "@/components/ui/FilterSelect";
-import { type FreshnessItemStatus } from "@/components/data/freshness";
 import { downloadText } from "@/lib/browser/download";
-import { type NormalizedProduct } from "@/lib/finlife/types";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
@@ -44,13 +40,11 @@ import {
   writeRecommendAutorunSessionPayload,
 } from "@/lib/recommend/recommendStorageAdapter";
 import {
-  type CandidatePool,
-  type CandidateSource,
-  type DepositProtectionMode,
-  type RecommendPlanningContext,
-  type RecommendPlanningHandoff,
-  type RecommendDetailProduct,
-} from "@/lib/recommend/types";
+  attachUnifiedIds,
+  formatKoreanDateTime,
+  readPlanningActionContext,
+  type RecommendResponse,
+} from "@/lib/recommend/recommendResultsViewModel";
 import {
   defaults as recommendProfileDefaults,
   fromSearchParams as recommendProfileFromSearchParams,
@@ -59,405 +53,19 @@ import {
 } from "@/lib/schemas/recommendProfile";
 import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
 import { type SourceStatusRow } from "@/lib/sources/types";
-import { cn } from "@/lib/utils";
-
-type RecommendItem = {
-  unifiedId: string;
-  sourceId: string;
-  kind: "deposit" | "saving";
-  finPrdtCd: string;
-  providerName: string;
-  productName: string;
-  finalScore: number;
-  selectedOption: {
-    saveTrm: string | null;
-    termMonths: number | null;
-    appliedRate: number;
-    baseRate: number | null;
-    maxRate: number | null;
-    rateSource: "intr_rate2" | "intr_rate" | "none";
-    reasons: string[];
-  };
-  breakdown: Array<{
-    key: "rate" | "term" | "liquidity";
-    label: string;
-    raw: number;
-    weight: number;
-    contribution: number;
-    reason: string;
-  }>;
-  reasons: string[];
-  detailProduct?: RecommendDetailProduct;
-  signals?: {
-    depositProtection?: "matched" | "unknown";
-  };
-  badges?: string[];
-};
-
-type RecommendResponse = {
-  ok: boolean;
-  meta?: {
-    kind: "deposit" | "saving";
-    topN: number;
-    rateMode: "max" | "base" | "simple";
-    candidatePool?: CandidatePool;
-    candidateSources?: CandidateSource[];
-    depositProtection?: DepositProtectionMode;
-    weights: { rate: number; term: number; liquidity: number };
-    assumptions: {
-      rateSelectionPolicy: string;
-      liquidityPolicy: string;
-      normalizationPolicy: string;
-      kdbParsingPolicy?: string;
-      depositProtectionPolicy?: string;
-    };
-    fallback?: {
-      mode?: string;
-      reason?: string;
-      generatedAt?: string;
-      nextRetryAt?: string;
-    };
-    planning?: RecommendPlanningHandoff | null;
-    planningContext?: RecommendPlanningContext | null;
-    planningLinkage?: {
-      readiness?: "none" | "partial" | "ready";
-      metricsCount?: number;
-      stageInference?: RecommendPlanningHandoff["summary"]["stage"] | "disabled";
-      inferenceSource?: "planning-summary" | "planning-context" | "none";
-    };
-  };
-  message?: string;
-  items?: RecommendItem[];
-  debug?: {
-    candidateCount: number;
-    rateMin: number;
-    rateMax: number;
-  };
-  error?: {
-    code: string;
-    message: string;
-    issues?: string[];
-  };
-};
 
 type StoredProfile = RecommendProfileNormalized;
 type StoredRecommendResult = StoredRecommendResultV1<StoredProfile, RecommendResponse["meta"]>;
-type PlanningInferenceSource = "planning-summary" | "planning-context" | "none" | undefined;
-type PlanningActionContextCode = "BUILD_EMERGENCY_FUND" | "COVER_LUMP_SUM_GOAL";
-type PlanningActionContext = {
-  code: PlanningActionContextCode;
-  label: string;
-};
-type ActionReasonContext = {
-  sectionLabel: string;
-  helper: string;
-};
-
-type TrustCue = {
-  tone: "emerald" | "amber" | "slate";
-  label: string;
-  helper: string;
-};
 
 type StatusApiResponse = {
   ok: boolean;
   data?: SourceStatusRow[];
 };
 
-type RecommendCardFreshnessMeta = {
-  sourceId: string;
-  kind: RecommendItem["kind"];
-  lastSyncedAt?: string | null;
-  freshnessStatus?: FreshnessItemStatus;
-  fallbackMode?: string | null;
-  assumptionNotes: string[];
-};
-
 const STORAGE_KEY = "recommend_profile_v1";
 const ERROR_SUMMARY_ID = "recommend_error_summary";
 
 const defaultProfile: StoredProfile = recommendProfileDefaults();
-
-function formatPlanningStageLabel(stage: RecommendPlanningHandoff["summary"]["stage"] | "disabled" | undefined): string | null {
-  switch (stage) {
-    case "DEFICIT":
-      return "적자 관리 단계";
-    case "DEBT":
-      return "부채 관리 단계";
-    case "EMERGENCY":
-      return "비상금 보강 단계";
-    case "INVEST":
-      return "여유자금 활용 단계";
-    case "disabled":
-      return "단계 판정 없음";
-    default:
-      return null;
-  }
-}
-
-function formatPlanningOverallStatusLabel(status: RecommendPlanningHandoff["summary"]["overallStatus"] | undefined): string | null {
-  switch (status) {
-    case "RUNNING":
-      return "실행 중";
-    case "SUCCESS":
-      return "성공";
-    case "PARTIAL_SUCCESS":
-      return "부분 성공";
-    case "FAILED":
-      return "실패";
-    default:
-      return null;
-  }
-}
-
-function formatInferenceSourceLabel(source: PlanningInferenceSource): string | null {
-  switch (source) {
-    case "planning-summary":
-      return "플래닝 요약 참고";
-    case "planning-context":
-      return "이전 플래닝 입력 참고";
-    case "none":
-      return "연결 정보 없음";
-    default:
-      return null;
-  }
-}
-
-function readPlanningActionContext(
-  searchParams: ReturnType<typeof useSearchParams>,
-): PlanningActionContext | null {
-  if (searchParams.get("from") !== "planning-report") return null;
-  const actionCode = searchParams.get("planning.actionCode");
-  if (actionCode === "BUILD_EMERGENCY_FUND") {
-    return { code: actionCode, label: "비상금 보강" };
-  }
-  if (actionCode === "COVER_LUMP_SUM_GOAL") {
-    return { code: actionCode, label: "목표자금 점검" };
-  }
-  return null;
-}
-
-function buildPlanningContextStrip(
-  storedProfile: StoredProfile | null,
-  result: RecommendResponse,
-  actionContext?: PlanningActionContext | null,
-): {
-  title: string;
-  description: string;
-  actionLabel?: string;
-  stageLabel?: string;
-  sourceLabel?: string;
-  runId?: string;
-  overallStatusLabel?: string;
-} | null {
-  const planning = result.meta?.planning ?? storedProfile?.planning;
-  const linkage = result.meta?.planningLinkage;
-  const inferenceSource = linkage?.inferenceSource;
-  const stageLabel = formatPlanningStageLabel(planning?.summary.stage ?? linkage?.stageInference);
-  const sourceLabel = formatInferenceSourceLabel(inferenceSource);
-  const overallStatusLabel = formatPlanningOverallStatusLabel(planning?.summary.overallStatus);
-  const runId = planning?.runId;
-  const metricsCount = typeof linkage?.metricsCount === "number" ? linkage.metricsCount : 0;
-  const hasStrip = Boolean(runId || stageLabel || (inferenceSource && inferenceSource !== "none") || metricsCount > 0);
-  const actionLabel = actionContext?.label;
-
-  if (!hasStrip) return null;
-
-  if (inferenceSource === "planning-summary") {
-    return {
-      title: actionLabel ? `${actionLabel} 흐름에서 함께 보는 추천입니다` : "현재 플래닝 결과 흐름에서 함께 보는 추천입니다",
-      description: actionLabel
-        ? `플래닝 리포트의 ${actionLabel} 액션에서 바로 열었고, 실행 요약을 참고로 넘겨 현재 플래닝 맥락과 함께 지금 조건의 비교 후보를 읽게 돕습니다.`
-        : "플래닝 리포트에서 넘긴 실행 요약을 참고해 현재 플래닝 맥락과 함께 지금 조건의 비교 후보를 읽게 돕습니다.",
-      ...(actionLabel ? { actionLabel } : {}),
-      ...(stageLabel ? { stageLabel } : {}),
-      ...(sourceLabel ? { sourceLabel } : {}),
-      ...(runId ? { runId } : {}),
-      ...(overallStatusLabel ? { overallStatusLabel } : {}),
-    };
-  }
-
-  if (inferenceSource === "planning-context") {
-    return {
-      title: actionLabel ? `${actionLabel} 흐름에서 참고하는 추천입니다` : "현재 플래닝 입력 흐름을 참고한 추천입니다",
-      description: actionLabel
-        ? `플래닝 리포트의 ${actionLabel} 액션에서 열었고, 기존 planningContext ${metricsCount}개 입력을 참고해 현재 단계를 읽고 지금 조건의 비교 후보를 함께 확인하게 돕습니다.`
-        : `기존 planningContext ${metricsCount}개 입력을 참고해 현재 단계를 읽고 지금 조건의 비교 후보를 함께 확인하게 돕습니다.`,
-      ...(actionLabel ? { actionLabel } : {}),
-      ...(stageLabel ? { stageLabel } : {}),
-      ...(sourceLabel ? { sourceLabel } : {}),
-      ...(runId ? { runId } : {}),
-      ...(overallStatusLabel ? { overallStatusLabel } : {}),
-    };
-  }
-
-  return {
-    title: actionLabel ? `${actionLabel} 흐름에서 함께 열린 추천입니다` : "플래닝 연동 참고 흐름과 함께 열린 추천입니다",
-    description: actionLabel
-      ? `플래닝 리포트의 ${actionLabel} 액션에서 열렸지만, 단계 판정은 아직 충분하지 않을 수 있어 연결 맥락을 참고하는 보조 정보로 읽어 주세요.`
-      : "이번 추천은 플래닝 결과와 함께 열렸지만, 단계 판정은 아직 충분하지 않을 수 있어 연결 맥락을 참고하는 보조 정보로 읽어 주세요.",
-    ...(actionLabel ? { actionLabel } : {}),
-    ...(stageLabel ? { stageLabel } : {}),
-    ...(sourceLabel ? { sourceLabel } : {}),
-    ...(runId ? { runId } : {}),
-    ...(overallStatusLabel ? { overallStatusLabel } : {}),
-  };
-}
-
-function buildActionReasonContext(
-  actionContext?: PlanningActionContext | null,
-): ActionReasonContext | null {
-  if (actionContext?.code === "BUILD_EMERGENCY_FUND") {
-    return {
-      sectionLabel: "비상금 보강에 맞는 이유",
-      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 비상금 보강 흐름에서 먼저 비교해 볼 후보인지 빠르게 읽을 수 있습니다.",
-    };
-  }
-
-  if (actionContext?.code === "COVER_LUMP_SUM_GOAL") {
-    return {
-      sectionLabel: "목표자금 점검에 맞는 이유",
-      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 목표자금 점검 흐름에서 기간과 금리 균형을 비교할 때 참고할 후보인지 빠르게 읽을 수 있습니다.",
-    };
-  }
-
-  return null;
-}
-
-function buildTrustCues(input: {
-  item: RecommendItem;
-  depositProtectionPolicy?: string;
-}): TrustCue[] {
-  const cues: TrustCue[] = [];
-  const { item, depositProtectionPolicy } = input;
-
-  if (item.signals?.depositProtection === "matched") {
-    cues.push({
-      tone: "emerald",
-      label: "예금자 보호 신호 확인",
-      helper: "현재 결과 기준으로 예금자 보호 신호가 함께 확인됐습니다. 가입 전 실제 적용 범위를 다시 확인해 주세요.",
-    });
-  }
-
-  if (item.signals?.depositProtection === "unknown") {
-    cues.push({
-      tone: "amber",
-      label: "예금자 보호 여부 추가 확인 필요",
-      helper: depositProtectionPolicy
-        ? `현재 결과만으로는 예금자 보호 여부가 확실하지 않습니다. ${depositProtectionPolicy} 기준과 상품 설명서를 함께 확인해 주세요.`
-        : "현재 결과만으로는 예금자 보호 여부가 확실하지 않습니다. 가입 전 상품 설명서와 보호 기준을 함께 확인해 주세요.",
-    });
-  }
-
-  if (item.selectedOption.rateSource === "intr_rate2") {
-    cues.push({
-      tone: "amber",
-      label: "우대금리 포함 가능성",
-      helper: "지금 보이는 금리는 우대조건이 반영된 값일 수 있습니다. 실제로 받을 수 있는 조건인지 한 번 더 확인해 주세요.",
-    });
-  } else if (item.selectedOption.rateSource === "intr_rate") {
-    cues.push({
-      tone: "slate",
-      label: "기본 금리 기준",
-      helper: "현재 카드는 기본 금리 기준으로 읽으면 됩니다. 우대조건이 따로 붙는지 비교해서 보세요.",
-    });
-  }
-
-  if ((item.badges ?? []).some((badge) => badge.trim().length > 0)) {
-    cues.push({
-      tone: "slate",
-      label: "상품 메모 확인",
-      helper: "카드에 붙은 메모 배지도 함께 보세요. 가입 조건이나 비교 포인트를 빠르게 읽는 데 도움이 됩니다.",
-    });
-  }
-
-  cues.push({
-    tone: "slate",
-    label: "데이터 최신성 읽기",
-    helper: "이 카드의 결과 기준 메타와 함께 읽어 주세요. 자세한 연결 상태는 데이터 신뢰 및 연동 상태에서 확인할 수 있습니다.",
-  });
-
-  return cues;
-}
-
-function buildSourceStatusKey(input: { sourceId: string; kind: RecommendItem["kind"] }): string {
-  return `${input.sourceId}:${input.kind}`;
-}
-
-function deriveFreshnessStatus(row: SourceStatusRow | null): FreshnessItemStatus {
-  if (!row) return "empty";
-  if (row.lastError?.message) return "error";
-  if (row.counts <= 0) return "empty";
-  if (!row.isFresh) return "stale";
-  return "ok";
-}
-
-function formatFreshnessStatusLabel(status: FreshnessItemStatus): string {
-  switch (status) {
-    case "ok":
-      return "최신";
-    case "stale":
-      return "기준 지남";
-    case "error":
-      return "최근 확인 실패";
-    case "empty":
-      return "기준 정보 없음";
-    default:
-      return "기준 정보 없음";
-  }
-}
-
-function formatFallbackModeLabel(mode?: string | null): string | null {
-  if (!mode) return null;
-  const normalized = mode.trim().toUpperCase();
-  if (normalized === "CACHE") return "캐시 기준";
-  if (normalized === "REPLAY") return "재생 데이터 기준";
-  if (normalized === "MOCK") return "예시 데이터 기준";
-  return `${mode} 기준`;
-}
-
-function buildAssumptionNotes(
-  item: RecommendItem,
-  meta: RecommendResponse["meta"] | undefined,
-): string[] {
-  const notes: string[] = [];
-  const assumptions = meta?.assumptions;
-
-  if (item.selectedOption.rateSource === "intr_rate2" && assumptions?.rateSelectionPolicy) {
-    notes.push(assumptions.rateSelectionPolicy);
-  }
-
-  if (item.signals?.depositProtection && assumptions?.depositProtectionPolicy) {
-    notes.push(assumptions.depositProtectionPolicy);
-  }
-
-  return [...new Set(notes.filter((note) => note.trim().length > 0))].slice(0, 2);
-}
-
-function buildCardFreshnessMeta(input: {
-  item: RecommendItem;
-  meta: RecommendResponse["meta"] | undefined;
-  sourceStatusReady: boolean;
-  sourceStatusRow: SourceStatusRow | null;
-}): RecommendCardFreshnessMeta | null {
-  const { item, meta, sourceStatusReady, sourceStatusRow } = input;
-  const fallbackMode = formatFallbackModeLabel(meta?.fallback?.mode);
-  const assumptionNotes = buildAssumptionNotes(item, meta);
-  const freshnessStatus = sourceStatusReady ? deriveFreshnessStatus(sourceStatusRow) : undefined;
-  const lastSyncedAt = sourceStatusReady ? sourceStatusRow?.lastSyncedAt ?? null : undefined;
-  const hasStatusMeta = sourceStatusReady;
-
-  if (!hasStatusMeta && !fallbackMode && assumptionNotes.length === 0) return null;
-
-  return {
-    sourceId: item.sourceId,
-    kind: item.kind,
-    ...(typeof lastSyncedAt !== "undefined" ? { lastSyncedAt } : {}),
-    ...(freshnessStatus ? { freshnessStatus } : {}),
-    ...(fallbackMode ? { fallbackMode } : {}),
-    assumptionNotes,
-  };
-}
 
 function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
   profilePatch: Partial<StoredProfile>;
@@ -491,21 +99,6 @@ function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): 
   };
 }
 
-function buildUnifiedId(sourceId: string, finPrdtCd: string): string {
-  return `${sourceId}:${finPrdtCd}`;
-}
-
-function attachUnifiedIds(response: RecommendResponse): RecommendResponse {
-  if (!Array.isArray(response.items)) return response;
-  return {
-    ...response,
-    items: response.items.map((item) => ({
-      ...item,
-      unifiedId: buildUnifiedId(item.sourceId, item.finPrdtCd),
-    })),
-  };
-}
-
 function toSavedRunProfile(profile: StoredProfile): SavedRunProfile {
   return {
     purpose: profile.purpose,
@@ -533,128 +126,6 @@ function buildExportRun(profile: StoredProfile, response: RecommendResponse): Sa
     runId: `adhoc_${Date.now()}`,
     savedAt: new Date().toISOString(),
   });
-}
-
-function formatKoreanDateTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("ko-KR");
-}
-
-function normalizeRate(value: number | null | undefined, fallback: number): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  return Number.isFinite(fallback) ? fallback : null;
-}
-
-function optionTerm(saveTrm: string | null, termMonths: number | null): string | undefined {
-  const normalized = typeof saveTrm === "string" ? saveTrm.trim() : "";
-  if (normalized.length > 0) return normalized;
-  if (typeof termMonths === "number" && Number.isFinite(termMonths) && termMonths > 0) return String(Math.trunc(termMonths));
-  return undefined;
-}
-
-function parseTermMonths(value: string | undefined | null): number | null {
-  if (typeof value !== "string") return null;
-  const parsed = Number(value.replace(/[^0-9]/g, ""));
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return Math.trunc(parsed);
-}
-
-function optionRateForCompare(option: { intr_rate?: number | null; intr_rate2?: number | null }): number | null {
-  if (typeof option.intr_rate2 === "number" && Number.isFinite(option.intr_rate2)) return option.intr_rate2;
-  if (typeof option.intr_rate === "number" && Number.isFinite(option.intr_rate)) return option.intr_rate;
-  return null;
-}
-
-function preferredOptionIndex(
-  options: Array<{ save_trm?: string; intr_rate?: number | null; intr_rate2?: number | null }>,
-  selected: RecommendItem["selectedOption"],
-): number {
-  if (options.length === 0) return -1;
-
-  const selectedText = typeof selected.saveTrm === "string" ? selected.saveTrm.trim() : "";
-  if (selectedText.length > 0) {
-    const exact = options.findIndex((option) => (option.save_trm ?? "").trim() === selectedText);
-    if (exact >= 0) return exact;
-  }
-
-  const selectedMonths = parseTermMonths(selectedText) ?? (selected.termMonths && Number.isFinite(selected.termMonths) ? Math.trunc(selected.termMonths) : null);
-  if (selectedMonths !== null) {
-    const termMatch = options.findIndex((option) => parseTermMonths(option.save_trm) === selectedMonths);
-    if (termMatch >= 0) return termMatch;
-  }
-
-  if (Number.isFinite(selected.appliedRate)) {
-    const byRate = options.findIndex((option) => {
-      const rate = optionRateForCompare(option);
-      return rate !== null && Math.abs(rate - selected.appliedRate) < 0.0001;
-    });
-    if (byRate >= 0) return byRate;
-  }
-
-  return 0;
-}
-
-function prioritizeRecommendedOption(
-  options: Array<{ save_trm?: string; intr_rate?: number | null; intr_rate2?: number | null; raw: Record<string, unknown> }>,
-  selected: RecommendItem["selectedOption"],
-): Array<{ save_trm?: string; intr_rate?: number | null; intr_rate2?: number | null; raw: Record<string, unknown> }> {
-  const index = preferredOptionIndex(options, selected);
-  if (index <= 0) return options;
-  return [options[index], ...options.slice(0, index), ...options.slice(index + 1)];
-}
-
-function buildDetailProduct(item: RecommendItem): NormalizedProduct {
-  if (item.detailProduct) {
-    const mappedOptions = (item.detailProduct.options ?? []).map((option) => ({
-      save_trm: option.save_trm,
-      intr_rate: option.intr_rate ?? null,
-      intr_rate2: option.intr_rate2 ?? null,
-      raw: option.raw ?? {},
-    }));
-    const options = prioritizeRecommendedOption(mappedOptions, item.selectedOption);
-
-    return {
-      fin_prdt_cd: item.detailProduct.fin_prdt_cd,
-      fin_co_no: item.detailProduct.fin_co_no,
-      kor_co_nm: item.detailProduct.kor_co_nm,
-      fin_prdt_nm: item.detailProduct.fin_prdt_nm,
-      options,
-      best: item.detailProduct.best
-        ? {
-            save_trm: item.detailProduct.best.save_trm,
-            intr_rate: item.detailProduct.best.intr_rate ?? null,
-            intr_rate2: item.detailProduct.best.intr_rate2 ?? null,
-          }
-        : undefined,
-      raw: item.detailProduct.raw ?? {},
-    };
-  }
-
-  const fallbackRate = Number.isFinite(item.selectedOption.appliedRate) ? item.selectedOption.appliedRate : 0;
-  const baseRate = normalizeRate(item.selectedOption.baseRate, fallbackRate);
-  const maxRate = normalizeRate(item.selectedOption.maxRate, fallbackRate);
-  const saveTerm = optionTerm(item.selectedOption.saveTrm, item.selectedOption.termMonths);
-
-  return {
-    fin_prdt_cd: item.finPrdtCd,
-    kor_co_nm: item.providerName,
-    fin_prdt_nm: item.productName,
-    options: [
-      {
-        save_trm: saveTerm,
-        intr_rate: baseRate,
-        intr_rate2: maxRate,
-        raw: {},
-      },
-    ],
-    best: {
-      save_trm: saveTerm,
-      intr_rate: baseRate,
-      intr_rate2: maxRate,
-    },
-    raw: {},
-  };
 }
 
 function RecommendPageInner() {
@@ -892,22 +363,6 @@ function RecommendPageInner() {
     () => readPlanningActionContext(searchParams),
     [searchParams],
   );
-  const actionReasonContext = useMemo(
-    () => buildActionReasonContext(planningActionContext),
-    [planningActionContext],
-  );
-  const planningContextStrip = useMemo(
-    () => (result ? buildPlanningContextStrip(lastStored?.profile ?? null, result, planningActionContext) : null),
-    [lastStored, planningActionContext, result],
-  );
-  const sourceStatusMap = useMemo(() => {
-    const next = new Map<string, SourceStatusRow>();
-    for (const row of sourceStatusRows) {
-      if (row.kind !== "deposit" && row.kind !== "saving") continue;
-      next.set(buildSourceStatusKey({ sourceId: row.sourceId, kind: row.kind }), row);
-    }
-    return next;
-  }, [sourceStatusRows]);
 
   async function submit() {
     if (loading) return;
@@ -938,6 +393,12 @@ function RecommendPageInner() {
     const content = exportRunCsv(run);
     downloadText(`recommend-run-${run.savedAt.slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
     setFeedback("CSV 파일이 다운로드되었습니다.");
+    setTimeout(() => setFeedback(""), 3000);
+  }
+
+  function addItemToCompare(unifiedId: string) {
+    addCompareIdToStorage(unifiedId, compareStoreConfig.max);
+    setFeedback("상품이 비교함에 담겼습니다.");
     setTimeout(() => setFeedback(""), 3000);
   }
 
@@ -1134,272 +595,21 @@ function RecommendPageInner() {
       )}
 
       {result && (
-        <div className="space-y-8">
-          <div className="flex flex-wrap items-center justify-between gap-4 px-2">
-            <div>
-              <h2 className="text-xl font-black text-navy">추천 결과 <span className="ml-1 text-primary">{result.items?.length}</span></h2>
-              <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
-                점수는 현재 선택한 조건과 가중치 기준 비교값입니다. 우열 확정이 아니라 비교 참고용으로 읽고, 가입 전 실제 금리와 조건은 다시 확인해 주세요.
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              {feedback && (
-                <span className="text-xs font-bold text-primary animate-in fade-in duration-300">{feedback}</span>
-              )}
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={saveCurrentRun}>결과 저장</Button>
-                  <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunJson}>JSON</Button>
-                  <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunCsv}>CSV</Button>
-                </div>
-                <p className="max-w-[22rem] text-[11px] font-medium leading-relaxed text-slate-500 md:text-right">
-                  결과 저장은 이 비교를 나중에 다시 보기 위한 기록용이고, JSON·CSV는 필요할 때만 내려받는 보조 기능입니다.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {planningContextStrip && (
-            <Card className="rounded-[2.5rem] border border-primary/10 bg-primary/10 p-6 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">플래닝 연동</p>
-                  <h3 className="text-lg font-black tracking-tight text-navy">{planningContextStrip.title}</h3>
-                  <p className="text-sm font-medium leading-relaxed text-slate-600">{planningContextStrip.description}</p>
-                  {(planningContextStrip.sourceLabel || planningContextStrip.overallStatusLabel || planningContextStrip.runId) && (
-                    <p className="text-xs font-medium leading-relaxed text-slate-500">
-                      먼저 위 설명과 액션·단계 같은 현재 맥락을 보고, 연결 근거·실행 상태·실행 ID는 확인이 필요할 때만 참고하세요.
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2 text-[11px] font-black">
-                  {planningContextStrip.actionLabel ? (
-                    <span className="rounded-full border border-primary/20 bg-white px-3 py-1 text-navy shadow-sm">
-                      연결된 액션: {planningContextStrip.actionLabel}
-                    </span>
-                  ) : null}
-                  {planningContextStrip.stageLabel ? (
-                    <span className="rounded-full border border-primary/20 bg-white px-3 py-1 text-navy shadow-sm">
-                      현재 단계: {planningContextStrip.stageLabel}
-                    </span>
-                  ) : null}
-                  {planningContextStrip.sourceLabel ? (
-                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
-                      연결 근거: {planningContextStrip.sourceLabel}
-                    </span>
-                  ) : null}
-                  {planningContextStrip.overallStatusLabel ? (
-                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
-                      실행 상태 참고: {planningContextStrip.overallStatusLabel}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              {planningContextStrip.runId ? (
-                <p className="mt-4 text-xs font-bold text-slate-500">
-                  플래닝 실행 ID · 연결 확인용: <span className="font-mono text-slate-700">{planningContextStrip.runId}</span>
-                </p>
-              ) : null}
-            </Card>
-          )}
-
-          <div className="grid gap-6 md:grid-cols-2">
-            {(result.items ?? []).map((item, index) => {
-              const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
-              const detailProduct = buildDetailProduct(item);
-              const scorePct = Math.min(100, Math.max(0, item.finalScore));
-              const freshnessMeta = buildCardFreshnessMeta({
-                item,
-                meta: result.meta,
-                sourceStatusReady,
-                sourceStatusRow: sourceStatusMap.get(buildSourceStatusKey(item)) ?? null,
-              });
-              const trustCues = buildTrustCues({
-                item,
-                depositProtectionPolicy: result.meta?.assumptions.depositProtectionPolicy,
-              });
-              return (
-                <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-primary/10">
-                  <div className="mb-6 flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-full text-xs font-black shadow-sm",
-                        index === 0 ? "bg-primary text-white shadow-navy/10" : "bg-surface-muted text-slate-600 border border-slate-200"
-                      )}>
-                        {index + 1}
-                      </span>
-                      <SourceBadge sourceId={item.sourceId} />
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">매칭 점수</span>
-                      <span className="text-lg font-black text-primary tabular-nums">{item.finalScore.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-8">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{item.providerName}</p>
-                    <h3 className="mt-1 text-xl font-black leading-snug text-navy group-hover:text-primary transition-colors tracking-tight">
-                      {item.productName}
-                    </h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-8">
-                    <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-4 text-center">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">선택 기간</p>
-                      <p className="mt-1 font-black text-slate-700 tabular-nums">{item.selectedOption.saveTrm || item.selectedOption.termMonths || "-"}개월</p>
-                    </div>
-                    <div className="rounded-2xl border border-primary/10 bg-primary/30 p-4 text-center">
-                      <p className="text-[10px] font-black text-primary uppercase tracking-widest">적용 금리</p>
-                      <p className="mt-1 font-black text-navy tabular-nums">{item.selectedOption.appliedRate.toFixed(2)}%</p>
-                    </div>
-                  </div>
-
-                  <div className="mb-8 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">점수 세부 분석</p>
-                      <span className="text-[10px] font-black text-primary tabular-nums">{Math.round(scorePct)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-surface-muted overflow-hidden">
-                      <CspSafeProgressBar fillClassName="text-primary" value={scorePct} />
-                    </div>
-                  </div>
-
-                  <div className="mb-8 space-y-3">
-                    {freshnessMeta ? (
-                      <div className="space-y-3 rounded-2xl border border-slate-100 bg-surface-muted/70 px-4 py-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">결과 기준</p>
-                          <div className="flex flex-wrap gap-2">
-                            {freshnessMeta.freshnessStatus ? (
-                              <span
-                                className={cn(
-                                  "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm",
-                                  freshnessMeta.freshnessStatus === "ok"
-                                    ? "border-primary/20 bg-primary/5 text-navy"
-                                    : freshnessMeta.freshnessStatus === "stale"
-                                      ? "border-amber-200 bg-amber-50 text-amber-800"
-                                      : freshnessMeta.freshnessStatus === "error"
-                                        ? "border-rose-200 bg-rose-50 text-rose-700"
-                                        : "border-slate-200 bg-white text-slate-500",
-                                )}
-                              >
-                                상태: {formatFreshnessStatusLabel(freshnessMeta.freshnessStatus)}
-                              </span>
-                            ) : null}
-                            {freshnessMeta.fallbackMode ? (
-                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm">
-                                {freshnessMeta.fallbackMode}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                        {typeof freshnessMeta.lastSyncedAt !== "undefined" ? (
-                          <p className="text-[11px] font-bold leading-relaxed text-slate-600">
-                            {freshnessMeta.lastSyncedAt
-                              ? `기준 확인 ${formatKoreanDateTime(freshnessMeta.lastSyncedAt)}`
-                              : "기준 확인 시각 정보가 아직 없습니다."}
-                          </p>
-                        ) : null}
-                        {freshnessMeta.assumptionNotes.length > 0 ? (
-                          <ul className="space-y-2">
-                            {freshnessMeta.assumptionNotes.map((note) => (
-                              <li
-                                key={note}
-                                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600 shadow-sm"
-                              >
-                                가정: {note}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">읽기 힌트</p>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        {trustCues.length}개
-                      </span>
-                    </div>
-                    <ul className="space-y-2">
-                      {trustCues.map((cue) => (
-                        <li
-                          key={cue.label}
-                          className={cn(
-                            "rounded-2xl border px-4 py-3 text-[11px] font-bold leading-relaxed shadow-sm",
-                            cue.tone === "emerald"
-                              ? "border-primary/10 bg-primary/10 text-navy"
-                              : cue.tone === "amber"
-                                ? "border-amber-100 bg-amber-50/50 text-amber-900"
-                                : "border-slate-100 bg-surface-muted/70 text-slate-600",
-                          )}
-                        >
-                          <p className="text-[10px] font-black uppercase tracking-widest">{cue.label}</p>
-                          <p className="mt-1">{cue.helper}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="mb-8 space-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          {actionReasonContext?.sectionLabel ?? "비교 근거"}
-                        </p>
-                        {actionReasonContext ? (
-                          <span className="text-[10px] font-black uppercase tracking-widest text-primary">
-                            상단 플래닝 연동 기준
-                          </span>
-                        ) : null}
-                      </div>
-                      {actionReasonContext ? (
-                        <p className="rounded-2xl border border-primary/10 bg-primary/10 px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600">
-                          {actionReasonContext.helper}
-                        </p>
-                      ) : null}
-                    </div>
-                    <ul className="space-y-3">
-                      {item.reasons.slice(0, 3).map((reason, i) => (
-                        <li key={i} className="flex gap-3 text-sm font-medium text-slate-600">
-                          <span className="text-primary font-black mt-0.5">•</span>
-                          <span className="line-clamp-2 leading-relaxed">{reason}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-3 pt-4 border-t border-slate-50">
-                    <Button variant="outline" className="flex-1 rounded-2xl h-12 font-black" onClick={() => setOpenDetailKey(itemKey)}>
-                      상세 분석
-                    </Button>
-                    <Button
-                      variant="primary"
-                      className="flex-1 rounded-2xl h-12 font-black shadow-md"
-                      onClick={() => {
-                        addCompareIdToStorage(item.unifiedId, compareStoreConfig.max);
-                        setFeedback("상품이 비교함에 담겼습니다.");
-                        setTimeout(() => setFeedback(""), 3000);
-                      }}
-                    >
-                      비교 담기
-                    </Button>
-                  </div>
-
-                  <ProductDetailDrawer
-                    open={openDetailKey === itemKey}
-                    onOpenChange={(next) => setOpenDetailKey(next ? itemKey : null)}
-                    kind={item.kind}
-                    product={detailProduct}
-                    amountWonDefault={item.kind === "saving" ? 500_000 : 10_000_000}
-                  />
-                </Card>
-              );
-            })}
-          </div>
-        </div>
+        <RecommendResultsPanel
+          result={result}
+          feedback={feedback}
+          storedProfile={lastStored?.profile ?? null}
+          planningActionContext={planningActionContext}
+          sourceStatusRows={sourceStatusRows}
+          sourceStatusReady={sourceStatusReady}
+          openDetailKey={openDetailKey}
+          onOpenDetailKeyChange={setOpenDetailKey}
+          onSave={saveCurrentRun}
+          onExportJson={exportCurrentRunJson}
+          onExportCsv={exportCurrentRunCsv}
+          onAddCompare={addItemToCompare}
+        />
       )}
-
       {!loading && !result && (
         <div className="py-20">
           <EmptyState
