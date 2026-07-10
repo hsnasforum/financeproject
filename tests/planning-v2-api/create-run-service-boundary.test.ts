@@ -31,6 +31,7 @@ describe("planning run create service boundary", () => {
     const preflightPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunPreflight.ts");
     const inputContextPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunInputContext.ts");
     const stagePlanPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunStagePlan.ts");
+    const stagePipelinePath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunStagePipeline.ts");
     const assemblerPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunRecordAssembler.ts");
     const persistencePath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunPersistence.ts");
     const sideEffectsPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunSideEffects.ts");
@@ -41,6 +42,7 @@ describe("planning run create service boundary", () => {
     expect(fs.existsSync(preflightPath)).toBe(true);
     expect(fs.existsSync(inputContextPath)).toBe(true);
     expect(fs.existsSync(stagePlanPath)).toBe(true);
+    expect(fs.existsSync(stagePipelinePath)).toBe(true);
     expect(fs.existsSync(assemblerPath)).toBe(true);
     expect(fs.existsSync(persistencePath)).toBe(true);
     expect(fs.existsSync(sideEffectsPath)).toBe(true);
@@ -48,6 +50,7 @@ describe("planning run create service boundary", () => {
     const serviceSource = fs.readFileSync(servicePath, "utf-8");
     const parserSource = fs.readFileSync(parserPath, "utf-8");
     const inputContextSource = fs.readFileSync(inputContextPath, "utf-8");
+    const stagePipelineSource = fs.readFileSync(stagePipelinePath, "utf-8");
     const persistenceSource = fs.readFileSync(persistencePath, "utf-8");
     const sideEffectsSource = fs.readFileSync(sideEffectsPath, "utf-8");
     const successResponseSource = fs.readFileSync(successResponsePath, "utf-8");
@@ -74,14 +77,21 @@ describe("planning run create service boundary", () => {
     expect(inputContextSource).toContain("applyProfilePatch");
     expect(inputContextSource).toContain("evaluateCreatePlanningRunPreflight");
     expect(inputContextSource).toContain("resolvePlanningRunAssumptions");
-    expect(serviceSource).toContain("buildPlanningStagePlan");
+    expect(serviceSource).toContain("runCreatePlanningRunStagePipeline");
+    expect(serviceSource).not.toContain("buildPlanningStagePlan");
+    expect(stagePipelineSource).toContain("buildPlanningStagePlan");
+    expect(stagePipelineSource).toContain("createPlanningStagePlanState");
+    expect(stagePipelineSource).toContain("resolvePlanningStageOutputs");
+    expect(stagePipelineSource).toContain("checkMonteCarloBudget");
+    expect(stagePipelineSource).toContain("export async function runCreatePlanningRunStagePipeline");
     expect(serviceSource).toContain("assemblePlanningRunRecordInput");
     expect(serviceSource).toContain("persistCreatePlanningRunRecord");
     expect(serviceSource).toContain("buildCreatePlanningRunSuccessResult");
     expect(serviceSource).toContain("recordCreateRunAuditSafely");
     expect(serviceSource).toContain("recordCreateRunStageMetricsSafely");
     expect(serviceSource).toContain("export async function createPlanningRun");
-    expect(serviceSource).toContain("runStagePipeline");
+    expect(serviceSource).not.toContain("runStagePipeline");
+    expect(stagePipelineSource).toContain("runStagePipeline");
     expect(serviceSource).toContain("recordCurrentUserRunStageMetrics");
     expect(serviceSource).not.toContain("request: Request");
     expect(serviceSource).not.toContain("PLANNING_RUN_STORE_RAW_OUTPUTS");

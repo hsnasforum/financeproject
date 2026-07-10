@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as profilesGET, POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/route";
 import {
   DELETE as profileDELETE,
@@ -142,6 +142,10 @@ describe("planning v2 persistence routes", () => {
       path.join(process.cwd(), "src/lib/planning/server/runs/createRunService.ts"),
       "utf-8",
     );
+    const createRunStagePipelineSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/runs/createRunStagePipeline.ts"),
+      "utf-8",
+    );
     const createRunRouteAdapterSource = fs.readFileSync(
       path.join(process.cwd(), "src/lib/planning/server/runs/createRunRouteAdapter.ts"),
       "utf-8",
@@ -169,7 +173,9 @@ describe("planning v2 persistence routes", () => {
     expect(routeServiceSource).toContain("appendOpsMetricEvent");
 
     expect(createRunServiceSource).toContain("createCurrentUserRunResponseData");
-    expect(createRunServiceSource).toContain("runStagePipeline");
+    expect(createRunServiceSource).toContain("runCreatePlanningRunStagePipeline");
+    expect(createRunServiceSource).not.toContain("runStagePipeline");
+    expect(createRunStagePipelineSource).toContain("runStagePipeline");
     expect(createRunServiceSource).toContain("recordCurrentUserRunStageMetrics");
     expect(createRunRouteAdapterSource).toContain("parseCreatePlanningRunCommand");
     expect(createRunRouteAdapterSource).toContain("createPlanningRun");
@@ -487,6 +493,77 @@ describe("planning v2 persistence routes", () => {
       expect(result.payload.data.id).toBeTruthy();
       expect(result.payload.data.profileId).toBe(profileId);
     }
+  });
+
+  it("preserves stage failure context when stage output resolution fails", async () => {
+    const createProfileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Stage output failure profile",
+      profile: sampleProfile(),
+    }));
+    const createProfilePayload = await createProfileResponse.json() as {
+      data?: { id?: string };
+    };
+    const profileId = String(createProfilePayload.data?.id ?? "");
+    expect(profileId).toBeTruthy();
+
+    const parsed = parseCreatePlanningRunCommand({
+      profileId,
+      title: "stage output resolution failure",
+      input: {
+        horizonMonths: 24,
+        runScenarios: false,
+        getActions: false,
+        analyzeDebt: false,
+      },
+    });
+    if (!parsed.ok) {
+      throw new Error(`unexpected parse failure: ${parsed.message}`);
+    }
+
+    const stages = [{
+      id: "simulate" as const,
+      status: "SUCCESS" as const,
+      startedAt: "2026-07-10T00:00:00.000Z",
+      endedAt: "2026-07-10T00:00:00.010Z",
+      durationMs: 10,
+    }];
+    const createRunRecord = vi.fn();
+    const recordStageMetrics = vi.fn(async () => undefined);
+    const recordAudit = vi.fn();
+
+    const result = await createPlanningRun(parsed.command, {
+      requestBaseUrl: `http://${LOCAL_HOST}`,
+    }, {
+      runPipeline: async () => ({
+        overallStatus: "SUCCESS",
+        stages,
+        get outputs() {
+          throw new Error("stage outputs unavailable");
+        },
+      }),
+      createRunRecord,
+      recordStageMetrics,
+      recordAudit,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: 500,
+      message: "stage outputs unavailable",
+      meta: { stages },
+    });
+    expect(createRunRecord).not.toHaveBeenCalled();
+    expect(recordStageMetrics).toHaveBeenCalledWith(expect.objectContaining({
+      profileId,
+      overallStatus: "FAILED",
+      stages,
+    }));
+    expect(recordAudit).toHaveBeenCalledWith(expect.objectContaining({
+      result: "ERROR",
+      recordId: profileId,
+      message: "stage outputs unavailable",
+    }));
+    expect(recordStageMetrics.mock.invocationCallOrder[0]).toBeLessThan(recordAudit.mock.invocationCallOrder[0]);
   });
 
   it("rejects run save when debt offer liabilityId does not match profile debt ids", async () => {

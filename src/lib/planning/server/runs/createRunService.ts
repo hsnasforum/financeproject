@@ -1,7 +1,5 @@
 import { getPlanningFeatureFlags } from "../config";
 import { resolvePlanningRunAssumptions } from "../v2/runAssumptionsRouteService";
-import { checkMonteCarloBudget } from "../v2/budget";
-import { matchCandidates } from "../v2/actions/matchFinlifeCandidates";
 import {
   createCurrentUserRunResponseData,
   getCurrentUserRunForRoute,
@@ -10,7 +8,6 @@ import {
   recordCurrentUserRunStageMetrics,
   type CurrentUserRunStageResult,
 } from "./routeService";
-import { runStagePipeline } from "../../v2/stagePipeline";
 import {
   toLegacyScenarioMetaFromInput,
   type CreatePlanningRunCommand,
@@ -31,10 +28,11 @@ import {
   type CreatePlanningRunSuccessResult,
 } from "./createRunSuccessResponse";
 import {
-  buildPlanningStagePlan,
-  createPlanningStagePlanState,
-  resolvePlanningStageOutputs,
-} from "./createRunStagePlan";
+  CreatePlanningRunStageOutputResolutionError,
+  defaultCreatePlanningRunStagePipelineDependencies,
+  runCreatePlanningRunStagePipeline,
+  type CreatePlanningRunStagePipelineDependencies,
+} from "./createRunStagePipeline";
 
 export {
   parseCreatePlanningRunCommand,
@@ -64,8 +62,8 @@ export type CreatePlanningRunDependencies = {
   getProfile?: typeof getCurrentUserRunProfileForRoute;
   getRun?: typeof getCurrentUserRunForRoute;
   resolveAssumptions?: typeof resolvePlanningRunAssumptions;
-  runPipeline?: typeof runStagePipeline;
-  matchCandidatesProvider?: typeof matchCandidates;
+  runPipeline?: CreatePlanningRunStagePipelineDependencies["runPipeline"];
+  matchCandidatesProvider?: CreatePlanningRunStagePipelineDependencies["matchCandidatesProvider"];
   createRunRecord?: typeof createCurrentUserRunResponseData;
   recordAudit?: typeof recordCurrentUserRunCreateAudit;
   recordStageMetrics?: typeof recordCurrentUserRunStageMetrics;
@@ -78,13 +76,14 @@ type ResolvedCreatePlanningRunDependencies = Required<CreatePlanningRunDependenc
 function resolveCreateDependencies(
   dependencies: CreatePlanningRunDependencies = {},
 ): ResolvedCreatePlanningRunDependencies {
+  const stagePipelineDependencies = defaultCreatePlanningRunStagePipelineDependencies;
   return {
     getFeatureFlags: dependencies.getFeatureFlags ?? getPlanningFeatureFlags,
     getProfile: dependencies.getProfile ?? getCurrentUserRunProfileForRoute,
     getRun: dependencies.getRun ?? getCurrentUserRunForRoute,
     resolveAssumptions: dependencies.resolveAssumptions ?? resolvePlanningRunAssumptions,
-    runPipeline: dependencies.runPipeline ?? runStagePipeline,
-    matchCandidatesProvider: dependencies.matchCandidatesProvider ?? matchCandidates,
+    runPipeline: dependencies.runPipeline ?? stagePipelineDependencies.runPipeline,
+    matchCandidatesProvider: dependencies.matchCandidatesProvider ?? stagePipelineDependencies.matchCandidatesProvider,
     createRunRecord: dependencies.createRunRecord ?? createCurrentUserRunResponseData,
     recordAudit: dependencies.recordAudit ?? recordCurrentUserRunCreateAudit,
     recordStageMetrics: dependencies.recordStageMetrics ?? recordCurrentUserRunStageMetrics,
@@ -153,12 +152,6 @@ export async function createPlanningRun(
   const {
     runRequestId,
     title,
-    horizonMonths,
-    policyId,
-    runScenariosEnabled,
-    getActionsEnabled,
-    analyzeDebtEnabled,
-    debtStrategyInput,
     includeProducts,
     monteCarloConfig,
   } = command;
@@ -219,39 +212,24 @@ export async function createPlanningRun(
     appliedOverrides,
   } = assumptionsContext;
 
-  const monteCarloBudget = monteCarloConfig
-    ? checkMonteCarloBudget({
-      paths: monteCarloConfig.paths,
-      horizonMonths,
-    })
-    : null;
-
   let stages: CurrentUserRunStageResult[] = [];
 
   try {
-    const stagePlanState = createPlanningStagePlanState();
-    const pipeline = await deps.runPipeline(buildPlanningStagePlan({
+    const stagePipelineResult = await runCreatePlanningRunStagePipeline({
+      command,
       profile: canonicalProfile,
-      horizonMonths,
-      policyId,
       baseAssumptions,
       finalSimulationAssumptions,
       riskTolerance,
       snapshotAsOf: snapshot?.asOf,
-      runScenariosEnabled,
-      getActionsEnabled,
-      analyzeDebtEnabled,
-      includeProducts,
-      monteCarloConfig,
-      monteCarloBudget,
-      debtStrategyInput,
       requestBaseUrl: context.requestBaseUrl,
-      matchCandidatesProvider: deps.matchCandidatesProvider,
-      state: stagePlanState,
-    }));
-
-    stages = pipeline.stages;
-    const stageOutputs = resolvePlanningStageOutputs(pipeline, stagePlanState);
+      dependencies: {
+        runPipeline: deps.runPipeline,
+        matchCandidatesProvider: deps.matchCandidatesProvider,
+      },
+    });
+    const { pipeline, stageOutputs } = stagePipelineResult;
+    stages = stagePipelineResult.stages;
     if (!stageOutputs.simulatePlan || pipeline.overallStatus === "FAILED") {
       await recordStageMetricsSafely(deps, {
         requestId: runRequestId,
@@ -328,6 +306,9 @@ export async function createPlanningRun(
       data: created,
     });
   } catch (error) {
+    if (error instanceof CreatePlanningRunStageOutputResolutionError) {
+      stages = error.stages;
+    }
     const message = error instanceof Error ? error.message : "실행 기록 저장에 실패했습니다.";
     if (stages.length > 0) {
       await recordStageMetricsSafely(deps, {
