@@ -1,3 +1,5 @@
+import { roundToInteger } from "../../calc/roundingPolicy";
+
 export type PlanningPageLoadTelemetryContext = Record<string, string | number | boolean | null | undefined>;
 
 export type PlanningPageLoadTelemetryStep = {
@@ -26,7 +28,7 @@ function readNowMs(): number {
 function toDurationMs(startMs: number, endMs: number): number {
   const duration = endMs - startMs;
   if (!Number.isFinite(duration) || duration < 0) return 0;
-  return Math.round(duration);
+  return roundToInteger(duration) ?? 0;
 }
 
 function normalizeThresholdMs(value: string | undefined): number {
@@ -34,7 +36,7 @@ function normalizeThresholdMs(value: string | undefined): number {
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_SLOW_PAGE_LOAD_THRESHOLD_MS;
-  return Math.round(parsed);
+  return roundToInteger(parsed) ?? DEFAULT_SLOW_PAGE_LOAD_THRESHOLD_MS;
 }
 
 function normalizeErrorName(error: unknown): string {

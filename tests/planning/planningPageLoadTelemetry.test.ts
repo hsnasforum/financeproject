@@ -76,11 +76,30 @@ describe("planning page load telemetry", () => {
     expect(logger).not.toHaveBeenCalled();
   });
 
+  it("keeps nearest-integer rounding for fractional durations", async () => {
+    const telemetry = createPlanningPageLoadTelemetry({
+      enabled: false,
+      nowMs: createSequenceClock([0, 0.2, 1.7, 2.6]),
+      route: "/planning/runs",
+    });
+
+    await telemetry.step("profiles", async () => []);
+    const snapshot = telemetry.finish();
+
+    expect(snapshot.steps).toEqual([
+      { durationMs: 2, name: "profiles", status: "ok" },
+    ]);
+    expect(snapshot.totalMs).toBe(3);
+  });
+
   it("uses an opt-in env threshold while keeping invalid values safe", () => {
     const previous = process.env.PLANNING_PAGE_LOAD_SLOW_MS;
     try {
       process.env.PLANNING_PAGE_LOAD_SLOW_MS = "1234";
       expect(getPlanningPageLoadSlowThresholdMs()).toBe(1234);
+
+      process.env.PLANNING_PAGE_LOAD_SLOW_MS = "1234.6";
+      expect(getPlanningPageLoadSlowThresholdMs()).toBe(1235);
 
       process.env.PLANNING_PAGE_LOAD_SLOW_MS = "-1";
       expect(getPlanningPageLoadSlowThresholdMs()).toBe(5000);
