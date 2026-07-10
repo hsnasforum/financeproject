@@ -56,4 +56,67 @@ describe("unified FINLIFE refresh persistence boundary", () => {
       }),
     );
   });
+
+  it("keeps the unified query flow available when the runner reports an upstream failure", async () => {
+    mocks.loadFinlifeSyncAttempt.mockReturnValue(null);
+    mocks.loadFinlifeSnapshot.mockReturnValue({
+      meta: {
+        generatedAt: "2026-07-01T00:00:00.000Z",
+        ttlMs: 43_200_000,
+        completionRate: 1,
+      },
+      items: [{ fin_prdt_cd: "FIN-001" }],
+    });
+    mocks.shouldRunFinlifeSync.mockReturnValue({
+      shouldRun: true,
+      reason: "stale_snapshot",
+    });
+    mocks.runFinlifeSnapshotSync.mockResolvedValue({
+      ok: false,
+      kind: "deposit",
+      error: {
+        code: "UPSTREAM_FETCH_FAILED",
+        message: "FINLIFE upstream fetch failed",
+        upstreamStatus: 503,
+      },
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(refreshFinlifeSnapshotIfStale("deposit", true)).resolves.toBeUndefined();
+
+    expect(mocks.runFinlifeSnapshotSync).toHaveBeenCalledWith("deposit");
+    expect(consoleError).toHaveBeenCalledWith("[unified] finlife refresh failed", {
+      kind: "deposit",
+      code: "UPSTREAM_FETCH_FAILED",
+      message: "FINLIFE upstream fetch failed",
+      upstreamStatus: 503,
+    });
+  });
+
+  it("keeps the unified query flow available when the refresh runner rejects", async () => {
+    mocks.loadFinlifeSyncAttempt.mockReturnValue(null);
+    mocks.loadFinlifeSnapshot.mockReturnValue({
+      meta: {
+        generatedAt: "2026-07-01T00:00:00.000Z",
+        ttlMs: 43_200_000,
+        completionRate: 1,
+      },
+      items: [{ fin_prdt_cd: "FIN-001" }],
+    });
+    mocks.shouldRunFinlifeSync.mockReturnValue({
+      shouldRun: true,
+      reason: "stale_snapshot",
+    });
+    mocks.runFinlifeSnapshotSync.mockRejectedValue(new Error("unexpected runner failure"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(refreshFinlifeSnapshotIfStale("saving", true)).resolves.toBeUndefined();
+
+    expect(consoleError).toHaveBeenCalledWith("[unified] finlife refresh failed", {
+      kind: "saving",
+      code: "UNEXPECTED_REFRESH_ERROR",
+      message: "unexpected runner failure",
+      upstreamStatus: null,
+    });
+  });
 });

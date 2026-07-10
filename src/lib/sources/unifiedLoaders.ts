@@ -213,7 +213,18 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
   const decision = shouldRunFinlifeSync(snapshot?.meta ?? null, Date.now(), { ttlMs, minCompletionRate: 0.95 });
   if (!decision.shouldRun) return;
 
-  const result = await runFinlifeSnapshotSync(kind);
+  let result: Awaited<ReturnType<typeof runFinlifeSnapshotSync>>;
+  try {
+    result = await runFinlifeSnapshotSync(kind);
+  } catch (error) {
+    console.error("[unified] finlife refresh failed", {
+      kind,
+      code: "UNEXPECTED_REFRESH_ERROR",
+      message: error instanceof Error ? error.message : "Unexpected FINLIFE refresh error",
+      upstreamStatus: null,
+    });
+    return;
+  }
   if (result.ok) return;
 
   console.error("[unified] finlife refresh failed", {
