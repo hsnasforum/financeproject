@@ -555,7 +555,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     const assumptionNote = toProductAssumptionNote(payload?.meta.note);
     const snapshotGeneratedAt = payload?.meta.snapshot?.generatedAt ?? null;
     const rowStatus = deriveFreshnessStatus(finlifeSourceStatusRow);
-    const lastSyncedAt = snapshotGeneratedAt ?? finlifeSourceStatusRow?.lastSyncedAt ?? null;
+    const lastSyncedAt = finlifeSourceStatusRow?.lastSyncedAt ?? snapshotGeneratedAt ?? null;
 
     if (!lastSyncedAt && !rowStatus && !fallbackMode && !assumptionNote) return null;
 

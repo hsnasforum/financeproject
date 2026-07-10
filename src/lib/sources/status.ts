@@ -16,6 +16,19 @@ type LastRunMeta = {
   resultMsg?: string;
 };
 
+type FinlifeEvidenceState = "db-complete" | "complete";
+
+type FinlifeEvidenceLookup =
+  | { status: "missing" }
+  | {
+      status: "found";
+      state: FinlifeEvidenceState;
+      lastSyncedAt: Date | null;
+      ttlMs: number;
+      meta: Record<string, unknown>;
+    }
+  | { status: "error"; error: unknown };
+
 function normalizeLastRun(meta: Record<string, unknown> | null): LastRunMeta | undefined {
   const fromMeta = meta?.lastRun;
   const value = (fromMeta && typeof fromMeta === "object")
@@ -43,6 +56,67 @@ function normalizeLastRun(meta: Record<string, unknown> | null): LastRunMeta | u
     resultCode: typeof value.resultCode === "string" ? value.resultCode : undefined,
     resultMsg: typeof value.resultMsg === "string" ? value.resultMsg : undefined,
   };
+}
+
+function canTreatFinlifeEvidenceAsFresh(state: FinlifeEvidenceState, meta: Record<string, unknown>): boolean {
+  if (state !== "complete") return false;
+  if (meta.source !== "finlife" || meta.fallbackUsed !== false) return false;
+  if (meta.truncatedByHardCap !== false) return false;
+  return typeof meta.completionRate === "number" && meta.completionRate >= 0.95;
+}
+
+function canTreatFinlifeSnapshotAsFresh(meta: Record<string, unknown> | null): boolean {
+  if (!meta) return false;
+  if (meta.source !== "finlife" || meta.fallbackUsed === true) return false;
+  if (meta.truncatedByHardCap === true) return false;
+  return typeof meta.completionRate === "number" && meta.completionRate >= 0.95;
+}
+
+function isMissingFinlifeEvidenceStorage(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  return /does not exist|no such table|relation .+ does not exist|P2021|not initialized/i.test(raw);
+}
+
+async function getFinlifeCompletionEvidence(kind: "deposit" | "saving"): Promise<FinlifeEvidenceLookup> {
+  try {
+    const row = await prisma.externalSourceSnapshot.findUnique({
+      where: {
+        sourceId_kind: {
+          sourceId: "finlife",
+          kind,
+        },
+      },
+    });
+    if (!row) return { status: "missing" };
+
+    const meta = (row.metaJson as Record<string, unknown> | null) ?? null;
+    const state = meta?.completionState;
+    if (meta?.evidenceType !== "finlife-prisma-product-sync"
+      || (state !== "db-complete" && state !== "complete")) {
+      return { status: "missing" };
+    }
+
+    const rawLastSyncedAt = row.lastSyncedAt instanceof Date
+      ? row.lastSyncedAt
+      : new Date(row.lastSyncedAt);
+    const lastSyncedAt = Number.isFinite(rawLastSyncedAt.getTime()) && rawLastSyncedAt.getTime() > 0
+      ? rawLastSyncedAt
+      : null;
+    return {
+      status: "found",
+      state,
+      lastSyncedAt,
+      ttlMs: row.ttlMs,
+      meta,
+    };
+  } catch (error) {
+    if (isMissingFinlifeEvidenceStorage(error)) return { status: "missing" };
+    console.error("[sources/status] finlife completion evidence unavailable", {
+      kind,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return { status: "error", error };
+  }
 }
 
 function resolveDataSourceStatusErrorMessage(error: unknown): string {
@@ -94,25 +168,49 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
   for (const kind of ["deposit", "saving"] as const) {
     const snapshot = loadFinlifeSnapshot(kind);
     const incompleteAttempt = loadFinlifeSyncAttempt(kind);
-    const ttlMs = snapshot?.meta?.ttlMs ?? Number(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS ?? "43200") * 1000;
-    const fresh = evaluateFreshness(snapshot?.meta?.generatedAt ?? null, ttlMs, nowMs);
+    const evidence = await getFinlifeCompletionEvidence(kind);
+    const foundEvidence = evidence.status === "found" ? evidence : null;
+    const ttlMs = foundEvidence?.ttlMs
+      ?? snapshot?.meta?.ttlMs
+      ?? Number(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS ?? "43200") * 1000;
+    const fresh = evaluateFreshness(
+      foundEvidence ? foundEvidence.lastSyncedAt : (snapshot?.meta?.generatedAt ?? null),
+      ttlMs,
+      nowMs,
+    );
+    const evidenceCanBeFresh = foundEvidence
+      ? canTreatFinlifeEvidenceAsFresh(foundEvidence.state, foundEvidence.meta)
+      : evidence.status === "missing"
+        && canTreatFinlifeSnapshotAsFresh((snapshot?.meta as unknown as Record<string, unknown> | null) ?? null);
+    const evidenceLastAttemptAt = foundEvidence && typeof foundEvidence.meta.lastAttemptAt === "string"
+      ? foundEvidence.meta.lastAttemptAt
+      : null;
+    const lastRun = foundEvidence ? normalizeLastRun(foundEvidence.meta) : undefined;
     statuses.push({
       sourceId: "finlife",
       kind,
       lastSyncedAt: fresh.lastSyncedAt,
-      lastAttemptAt: incompleteAttempt?.updatedAt,
+      lastAttemptAt: incompleteAttempt?.updatedAt
+        ?? evidenceLastAttemptAt
+        ?? undefined,
       ttlMs,
       ageMs: fresh.ageMs,
-      isFresh: incompleteAttempt ? false : fresh.isFresh,
+      isFresh: incompleteAttempt ? false : evidenceCanBeFresh && fresh.isFresh,
       counts: snapshot?.items?.length ?? 0,
+      lastRun,
       lastError: incompleteAttempt
         ? {
             at: incompleteAttempt.updatedAt,
             message: incompleteAttempt.status === "failed"
-              ? "FINLIFE 동기화가 완료되지 않았습니다. 이전 데이터는 유지되며 동기화를 다시 실행해주세요."
+              ? "FINLIFE 동기화가 완료되지 않았습니다. 표시 데이터와 상태 시점이 다를 수 있으니 동기화를 다시 실행해주세요."
               : "FINLIFE 동기화가 진행 중이거나 완료되지 않았습니다. 잠시 후 상태를 다시 확인해주세요.",
           }
-        : undefined,
+        : evidence.status === "error"
+          ? {
+              at: checkedAt,
+              message: "FINLIFE 상품 저장소 상태를 확인하지 못했습니다. 잠시 후 다시 확인해주세요.",
+            }
+          : undefined,
     });
   }
 
