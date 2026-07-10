@@ -462,6 +462,16 @@ function shouldRetainStartupRunPromise(result: PlanningMigrationRunResult): bool
   return result.result !== "failed";
 }
 
+export function invalidatePlanningStartupMigrationCache(options?: {
+  baseDir?: string;
+}): void {
+  if (options?.baseDir) {
+    startupRunPromises.delete(resolveMigrationStatePath(options.baseDir));
+    return;
+  }
+  startupRunPromises.clear();
+}
+
 function applyStateEntry(
   state: PlanningMigrationState,
   item: PlanningMigrationItem,

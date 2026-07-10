@@ -1,5 +1,6 @@
 import { appendOpsMetricEvent } from "../../../ops/metricsLog";
 import { appendOpsAuditEvent } from "../../../ops/securityAuditLog";
+import { invalidatePlanningStartupMigrationCache } from "../../migrations/manager";
 import { consumeVaultCsrfOrThrow } from "../../security/vaultCsrf";
 import {
   lockVault,
@@ -63,6 +64,7 @@ export async function unlockOpsSecurityVault(input: {
   startedAt: number;
 }): Promise<VaultStatus> {
   const status = await unlockVault(input.passphrase);
+  invalidatePlanningStartupMigrationCache();
   await appendOpsAuditEvent({
     eventType: "VAULT_UNLOCK_SUCCESS",
     meta: {
