@@ -13,7 +13,10 @@ vi.mock("../src/lib/finlife/snapshot", () => ({
   saveFinlifeSnapshot: mocks.saveFinlifeSnapshot,
 }));
 
-import { runFinlifeSnapshotSync } from "../src/lib/finlife/syncRunner";
+import {
+  collectFinlifeSnapshot,
+  runFinlifeSnapshotSync,
+} from "../src/lib/finlife/syncRunner";
 
 const ENV_KEYS = [
   "FINLIFE_MODE",
@@ -92,5 +95,21 @@ describe("FINLIFE snapshot sync upstream failure", () => {
         ]),
       }),
     );
+  });
+
+  it("collects without writing until a persistence boundary accepts the result", async () => {
+    process.env.FINLIFE_FAIL_OPEN_TO_MOCK = "1";
+
+    await expect(collectFinlifeSnapshot("deposit")).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        meta: {
+          source: "mock",
+          fallbackUsed: true,
+        },
+      },
+    });
+
+    expect(mocks.saveFinlifeSnapshot).not.toHaveBeenCalled();
   });
 });

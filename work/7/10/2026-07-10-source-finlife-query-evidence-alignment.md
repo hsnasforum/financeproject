@@ -74,3 +74,9 @@
 - evidence read 오류 시 availability를 위해 file snapshot 기준으로 fallback하므로 장애 중 snapshot-only refresh가 실행되면 일시적 기준 이탈 가능성이 남습니다.
 - deposit/saving 외 FINLIFE kind는 unified query/status 범위 밖입니다.
 - 롤백 기준은 complete evidence가 있는데도 snapshot-only refresh 뒤 `onlyNew` 또는 status count가 전진하는 경우, evidence missing/error fallback이 query/status를 실패시키는 경우, 일반 query 결과나 cache 동작이 바뀌는 경우입니다.
+
+## 다음 라운드 우선순위
+
+1. runtime `refresh=1`이 Prisma 상품 DB와 completion evidence를 함께 갱신하도록 CLI persistence 경계를 공용화합니다.
+2. Product prune/active 정책을 별도 Issue로 합의해 fetched count와 누적 DB inventory 차이를 해소합니다.
+3. DB write ownership 또는 Product query 결과 집합이 바뀌는 변경은 Issue #197에 영향과 롤백 기준을 먼저 남깁니다.

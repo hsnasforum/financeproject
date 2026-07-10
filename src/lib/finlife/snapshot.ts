@@ -67,6 +67,21 @@ export function loadFinlifeSyncAttempt(kind: FinlifeSnapshotKind): FinlifeSyncAt
   }
 }
 
+export function saveFinlifeSyncAttempt(
+  kind: FinlifeSnapshotKind,
+  attempt: FinlifeSyncAttempt,
+): void {
+  const filePath = syncAttemptPath(kind);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(attempt), "utf-8");
+  fs.renameSync(tempPath, filePath);
+}
+
+export function clearFinlifeSyncAttempt(kind: FinlifeSnapshotKind): void {
+  fs.rmSync(syncAttemptPath(kind), { force: true });
+}
+
 export function loadFinlifeSnapshot(kind: FinlifeSnapshotKind): FinlifeSnapshot | null {
   const filePath = snapshotPath(kind);
   const cached = memoryCache.get(filePath);

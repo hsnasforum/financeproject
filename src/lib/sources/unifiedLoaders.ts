@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { readFinlifeCompletionEvidence } from "@/lib/finlife/completionEvidence";
+import { runFinlifePersistentSync } from "@/lib/finlife/persistentSync";
 import { loadFinlifeSnapshot, loadFinlifeSyncAttempt } from "@/lib/finlife/snapshot";
 import { shouldRunFinlifeSync } from "@/lib/finlife/syncPolicy";
-import { runFinlifeSnapshotSync } from "@/lib/finlife/syncRunner";
 import { samplebankProvider } from "@/lib/providers/samplebank";
 import { runProvider } from "@/lib/providers/runProvider";
 import { refreshSourceIfStale } from "@/lib/sources/datago/sync";
@@ -195,6 +195,23 @@ function resolveFinlifeSnapshotTtlMs(): number {
   return Math.max(60, Math.trunc(sec)) * 1000;
 }
 
+function toFinlifeRefreshEvidenceMeta(input: {
+  state: "db-complete" | "complete";
+  lastSyncedAt: Date | null;
+  meta: Record<string, unknown>;
+}): { generatedAt: string; completionRate: number } | null {
+  if (input.state !== "complete" || !input.lastSyncedAt) return null;
+  const verified = input.meta.source === "finlife"
+    && input.meta.fallbackUsed === false
+    && input.meta.truncatedByHardCap === false;
+  return {
+    generatedAt: input.lastSyncedAt.toISOString(),
+    completionRate: verified && typeof input.meta.completionRate === "number"
+      ? input.meta.completionRate
+      : 0,
+  };
+}
+
 export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", refresh: boolean): Promise<void> {
   if (!refresh) return;
 
@@ -209,14 +226,28 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
     return;
   }
 
+  const evidence = await readFinlifeCompletionEvidence(kind);
+  if (evidence.status === "error") {
+    console.error("[unified] finlife refresh skipped because completion evidence is unavailable", {
+      kind,
+      message: evidence.error instanceof Error ? evidence.error.message : "unknown",
+    });
+    return;
+  }
+
   const snapshot = loadFinlifeSnapshot(kind);
-  const ttlMs = snapshot?.meta?.ttlMs ?? resolveFinlifeSnapshotTtlMs();
-  const decision = shouldRunFinlifeSync(snapshot?.meta ?? null, Date.now(), { ttlMs, minCompletionRate: 0.95 });
+  const ttlMs = evidence.status === "found"
+    ? evidence.ttlMs
+    : snapshot?.meta?.ttlMs ?? resolveFinlifeSnapshotTtlMs();
+  const policyMeta = evidence.status === "found"
+    ? toFinlifeRefreshEvidenceMeta(evidence)
+    : snapshot?.meta ?? null;
+  const decision = shouldRunFinlifeSync(policyMeta, Date.now(), { ttlMs, minCompletionRate: 0.95 });
   if (!decision.shouldRun) return;
 
-  let result: Awaited<ReturnType<typeof runFinlifeSnapshotSync>>;
+  let result: Awaited<ReturnType<typeof runFinlifePersistentSync>>;
   try {
-    result = await runFinlifeSnapshotSync(kind);
+    result = await runFinlifePersistentSync(kind);
   } catch (error) {
     console.error("[unified] finlife refresh failed", {
       kind,

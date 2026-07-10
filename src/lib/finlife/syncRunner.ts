@@ -2,11 +2,20 @@ import { fetchLiveFinlife } from "./fetchLive";
 import { fetchMockFinlife } from "./fetchMock";
 import { extractPagingMeta } from "./meta";
 import { normalizeFinlifeProducts } from "./normalize";
-import { saveFinlifeSnapshot, type FinlifeSnapshotKind, type FinlifeSnapshotMeta } from "./snapshot";
+import {
+  saveFinlifeSnapshot,
+  type FinlifeSnapshot,
+  type FinlifeSnapshotKind,
+  type FinlifeSnapshotMeta,
+} from "./snapshot";
 import { type FinlifeMode, type NormalizedProduct } from "./types";
 
-type SyncResult =
+export type FinlifeSyncResult =
   | { ok: true; kind: FinlifeSnapshotKind; meta: FinlifeSnapshotMeta }
+  | { ok: false; kind: FinlifeSnapshotKind; error: { code: string; message: string; upstreamStatus?: number | null } };
+
+export type FinlifeCollectionResult =
+  | { ok: true; kind: FinlifeSnapshotKind; snapshot: FinlifeSnapshot }
   | { ok: false; kind: FinlifeSnapshotKind; error: { code: string; message: string; upstreamStatus?: number | null } };
 
 function parseMode(): "auto" | FinlifeMode {
@@ -157,7 +166,7 @@ export function computeCompletion({
   };
 }
 
-export async function runFinlifeSnapshotSync(kind: FinlifeSnapshotKind): Promise<SyncResult> {
+export async function collectFinlifeSnapshot(kind: FinlifeSnapshotKind): Promise<FinlifeCollectionResult> {
   const mode = parseMode();
   const topGroups = parseTopGroupList();
   const ttlMs = parsePositiveInt(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS, 43_200, 60, 7 * 24 * 60 * 60) * 1000;
@@ -272,8 +281,11 @@ export async function runFinlifeSnapshotSync(kind: FinlifeSnapshotKind): Promise
       note: topGroups.length <= 1 ? "업권 범위가 좁을 수 있습니다. FINLIFE 업권 설정을 확인하세요." : undefined,
     };
 
-    saveFinlifeSnapshot(kind, { meta, items: merged.items });
-    return { ok: true, kind, meta };
+    return {
+      ok: true,
+      kind,
+      snapshot: { meta, items: merged.items },
+    };
   } catch (error) {
     return {
       ok: false,
@@ -282,6 +294,30 @@ export async function runFinlifeSnapshotSync(kind: FinlifeSnapshotKind): Promise
         code: "INTERNAL",
         message: error instanceof Error ? error.message : "finlife sync failed",
         upstreamStatus: lastUpstreamStatus,
+      },
+    };
+  }
+}
+
+export async function runFinlifeSnapshotSync(kind: FinlifeSnapshotKind): Promise<FinlifeSyncResult> {
+  const collected = await collectFinlifeSnapshot(kind);
+  if (!collected.ok) return collected;
+
+  try {
+    saveFinlifeSnapshot(kind, collected.snapshot);
+    return {
+      ok: true,
+      kind,
+      meta: collected.snapshot.meta,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      kind,
+      error: {
+        code: "INTERNAL",
+        message: error instanceof Error ? error.message : "finlife sync failed",
+        upstreamStatus: collected.snapshot.meta.lastUpstreamStatus ?? null,
       },
     };
   }

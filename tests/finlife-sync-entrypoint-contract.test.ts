@@ -56,6 +56,8 @@ describe("FINLIFE sync entrypoint contract", () => {
       scripts?: Record<string, string>;
     };
     const packageScripts = packageJson.scripts ?? {};
+    const syncScript = fs.readFileSync(path.join(scriptsDir, "finlife_sync.mjs"), "utf-8");
+    const persistenceCore = fs.readFileSync(path.join(scriptsDir, "finlife_persistence.mjs"), "utf-8");
     const forbiddenPackageEntrypoints = Object.entries(packageScripts)
       .filter(([, command]) => (
         /finlife_sync(?:_if_stale)?\.ts/u.test(command)
@@ -82,8 +84,13 @@ describe("FINLIFE sync entrypoint contract", () => {
     expect(packageJson.scripts?.["products:sync"]).toBe("node scripts/finlife_sync.mjs && node scripts/datago_sync.mjs");
     expect(forbiddenPackageEntrypoints).toEqual([]);
     expect(directRuntimeRunnerImports).toEqual([
-      "src/lib/sources/unifiedLoaders.ts",
+      "src/lib/finlife/persistentSync.ts",
     ]);
+    expect(syncScript).toContain('from "./finlife_persistence.mjs"');
+    expect(syncScript).not.toContain("prisma.product.upsert");
+    expect(syncScript).not.toContain("prisma.externalSourceSnapshot.upsert");
+    expect(persistenceCore).not.toContain("process.exit");
+    expect(persistenceCore).not.toContain("runSyncKinds");
   });
 
   it("documents package scripts as the supported operator boundary", () => {

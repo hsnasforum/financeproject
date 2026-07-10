@@ -3,9 +3,10 @@ import {
   FinlifeSyncPersistenceError,
   persistFinlifeSyncKind,
   writeFinlifeCompletionEvidence,
-} from "../scripts/finlife_sync.mjs";
+} from "../scripts/finlife_persistence.mjs";
+import type { FinlifeSnapshot } from "../src/lib/finlife/snapshot";
 
-function snapshot() {
+function snapshot(): FinlifeSnapshot {
   return {
     meta: {
       generatedAt: "2026-07-10T00:00:00.000Z",
@@ -305,7 +306,7 @@ describe("FINLIFE sync persistence contract", () => {
       source: "finlife",
       fallbackUsed: false,
       provenance: {
-        mode: "replay",
+        mode: "replay" as const,
         replayFile: "/private/source/finlife-pension.json",
         dumpSchemaVersion: 1,
       },
