@@ -1,11 +1,7 @@
 import { getPlanningFeatureFlags } from "../config";
-import {
-  PlanningRunAssumptionsResolveError,
-  resolvePlanningRunAssumptions,
-} from "../v2/runAssumptionsRouteService";
+import { resolvePlanningRunAssumptions } from "../v2/runAssumptionsRouteService";
 import { checkMonteCarloBudget } from "../v2/budget";
 import { matchCandidates } from "../v2/actions/matchFinlifeCandidates";
-import { PlanningV2ValidationError } from "../v2/types";
 import {
   createCurrentUserRunResponseData,
   getCurrentUserRunForRoute,
@@ -16,20 +12,12 @@ import {
   type CurrentUserRunStageResult,
 } from "./routeService";
 import { runStagePipeline } from "../../v2/stagePipeline";
-import { loadCanonicalProfile } from "../../v2/loadCanonicalProfile";
-import { applyProfilePatch } from "../../v2/profilePatch";
 import {
-  applyScenario,
-  validateScenario,
-} from "../../v2/scenario";
-import {
-  legacyScenarioToInputScenario,
-  parseRiskTolerance,
   toLegacyScenarioMetaFromInput,
-  validationIssues,
   type CreatePlanningRunCommand,
   type CreatePlanningRunParseResult,
 } from "./createRunCommandParser";
+import { prepareCreatePlanningRunInputContext } from "./createRunInputContext";
 import {
   assemblePlanningRunRecordInput,
   buildCreatePlanningRunSuccessMeta,
@@ -40,7 +28,6 @@ import {
   recordCreateRunAuditSafely,
   recordCreateRunStageMetricsSafely,
 } from "./createRunSideEffects";
-import { evaluateCreatePlanningRunPreflight } from "./createRunPreflight";
 import {
   buildPlanningStagePlan,
   createPlanningStagePlanState,
@@ -169,13 +156,10 @@ export async function createPlanningRun(
 ): Promise<CreatePlanningRunResult> {
   const deps = resolveCreateDependencies(dependencies);
   const {
-    profileId,
     runRequestId,
     title,
     horizonMonths,
     policyId,
-    requestedSnapshotId,
-    assumptionsOverride,
     runScenariosEnabled,
     getActionsEnabled,
     analyzeDebtEnabled,
@@ -183,7 +167,6 @@ export async function createPlanningRun(
     includeProducts,
     monteCarloConfig,
   } = command;
-  let scenarioInput = command.scenarioInput;
   const scenarioMeta = command.scenarioMeta;
 
   const featureFlags = deps.getFeatureFlags();
@@ -210,204 +193,27 @@ export async function createPlanningRun(
     });
   }
 
-  const profileRecord = await deps.getProfile(profileId);
-  if (!profileRecord) {
-    recordCreateAudit(deps, {
-      result: "ERROR",
-      recordId: profileId,
-      message: "profile not found",
-    });
-    return errorResult({
-      code: "NO_DATA",
-      message: "프로필을 찾을 수 없습니다.",
-    });
-  }
-
-  const scenarioBaselineRunId = scenarioInput?.baseRunId || scenarioMeta?.baselineRunId;
-  if (scenarioBaselineRunId) {
-    const baselineRun = await deps.getRun(scenarioBaselineRunId);
-    if (!baselineRun) {
-      recordCreateAudit(deps, {
-        result: "ERROR",
-        recordId: profileId,
-        message: "scenario baseline run not found",
-      });
-      return errorResult({
-        code: "INPUT",
-        message: "scenario baseline runId를 찾을 수 없습니다.",
-        status: 400,
-        issues: [`input.scenario.baseRunId: '${scenarioBaselineRunId}' not found`],
-      });
-    }
-  }
-
-  if (!scenarioInput && scenarioMeta) {
-    scenarioInput = legacyScenarioToInputScenario(scenarioMeta);
-  }
-
-  let canonicalProfile = profileRecord.profile;
-  let profileNormalization = {
-    defaultsApplied: [],
-    fixesApplied: [],
-  } as ReturnType<typeof loadCanonicalProfile>["normalization"];
-  try {
-    const canonicalLoad = loadCanonicalProfile(profileRecord.profile, {
-      offers: debtStrategyInput.offers,
-    });
-    canonicalProfile = canonicalLoad.profile;
-    profileNormalization = canonicalLoad.normalization;
-  } catch (error) {
-    if (error instanceof PlanningV2ValidationError) {
-      recordCreateAudit(deps, {
-        result: "ERROR",
-        recordId: profileId,
-        message: "profile canonicalization failed",
-      });
-      return errorResult({
-        code: "INPUT",
-        message: error.message,
-        status: 400,
-        issues: validationIssues(error),
-      });
-    }
-    recordCreateAudit(deps, {
-      result: "ERROR",
-      recordId: profileId,
-      message: "profile canonicalization failed",
-    });
-    return errorResult({
-      code: "INTERNAL",
-      message: "실행 저장 검증 중 오류가 발생했습니다.",
-    });
-  }
-
-  if (scenarioInput) {
-    try {
-      canonicalProfile = applyProfilePatch(canonicalProfile, scenarioInput.patch);
-    } catch (error) {
-      recordCreateAudit(deps, {
-        result: "ERROR",
-        recordId: profileId,
-        message: "scenario apply failed",
-      });
-      if (error instanceof PlanningV2ValidationError) {
-        return errorResult({
-          code: "INPUT",
-          message: "scenario patch 검증에 실패했습니다.",
-          status: 400,
-          issues: validationIssues(error),
-        });
-      }
-      return errorResult({
-        code: "INPUT",
-        message: error instanceof Error ? error.message : "scenario 적용에 실패했습니다.",
-        status: 400,
-      });
-    }
-  } else if (scenarioMeta) {
-    const scenarioIssues = validateScenario(canonicalProfile, scenarioMeta.patches);
-    if (scenarioIssues.length > 0) {
-      recordCreateAudit(deps, {
-        result: "ERROR",
-        recordId: profileId,
-        message: "scenario validation failed",
-      });
-      return errorResult({
-        code: "INPUT",
-        message: "scenario patch 검증에 실패했습니다.",
-        status: 400,
-        issues: scenarioIssues.map((issue) => `${issue.path}: ${issue.message}`),
-      });
-    }
-    try {
-      canonicalProfile = applyScenario(canonicalProfile, scenarioMeta.patches);
-    } catch (error) {
-      recordCreateAudit(deps, {
-        result: "ERROR",
-        recordId: profileId,
-        message: "scenario apply failed",
-      });
-      return errorResult({
-        code: "INPUT",
-        message: error instanceof Error ? error.message : "scenario 적용에 실패했습니다.",
-        status: 400,
-      });
-    }
-  }
-  const preflight = evaluateCreatePlanningRunPreflight({
-    profile: canonicalProfile,
-    requestedSnapshotId,
-    debtStrategyInput,
-    assumptionsOverride,
-    monteCarloConfig,
-    horizonMonths,
+  const inputContext = await prepareCreatePlanningRunInputContext({
+    command,
+    dependencies: deps,
   });
-  if (!preflight.ok) {
+  if (!inputContext.ok) {
     recordCreateAudit(deps, {
-      result: "ERROR",
-      recordId: profileId,
-      message: `preflight blocked (${preflight.blockIssues.map((issue) => issue.code).join(", ")})`,
+      ...inputContext.audit,
     });
     return errorResult({
-      code: "INPUT",
-      message: "실행 저장 사전 점검에 실패했습니다.",
-      status: 400,
-      issues: preflight.responseIssues,
-      meta: preflight.meta,
+      ...inputContext.error,
     });
   }
 
-  const riskTolerance = parseRiskTolerance(canonicalProfile as unknown);
-  let assumptionsContext: Awaited<ReturnType<typeof resolvePlanningRunAssumptions>>;
-  try {
-    assumptionsContext = await deps.resolveAssumptions({
-      profileId: profileRecord.id,
-      requestedSnapshotId,
-      assumptionsOverride,
-      riskTolerance,
-    });
-  } catch (error) {
-    if (error instanceof PlanningRunAssumptionsResolveError) {
-      recordCreateAudit(deps, {
-        result: "ERROR",
-        recordId: profileId,
-        message: error.auditMessage,
-      });
-      if (error.kind === "SNAPSHOT_NOT_FOUND") {
-        return errorResult({
-          code: "SNAPSHOT_NOT_FOUND",
-          message: error.message,
-          status: error.status,
-          issues: error.issues,
-        });
-      }
-      if (error.kind === "SNAPSHOT") {
-        return errorResult({
-          code: "SNAPSHOT",
-          message: error.message,
-          status: error.status,
-        });
-      }
-      return errorResult({
-        code: "INTERNAL",
-        message: "저장된 가정 오버라이드 로드에 실패했습니다.",
-        status: error.status,
-      });
-    }
-
-    const message = error instanceof Error ? error.message : "Failed to resolve run assumptions";
-    recordCreateAudit(deps, {
-      result: "ERROR",
-      recordId: profileId,
-      message,
-    });
-    return errorResult({
-      code: "INTERNAL",
-      message,
-      status: 500,
-    });
-  }
-
+  const {
+    profileRecord,
+    canonicalProfile,
+    profileNormalization,
+    scenarioInput,
+    riskTolerance,
+    assumptionsContext,
+  } = inputContext;
   const {
     snapshot,
     snapshotId,
