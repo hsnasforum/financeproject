@@ -1,32 +1,111 @@
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
-const removedFiles = [
-  "src/lib/planner/core.ts",
-  "src/lib/planner/metrics.ts",
-  "src/lib/planner/rules.ts",
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+
+const REMOVED_MODULES = new Set([
+  "src/lib/planner/core",
+  "src/lib/planner/metrics",
+  "src/lib/planner/rules",
+]);
+
+const LEGACY_MODEL_MODULE = "src/lib/planner/legacyPlanModel";
+const LEGACY_MODEL_ALLOWED_IMPORTERS = new Set([
+  "src/lib/planner/insuranceMetrics.ts",
+  "src/lib/planner/plan.ts",
+  "src/lib/planner/retirementMetrics.ts",
+]);
+
+const EXTERNAL_PLANNER_ALLOWED_IMPORTS = new Map([
+  [
+    "src/app/api/planner/compute/route.ts",
+    new Set([
+      "src/lib/planner/compute",
+      "src/lib/planner/types",
+    ]),
+  ],
+  ["src/components/BenefitsClient.tsx", new Set(["src/lib/planner/actionQuery"])],
+  [
+    "src/components/PlannerWizard.tsx",
+    new Set([
+      "src/lib/planner/checklistStorage",
+      "src/lib/planner/executionHints",
+      "src/lib/planner/insuranceMetrics",
+      "src/lib/planner/plan",
+      "src/lib/planner/retirementMetrics",
+      "src/lib/planner/storage",
+      "src/lib/planner/uiPrefs",
+    ]),
+  ],
+  ["src/components/PlaybookModal.tsx", new Set(["src/lib/planner/playbook.ko"])],
+  [
+    "src/components/SnapshotDeltaCards.tsx",
+    new Set([
+      "src/lib/planner/plan",
+      "src/lib/planner/storage",
+    ]),
+  ],
+  [
+    "src/components/plannerWizard/shared.ts",
+    new Set([
+      "src/lib/planner/checklistStorage",
+      "src/lib/planner/insuranceMetrics",
+      "src/lib/planner/plan",
+      "src/lib/planner/retirementMetrics",
+      "src/lib/planner/storage",
+      "src/lib/planner/uiPrefs",
+    ]),
+  ],
+  ["src/lib/report/reportBuilder.ts", new Set(["src/lib/planner/types"])],
+  ["src/lib/schemas/plannerInput.ts", new Set(["src/lib/planner/types"])],
+]);
+
+const PARKED_UI_ALLOWED_IMPORTERS = new Map([
+  ["src/components/PlannerClient", new Set()],
+  ["src/components/PlannerWizard", new Set(["src/components/PlannerClient.tsx"])],
+  ["src/components/ReportClient", new Set()],
+]);
+
+const SOURCE_FILE_PATTERN = /\.[cm]?[jt]sx?$/;
+const SOURCE_EXTENSION_PATTERN = /\.[cm]?[jt]sx?$/;
+const SOURCE_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mts",
+  ".mjs",
+  ".cts",
+  ".cjs",
 ];
 
-for (const filePath of removedFiles) {
-  if (fs.existsSync(filePath)) {
-    console.error(`[planner:deprecated:guard] removed file restored unexpectedly: ${filePath}`);
-    process.exit(1);
-  }
+function toPosix(value) {
+  return value.split(path.sep).join("/");
 }
 
-const checks = [
-  {
-    name: "deprecated planner module imports",
-    pattern: "lib/planner/(core|metrics|rules)",
-  },
-];
-
-function asTrimmedText(value) {
-  return typeof value === "string" ? value.trim() : "";
+function withoutSourceExtension(value) {
+  return value.replace(SOURCE_EXTENSION_PATTERN, "");
 }
 
-function listFiles(rootDir) {
+function isRemovedModuleTarget(target) {
+  return [...REMOVED_MODULES].some(
+    (modulePath) => target === modulePath || target.startsWith(`${modulePath}/`),
+  );
+}
+
+function looksLikeBoundarySpecifier(value) {
+  const normalized = value.replaceAll("\\", "/");
+  return normalized.includes("/lib/planner/")
+    || normalized.includes("/planner/")
+    || normalized === "@/components/PlannerClient"
+    || normalized === "@/components/PlannerWizard"
+    || normalized === "@/components/ReportClient";
+}
+
+function listSourceFiles(rootDir) {
   if (!fs.existsSync(rootDir)) return [];
   const out = [];
   const stack = [rootDir];
@@ -41,23 +120,95 @@ function listFiles(rootDir) {
         stack.push(fullPath);
         continue;
       }
-      out.push(fullPath);
+      if (SOURCE_FILE_PATTERN.test(entry.name)) out.push(fullPath);
     }
   }
 
-  return out;
+  return out.sort((a, b) => a.localeCompare(b));
 }
 
-function toPosix(value) {
-  return value.split(path.sep).join("/");
+function extractModuleSpecifiers(filePath, source) {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    filePath.endsWith(".tsx") || filePath.endsWith(".jsx")
+      ? ts.ScriptKind.TSX
+      : ts.ScriptKind.TS,
+  );
+  const specifiers = [];
+
+  function addStringLiteral(node) {
+    if (node && ts.isStringLiteralLike(node)) specifiers.push(node.text);
+  }
+
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      addStringLiteral(node.moduleSpecifier);
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      addStringLiteral(node.argument.literal);
+    } else if (ts.isCallExpression(node) && node.arguments.length === 1) {
+      const [argument] = node.arguments;
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        addStringLiteral(argument);
+      } else if (ts.isIdentifier(node.expression) && node.expression.text === "require") {
+        addStringLiteral(argument);
+      } else if (ts.isStringLiteralLike(argument) && looksLikeBoundarySpecifier(argument.text)) {
+        addStringLiteral(argument);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return specifiers;
 }
 
-function runNodeFallback(pattern) {
-  const regex = new RegExp(pattern);
-  const files = [...listFiles("src"), ...listFiles("tests")];
-  const lines = [];
+function resolveProjectModule(cwd, importer, specifier) {
+  let absolute = "";
+  if (specifier.startsWith("@/")) {
+    absolute = path.join(cwd, "src", specifier.slice(2));
+  } else if (specifier.startsWith(".")) {
+    absolute = path.resolve(cwd, path.dirname(importer), specifier);
+  } else {
+    return null;
+  }
+
+  const relative = toPosix(path.relative(cwd, absolute));
+  if (relative === ".." || relative.startsWith("../")) return null;
+  return withoutSourceExtension(relative);
+}
+
+function addViolation(violations, violation) {
+  violations.push(violation);
+}
+
+export function findLegacyPlannerBoundaryViolations(options = {}) {
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const violations = [];
+
+  for (const modulePath of REMOVED_MODULES) {
+    const restored = [path.join(cwd, modulePath), ...SOURCE_EXTENSIONS.map(
+      (extension) => path.join(cwd, `${modulePath}${extension}`),
+    )]
+      .find((filePath) => fs.existsSync(filePath));
+    if (restored) {
+      addViolation(violations, {
+        code: "removed-file-restored",
+        file: toPosix(path.relative(cwd, restored)),
+        target: modulePath,
+      });
+    }
+  }
+
+  const files = [
+    ...listSourceFiles(path.join(cwd, "src")),
+    ...listSourceFiles(path.join(cwd, "tests")),
+  ];
 
   for (const filePath of files) {
+    const importer = toPosix(path.relative(cwd, filePath));
     let source = "";
     try {
       source = fs.readFileSync(filePath, "utf8");
@@ -65,52 +216,86 @@ function runNodeFallback(pattern) {
       continue;
     }
 
-    const relativePath = toPosix(path.relative(process.cwd(), filePath));
-    const rows = source.split("\n");
-    for (let index = 0; index < rows.length; index += 1) {
-      const row = rows[index] ?? "";
-      if (!regex.test(row)) continue;
-      lines.push(`${relativePath}:${index + 1}:${row}`);
-    }
-  }
+    for (const specifier of extractModuleSpecifiers(filePath, source)) {
+      const target = resolveProjectModule(cwd, importer, specifier);
+      if (!target) continue;
 
-  return lines;
-}
-
-for (const check of checks) {
-  const run = spawnSync("rg", [check.pattern, "src", "tests"], {
-    encoding: "utf8",
-  });
-
-  if (run.error) {
-    if (run.error.code === "ENOENT") {
-      const fallbackMatches = runNodeFallback(check.pattern);
-      if (fallbackMatches.length > 0) {
-        console.error(`[planner:deprecated:guard] ${check.name} matches found (node fallback):`);
-        console.error(fallbackMatches.join("\n"));
-        process.exit(1);
+      if (isRemovedModuleTarget(target)) {
+        addViolation(violations, {
+          code: "removed-module-import",
+          file: importer,
+          specifier,
+          target,
+        });
       }
-      continue;
+
+      if (
+        importer.startsWith("src/")
+        && target === LEGACY_MODEL_MODULE
+        && !LEGACY_MODEL_ALLOWED_IMPORTERS.has(importer)
+      ) {
+        addViolation(violations, {
+          code: "legacy-model-importer",
+          file: importer,
+          specifier,
+          target,
+        });
+      }
+
+      if (
+        importer.startsWith("src/")
+        && !importer.startsWith("src/lib/planner/")
+        && target.startsWith("src/lib/planner/")
+      ) {
+        const allowedTargets = EXTERNAL_PLANNER_ALLOWED_IMPORTS.get(importer);
+        if (!allowedTargets?.has(target)) {
+          addViolation(violations, {
+            code: "external-planner-importer",
+            file: importer,
+            specifier,
+            target,
+          });
+        }
+      }
+
+      const allowedParkedImporters = PARKED_UI_ALLOWED_IMPORTERS.get(target);
+      if (
+        importer.startsWith("src/")
+        && allowedParkedImporters
+        && !allowedParkedImporters.has(importer)
+      ) {
+        addViolation(violations, {
+          code: "parked-ui-importer",
+          file: importer,
+          specifier,
+          target,
+        });
+      }
     }
-
-    console.error(`[planner:deprecated:guard] rg execution failed for ${check.name}`);
-    console.error(run.error.message);
-    process.exit(2);
   }
 
-  if (run.status === 0) {
-    console.error(`[planner:deprecated:guard] ${check.name} matches found:`);
-    const stdout = asTrimmedText(run.stdout);
-    if (stdout) console.error(stdout);
-    process.exit(1);
-  }
-
-  if (run.status === 1) continue;
-
-  console.error(`[planner:deprecated:guard] rg failed for ${check.name}`);
-  const stderr = asTrimmedText(run.stderr);
-  if (stderr) console.error(stderr);
-  process.exit(2);
+  return violations.sort((a, b) => {
+    const left = `${a.code}:${a.file}:${a.specifier ?? ""}`;
+    const right = `${b.code}:${b.file}:${b.specifier ?? ""}`;
+    return left.localeCompare(right);
+  });
 }
 
-console.log("[planner:deprecated:guard] deprecated planner module references not found");
+function run() {
+  const violations = findLegacyPlannerBoundaryViolations();
+  if (violations.length > 0) {
+    console.error("[planner:deprecated:guard] legacy planner boundary violations found:");
+    for (const violation of violations) {
+      const specifier = violation.specifier ? ` import=${violation.specifier}` : "";
+      console.error(`- ${violation.code}: ${violation.file}${specifier}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log("[planner:deprecated:guard] legacy planner compatibility boundary intact");
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  run();
+}

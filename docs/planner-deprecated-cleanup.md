@@ -1,6 +1,6 @@
 # Planner Deprecated Cleanup Inventory
 
-Last updated: 2026-06-28
+Last updated: 2026-07-10
 
 ## Removed in P2 Start
 
@@ -18,6 +18,19 @@ Last updated: 2026-06-28
 - Checks:
   - removed files do not reappear,
   - no `lib/planner/core`, `lib/planner/metrics`, or `lib/planner/rules` import references remain in `src`/`tests`.
+  - `legacyPlanModel.ts` direct imports stay limited to the current transition adapters:
+    - `src/lib/planner/plan.ts`
+    - `src/lib/planner/insuranceMetrics.ts`
+    - `src/lib/planner/retirementMetrics.ts`
+  - application source outside `src/lib/planner/**` cannot add a new import edge into the legacy planner tree. The current upper-bound allowlist contains:
+    - active compatibility consumers: `/api/planner/compute`, `plannerInput.ts`, and `BenefitsClient.tsx`
+    - parked transition consumers: `PlannerWizard` support components and `reportBuilder.ts`
+  - parked legacy UI entries do not gain new application source importers:
+    - `PlannerClient`: no production importer
+    - `PlannerWizard`: `PlannerClient` only
+    - `ReportClient`: no production importer
+
+허용 목록은 기존 경계를 보존하기 위한 상한선이다. migration으로 소비자가 제거되면 다시 추가하지 않으며, 신규 예외는 별도 Issue에서 public route/API와 telemetry 영향을 먼저 확인한다. guard는 static `import`/`export`/`require`와 정적 문자열 module specifier를 검사하며, 계산된 동적 specifier는 자동 판별 대상이 아니므로 사용하지 않는다.
 
 ## Legacy Planner Compute Boundary
 
