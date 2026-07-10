@@ -30,3 +30,23 @@ export async function recordCreateRunStageMetricsSafely(
     logger.error("[planning/runs] failed to record stage metrics", error);
   }
 }
+
+export async function recordCreateRunSuccessSideEffects(input: {
+  recordAudit: RecordCreateRunAudit;
+  recordStageMetrics: RecordCreateRunStageMetrics;
+  stageMetrics: Parameters<RecordCreateRunStageMetrics>[0];
+  recordId: string;
+  auditMessage?: string;
+  logger?: CreateRunSideEffectLogger;
+}): Promise<void> {
+  await recordCreateRunStageMetricsSafely(
+    input.recordStageMetrics,
+    input.stageMetrics,
+    input.logger,
+  );
+  recordCreateRunAuditSafely(input.recordAudit, {
+    result: "SUCCESS",
+    recordId: input.recordId,
+    message: input.auditMessage ?? "planning run created",
+  }, input.logger);
+}

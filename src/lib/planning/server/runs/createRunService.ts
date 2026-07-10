@@ -21,6 +21,7 @@ import {
 import { persistCreatePlanningRunRecord } from "./createRunPersistence";
 import {
   recordCreateRunAuditSafely,
+  recordCreateRunSuccessSideEffects,
   recordCreateRunStageMetricsSafely,
 } from "./createRunSideEffects";
 import {
@@ -281,19 +282,18 @@ export async function createPlanningRun(
       createRunRecord: deps.createRunRecord,
       recordInput,
     });
-    await recordStageMetricsSafely(deps, {
-      requestId: runRequestId,
-      runId: created.id,
-      profileId: profileRecord.id,
-      overallStatus: pipeline.overallStatus,
-      stages,
-      totalDurationMs: totalStageDurationMs(stages),
-    });
-
-    recordCreateAudit(deps, {
-      result: "SUCCESS",
+    await recordCreateRunSuccessSideEffects({
+      recordAudit: deps.recordAudit,
+      recordStageMetrics: deps.recordStageMetrics,
       recordId: created.id,
-      message: "planning run created",
+      stageMetrics: {
+        requestId: runRequestId,
+        runId: created.id,
+        profileId: profileRecord.id,
+        overallStatus: pipeline.overallStatus,
+        stages,
+        totalDurationMs: totalStageDurationMs(stages),
+      },
     });
 
     return buildCreatePlanningRunSuccessResult({

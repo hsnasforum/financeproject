@@ -87,6 +87,8 @@ describe("planning run create service boundary", () => {
     expect(serviceSource).toContain("assemblePlanningRunRecordInput");
     expect(serviceSource).toContain("persistCreatePlanningRunRecord");
     expect(serviceSource).toContain("buildCreatePlanningRunSuccessResult");
+    expect(serviceSource).toContain("recordCreateRunSuccessSideEffects");
+    expect(serviceSource).not.toContain("planning run created");
     expect(serviceSource).toContain("recordCreateRunAuditSafely");
     expect(serviceSource).toContain("recordCreateRunStageMetricsSafely");
     expect(serviceSource).toContain("export async function createPlanningRun");
@@ -99,6 +101,8 @@ describe("planning run create service boundary", () => {
     expect(persistenceSource).toContain("PLANNING_RUN_STORE_RAW_OUTPUTS");
     expect(serviceSource).not.toContain("[planning/runs] failed to record create audit");
     expect(serviceSource).not.toContain("[planning/runs] failed to record stage metrics");
+    expect(sideEffectsSource).toContain("export async function recordCreateRunSuccessSideEffects");
+    expect(sideEffectsSource).toContain("planning run created");
     expect(sideEffectsSource).toContain("[planning/runs] failed to record create audit");
     expect(sideEffectsSource).toContain("[planning/runs] failed to record stage metrics");
     expect(successResponseSource).toContain("buildCreatePlanningRunSuccessMeta");
