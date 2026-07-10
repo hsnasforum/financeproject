@@ -384,6 +384,35 @@ export function snapshotFilePath(kind) {
   return path.join(process.cwd(), ".data", `finlife_${kind}_snapshot.json`);
 }
 
+export function syncAttemptFilePath(kind) {
+  return path.join(process.cwd(), ".data", `finlife_${kind}_sync_attempt.json`);
+}
+
+export function writeSyncAttempt(kind, attempt) {
+  const filePath = syncAttemptFilePath(kind);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tmp = `${filePath}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(attempt), "utf-8");
+  fs.renameSync(tmp, filePath);
+}
+
+export function readSyncAttempt(kind) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(syncAttemptFilePath(kind), "utf-8"));
+    if (!parsed || typeof parsed !== "object") return null;
+    if (parsed.status !== "running" && parsed.status !== "failed") return null;
+    if (parsed.phase !== "db" && parsed.phase !== "snapshot") return null;
+    if (typeof parsed.startedAt !== "string" || typeof parsed.updatedAt !== "string") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSyncAttempt(kind) {
+  fs.rmSync(syncAttemptFilePath(kind), { force: true });
+}
+
 export function writeSnapshot(kind, payload) {
   const filePath = snapshotFilePath(kind);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });

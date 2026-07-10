@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { loadFinlifeSnapshot } from "@/lib/finlife/snapshot";
+import { loadFinlifeSnapshot, loadFinlifeSyncAttempt } from "@/lib/finlife/snapshot";
 import { shouldRunFinlifeSync } from "@/lib/finlife/syncPolicy";
 import { runFinlifeSnapshotSync } from "@/lib/finlife/syncRunner";
 import { samplebankProvider } from "@/lib/providers/samplebank";
@@ -196,6 +196,17 @@ function resolveFinlifeSnapshotTtlMs(): number {
 
 export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", refresh: boolean): Promise<void> {
   if (!refresh) return;
+
+  const incompleteAttempt = loadFinlifeSyncAttempt(kind);
+  if (incompleteAttempt) {
+    console.error("[unified] finlife snapshot refresh skipped for incomplete DB sync", {
+      kind,
+      status: incompleteAttempt.status,
+      phase: incompleteAttempt.phase,
+      errorCode: incompleteAttempt.errorCode ?? null,
+    });
+    return;
+  }
 
   const snapshot = loadFinlifeSnapshot(kind);
   const ttlMs = snapshot?.meta?.ttlMs ?? resolveFinlifeSnapshotTtlMs();

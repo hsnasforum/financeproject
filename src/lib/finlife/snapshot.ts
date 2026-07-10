@@ -27,10 +27,42 @@ export type FinlifeSnapshot = {
   items: NormalizedProduct[];
 };
 
+export type FinlifeSyncAttempt = {
+  status: "running" | "failed";
+  phase: "db" | "snapshot";
+  startedAt: string;
+  updatedAt: string;
+  errorCode?: "DB_SYNC_FAILED" | "SNAPSHOT_WRITE_FAILED";
+};
+
 const memoryCache = new Map<string, FinlifeSnapshot>();
 
 function snapshotPath(kind: FinlifeSnapshotKind): string {
   return path.join(process.cwd(), ".data", `finlife_${kind}_snapshot.json`);
+}
+
+function syncAttemptPath(kind: FinlifeSnapshotKind): string {
+  return path.join(process.cwd(), ".data", `finlife_${kind}_sync_attempt.json`);
+}
+
+export function loadFinlifeSyncAttempt(kind: FinlifeSnapshotKind): FinlifeSyncAttempt | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(syncAttemptPath(kind), "utf-8")) as Partial<FinlifeSyncAttempt>;
+    if (parsed.status !== "running" && parsed.status !== "failed") return null;
+    if (parsed.phase !== "db" && parsed.phase !== "snapshot") return null;
+    if (typeof parsed.startedAt !== "string" || typeof parsed.updatedAt !== "string") return null;
+    return {
+      status: parsed.status,
+      phase: parsed.phase,
+      startedAt: parsed.startedAt,
+      updatedAt: parsed.updatedAt,
+      ...(parsed.errorCode === "DB_SYNC_FAILED" || parsed.errorCode === "SNAPSHOT_WRITE_FAILED"
+        ? { errorCode: parsed.errorCode }
+        : {}),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function loadFinlifeSnapshot(kind: FinlifeSnapshotKind): FinlifeSnapshot | null {

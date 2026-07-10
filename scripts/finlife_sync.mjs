@@ -10,6 +10,8 @@ import {
   mergeProducts,
   mergeAcrossGroups,
   writeSnapshot,
+  writeSyncAttempt,
+  clearSyncAttempt,
   parseStatusFromError,
 } from "./finlife_cli_common.mjs";
 import {
@@ -28,6 +30,16 @@ const KIND_PRIORITY = new Map(PRIORITY_KIND_ORDER.map((kind, index) => [kind, in
 const DEFAULT_GROUPS_BY_KIND = {
   pension: "050000,060000",
 };
+
+export class FinlifeSyncPersistenceError extends Error {
+  constructor(kind, phase, cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    super(`FINLIFE ${kind} persistence failed (phase=${phase}): ${detail}`, { cause });
+    this.name = "FinlifeSyncPersistenceError";
+    this.kind = kind;
+    this.phase = phase;
+  }
+}
 
 function parseArgs(argv) {
   const out = {
@@ -176,6 +188,72 @@ async function syncFinlifeProductsToDb(kind, items, options = {}) {
   }
 
   return { providersUpserted, productsUpserted, optionsWritten, skippedCrossKindDuplicates, replacedCrossKindDuplicates };
+}
+
+export async function persistFinlifeSyncKind(input, dependencies = {}) {
+  const syncProductsToDb = dependencies.syncProductsToDb ?? syncFinlifeProductsToDb;
+  const saveSnapshot = dependencies.writeSnapshot ?? writeSnapshot;
+  const saveAttempt = dependencies.writeSyncAttempt ?? writeSyncAttempt;
+  const removeAttempt = dependencies.clearSyncAttempt ?? clearSyncAttempt;
+  const nowIso = dependencies.nowIso ?? (() => new Date().toISOString());
+  const startedAt = nowIso();
+  let dbSync;
+
+  const recordAttempt = (status, phase, errorCode) => {
+    saveAttempt(input.kind, {
+      status,
+      phase,
+      startedAt,
+      updatedAt: nowIso(),
+      ...(errorCode ? { errorCode } : {}),
+    });
+  };
+  const recordFailure = (phase, errorCode) => {
+    try {
+      recordAttempt("failed", phase, errorCode);
+    } catch {
+      return;
+    }
+  };
+
+  try {
+    recordAttempt("running", "db");
+  } catch (error) {
+    throw new FinlifeSyncPersistenceError(input.kind, "attempt", error);
+  }
+
+  try {
+    dbSync = await syncProductsToDb(input.kind, input.snapshot.items, {
+      priorityByKind: input.priorityByKind ?? KIND_PRIORITY,
+    });
+  } catch (error) {
+    recordFailure("db", "DB_SYNC_FAILED");
+    throw new FinlifeSyncPersistenceError(input.kind, "db", error);
+  }
+
+  try {
+    recordAttempt("running", "snapshot");
+  } catch (error) {
+    throw new FinlifeSyncPersistenceError(input.kind, "attempt", error);
+  }
+
+  try {
+    saveSnapshot(input.kind, input.snapshot);
+  } catch (error) {
+    recordFailure("snapshot", "SNAPSHOT_WRITE_FAILED");
+    throw new FinlifeSyncPersistenceError(input.kind, "snapshot", error);
+  }
+
+  try {
+    removeAttempt(input.kind);
+  } catch (error) {
+    throw new FinlifeSyncPersistenceError(input.kind, "attempt", error);
+  }
+
+  return {
+    dbSync,
+    snapshotWritten: true,
+  };
 }
 
 function normalizeDumpProducts(products) {
@@ -406,12 +484,16 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
       note: replay ? `fromFile replay (schemaVersion=${replay.schemaVersion})` : (groups.length <= 1 ? "업권 범위가 좁을 수 있음. pnpm finlife:probe 권장" : undefined),
     };
 
-    writeSnapshot(kind, { meta, items: merged.items });
     if (inspect) {
       const dumped = writeInspectDump(kind, merged.items, { gzip, out }, { groupsScanned: replay ? [] : groups });
       console.log(`[finlife:sync] inspect dump saved: ${path.relative(process.cwd(), dumped.filePath)}`);
     }
-    const dbSync = await syncFinlifeProductsToDb(kind, merged.items, { priorityByKind: KIND_PRIORITY });
+    const persisted = await persistFinlifeSyncKind({
+      kind,
+      snapshot: { meta, items: merged.items },
+      priorityByKind: KIND_PRIORITY,
+    });
+    const dbSync = persisted.dbSync;
 
     console.log(`[finlife:sync] ${kind} done`);
     if (replay) console.log(`- replayFile: ${path.relative(process.cwd(), replay.abs)}`);

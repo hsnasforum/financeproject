@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { loadFinlifeSnapshot } from "@/lib/finlife/snapshot";
+import { loadFinlifeSnapshot, loadFinlifeSyncAttempt } from "@/lib/finlife/snapshot";
 import { DATAGO_DEFAULT_TTL_MS, evaluateFreshness } from "@/lib/sources/snapshot";
 import { type SourceStatusRow } from "@/lib/sources/types";
 
@@ -93,16 +93,26 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
 
   for (const kind of ["deposit", "saving"] as const) {
     const snapshot = loadFinlifeSnapshot(kind);
+    const incompleteAttempt = loadFinlifeSyncAttempt(kind);
     const ttlMs = snapshot?.meta?.ttlMs ?? Number(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS ?? "43200") * 1000;
     const fresh = evaluateFreshness(snapshot?.meta?.generatedAt ?? null, ttlMs, nowMs);
     statuses.push({
       sourceId: "finlife",
       kind,
       lastSyncedAt: fresh.lastSyncedAt,
+      lastAttemptAt: incompleteAttempt?.updatedAt,
       ttlMs,
       ageMs: fresh.ageMs,
-      isFresh: fresh.isFresh,
+      isFresh: incompleteAttempt ? false : fresh.isFresh,
       counts: snapshot?.items?.length ?? 0,
+      lastError: incompleteAttempt
+        ? {
+            at: incompleteAttempt.updatedAt,
+            message: incompleteAttempt.status === "failed"
+              ? "FINLIFE 동기화가 완료되지 않았습니다. 이전 데이터는 유지되며 동기화를 다시 실행해주세요."
+              : "FINLIFE 동기화가 진행 중이거나 완료되지 않았습니다. 잠시 후 상태를 다시 확인해주세요.",
+          }
+        : undefined,
     });
   }
 

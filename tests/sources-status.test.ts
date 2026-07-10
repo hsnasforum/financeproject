@@ -10,18 +10,25 @@ const prismaMock = vi.hoisted(() => ({
     count: vi.fn(),
   },
 }));
+const finlifeMock = vi.hoisted(() => ({
+  loadFinlifeSnapshot: vi.fn(),
+  loadFinlifeSyncAttempt: vi.fn(),
+}));
 
 vi.mock("../src/lib/db/prisma", () => ({
   prisma: prismaMock,
 }));
 
 vi.mock("../src/lib/finlife/snapshot", () => ({
-  loadFinlifeSnapshot: vi.fn(() => null),
+  loadFinlifeSnapshot: finlifeMock.loadFinlifeSnapshot,
+  loadFinlifeSyncAttempt: finlifeMock.loadFinlifeSyncAttempt,
 }));
 
 describe("getUnifiedSourceStatuses", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    finlifeMock.loadFinlifeSnapshot.mockReturnValue(null);
+    finlifeMock.loadFinlifeSyncAttempt.mockReturnValue(null);
   });
 
   it("keeps source status response usable when DATAGO storage is not initialized", async () => {
@@ -45,5 +52,42 @@ describe("getUnifiedSourceStatuses", () => {
     expect(datago?.lastAttemptAt).toEqual(expect.any(String));
     expect(prismaMock.externalSourceSnapshot.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.externalProduct.count).not.toHaveBeenCalled();
+  });
+
+  it("marks FINLIFE stale when an incomplete DB sync attempt exists", async () => {
+    const now = new Date().toISOString();
+    finlifeMock.loadFinlifeSnapshot.mockImplementation((kind: string) => kind === "deposit"
+      ? {
+          meta: {
+            generatedAt: now,
+            ttlMs: 43_200_000,
+          },
+          items: [{ fin_prdt_cd: "FIN-001" }],
+        }
+      : null);
+    finlifeMock.loadFinlifeSyncAttempt.mockImplementation((kind: string) => kind === "deposit"
+      ? {
+          status: "failed",
+          phase: "snapshot",
+          startedAt: now,
+          updatedAt: now,
+          errorCode: "SNAPSHOT_WRITE_FAILED",
+        }
+      : null);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+
+    const rows = await getUnifiedSourceStatuses();
+    const finlife = rows.find((row) => row.sourceId === "finlife" && row.kind === "deposit");
+
+    expect(finlife).toMatchObject({
+      lastSyncedAt: now,
+      lastAttemptAt: now,
+      isFresh: false,
+      counts: 1,
+      lastError: {
+        at: now,
+        message: "FINLIFE 동기화가 완료되지 않았습니다. 이전 데이터는 유지되며 동기화를 다시 실행해주세요.",
+      },
+    });
   });
 });
