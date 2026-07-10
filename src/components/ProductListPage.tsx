@@ -4,17 +4,12 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
-import { applyFilters, collectFilterOptions } from "@/lib/finlife/filters";
 import { pruneOpen, toggleOpen } from "@/lib/finlife/groupOpenState";
 import { type RatePreference } from "@/lib/finlife/uiSort";
 import {
-  deriveTotals,
-  flattenOptionRows,
   formatOptionBonus,
   formatOptionRate,
   getOptionRates,
-  groupOptionRowsByProduct,
-  sortOptionRows,
   type OptionRow,
   type OptionSortKey,
 } from "@/lib/finlife/optionView";
@@ -30,12 +25,8 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
-import {
-  ensureProductReasons,
-  filterProductsForList,
-  sortProductsForList,
-  type ProductListSortKey,
-} from "@/lib/products/listUtils";
+import { type ProductListSortKey } from "@/lib/products/listUtils";
+import { buildProductListViewModel } from "@/lib/products/productListViewModel";
 import {
   buildFinlifeRequestParams,
   buildProductExplorerApiUrl,
@@ -417,60 +408,53 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     viewMode,
   ]);
 
-  const filterOptions = useMemo(() => collectFilterOptions(payload?.data ?? [], kind), [payload?.data, kind]);
-
   const shelfFavoriteIds = useMemo(() => shelf?.favorites ?? new Set<string>(), [shelf]);
   const shelfCompareSet = useMemo(() => new Set(shelf?.compareBasket ?? []), [shelf]);
 
-  const filteredProducts = useMemo(() => {
-    const products = (payload?.data ?? []).filter((item) => {
-      if (!selectedFinCoNo) return true;
-      return item.fin_co_no === selectedFinCoNo;
-    });
-
-    return applyFilters(
-      products,
-      {
-        selectedTerms,
-        amountWon: parseAmountInput(amountInput),
-        selectedProductTypes,
-        selectedBenefits,
-      },
+  const productListViewModel = useMemo(
+    () => buildProductListViewModel({
+      payload,
       kind,
-    );
-  }, [amountInput, kind, payload?.data, selectedFinCoNo, selectedBenefits, selectedProductTypes, selectedTerms]);
-
-  const filteredByQuery = useMemo(
-    () =>
-      filterProductsForList(filteredProducts, {
-        query: searchQuery,
-        onlyFavorites,
-        favoriteIds: shelfFavoriteIds,
-      }),
-    [filteredProducts, onlyFavorites, searchQuery, shelfFavoriteIds],
+      selectedFinCoNo,
+      selectedTerms,
+      amountInput,
+      selectedProductTypes,
+      selectedBenefits,
+      searchQuery,
+      onlyFavorites,
+      favoriteIds: shelfFavoriteIds,
+      sortKey,
+      ratePreference,
+      optionSortKey,
+      optionGroup,
+      viewMode,
+    }),
+    [
+      amountInput,
+      kind,
+      onlyFavorites,
+      optionGroup,
+      optionSortKey,
+      payload,
+      ratePreference,
+      searchQuery,
+      selectedBenefits,
+      selectedFinCoNo,
+      selectedProductTypes,
+      selectedTerms,
+      shelfFavoriteIds,
+      sortKey,
+      viewMode,
+    ],
   );
-
-  const filteredSorted = useMemo(
-    () => sortProductsForList(filteredByQuery, sortKey, ratePreference),
-    [filteredByQuery, ratePreference, sortKey],
-  );
-
-  const enrichedProducts = useMemo(() => ensureProductReasons(filteredSorted), [filteredSorted]);
-
-  const optionRows = useMemo(() => {
-    const rows = flattenOptionRows(enrichedProducts, selectedTerms);
-    return sortOptionRows(rows, optionSortKey);
-  }, [enrichedProducts, optionSortKey, selectedTerms]);
-
-  const optionGroups = useMemo(() => {
-    if (!optionGroup) return [];
-    return groupOptionRowsByProduct(optionRows, "best_desc");
-  }, [optionGroup, optionRows]);
-
-  const validOptionGroupKeys = useMemo(
-    () => optionGroups.map((group) => group.product.fin_prdt_cd ?? group.key),
-    [optionGroups],
-  );
+  const {
+    filterOptions,
+    enrichedProducts,
+    optionRows,
+    optionGroups,
+    validOptionGroupKeys,
+    totals,
+  } = productListViewModel;
 
   useEffect(() => {
     if (!optionGroup) return;
@@ -479,15 +463,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     }, 0);
     return () => window.clearTimeout(openGroupsTimer);
   }, [optionGroup, validOptionGroupKeys]);
-
-  const totals = useMemo(() => {
-    if (viewMode === "product") {
-      const shownOptions = enrichedProducts.reduce((sum, item) => sum + item.options.length, 0);
-      return deriveTotals(payload, enrichedProducts.length, shownOptions);
-    }
-    const uniqueProducts = new Set(optionRows.map((row) => row.product.fin_prdt_cd)).size;
-    return deriveTotals(payload, uniqueProducts, optionRows.length);
-  }, [enrichedProducts, optionRows, payload, viewMode]);
 
   const hasNext = payload?.meta.hasNext ?? ((payload?.meta.pageNo ?? pageNo) >= 1 && (payload?.data.length ?? 0) > 0);
 
