@@ -489,10 +489,9 @@ export async function setDefaultProfile(profileId: string): Promise<string> {
   return safeProfileId;
 }
 
-export async function getProfile(id: string): Promise<PlanningProfileRecord | null> {
-  assertServerOnly();
-  await ensureStartupMigrations();
-
+async function readProfileRecordAfterStartupMigrations(
+  id: string,
+): Promise<PlanningProfileRecord | null> {
   const safeId = sanitizeRecordId(id);
   const partitionPath = resolveProfileRecordPath(safeId);
   const fromPartition = await readProfileFile(partitionPath);
@@ -504,6 +503,12 @@ export async function getProfile(id: string): Promise<PlanningProfileRecord | nu
 
   await migrateLegacyProfileRecord(fromLegacy);
   return fromLegacy;
+}
+
+export async function getProfile(id: string): Promise<PlanningProfileRecord | null> {
+  assertServerOnly();
+  await ensureStartupMigrations();
+  return readProfileRecordAfterStartupMigrations(id);
 }
 
 export async function createProfile(input: CreateProfileInput): Promise<PlanningProfileRecord> {
@@ -557,7 +562,7 @@ export async function updateProfile(id: string, patch: ProfilePatch): Promise<Pl
   assertServerOnly();
   await ensureStartupMigrations();
 
-  const existing = await getProfile(id);
+  const existing = await readProfileRecordAfterStartupMigrations(id);
   if (!existing) return null;
 
   const canonicalProfile = patch.profile !== undefined
