@@ -34,6 +34,7 @@ describe("planning run create service boundary", () => {
     const assemblerPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunRecordAssembler.ts");
     const persistencePath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunPersistence.ts");
     const sideEffectsPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunSideEffects.ts");
+    const successResponsePath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunSuccessResponse.ts");
 
     expect(fs.existsSync(servicePath)).toBe(true);
     expect(fs.existsSync(parserPath)).toBe(true);
@@ -43,11 +44,13 @@ describe("planning run create service boundary", () => {
     expect(fs.existsSync(assemblerPath)).toBe(true);
     expect(fs.existsSync(persistencePath)).toBe(true);
     expect(fs.existsSync(sideEffectsPath)).toBe(true);
+    expect(fs.existsSync(successResponsePath)).toBe(true);
     const serviceSource = fs.readFileSync(servicePath, "utf-8");
     const parserSource = fs.readFileSync(parserPath, "utf-8");
     const inputContextSource = fs.readFileSync(inputContextPath, "utf-8");
     const persistenceSource = fs.readFileSync(persistencePath, "utf-8");
     const sideEffectsSource = fs.readFileSync(sideEffectsPath, "utf-8");
+    const successResponseSource = fs.readFileSync(successResponsePath, "utf-8");
 
     expect(runsRoute).toContain("handleCreatePlanningRunPost");
     expect(runsRoute).not.toContain("runStagePipeline");
@@ -74,6 +77,7 @@ describe("planning run create service boundary", () => {
     expect(serviceSource).toContain("buildPlanningStagePlan");
     expect(serviceSource).toContain("assemblePlanningRunRecordInput");
     expect(serviceSource).toContain("persistCreatePlanningRunRecord");
+    expect(serviceSource).toContain("buildCreatePlanningRunSuccessResult");
     expect(serviceSource).toContain("recordCreateRunAuditSafely");
     expect(serviceSource).toContain("recordCreateRunStageMetricsSafely");
     expect(serviceSource).toContain("export async function createPlanningRun");
@@ -87,5 +91,7 @@ describe("planning run create service boundary", () => {
     expect(serviceSource).not.toContain("[planning/runs] failed to record stage metrics");
     expect(sideEffectsSource).toContain("[planning/runs] failed to record create audit");
     expect(sideEffectsSource).toContain("[planning/runs] failed to record stage metrics");
+    expect(successResponseSource).toContain("buildCreatePlanningRunSuccessMeta");
+    expect(successResponseSource).toContain("export function buildCreatePlanningRunSuccessResult");
   });
 });

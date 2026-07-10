@@ -8,7 +8,6 @@ import {
   getCurrentUserRunProfileForRoute,
   recordCurrentUserRunCreateAudit,
   recordCurrentUserRunStageMetrics,
-  type CurrentUserRunRecord,
   type CurrentUserRunStageResult,
 } from "./routeService";
 import { runStagePipeline } from "../../v2/stagePipeline";
@@ -20,7 +19,6 @@ import {
 import { prepareCreatePlanningRunInputContext } from "./createRunInputContext";
 import {
   assemblePlanningRunRecordInput,
-  buildCreatePlanningRunSuccessMeta,
   totalStageDurationMs,
 } from "./createRunRecordAssembler";
 import { persistCreatePlanningRunRecord } from "./createRunPersistence";
@@ -28,6 +26,10 @@ import {
   recordCreateRunAuditSafely,
   recordCreateRunStageMetricsSafely,
 } from "./createRunSideEffects";
+import {
+  buildCreatePlanningRunSuccessResult,
+  type CreatePlanningRunSuccessResult,
+} from "./createRunSuccessResponse";
 import {
   buildPlanningStagePlan,
   createPlanningStagePlanState,
@@ -47,14 +49,7 @@ export type CreatePlanningRunContext = {
 };
 
 export type CreatePlanningRunResult =
-  | {
-    ok: true;
-    status: number;
-    payload: {
-      meta: Record<string, unknown>;
-      data: CurrentUserRunRecord;
-    };
-  }
+  | CreatePlanningRunSuccessResult
   | {
     ok: false;
     code: string;
@@ -323,21 +318,15 @@ export async function createPlanningRun(
       message: "planning run created",
     });
 
-    return {
-      ok: true,
-      status: 201,
-      payload: {
-        meta: buildCreatePlanningRunSuccessMeta({
-          generatedAt: deps.now().toISOString(),
-          snapshotMeta,
-          profileNormalization,
-          healthSummary: health.summary,
-          overallStatus: pipeline.overallStatus,
-          stages,
-        }),
-        data: created,
-      },
-    };
+    return buildCreatePlanningRunSuccessResult({
+      generatedAt: deps.now().toISOString(),
+      snapshotMeta,
+      profileNormalization,
+      healthSummary: health.summary,
+      overallStatus: pipeline.overallStatus,
+      stages,
+      data: created,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 저장에 실패했습니다.";
     if (stages.length > 0) {
