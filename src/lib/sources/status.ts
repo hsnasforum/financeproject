@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { readFinlifeCompletionEvidence } from "@/lib/finlife/completionEvidence";
 import { loadFinlifeSnapshot, loadFinlifeSyncAttempt } from "@/lib/finlife/snapshot";
 import { DATAGO_DEFAULT_TTL_MS, evaluateFreshness } from "@/lib/sources/snapshot";
 import { type SourceStatusRow } from "@/lib/sources/types";
@@ -15,19 +16,6 @@ type LastRunMeta = {
   resultCode?: string;
   resultMsg?: string;
 };
-
-type FinlifeEvidenceState = "db-complete" | "complete";
-
-type FinlifeEvidenceLookup =
-  | { status: "missing" }
-  | {
-      status: "found";
-      state: FinlifeEvidenceState;
-      lastSyncedAt: Date | null;
-      ttlMs: number;
-      meta: Record<string, unknown>;
-    }
-  | { status: "error"; error: unknown };
 
 function normalizeLastRun(meta: Record<string, unknown> | null): LastRunMeta | undefined {
   const fromMeta = meta?.lastRun;
@@ -58,7 +46,7 @@ function normalizeLastRun(meta: Record<string, unknown> | null): LastRunMeta | u
   };
 }
 
-function canTreatFinlifeEvidenceAsFresh(state: FinlifeEvidenceState, meta: Record<string, unknown>): boolean {
+function canTreatFinlifeEvidenceAsFresh(state: "db-complete" | "complete", meta: Record<string, unknown>): boolean {
   if (state !== "complete") return false;
   if (meta.source !== "finlife" || meta.fallbackUsed !== false) return false;
   if (meta.truncatedByHardCap !== false) return false;
@@ -70,53 +58,6 @@ function canTreatFinlifeSnapshotAsFresh(meta: Record<string, unknown> | null): b
   if (meta.source !== "finlife" || meta.fallbackUsed === true) return false;
   if (meta.truncatedByHardCap === true) return false;
   return typeof meta.completionRate === "number" && meta.completionRate >= 0.95;
-}
-
-function isMissingFinlifeEvidenceStorage(error: unknown): boolean {
-  const raw = error instanceof Error ? error.message : String(error ?? "");
-  return /does not exist|no such table|relation .+ does not exist|P2021|not initialized/i.test(raw);
-}
-
-async function getFinlifeCompletionEvidence(kind: "deposit" | "saving"): Promise<FinlifeEvidenceLookup> {
-  try {
-    const row = await prisma.externalSourceSnapshot.findUnique({
-      where: {
-        sourceId_kind: {
-          sourceId: "finlife",
-          kind,
-        },
-      },
-    });
-    if (!row) return { status: "missing" };
-
-    const meta = (row.metaJson as Record<string, unknown> | null) ?? null;
-    const state = meta?.completionState;
-    if (meta?.evidenceType !== "finlife-prisma-product-sync"
-      || (state !== "db-complete" && state !== "complete")) {
-      return { status: "missing" };
-    }
-
-    const rawLastSyncedAt = row.lastSyncedAt instanceof Date
-      ? row.lastSyncedAt
-      : new Date(row.lastSyncedAt);
-    const lastSyncedAt = Number.isFinite(rawLastSyncedAt.getTime()) && rawLastSyncedAt.getTime() > 0
-      ? rawLastSyncedAt
-      : null;
-    return {
-      status: "found",
-      state,
-      lastSyncedAt,
-      ttlMs: row.ttlMs,
-      meta,
-    };
-  } catch (error) {
-    if (isMissingFinlifeEvidenceStorage(error)) return { status: "missing" };
-    console.error("[sources/status] finlife completion evidence unavailable", {
-      kind,
-      message: error instanceof Error ? error.message : "unknown",
-    });
-    return { status: "error", error };
-  }
 }
 
 function resolveDataSourceStatusErrorMessage(error: unknown): string {
@@ -168,7 +109,13 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
   for (const kind of ["deposit", "saving"] as const) {
     const snapshot = loadFinlifeSnapshot(kind);
     const incompleteAttempt = loadFinlifeSyncAttempt(kind);
-    const evidence = await getFinlifeCompletionEvidence(kind);
+    const evidence = await readFinlifeCompletionEvidence(kind);
+    if (evidence.status === "error") {
+      console.error("[sources/status] finlife completion evidence unavailable", {
+        kind,
+        message: evidence.error instanceof Error ? evidence.error.message : "unknown",
+      });
+    }
     const foundEvidence = evidence.status === "found" ? evidence : null;
     const ttlMs = foundEvidence?.ttlMs
       ?? snapshot?.meta?.ttlMs
@@ -186,6 +133,10 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
       ? foundEvidence.meta.lastAttemptAt
       : null;
     const lastRun = foundEvidence ? normalizeLastRun(foundEvidence.meta) : undefined;
+    const completedEvidenceCount = foundEvidence?.state === "complete"
+      && typeof lastRun?.fetchedItems === "number"
+      ? Math.max(0, Math.trunc(lastRun.fetchedItems))
+      : null;
     statuses.push({
       sourceId: "finlife",
       kind,
@@ -196,7 +147,7 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
       ttlMs,
       ageMs: fresh.ageMs,
       isFresh: incompleteAttempt ? false : evidenceCanBeFresh && fresh.isFresh,
-      counts: snapshot?.items?.length ?? 0,
+      counts: completedEvidenceCount ?? snapshot?.items?.length ?? 0,
       lastRun,
       lastError: incompleteAttempt
         ? {

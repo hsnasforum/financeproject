@@ -166,7 +166,7 @@ describe("getUnifiedSourceStatuses", () => {
     expect(finlife?.lastError).toBeUndefined();
   });
 
-  it("uses complete FINLIFE evidence for freshness while preserving snapshot counts", async () => {
+  it("uses complete FINLIFE evidence for freshness and the completed sync count", async () => {
     const completedAt = new Date().toISOString();
     const startedAt = new Date(Date.now() - 1_000).toISOString();
     finlifeMock.loadFinlifeSnapshot.mockImplementation((kind: string) => kind === "deposit"
@@ -211,7 +211,7 @@ describe("getUnifiedSourceStatuses", () => {
       lastSyncedAt: completedAt,
       lastAttemptAt: completedAt,
       isFresh: true,
-      counts: 2,
+      counts: 7,
       lastRun: {
         startedAt,
         finishedAt: completedAt,

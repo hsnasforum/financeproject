@@ -9,8 +9,8 @@ FINLIFE 동기화에는 파일 snapshot과 Prisma 상품 DB라는 두 저장 경
 | `runFinlifeSnapshotSync` | `deposit`, `saving` | `.data/finlife_<kind>_snapshot.json` | runtime snapshot만 갱신합니다. Prisma `Product`는 갱신하지 않으므로 이 성공만으로 unified 상품 query가 최신이라고 판단하지 않습니다. |
 | `pnpm finlife:sync` | `deposit`, `saving`, `pension`, `mortgage-loan`, `rent-house-loan`, `credit-loan` | sync-attempt marker, Prisma `Provider`/`Product`/`ProductOption`, DB 완료 증거, 이후 file snapshot | kind별 DB 반영과 snapshot 교체가 모두 끝나야 해당 kind를 완료로 봅니다. 여러 kind 전체는 하나의 transaction이 아닙니다. |
 | `pnpm finlife:sync:if-stale` | 위 6개 kind | stale이거나 failed marker가 남은 kind에 대해 `finlife:sync` 실행 | failed marker는 fresh snapshot보다 우선해 재시도합니다. running marker는 정상 동기화와 겹치지 않도록 skip합니다. |
-| unified FINLIFE query | `deposit`, `saving` | Prisma `Product` read | 사용자 상품 결과의 저장소입니다. `onlyNew` 기준 시각은 현재 file snapshot을 사용하므로 ownership 정렬이 후속 과제로 남아 있습니다. |
-| unified source status | `deposit`, `saving` | DB 완료 증거, file snapshot count, sync-attempt marker read | `complete` 증거만 freshness 기준으로 쓰고 marker를 우선합니다. 증거가 없는 기존 설치는 file snapshot 기준으로 안전하게 fallback합니다. |
+| unified FINLIFE query | `deposit`, `saving` | Prisma `Product` read, DB 완료 증거 read | 사용자 상품 결과의 저장소입니다. `onlyNew`는 완료된 DB sync 증거의 snapshot 수집 시각을 사용하고, 증거가 없는 기존 설치만 file snapshot으로 fallback합니다. |
+| unified source status | `deposit`, `saving` | DB 완료 증거, file snapshot fallback, sync-attempt marker read | `complete` 증거의 freshness와 fetched item count를 사용하고 marker를 우선합니다. 증거가 없는 기존 설치는 file snapshot 기준으로 안전하게 fallback합니다. |
 
 ## kind별 persistence 계약
 
@@ -26,13 +26,13 @@ FINLIFE 동기화에는 파일 snapshot과 Prisma 상품 DB라는 두 저장 경
 - 앞선 kind가 완료된 뒤 다음 kind가 실패할 수 있습니다. `all` 실행은 kind 전체에 대한 all-or-nothing transaction이 아닙니다.
 - hard cap으로 수집이 잘리면 기존 `completionRate`와 `truncatedByHardCap` 근거를 유지합니다. completion이 기준보다 낮은 snapshot은 다음 `if-stale` 실행에서 다시 수집 대상이 됩니다.
 
-snapshot의 `generatedAt`은 upstream 수집 완료 시각이며 DB commit 시각이 아닙니다. 현재 unified `onlyNew`는 이 시각을 유지하므로 public query semantics는 바뀌지 않습니다.
+snapshot의 `generatedAt`은 upstream 수집 완료 시각이며 DB commit 시각이 아닙니다. unified `onlyNew`는 `completionState=complete` 증거에 보존된 `snapshotGeneratedAt`을 우선해 실제 Prisma `Product` 반영과 같은 실행을 기준으로 삼습니다. 완료 증거가 없거나 구형 증거에 해당 시각이 없으면 기존 file snapshot 시각으로 fallback합니다.
 
 DB 완료 증거는 `dbCompletedAt`, `snapshotCompletedAt`, `lastRun.startedAt`/`finishedAt`, fetched/upserted 건수, live/replay provenance를 내부 `metaJson`에 보존합니다. replay file은 전체 경로가 아닌 basename만 기록합니다.
 
-unified source status는 `completionState=complete`인 증거의 `lastSyncedAt`을 사용합니다. `db-complete`, mock/fallback, 낮은 completion, hard-cap truncation, incomplete marker는 fresh로 표시하지 않습니다. `Product` sync는 현재 사라진 upstream 상품을 prune하지 않으므로 status count는 누적 DB inventory 대신 file snapshot item 수를 유지합니다. 증거가 아직 없거나 증거 테이블이 없는 기존 설치는 file snapshot 값으로 fallback하되 같은 provenance/completion 기준을 적용합니다. 그 밖의 DB 상태 확인 실패는 해당 FINLIFE row만 `isFresh=false`와 안전한 안내를 반환합니다. 상품 목록의 `기준 확인` 시각도 source status 완료 시각을 우선합니다. public 응답 shape와 cache 동작은 유지됩니다.
+unified source status는 `completionState=complete`인 증거의 `lastSyncedAt`과 `lastRun.fetchedItems`를 사용합니다. `db-complete`, mock/fallback, 낮은 completion, hard-cap truncation, incomplete marker는 fresh로 표시하지 않습니다. `Product` sync는 현재 사라진 upstream 상품을 prune하지 않으므로 status count는 누적 DB inventory가 아니라 마지막 완료 sync가 수집한 item 수입니다. 증거가 아직 없거나 증거 테이블이 없는 기존 설치는 file snapshot 값으로 fallback하되 같은 provenance/completion 기준을 적용합니다. 그 밖의 DB 상태 확인 실패는 해당 FINLIFE row만 `isFresh=false`와 안전한 안내를 반환합니다. 상품 목록의 `기준 확인` 시각도 source status 완료 시각을 우선합니다. public 응답 shape와 cache 동작은 유지됩니다.
 
-unified `onlyNew`는 아직 file snapshot `generatedAt`을 사용하므로 DB 완료 증거로 기준을 옮기는 작업은 별도 단계입니다. 그 전까지 runtime snapshot refresh 성공을 unified DB refresh 성공으로 해석하지 않습니다.
+runtime snapshot refresh 성공은 여전히 unified DB refresh 성공이 아닙니다. 다만 완료 증거가 있는 설치에서는 이후 snapshot-only refresh가 status count와 `onlyNew` 기준을 전진시키지 않습니다.
 
 ## 동기화 진입점
 

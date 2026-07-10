@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { readFinlifeCompletionEvidence } from "@/lib/finlife/completionEvidence";
 import { loadFinlifeSnapshot, loadFinlifeSyncAttempt } from "@/lib/finlife/snapshot";
 import { shouldRunFinlifeSync } from "@/lib/finlife/syncPolicy";
 import { runFinlifeSnapshotSync } from "@/lib/finlife/syncRunner";
@@ -253,6 +254,30 @@ async function getOnlyNewSinceBySource(kind: "deposit" | "saving", sourceIds: st
   return out;
 }
 
+function toValidDate(value: unknown): Date | null {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+async function resolveFinlifeOnlyNewThreshold(
+  kind: "deposit" | "saving",
+  snapshotGeneratedAt: unknown,
+): Promise<Date | null> {
+  const evidence = await readFinlifeCompletionEvidence(kind);
+  if (evidence.status === "found" && evidence.state === "complete") {
+    const completedSnapshotGeneratedAt = toValidDate(evidence.meta.snapshotGeneratedAt);
+    if (completedSnapshotGeneratedAt) return completedSnapshotGeneratedAt;
+  }
+  if (evidence.status === "error") {
+    console.error("[unified] finlife completion evidence unavailable", {
+      kind,
+      message: evidence.error instanceof Error ? evidence.error.message : "unknown",
+    });
+  }
+  return toValidDate(snapshotGeneratedAt);
+}
+
 function pageResult(input: {
   sourceId: UnifiedSourceId;
   items: UnifiedProductView[];
@@ -283,8 +308,9 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
   }
 
   const snapshot = loadFinlifeSnapshot(input.kind);
-  const snapshotGeneratedAt = snapshot?.meta?.generatedAt ? new Date(snapshot.meta.generatedAt) : null;
-  const hasOnlyNewThreshold = Boolean(input.onlyNew && snapshotGeneratedAt && Number.isFinite(snapshotGeneratedAt.getTime()));
+  const onlyNewThreshold = input.onlyNew
+    ? await resolveFinlifeOnlyNewThreshold(input.kind, snapshot?.meta?.generatedAt)
+    : null;
 
   const changedSinceDate = input.changedSince ? new Date(input.changedSince) : null;
   const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
@@ -295,7 +321,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
     where: {
       kind: input.kind,
       ...qFilter,
-      ...(hasOnlyNewThreshold && snapshotGeneratedAt ? { createdAt: { gte: snapshotGeneratedAt } } : {}),
+      ...(onlyNewThreshold ? { createdAt: { gte: onlyNewThreshold } } : {}),
       ...(hasChangedSince && changedSinceDate
         ? {
             OR: [
