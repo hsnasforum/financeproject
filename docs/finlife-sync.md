@@ -28,6 +28,13 @@ snapshot의 `generatedAt`은 upstream 수집 완료 시각이며 DB commit 시�
 
 `runFinlifeSnapshotSync`, unified query, source status를 같은 DB-backed 완료 증거로 완전히 정렬하는 작업은 별도 단계입니다. 그 전까지 runtime snapshot refresh 성공을 unified DB refresh 성공으로 해석하지 않습니다.
 
+## 동기화 진입점
+
+- 운영 FINLIFE sync의 단일 진입점은 package script `pnpm finlife:sync`와 `pnpm finlife:sync:if-stale`입니다.
+- 두 package script는 각각 `scripts/finlife_sync.mjs`, `scripts/finlife_sync_if_stale.mjs`를 실행합니다.
+- `runFinlifeSnapshotSync`는 runtime snapshot refresh 내부 함수이며 CLI 완료 상태로 사용하지 않습니다.
+- 별도 TypeScript sync script를 직접 실행하는 경로는 지원하지 않습니다. DB 반영 없는 snapshot-only 실행이 운영 sync 성공으로 오해되지 않도록 진입점을 추가하지 않습니다.
+
 ## 수동 동기화
 
 ```bash
