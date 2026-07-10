@@ -16,7 +16,7 @@
 - vault unlock 이후 기존 `partial` startup result가 계속 재사용되는 회귀를 막는 manager 테스트를 추가했습니다.
 - vault mutation service가 cache invalidation 호출을 유지하는 boundary 테스트를 추가했습니다.
 
-## 수정 파일
+## 변경 파일
 - `src/lib/planning/migrations/manager.ts`
 - `src/lib/planning/server/security/opsSecurityConfigureRouteService.ts`
 - `src/lib/planning/server/security/opsSecurityLockRouteService.ts`
@@ -48,6 +48,6 @@
 - `vaultState`를 route service 없이 직접 호출하는 내부 테스트/유틸 경로는 자동 invalidation 대상이 아닙니다. 순환 import를 피하기 위해 production ops route service 경계에서 처리했고, 직접 호출 경로는 필요 시 helper를 명시 호출해야 합니다.
 - #116의 migration/trash/legacy fallback 전체 재작성은 이번 PR 범위에서 제외했습니다.
 
-## 다음 후보
+## 다음 작업
 - #116: migration/trash/legacy fallback 관측성 및 경계 추가 분리 여부 재검토
 - #117: run creation persistence adapter와 audit/metrics side-effect 경계 추가 분리
