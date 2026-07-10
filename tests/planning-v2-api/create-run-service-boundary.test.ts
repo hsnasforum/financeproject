@@ -29,6 +29,7 @@ describe("planning run create service boundary", () => {
     const servicePath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunService.ts");
     const parserPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunCommandParser.ts");
     const preflightPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunPreflight.ts");
+    const inputContextPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunInputContext.ts");
     const stagePlanPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunStagePlan.ts");
     const assemblerPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunRecordAssembler.ts");
     const persistencePath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunPersistence.ts");
@@ -37,12 +38,14 @@ describe("planning run create service boundary", () => {
     expect(fs.existsSync(servicePath)).toBe(true);
     expect(fs.existsSync(parserPath)).toBe(true);
     expect(fs.existsSync(preflightPath)).toBe(true);
+    expect(fs.existsSync(inputContextPath)).toBe(true);
     expect(fs.existsSync(stagePlanPath)).toBe(true);
     expect(fs.existsSync(assemblerPath)).toBe(true);
     expect(fs.existsSync(persistencePath)).toBe(true);
     expect(fs.existsSync(sideEffectsPath)).toBe(true);
     const serviceSource = fs.readFileSync(servicePath, "utf-8");
     const parserSource = fs.readFileSync(parserPath, "utf-8");
+    const inputContextSource = fs.readFileSync(inputContextPath, "utf-8");
     const persistenceSource = fs.readFileSync(persistencePath, "utf-8");
     const sideEffectsSource = fs.readFileSync(sideEffectsPath, "utf-8");
 
@@ -60,7 +63,14 @@ describe("planning run create service boundary", () => {
     expect(routeAdapter).toContain("jsonError");
 
     expect(parserSource).toContain("export function parseCreatePlanningRunCommand");
-    expect(serviceSource).toContain("evaluateCreatePlanningRunPreflight");
+    expect(serviceSource).toContain("prepareCreatePlanningRunInputContext");
+    expect(serviceSource).not.toContain("loadCanonicalProfile");
+    expect(serviceSource).not.toContain("applyProfilePatch");
+    expect(serviceSource).not.toContain("applyScenario");
+    expect(inputContextSource).toContain("loadCanonicalProfile");
+    expect(inputContextSource).toContain("applyProfilePatch");
+    expect(inputContextSource).toContain("evaluateCreatePlanningRunPreflight");
+    expect(inputContextSource).toContain("resolvePlanningRunAssumptions");
     expect(serviceSource).toContain("buildPlanningStagePlan");
     expect(serviceSource).toContain("assemblePlanningRunRecordInput");
     expect(serviceSource).toContain("persistCreatePlanningRunRecord");
