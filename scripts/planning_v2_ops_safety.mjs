@@ -1,4 +1,8 @@
 import path from "node:path";
+import {
+  createLegacyBackfillAnomalyCollector,
+  summarizeLegacyBackfillAnomalies,
+} from "./planning_v2_legacy_backfill_anomalies.mjs";
 import { fileURLToPath } from "node:url";
 import { runOpsPipeline } from "./planning_v2_ops_run.mjs";
 import {
@@ -237,6 +241,24 @@ function buildLegacyLogBlock(input) {
     lines.push(`skipped=${input.applyResult.skipped}`);
     lines.push(`failed=${input.applyResult.failed}`);
   }
+  if (input.applyAnomalies && Number(input.applyAnomalies.total) > 0) {
+    lines.push("", "[apply-anomalies]");
+    lines.push(`total=${input.applyAnomalies.total}`);
+    lines.push(`skipped=${input.applyAnomalies.skipped}`);
+    lines.push(`failed=${input.applyAnomalies.failed}`);
+    for (const [reason, count] of Object.entries(input.applyAnomalies.byReason ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      lines.push(`reason.${reason}=${count}`);
+    }
+    for (const [reason, count] of Object.entries(input.applyAnomalies.byCandidateReason ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      lines.push(`candidateReason.${reason}=${count}`);
+    }
+    for (const [errorName, count] of Object.entries(input.applyAnomalies.byErrorName ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      lines.push(`errorName.${errorName}=${count}`);
+    }
+    for (const [runKind, count] of Object.entries(input.applyAnomalies.byRunKind ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      lines.push(`runKind.${runKind}=${count}`);
+    }
+  }
   if (typeof input.postApplyCandidateCount === "number") {
     lines.push("", "[post-apply]");
     lines.push(`totalRuns=${input.postApplySummary?.totalRuns ?? "-"}`);
@@ -342,10 +364,13 @@ export async function runOpsSafetyPipeline(options = {}) {
           };
           reportErrors.push("legacy backfill apply helper unavailable");
         } else {
+          const anomalies = createLegacyBackfillAnomalyCollector();
           const applyResult = await legacyHelpers.backfillLegacyRuns({
             limit: args.legacyLimit,
             includeOpsDoctor: args.legacyIncludeOpsDoctor,
+            recordBackfillAnomaly: anomalies.record,
           });
+          const applyAnomalies = summarizeLegacyBackfillAnomalies(anomalies.events);
           const postApplySummary = await legacyHelpers.summarizeLegacyRunBackfill();
           const postApplyCandidates = await legacyHelpers.listLegacyRunBackfillCandidates({
             limit: args.legacyLimit,
@@ -359,6 +384,7 @@ export async function runOpsSafetyPipeline(options = {}) {
             status: applyFailed || postApplyOverThreshold ? "FAIL" : "PASS",
             reason: applyFailed ? "apply_failed" : (postApplyOverThreshold ? "post_apply_threshold_exceeded" : "ok"),
             applyResult,
+            ...(applyAnomalies.total > 0 ? { applyAnomalies } : {}),
             postApplySummary,
             postApplyCandidateCount,
             postApplyOverThreshold,

@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createRunLegacyBackfillStore } from "../../src/lib/planning/store/runLegacyBackfillStore";
-import { type LegacyRunBackfillCandidate } from "../../src/lib/planning/store/runLegacyBackfillService";
+import {
+  type LegacyRunBackfillAnomaly,
+  type LegacyRunBackfillCandidate,
+} from "../../src/lib/planning/store/runLegacyBackfillService";
 import { type RunIndexEntry } from "../../src/lib/planning/store/runIndex";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 
@@ -174,5 +177,168 @@ describe("planning run legacy backfill store", () => {
     });
     expect(migrationsEnsured).toBe(1);
     expect(readOptions).toEqual([{ persistMigrations: true }]);
+  });
+
+  it("records privacy-safe skipped and post-check failure anomalies", async () => {
+    const rawLegacy = sampleRun({
+      id: "legacy",
+      profileId: "profile-1",
+      createdAt: "2026-07-02T00:00:00.000Z",
+      outputs: { resultDto: { version: 1 } as PlanningRunRecord["outputs"]["resultDto"] },
+    });
+    const rawPath = path.join(root, "vault", "profiles", "profile-1", "runs", "legacy", "run.json");
+    const anomalies: LegacyRunBackfillAnomaly[] = [];
+    const store = createStore({
+      rows: [
+        {
+          id: "unreadable",
+          profileId: "profile-1",
+          createdAt: "2026-07-03T00:00:00.000Z",
+          title: "Unreadable",
+        },
+        {
+          id: "legacy",
+          profileId: "profile-1",
+          createdAt: "2026-07-02T00:00:00.000Z",
+          title: "Legacy",
+        },
+      ],
+      rawByPath: new Map([[rawPath, rawLegacy]]),
+      readRunForCandidate: async () => sampleRun({ id: "legacy", profileId: "profile-1", outputs: {} }),
+    });
+
+    await expect(store.backfill({
+      recordBackfillAnomaly: (event) => anomalies.push(event),
+    })).resolves.toMatchObject({
+      selected: 2,
+      migrated: 0,
+      skipped: 1,
+      failed: 1,
+    });
+    expect(anomalies).toEqual([
+      {
+        candidateReason: "unreadableMeta",
+        outcome: "skipped",
+        reason: "unreadableMeta",
+        runKind: "user",
+      },
+      {
+        candidateReason: "resultDtoOnly",
+        outcome: "failed",
+        reason: "postCheckMissingEngine",
+        runKind: "user",
+      },
+    ]);
+    expect(JSON.stringify(anomalies)).not.toContain("profile-1");
+    expect(JSON.stringify(anomalies)).not.toContain("legacy");
+  });
+
+  it("records only an error name and isolates recorder failures", async () => {
+    const rawLegacy = sampleRun({
+      id: "legacy",
+      profileId: "profile-1",
+      createdAt: "2026-07-02T00:00:00.000Z",
+      outputs: { resultDto: { version: 1 } as PlanningRunRecord["outputs"]["resultDto"] },
+    });
+    const rawPath = path.join(root, "vault", "profiles", "profile-1", "runs", "legacy", "run.json");
+    const anomalies: LegacyRunBackfillAnomaly[] = [];
+    const store = createStore({
+      rows: [
+        {
+          id: "legacy",
+          profileId: "profile-1",
+          createdAt: "2026-07-02T00:00:00.000Z",
+          title: "Legacy",
+        },
+      ],
+      rawByPath: new Map([[rawPath, rawLegacy]]),
+      readRunForCandidate: async () => {
+        throw new TypeError("sensitive path and payload details");
+      },
+    });
+
+    await expect(store.backfill({
+      recordBackfillAnomaly: (event) => {
+        anomalies.push(event);
+        return Promise.reject(new Error("recorder failed"));
+      },
+    })).resolves.toMatchObject({
+      selected: 1,
+      migrated: 0,
+      skipped: 0,
+      failed: 1,
+    });
+    expect(anomalies).toEqual([
+      {
+        candidateReason: "resultDtoOnly",
+        errorName: "TypeError",
+        outcome: "failed",
+        reason: "readException",
+        runKind: "user",
+      },
+    ]);
+    expect(JSON.stringify(anomalies)).not.toContain("sensitive path");
+  });
+
+  it("distinguishes missing run and missing engine schema post-check failures", async () => {
+    const rawRuns = ["missing-run", "missing-schema"].map((id, index) => sampleRun({
+      id,
+      profileId: "profile-1",
+      createdAt: `2026-07-0${3 - index}T00:00:00.000Z`,
+      outputs: { resultDto: { version: 1 } as PlanningRunRecord["outputs"]["resultDto"] },
+    }));
+    const rawByPath = new Map(rawRuns.map((run) => [
+      path.join(root, "vault", "profiles", "profile-1", "runs", run.id, "run.json"),
+      run,
+    ]));
+    const anomalies: LegacyRunBackfillAnomaly[] = [];
+    const store = createStore({
+      rows: rawRuns.map((run) => ({
+        id: run.id,
+        profileId: run.profileId,
+        createdAt: run.createdAt,
+        title: run.title,
+      })),
+      rawByPath,
+      readRunForCandidate: async (candidate) => {
+        if (candidate.id === "missing-run") return null;
+        return sampleRun({
+          id: candidate.id,
+          profileId: candidate.profileId,
+          outputs: {
+            engine: {
+              stage: "DEBT",
+              financialStatus: {},
+              stageDecision: {},
+            } as PlanningRunRecord["outputs"]["engine"],
+          },
+        });
+      },
+    });
+
+    await expect(store.backfill({
+      recordBackfillAnomaly: (event) => anomalies.push(event),
+    })).resolves.toMatchObject({ failed: 2, migrated: 0, selected: 2, skipped: 0 });
+    expect(anomalies.map((event) => event.reason)).toEqual([
+      "postCheckMissingRun",
+      "postCheckMissingEngineSchema",
+    ]);
+  });
+
+  it("does not await an unresolved async anomaly recorder", async () => {
+    const store = createStore({
+      rows: [
+        {
+          id: "unreadable",
+          profileId: "profile-1",
+          createdAt: "2026-07-03T00:00:00.000Z",
+          title: "Unreadable",
+        },
+      ],
+    });
+
+    await expect(store.backfill({
+      recordBackfillAnomaly: () => new Promise<void>(() => undefined),
+    })).resolves.toMatchObject({ selected: 1, migrated: 0, skipped: 1, failed: 0 });
   });
 });

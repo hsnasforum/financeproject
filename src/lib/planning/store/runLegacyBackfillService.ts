@@ -36,6 +36,25 @@ export type LegacyRunBackfillResult = {
   candidates: LegacyRunBackfillCandidate[];
 };
 
+export type LegacyRunBackfillAnomalyReason =
+  | "unreadableMeta"
+  | "postCheckMissingRun"
+  | "postCheckMissingEngine"
+  | "postCheckMissingEngineSchema"
+  | "readException";
+
+export type LegacyRunBackfillAnomaly = {
+  candidateReason: LegacyRunBackfillCandidateReason;
+  errorName?: string;
+  outcome: "skipped" | "failed";
+  reason: LegacyRunBackfillAnomalyReason;
+  runKind: LegacyRunBackfillCandidate["runKind"];
+};
+
+export type LegacyRunBackfillAnomalyRecorder = (
+  event: LegacyRunBackfillAnomaly,
+) => Promise<void> | void;
+
 type LegacyRunBackfillIndexEntry = {
   id: string;
   profileId: string;
@@ -56,7 +75,19 @@ type LegacyRunBackfillDependencies = {
   ) => Promise<PlanningRunRecord | null>;
   ensureStartupMigrations: () => Promise<void>;
   isEngineEnvelopeLike: (value: unknown) => boolean;
+  recordBackfillAnomaly?: LegacyRunBackfillAnomalyRecorder;
 };
+
+const SAFE_ERROR_NAMES = new Set([
+  "AggregateError",
+  "Error",
+  "EvalError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "TypeError",
+  "URIError",
+]);
 
 function asRecord(value: unknown): Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -89,6 +120,41 @@ function resolveBackfillRunKind(row: Pick<LegacyRunBackfillIndexEntry, "id" | "p
   return row.id.startsWith("ops-doctor-") || row.profileId === "ops-doctor"
     ? "opsDoctor"
     : "user";
+}
+
+function normalizeErrorName(error: unknown): string {
+  const name = error instanceof Error && error.name ? error.name : "Error";
+  return SAFE_ERROR_NAMES.has(name) ? name : "Error";
+}
+
+function toBackfillAnomaly(
+  candidate: LegacyRunBackfillCandidate,
+  outcome: LegacyRunBackfillAnomaly["outcome"],
+  reason: LegacyRunBackfillAnomalyReason,
+  error?: unknown,
+): LegacyRunBackfillAnomaly {
+  return {
+    candidateReason: candidate.reason,
+    ...(error === undefined ? {} : { errorName: normalizeErrorName(error) }),
+    outcome,
+    reason,
+    runKind: candidate.runKind,
+  };
+}
+
+function recordBackfillAnomaly(
+  deps: Pick<LegacyRunBackfillDependencies, "recordBackfillAnomaly">,
+  event: LegacyRunBackfillAnomaly,
+): void {
+  if (!deps.recordBackfillAnomaly) return;
+  try {
+    const pending = deps.recordBackfillAnomaly(event);
+    if (pending && typeof pending.then === "function") {
+      void Promise.resolve(pending).catch(() => undefined);
+    }
+  } catch {
+    // Best-effort observability must not alter or delay the backfill result.
+  }
 }
 
 export function resolveLegacyRunBackfillCandidateReason(
@@ -202,6 +268,10 @@ export async function backfillLegacyRunsWith(
   for (const candidate of candidates) {
     if (candidate.reason === "unreadableMeta") {
       skipped += 1;
+      recordBackfillAnomaly(
+        deps,
+        toBackfillAnomaly(candidate, "skipped", "unreadableMeta"),
+      );
       continue;
     }
 
@@ -215,9 +285,22 @@ export async function backfillLegacyRunsWith(
         migrated += 1;
       } else {
         failed += 1;
+        const reason: LegacyRunBackfillAnomalyReason = !loaded
+          ? "postCheckMissingRun"
+          : hasEngine
+            ? "postCheckMissingEngineSchema"
+            : "postCheckMissingEngine";
+        recordBackfillAnomaly(
+          deps,
+          toBackfillAnomaly(candidate, "failed", reason),
+        );
       }
-    } catch {
+    } catch (error) {
       failed += 1;
+      recordBackfillAnomaly(
+        deps,
+        toBackfillAnomaly(candidate, "failed", "readException", error),
+      );
     }
   }
 
