@@ -8,6 +8,7 @@ import {
   type LegacyRunBackfillCandidate,
 } from "../../src/lib/planning/store/runLegacyBackfillService";
 import { type RunIndexEntry } from "../../src/lib/planning/store/runIndex";
+import { type JsonFileDetailedReadResult } from "../../src/lib/planning/store/runRecordCodec";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 
 const env = process.env as Record<string, string | undefined>;
@@ -35,6 +36,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function createStore(input: {
   rows?: RunIndexEntry[];
   rawByPath?: Map<string, PlanningRunRecord | null>;
+  detailedByPath?: Map<string, JsonFileDetailedReadResult>;
   calls?: string[];
   readRunForCandidate?: (
     candidate: LegacyRunBackfillCandidate,
@@ -58,6 +60,12 @@ function createStore(input: {
       const payload = input.rawByPath.get(filePath);
       return payload ? { payload } : null;
     },
+    ...(input.detailedByPath ? {
+      readJsonFileDetailed: async (filePath: string) => {
+        input.calls?.push(filePath);
+        return input.detailedByPath?.get(filePath) ?? { status: "missing" as const };
+      },
+    } : {}),
     decodeStoredPayload: async (loaded) => {
       return loaded as { payload: unknown };
     },
@@ -231,6 +239,175 @@ describe("planning run legacy backfill store", () => {
     ]);
     expect(JSON.stringify(anomalies)).not.toContain("profile-1");
     expect(JSON.stringify(anomalies)).not.toContain("legacy");
+  });
+
+  it("records one privacy-safe raw read reason per recovered or skipped candidate", async () => {
+    const recovered = sampleRun({
+      id: "recovered",
+      createdAt: "2026-07-02T00:00:00.000Z",
+      outputs: { resultDto: { version: 1 } as PlanningRunRecord["outputs"]["resultDto"] },
+    });
+    const recoveredPartitionPath = path.join(
+      root,
+      "vault",
+      "profiles",
+      "profile-1",
+      "runs",
+      "recovered",
+      "run.json",
+    );
+    const recoveredLegacyMetaPath = path.join(root, "runs", "recovered", "run.json");
+    const unreadablePartitionPath = path.join(
+      root,
+      "vault",
+      "profiles",
+      "profile-1",
+      "runs",
+      "unreadable",
+      "run.json",
+    );
+    const anomalies: LegacyRunBackfillAnomaly[] = [];
+    const store = createStore({
+      rows: [
+        {
+          id: "unreadable",
+          profileId: "profile-1",
+          createdAt: "2026-07-03T00:00:00.000Z",
+          title: "Unreadable",
+        },
+        {
+          id: "recovered",
+          profileId: "profile-1",
+          createdAt: recovered.createdAt,
+          title: "Recovered",
+        },
+      ],
+      detailedByPath: new Map([
+        [unreadablePartitionPath, { status: "found", value: "invalid-run" }],
+        [recoveredPartitionPath, { status: "invalid-json" }],
+        [recoveredLegacyMetaPath, { status: "found", value: { payload: recovered } }],
+      ]),
+      readRunForCandidate: async () => sampleRun({
+        id: "recovered",
+        outputs: {
+          engineSchemaVersion: 1,
+          engine: {
+            stage: "DEBT",
+            financialStatus: {},
+            stageDecision: {},
+          } as PlanningRunRecord["outputs"]["engine"],
+        },
+      }),
+    });
+
+    await expect(store.backfill({
+      recordBackfillAnomaly: (event) => anomalies.push(event),
+    })).resolves.toMatchObject({
+      selected: 2,
+      migrated: 1,
+      skipped: 1,
+      failed: 0,
+    });
+    expect(anomalies).toEqual([
+      {
+        candidateReason: "unreadableMeta",
+        outcome: "skipped",
+        reason: "rawInvalidRunRecord",
+        runKind: "user",
+        source: "partition-meta",
+      },
+      {
+        candidateReason: "resultDtoOnly",
+        outcome: "recovered",
+        reason: "rawInvalidJson",
+        runKind: "user",
+        source: "partition-meta",
+      },
+    ]);
+    const serialized = JSON.stringify(anomalies);
+    expect(serialized).not.toContain('"profileId"');
+    expect(serialized).not.toContain('"id"');
+  });
+
+  it("records read fallback events only for candidates selected after sorting and limit", async () => {
+    const newer = sampleRun({
+      id: "newer",
+      createdAt: "2026-07-03T00:00:00.000Z",
+      outputs: { resultDto: { version: 1 } as PlanningRunRecord["outputs"]["resultDto"] },
+    });
+    const older = sampleRun({
+      id: "older",
+      createdAt: "2026-07-02T00:00:00.000Z",
+    });
+    const newerPartitionPath = path.join(
+      root,
+      "vault",
+      "profiles",
+      "profile-1",
+      "runs",
+      newer.id,
+      "run.json",
+    );
+    const newerLegacyMetaPath = path.join(root, "runs", newer.id, "run.json");
+    const olderPartitionPath = path.join(
+      root,
+      "vault",
+      "profiles",
+      "profile-1",
+      "runs",
+      older.id,
+      "run.json",
+    );
+    const anomalies: LegacyRunBackfillAnomaly[] = [];
+    const store = createStore({
+      rows: [
+        {
+          id: older.id,
+          profileId: older.profileId,
+          createdAt: older.createdAt,
+        },
+        {
+          id: newer.id,
+          profileId: newer.profileId,
+          createdAt: newer.createdAt,
+        },
+      ],
+      detailedByPath: new Map([
+        [newerPartitionPath, { status: "invalid-json" }],
+        [newerLegacyMetaPath, { status: "found", value: { payload: newer } }],
+        [olderPartitionPath, { status: "found", value: "invalid-run" }],
+      ]),
+      readRunForCandidate: async () => sampleRun({
+        id: newer.id,
+        outputs: {
+          engineSchemaVersion: 1,
+          engine: {
+            stage: "DEBT",
+            financialStatus: {},
+            stageDecision: {},
+          } as PlanningRunRecord["outputs"]["engine"],
+        },
+      }),
+    });
+
+    await expect(store.backfill({
+      limit: 1,
+      recordBackfillAnomaly: (event) => anomalies.push(event),
+    })).resolves.toMatchObject({
+      selected: 1,
+      migrated: 1,
+      skipped: 0,
+      failed: 0,
+    });
+    expect(anomalies).toEqual([
+      {
+        candidateReason: "resultDtoOnly",
+        outcome: "recovered",
+        reason: "rawInvalidJson",
+        runKind: "user",
+        source: "partition-meta",
+      },
+    ]);
   });
 
   it("records only an error name and isolates recorder failures", async () => {

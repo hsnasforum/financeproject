@@ -1,3 +1,8 @@
+import {
+  type RunLegacyBackfillDetailedReadResult,
+  type RunLegacyBackfillReadFallback,
+  type RunLegacyBackfillReadSource,
+} from "./runLegacyBackfillReadStore";
 import { type PlanningRunRecord } from "./types";
 
 export type LegacyRunBackfillSummary = {
@@ -38,6 +43,8 @@ export type LegacyRunBackfillResult = {
 
 export type LegacyRunBackfillAnomalyReason =
   | "unreadableMeta"
+  | "rawInvalidJson"
+  | "rawInvalidRunRecord"
   | "postCheckMissingRun"
   | "postCheckMissingEngine"
   | "postCheckMissingEngineSchema"
@@ -46,9 +53,10 @@ export type LegacyRunBackfillAnomalyReason =
 export type LegacyRunBackfillAnomaly = {
   candidateReason: LegacyRunBackfillCandidateReason;
   errorName?: string;
-  outcome: "skipped" | "failed";
+  outcome: "recovered" | "skipped" | "failed";
   reason: LegacyRunBackfillAnomalyReason;
   runKind: LegacyRunBackfillCandidate["runKind"];
+  source?: RunLegacyBackfillReadSource;
 };
 
 export type LegacyRunBackfillAnomalyRecorder = (
@@ -69,6 +77,9 @@ type ReadRunForBackfillOptions = {
 type LegacyRunBackfillDependencies = {
   listIndexEntries: () => Promise<LegacyRunBackfillIndexEntry[]>;
   readRawRunForIndexEntry: (row: LegacyRunBackfillIndexEntry) => Promise<PlanningRunRecord | null>;
+  readRawRunForIndexEntryDetailed?: (
+    row: LegacyRunBackfillIndexEntry,
+  ) => Promise<RunLegacyBackfillDetailedReadResult>;
   readRunForCandidate: (
     candidate: LegacyRunBackfillCandidate,
     options?: ReadRunForBackfillOptions,
@@ -132,6 +143,7 @@ function toBackfillAnomaly(
   outcome: LegacyRunBackfillAnomaly["outcome"],
   reason: LegacyRunBackfillAnomalyReason,
   error?: unknown,
+  source?: RunLegacyBackfillReadSource,
 ): LegacyRunBackfillAnomaly {
   return {
     candidateReason: candidate.reason,
@@ -139,7 +151,16 @@ function toBackfillAnomaly(
     outcome,
     reason,
     runKind: candidate.runKind,
+    ...(source ? { source } : {}),
   };
+}
+
+function toBackfillReadAnomalyReason(
+  fallback: RunLegacyBackfillReadFallback,
+): Extract<LegacyRunBackfillAnomalyReason, "rawInvalidJson" | "rawInvalidRunRecord"> | null {
+  if (fallback.reason === "invalid-json") return "rawInvalidJson";
+  if (fallback.reason === "invalid-run-record") return "rawInvalidRunRecord";
+  return null;
 }
 
 function recordBackfillAnomaly(
@@ -223,6 +244,10 @@ export async function listLegacyRunBackfillCandidatesWith(
     limit?: number;
     includeOpsDoctor?: boolean;
   },
+  observeCandidateReadFallback?: (
+    candidate: LegacyRunBackfillCandidate,
+    fallback: RunLegacyBackfillReadFallback | undefined,
+  ) => void,
 ): Promise<LegacyRunBackfillCandidate[]> {
   const indexRows = await deps.listIndexEntries();
   const out: LegacyRunBackfillCandidate[] = [];
@@ -230,17 +255,28 @@ export async function listLegacyRunBackfillCandidatesWith(
     const runKind = resolveBackfillRunKind(row);
     if (runKind === "opsDoctor" && options?.includeOpsDoctor !== true) continue;
 
-    const raw = await deps.readRawRunForIndexEntry(row);
+    const detailedRead = deps.readRawRunForIndexEntryDetailed
+      ? await deps.readRawRunForIndexEntryDetailed(row)
+      : {
+          run: await deps.readRawRunForIndexEntry(row),
+          fallbacks: [],
+        };
+    const raw = detailedRead.run;
     const reason = resolveLegacyRunBackfillCandidateReason(raw, deps.isEngineEnvelopeLike);
     if (!reason) continue;
-    out.push({
+    const candidate: LegacyRunBackfillCandidate = {
       id: row.id,
       profileId: row.profileId,
       createdAt: row.createdAt,
       ...(asString(row.title) ? { title: asString(row.title) } : {}),
       runKind,
       reason,
-    });
+    };
+    observeCandidateReadFallback?.(
+      candidate,
+      detailedRead.fallbacks.find((fallback) => fallback.reason !== "missing-file"),
+    );
+    out.push(candidate);
   }
 
   const limit = toSafeLimit(options?.limit, 100);
@@ -256,22 +292,51 @@ export async function backfillLegacyRunsWith(
 ): Promise<LegacyRunBackfillResult> {
   await deps.ensureStartupMigrations();
 
-  const candidates = await listLegacyRunBackfillCandidatesWith(deps, {
-    limit: options?.limit,
-    includeOpsDoctor: options?.includeOpsDoctor,
-  });
+  const candidateReadFallbacks = new Map<
+    LegacyRunBackfillCandidate,
+    RunLegacyBackfillReadFallback
+  >();
+  const candidates = await listLegacyRunBackfillCandidatesWith(
+    deps,
+    {
+      limit: options?.limit,
+      includeOpsDoctor: options?.includeOpsDoctor,
+    },
+    (candidate, fallback) => {
+      if (fallback) candidateReadFallbacks.set(candidate, fallback);
+    },
+  );
 
   let migrated = 0;
   let skipped = 0;
   let failed = 0;
 
   for (const candidate of candidates) {
-    if (candidate.reason === "unreadableMeta") {
-      skipped += 1;
+    const readFallback = candidateReadFallbacks.get(candidate);
+    const readAnomalyReason = readFallback
+      ? toBackfillReadAnomalyReason(readFallback)
+      : null;
+    if (readFallback && readAnomalyReason) {
       recordBackfillAnomaly(
         deps,
-        toBackfillAnomaly(candidate, "skipped", "unreadableMeta"),
+        toBackfillAnomaly(
+          candidate,
+          candidate.reason === "unreadableMeta" ? "skipped" : "recovered",
+          readAnomalyReason,
+          undefined,
+          readFallback.source,
+        ),
       );
+    }
+
+    if (candidate.reason === "unreadableMeta") {
+      skipped += 1;
+      if (!readAnomalyReason) {
+        recordBackfillAnomaly(
+          deps,
+          toBackfillAnomaly(candidate, "skipped", "unreadableMeta"),
+        );
+      }
       continue;
     }
 

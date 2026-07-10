@@ -8,20 +8,29 @@ export type DecodedRunStoragePayload = {
   rewriteToVault: boolean;
 };
 
-function isRecoverableJsonReadError(error: unknown): boolean {
-  const nodeError = error as NodeJS.ErrnoException;
-  if (nodeError?.code === "ENOENT") return true;
-  return error instanceof SyntaxError;
+export type JsonFileDetailedReadResult =
+  | { status: "found"; value: unknown }
+  | { status: "missing" }
+  | { status: "invalid-json" };
+
+export async function readJsonFileDetailed(filePath: string): Promise<JsonFileDetailedReadResult> {
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    return {
+      status: "found",
+      value: JSON.parse(raw) as unknown,
+    };
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code === "ENOENT") return { status: "missing" };
+    if (error instanceof SyntaxError) return { status: "invalid-json" };
+    throw error;
+  }
 }
 
 export async function readJsonFile(filePath: string): Promise<unknown | null> {
-  try {
-    const raw = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(raw) as unknown;
-  } catch (error) {
-    if (isRecoverableJsonReadError(error)) return null;
-    throw error;
-  }
+  const result = await readJsonFileDetailed(filePath);
+  return result.status === "found" ? result.value : null;
 }
 
 export async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {

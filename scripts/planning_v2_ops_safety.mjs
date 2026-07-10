@@ -244,6 +244,7 @@ function buildLegacyLogBlock(input) {
   if (input.applyAnomalies && Number(input.applyAnomalies.total) > 0) {
     lines.push("", "[apply-anomalies]");
     lines.push(`total=${input.applyAnomalies.total}`);
+    lines.push(`recoveredReadFallbackEvents=${input.applyAnomalies.recoveredReadFallbackEvents ?? 0}`);
     lines.push(`skipped=${input.applyAnomalies.skipped}`);
     lines.push(`failed=${input.applyAnomalies.failed}`);
     for (const [reason, count] of Object.entries(input.applyAnomalies.byReason ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
@@ -257,6 +258,9 @@ function buildLegacyLogBlock(input) {
     }
     for (const [runKind, count] of Object.entries(input.applyAnomalies.byRunKind ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
       lines.push(`runKind.${runKind}=${count}`);
+    }
+    for (const [source, count] of Object.entries(input.applyAnomalies.bySource ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      lines.push(`source.${source}=${count}`);
     }
   }
   if (typeof input.postApplyCandidateCount === "number") {

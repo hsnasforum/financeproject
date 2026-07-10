@@ -88,6 +88,87 @@ describe("planning run legacy backfill read store", () => {
     expect(normalizeRawRun).toHaveBeenNthCalledWith(2, { id: "legacy-meta" });
   });
 
+  it("reports malformed and invalid run fallbacks without exposing paths", async () => {
+    const run = makeRun({ id: "legacy-file" });
+    const store = createRunLegacyBackfillReadStore({
+      getPaths: vi.fn(() => makePaths()),
+      readJsonFile: vi.fn(async () => null),
+      readJsonFileDetailed: vi.fn(async (filePath: string) => {
+        if (filePath.startsWith("/vault")) return { status: "invalid-json" as const };
+        if (filePath.endsWith("/run-1/run.json")) {
+          return { status: "found" as const, value: "invalid-run" };
+        }
+        return { status: "found" as const, value: run };
+      }),
+      decodeStoredPayload: vi.fn(async (loaded: unknown) => ({ payload: loaded })),
+      normalizeRawRun: vi.fn((value: unknown) => (
+        value === "invalid-run" ? null : value as PlanningRunRecord
+      )),
+    });
+
+    await expect(store.readRawRunForIndexEntryDetailed({
+      id: "run-1",
+      profileId: "profile-1",
+    })).resolves.toEqual({
+      run,
+      fallbacks: [
+        { source: "partition-meta", reason: "invalid-json" },
+        { source: "legacy-meta", reason: "invalid-run-record" },
+      ],
+    });
+  });
+
+  it("attributes the legacy meta fallback correctly when no partition path exists", async () => {
+    const run = makeRun({ id: "legacy-meta" });
+    const paths = makePaths();
+    delete paths.partitionMetaPath;
+    let reads = 0;
+    const store = createRunLegacyBackfillReadStore({
+      getPaths: vi.fn(() => paths),
+      readJsonFile: vi.fn(async () => null),
+      readJsonFileDetailed: vi.fn(async () => {
+        reads += 1;
+        return reads === 1
+          ? { status: "invalid-json" as const }
+          : { status: "found" as const, value: run };
+      }),
+      decodeStoredPayload: vi.fn(async (loaded: unknown) => ({ payload: loaded })),
+      normalizeRawRun: vi.fn((value: unknown) => value as PlanningRunRecord),
+    });
+
+    await expect(store.readRawRunForIndexEntryDetailed({
+      id: "run-1",
+      profileId: "profile-1",
+    })).resolves.toEqual({
+      run,
+      fallbacks: [
+        { source: "legacy-meta", reason: "invalid-json" },
+      ],
+    });
+    expect(reads).toBe(2);
+  });
+
+  it("preserves decode exceptions instead of treating them as fallback", async () => {
+    const decodeError = new TypeError("vault decode failed");
+    const store = createRunLegacyBackfillReadStore({
+      getPaths: vi.fn(() => makePaths()),
+      readJsonFile: vi.fn(async () => ({ encoded: true })),
+      readJsonFileDetailed: vi.fn(async () => ({
+        status: "found" as const,
+        value: { encoded: true },
+      })),
+      decodeStoredPayload: vi.fn(async () => {
+        throw decodeError;
+      }),
+      normalizeRawRun: vi.fn(() => makeRun()),
+    });
+
+    await expect(store.readRawRunForIndexEntryDetailed({
+      id: "run-1",
+      profileId: "profile-1",
+    })).rejects.toBe(decodeError);
+  });
+
   it("returns null without decoding when no raw source is readable", async () => {
     const decodeStoredPayload = vi.fn(async () => ({ payload: makeRun() }));
     const normalizeRawRun = vi.fn(() => makeRun());

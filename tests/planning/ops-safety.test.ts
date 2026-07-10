@@ -38,12 +38,14 @@ type LegacyBackfillReport = {
   };
   applyAnomalies?: {
     total?: number;
+    recoveredReadFallbackEvents?: number;
     skipped?: number;
     failed?: number;
     byReason?: Record<string, number>;
     byCandidateReason?: Record<string, number>;
     byErrorName?: Record<string, number>;
     byRunKind?: Record<string, number>;
+    bySource?: Record<string, number>;
   };
   postApplyCandidateCount?: number;
   postApplySummary?: {
@@ -223,10 +225,18 @@ describe("planning v2 ops safety pipeline", () => {
     }) => {
       await options?.recordBackfillAnomaly?.({
         candidateReason: "resultDtoOnly",
+        outcome: "recovered",
+        reason: "rawInvalidJson",
+        runKind: "user",
+        source: "partition-meta",
+      });
+      await options?.recordBackfillAnomaly?.({
+        candidateReason: "resultDtoOnly",
         errorName: "TypeError",
         outcome: "failed",
         reason: "readException",
         runKind: "user",
+        source: "/sensitive/run/path",
       });
       return { selected: 1, migrated: 0, skipped: 0, failed: 1, candidates: [] };
     });
@@ -251,21 +261,27 @@ describe("planning v2 ops safety pipeline", () => {
     expect(result.ok).toBe(false);
     const legacy = result.report.legacyBackfill as LegacyBackfillReport;
     expect(legacy.applyAnomalies).toEqual({
-      total: 1,
+      total: 2,
+      recoveredReadFallbackEvents: 1,
       skipped: 0,
       failed: 1,
-      byReason: { readException: 1 },
-      byCandidateReason: { resultDtoOnly: 1 },
+      byReason: { rawInvalidJson: 1, readException: 1 },
+      byCandidateReason: { resultDtoOnly: 2 },
       byErrorName: { TypeError: 1 },
-      byRunKind: { user: 1 },
+      byRunKind: { user: 2 },
+      bySource: { "partition-meta": 1 },
     });
     const log = fs.readFileSync(path.join(root, result.logPath), "utf8");
     expect(log).toContain("[apply-anomalies]");
+    expect(log).toContain("recoveredReadFallbackEvents=1");
+    expect(log).toContain("reason.rawInvalidJson=1");
     expect(log).toContain("reason.readException=1");
     expect(log).toContain("errorName.TypeError=1");
+    expect(log).toContain("source.partition-meta=1");
     const anomalyBlock = log.split("[apply-anomalies]")[1]?.split("[post-apply]")[0] ?? "";
     expect(anomalyBlock).not.toContain("profile=");
     expect(anomalyBlock).not.toContain("run-");
+    expect(anomalyBlock).not.toContain("sensitive");
   });
 
   it("uses synthetic file-backed legacy data to report post-apply inventory", async () => {

@@ -11,6 +11,7 @@ import { createRunLegacyBackfillStore } from "./runLegacyBackfillStore";
 import {
   fromStoredPayload,
   readJsonFile,
+  readJsonFileDetailed,
 } from "./runRecordCodec";
 import {
   isEngineEnvelopeLike,
@@ -129,6 +130,7 @@ const legacyRunBackfillStore = createRunLegacyBackfillStore({
   ensureStartupMigrations,
   isEngineEnvelopeLike,
   readJsonFile,
+  readJsonFileDetailed,
   decodeStoredPayload: fromStoredPayload,
   normalizeRawRun: normalizeRawRunForBackfill,
 });

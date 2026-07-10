@@ -69,6 +69,7 @@ function printAnomalySummary(events) {
   if (summary.total < 1) return;
   console.log("[planning:v2:backfill-legacy-runs] anomalies");
   console.log(`- total=${summary.total}`);
+  console.log(`- recoveredReadFallbackEvents=${summary.recoveredReadFallbackEvents}`);
   console.log(`- skipped=${summary.skipped}`);
   console.log(`- failed=${summary.failed}`);
   for (const [reason, count] of Object.entries(summary.byReason).sort(([left], [right]) => left.localeCompare(right))) {
@@ -82,6 +83,9 @@ function printAnomalySummary(events) {
   }
   for (const [runKind, count] of Object.entries(summary.byRunKind).sort(([left], [right]) => left.localeCompare(right))) {
     console.log(`- runKind.${runKind}=${count}`);
+  }
+  for (const [source, count] of Object.entries(summary.bySource).sort(([left], [right]) => left.localeCompare(right))) {
+    console.log(`- source.${source}=${count}`);
   }
 }
 
