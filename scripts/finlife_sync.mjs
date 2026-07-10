@@ -363,6 +363,10 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
     console.log(`- db optionsWritten: ${dbSync.optionsWritten}`);
     console.log(`- db skippedCrossKindDuplicates: ${dbSync.skippedCrossKindDuplicates}`);
     console.log(`- db replacedCrossKindDuplicates: ${dbSync.replacedCrossKindDuplicates}`);
+    console.log(`- db candidateItems: ${dbSync.candidateItems}`);
+    console.log(`- db inventoryItems: ${dbSync.inventoryItems ?? "unavailable"}`);
+    console.log(`- db inventoryDeltaItems: ${dbSync.inventoryDeltaItems ?? "unavailable"}`);
+    console.log(`- db staleCandidateItems: ${dbSync.staleCandidateItems ?? "unavailable"}`);
   }
 }
 

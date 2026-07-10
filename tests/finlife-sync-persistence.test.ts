@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   FinlifeSyncPersistenceError,
   persistFinlifeSyncKind,
+  syncFinlifeProductsToDb,
   writeFinlifeCompletionEvidence,
 } from "../scripts/finlife_persistence.mjs";
 import type { FinlifeSnapshot } from "../src/lib/finlife/snapshot";
@@ -30,10 +31,160 @@ function dbSyncResult() {
     optionsWritten: 0,
     skippedCrossKindDuplicates: 0,
     replacedCrossKindDuplicates: 0,
+    candidateItems: 1,
+    inventoryItems: 1,
+    inventoryDeltaItems: 0,
+    staleCandidateItems: 0,
   };
 }
 
 describe("FINLIFE sync persistence contract", () => {
+  it("observes kind inventory drift without pruning stored products", async () => {
+    const count = vi.fn(async () => 3);
+    const prisma = {
+      provider: {
+        upsert: vi.fn(async () => ({ id: 10 })),
+      },
+      product: {
+        findMany: vi.fn(async () => []),
+        upsert: vi.fn(async () => ({ id: 20 })),
+        count,
+      },
+      productOption: {
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        createMany: vi.fn(async () => ({ count: 0 })),
+      },
+    };
+
+    await expect(syncFinlifeProductsToDb("deposit", [{
+      fin_prdt_cd: "FIN-001",
+      fin_co_no: "COMPANY-001",
+      kor_co_nm: "테스트은행",
+      fin_prdt_nm: "테스트예금",
+      options: [],
+      raw: {},
+    }], {
+      getPrismaClient: () => prisma,
+    })).resolves.toEqual({
+      providersUpserted: 1,
+      productsUpserted: 1,
+      optionsWritten: 0,
+      skippedCrossKindDuplicates: 0,
+      replacedCrossKindDuplicates: 0,
+      candidateItems: 1,
+      inventoryItems: 3,
+      inventoryDeltaItems: 2,
+      staleCandidateItems: 2,
+    });
+    expect(count).toHaveBeenCalledWith({ where: { kind: "deposit" } });
+  });
+
+  it("deduplicates same-kind product codes before calculating inventory drift", async () => {
+    const productUpsert = vi.fn(async () => ({ id: 20 }));
+    const prisma = {
+      provider: {
+        upsert: vi.fn(async () => ({ id: 10 })),
+      },
+      product: {
+        findMany: vi.fn(async () => []),
+        upsert: productUpsert,
+        count: vi.fn(async () => 1),
+      },
+      productOption: {
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        createMany: vi.fn(async () => ({ count: 0 })),
+      },
+    };
+    const duplicate = {
+      fin_prdt_cd: "FIN-DUPLICATE",
+      options: [],
+      raw: {},
+    };
+
+    await expect(syncFinlifeProductsToDb("deposit", [duplicate, duplicate], {
+      getPrismaClient: () => prisma,
+    })).resolves.toMatchObject({
+      productsUpserted: 1,
+      candidateItems: 1,
+      inventoryItems: 1,
+      inventoryDeltaItems: 0,
+      staleCandidateItems: 0,
+    });
+    expect(productUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a completed product write successful when inventory observation fails", async () => {
+    const prisma = {
+      provider: {
+        upsert: vi.fn(async () => ({ id: 10 })),
+      },
+      product: {
+        findMany: vi.fn(async () => []),
+        upsert: vi.fn(async () => ({ id: 20 })),
+        count: vi.fn(async () => {
+          throw new Error("inventory count unavailable");
+        }),
+      },
+      productOption: {
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        createMany: vi.fn(async () => ({ count: 0 })),
+      },
+    };
+
+    await expect(syncFinlifeProductsToDb("saving", [{
+      fin_prdt_cd: "FIN-002",
+      options: [],
+      raw: {},
+    }], {
+      getPrismaClient: () => prisma,
+    })).resolves.toMatchObject({
+      productsUpserted: 1,
+      candidateItems: 1,
+      inventoryItems: null,
+      inventoryDeltaItems: null,
+      staleCandidateItems: null,
+    });
+  });
+
+  it("reports negative inventory drift when a higher-priority stored kind blocks the current run", async () => {
+    const providerUpsert = vi.fn();
+    const productUpsert = vi.fn();
+    const prisma = {
+      provider: {
+        upsert: providerUpsert,
+      },
+      product: {
+        findMany: vi.fn(async () => [{ finPrdtCd: "SHARED-001", kind: "saving" }]),
+        upsert: productUpsert,
+        count: vi.fn(async () => 0),
+      },
+      productOption: {
+        deleteMany: vi.fn(),
+        createMany: vi.fn(),
+      },
+    };
+
+    await expect(syncFinlifeProductsToDb("deposit", [{
+      fin_prdt_cd: "SHARED-001",
+      options: [],
+      raw: {},
+    }], {
+      getPrismaClient: () => prisma,
+    })).resolves.toEqual({
+      providersUpserted: 0,
+      productsUpserted: 0,
+      optionsWritten: 0,
+      skippedCrossKindDuplicates: 1,
+      replacedCrossKindDuplicates: 0,
+      candidateItems: 1,
+      inventoryItems: 0,
+      inventoryDeltaItems: -1,
+      staleCandidateItems: 0,
+    });
+    expect(providerUpsert).not.toHaveBeenCalled();
+    expect(productUpsert).not.toHaveBeenCalled();
+  });
+
   it("writes the snapshot only after the DB sync and completion evidence finish", async () => {
     const calls: string[] = [];
     const dbSync = dbSyncResult();
@@ -316,6 +467,10 @@ describe("FINLIFE sync persistence contract", () => {
         optionsWritten: 4,
         skippedCrossKindDuplicates: 1,
         replacedCrossKindDuplicates: 0,
+        candidateItems: 3,
+        inventoryItems: 5,
+        inventoryDeltaItems: 2,
+        staleCandidateItems: 2,
       },
     };
 
@@ -352,6 +507,10 @@ describe("FINLIFE sync persistence contract", () => {
       optionsWritten: 4,
       skippedCrossKindDuplicates: 1,
       replacedCrossKindDuplicates: 0,
+      candidateItems: 3,
+      inventoryItems: 5,
+      inventoryDeltaItems: 2,
+      staleCandidateItems: 2,
     };
     const dbMetaJson = expect.objectContaining({
       ...baseMeta,

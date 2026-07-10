@@ -46,6 +46,14 @@ function nonNegativeCount(value) {
   return Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
 }
 
+function nullableNonNegativeCount(value) {
+  return value == null ? null : nonNegativeCount(value);
+}
+
+function nullableInteger(value) {
+  return value == null || !Number.isFinite(Number(value)) ? null : Math.trunc(Number(value));
+}
+
 export async function writeFinlifeCompletionEvidence(input, dependencies = {}) {
   if (input.state !== "db-complete" && input.state !== "complete") {
     throw new Error(`Invalid FINLIFE completion evidence state: ${input.state}`);
@@ -100,6 +108,10 @@ export async function writeFinlifeCompletionEvidence(input, dependencies = {}) {
       optionsWritten: nonNegativeCount(input.dbSync?.optionsWritten),
       skippedCrossKindDuplicates: nonNegativeCount(input.dbSync?.skippedCrossKindDuplicates),
       replacedCrossKindDuplicates: nonNegativeCount(input.dbSync?.replacedCrossKindDuplicates),
+      candidateItems: nonNegativeCount(input.dbSync?.candidateItems),
+      inventoryItems: nullableNonNegativeCount(input.dbSync?.inventoryItems),
+      inventoryDeltaItems: nullableInteger(input.dbSync?.inventoryDeltaItems),
+      staleCandidateItems: nullableNonNegativeCount(input.dbSync?.staleCandidateItems),
       resultCode: isComplete ? "OK" : "DB_COMPLETED",
     },
     ...(isComplete ? { lastError: null } : {}),
@@ -149,6 +161,7 @@ export async function syncFinlifeProductsToDb(kind, items, options = {}) {
       })
     : [];
   const existingByCode = new Map(existingRows.map((row) => [row.finPrdtCd, row.kind]));
+  const candidateItems = normalizedItems.length;
   let providersUpserted = 0;
   let productsUpserted = 0;
   let optionsWritten = 0;
@@ -222,12 +235,27 @@ export async function syncFinlifeProductsToDb(kind, items, options = {}) {
     }
   }
 
+  let inventoryItems = null;
+  let inventoryDeltaItems = null;
+  let staleCandidateItems = null;
+  try {
+    inventoryItems = nonNegativeCount(await prisma.product.count({ where: { kind } }));
+    inventoryDeltaItems = inventoryItems - candidateItems;
+    staleCandidateItems = Math.max(0, inventoryItems - productsUpserted);
+  } catch {
+    // Inventory diagnostics must not turn successful product writes into a failed sync.
+  }
+
   return {
     providersUpserted,
     productsUpserted,
     optionsWritten,
     skippedCrossKindDuplicates,
     replacedCrossKindDuplicates,
+    candidateItems,
+    inventoryItems,
+    inventoryDeltaItems,
+    staleCandidateItems,
   };
 }
 

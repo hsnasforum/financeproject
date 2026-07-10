@@ -11,6 +11,10 @@ export type FinlifeDbSyncResult = {
   optionsWritten: number;
   skippedCrossKindDuplicates: number;
   replacedCrossKindDuplicates: number;
+  candidateItems: number;
+  inventoryItems: number | null;
+  inventoryDeltaItems: number | null;
+  staleCandidateItems: number | null;
 };
 
 export type FinlifePersistenceInput = {
