@@ -23,7 +23,6 @@ import {
   validateScenario,
 } from "../../v2/scenario";
 import {
-  asString,
   legacyScenarioToInputScenario,
   parseRiskTolerance,
   toLegacyScenarioMetaFromInput,
@@ -36,6 +35,7 @@ import {
   buildCreatePlanningRunSuccessMeta,
   totalStageDurationMs,
 } from "./createRunRecordAssembler";
+import { persistCreatePlanningRunRecord } from "./createRunPersistence";
 import {
   recordCreateRunAuditSafely,
   recordCreateRunStageMetricsSafely,
@@ -498,8 +498,9 @@ export async function createPlanningRun(
       },
     });
 
-    const created = await deps.createRunRecord(recordInput, {
-      storeRawOutputs: asString(process.env.PLANNING_RUN_STORE_RAW_OUTPUTS).toLowerCase() === "true",
+    const created = await persistCreatePlanningRunRecord({
+      createRunRecord: deps.createRunRecord,
+      recordInput,
     });
     await recordStageMetricsSafely(deps, {
       requestId: runRequestId,
