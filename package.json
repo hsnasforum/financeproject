@@ -61,6 +61,7 @@
     "e2e:legacy": "node scripts/e2e_run.mjs",
     "e2e:docker": "node scripts/e2e_docker.mjs",
     "finlife:probe": "node scripts/finlife_probe_groups.mjs",
+    "finlife:inventory:report": "node scripts/finlife_inventory_report.mjs",
     "finlife:sync": "node scripts/finlife_sync.mjs",
     "finlife:sync:if-stale": "node scripts/finlife_sync_if_stale.mjs",
     "finlife:backfill-norms": "node scripts/finlife_backfill_norms.mjs",

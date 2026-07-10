@@ -37,6 +37,27 @@ unified source status는 `completionState=complete`인 증거의 `lastSyncedAt`�
 
 CLI와 runtime unified refresh는 `scripts/finlife_persistence.mjs`의 같은 DB/evidence/snapshot 순서를 사용합니다. `runFinlifeSnapshotSync` snapshot-only helper는 기존 내부 계약을 위해 남아 있지만 unified refresh에서는 호출하지 않습니다.
 
+## Inventory drift read-only 진단
+
+`pnpm finlife:inventory:report`는 Product active/prune migration 전에 code 단위 차이와 참조 위험을 확인하는 read-only 운영 명령입니다. `Product`와 `ExternalSourceSnapshot`을 읽고 JSON을 stdout으로 출력할 뿐 DB, snapshot, cache를 수정하지 않습니다.
+
+```bash
+DATABASE_URL=file:./prisma/dev.db pnpm finlife:inventory:report --kind=deposit
+```
+
+기본 입력은 `.data/finlife_<kind>_snapshot.json`입니다. inspect/replay에 사용한 normalized dump와 직접 대조하려면 같은 kind를 명시해 실행합니다.
+
+```bash
+DATABASE_URL=file:./prisma/dev.db pnpm finlife:inventory:report --kind=deposit --fromFile=artifacts/finlife_deposit.normalized.v1.json
+```
+
+- candidate source와 `completionState=complete` 증거가 같은 snapshot 시각 또는 replay basename으로 정렬되는지 별도 표시합니다.
+- candidate code를 현재 kind가 보유하면 `kept`, row가 없으면 `missing`, 다른 kind가 보유하면 priority 기준 `blocked-by-priority` 또는 `replaceable-owner`로 분류합니다.
+- 현재 kind DB row가 candidate source에 없으면 `staleObserved`에 기록하고 ProductOption, Favorite, ExternalProductMatch 참조 수를 함께 표시합니다.
+- evidence가 정렬되지 않으면 stale row는 `evidence-unaligned`로 표시합니다. 정렬되더라도 이 보고서는 삭제 가능성을 확정하지 않으며 mutation을 수행하지 않습니다.
+- replay 정렬은 completion evidence가 보존하는 basename 기준이므로 동일 이름 파일의 내용 동일성을 증명하지 않습니다.
+- 초기화된 populated DB가 필요합니다. schema가 없으면 안전한 오류로 종료하고, 요청한 kind의 Product와 completion evidence가 모두 없으면 다른 kind row가 있어도 `readiness.ready=false` JSON과 non-zero exit code를 반환합니다.
+
 ## 동기화 진입점
 
 - 운영 FINLIFE sync의 단일 진입점은 package script `pnpm finlife:sync`와 `pnpm finlife:sync:if-stale`입니다.

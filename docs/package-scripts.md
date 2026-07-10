@@ -35,7 +35,7 @@
 ## 수동 운영·데이터 명령
 
 - DART: `pnpm dart:corpindex`, `pnpm dart:ensure-corpindex`, `pnpm dart:watch*`, `pnpm dart:rules:*`
-- FINLIFE/DataGo/Gov24: `pnpm finlife:sync*`, `pnpm datago:sync`, `pnpm products:sync`, `pnpm gov24:sync*`
+- FINLIFE/DataGo/Gov24: `pnpm finlife:sync*`, `pnpm finlife:inventory:report`, `pnpm datago:sync`, `pnpm products:sync`, `pnpm gov24:sync*`
 - freshness/warmup: `pnpm freshness:report`, `pnpm data:doctor`, `pnpm warm:if-stale`, `pnpm daily:refresh*`
 - planning ops: `pnpm planning:v2:ops:*`, `pnpm planning:v2:backfill-legacy-runs`, `pnpm planning:v2:migrate:*`
 - 위 명령은 일반 PR 필수 게이트가 아니며, 실행했다면 `/work` 또는 release closeout에 목적과 결과를 남깁니다.
