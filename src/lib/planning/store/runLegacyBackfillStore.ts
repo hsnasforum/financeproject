@@ -2,6 +2,7 @@ import {
   backfillLegacyRunsWith,
   listLegacyRunBackfillCandidatesWith,
   summarizeLegacyRunBackfillWith,
+  type LegacyRunBackfillAnomalyRecorder,
   type LegacyRunBackfillCandidate,
   type LegacyRunBackfillResult,
   type LegacyRunBackfillSummary,
@@ -30,6 +31,7 @@ type CreateRunLegacyBackfillStoreInput = {
 type LegacyBackfillOptions = {
   limit?: number;
   includeOpsDoctor?: boolean;
+  recordBackfillAnomaly?: LegacyRunBackfillAnomalyRecorder;
 };
 
 type RunLegacyBackfillStore = {
@@ -46,20 +48,24 @@ export function createRunLegacyBackfillStore(input: CreateRunLegacyBackfillStore
     normalizeRawRun: input.normalizeRawRun,
   });
 
-  function toServiceDeps() {
+  function toServiceDeps(recordBackfillAnomaly?: LegacyRunBackfillAnomalyRecorder) {
     return {
       listIndexEntries: input.listIndexEntries,
       readRawRunForIndexEntry: rawReadStore.readRawRunForIndexEntry,
       readRunForCandidate: input.readRunForCandidate,
       ensureStartupMigrations: input.ensureStartupMigrations,
       isEngineEnvelopeLike: input.isEngineEnvelopeLike,
+      ...(recordBackfillAnomaly ? { recordBackfillAnomaly } : {}),
     };
   }
 
   return {
     summarize: () => summarizeLegacyRunBackfillWith(toServiceDeps()),
     listCandidates: (options) => listLegacyRunBackfillCandidatesWith(toServiceDeps(), options),
-    backfill: (options) => backfillLegacyRunsWith(toServiceDeps(), options),
+    backfill: (options) => backfillLegacyRunsWith(
+      toServiceDeps(options?.recordBackfillAnomaly),
+      options,
+    ),
     readRawRunForIndexEntry: rawReadStore.readRawRunForIndexEntry,
   };
 }

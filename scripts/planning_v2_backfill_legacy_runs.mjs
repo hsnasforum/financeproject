@@ -1,4 +1,8 @@
 import { tsImport } from "tsx/esm/api";
+import {
+  createLegacyBackfillAnomalyCollector,
+  summarizeLegacyBackfillAnomalies,
+} from "./planning_v2_legacy_backfill_anomalies.mjs";
 
 const REQUIRED_CONFIRM = "BACKFILL LEGACY RUNS";
 
@@ -60,6 +64,27 @@ function printCandidates(candidates) {
   }
 }
 
+function printAnomalySummary(events) {
+  const summary = summarizeLegacyBackfillAnomalies(events);
+  if (summary.total < 1) return;
+  console.log("[planning:v2:backfill-legacy-runs] anomalies");
+  console.log(`- total=${summary.total}`);
+  console.log(`- skipped=${summary.skipped}`);
+  console.log(`- failed=${summary.failed}`);
+  for (const [reason, count] of Object.entries(summary.byReason).sort(([left], [right]) => left.localeCompare(right))) {
+    console.log(`- reason.${reason}=${count}`);
+  }
+  for (const [reason, count] of Object.entries(summary.byCandidateReason).sort(([left], [right]) => left.localeCompare(right))) {
+    console.log(`- candidateReason.${reason}=${count}`);
+  }
+  for (const [errorName, count] of Object.entries(summary.byErrorName).sort(([left], [right]) => left.localeCompare(right))) {
+    console.log(`- errorName.${errorName}=${count}`);
+  }
+  for (const [runKind, count] of Object.entries(summary.byRunKind).sort(([left], [right]) => left.localeCompare(right))) {
+    console.log(`- runKind.${runKind}=${count}`);
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const modRaw = await tsImport("../src/lib/planning/store/runStore.ts", { parentURL: import.meta.url });
@@ -88,9 +113,11 @@ async function main() {
     process.exit(1);
   }
 
+  const anomalies = createLegacyBackfillAnomalyCollector();
   const result = await mod.backfillLegacyRuns({
     limit: args.limit,
     includeOpsDoctor: args.includeOpsDoctor,
+    recordBackfillAnomaly: anomalies.record,
   });
 
   console.log("[planning:v2:backfill-legacy-runs] apply");
@@ -98,6 +125,7 @@ async function main() {
   console.log(`- migrated=${result.migrated}`);
   console.log(`- skipped=${result.skipped}`);
   console.log(`- failed=${result.failed}`);
+  printAnomalySummary(anomalies.events);
   process.exit(result.failed > 0 ? 1 : 0);
 }
 

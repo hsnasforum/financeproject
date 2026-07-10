@@ -36,6 +36,15 @@ type LegacyBackfillReport = {
   applyResult?: {
     migrated?: number;
   };
+  applyAnomalies?: {
+    total?: number;
+    skipped?: number;
+    failed?: number;
+    byReason?: Record<string, number>;
+    byCandidateReason?: Record<string, number>;
+    byErrorName?: Record<string, number>;
+    byRunKind?: Record<string, number>;
+  };
   postApplyCandidateCount?: number;
   postApplySummary?: {
     legacyCandidates?: number;
@@ -205,6 +214,58 @@ describe("planning v2 ops safety pipeline", () => {
     expect(result.report.legacyBackfill.status).toBe("PASS");
     expect(result.report.legacyBackfill.reason).toBe("ok");
     expect(backfillSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("records aggregated apply anomalies without run or profile identifiers", async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-ops-safety-"));
+    const backfillSpy = vi.fn(async (options?: {
+      recordBackfillAnomaly?: (event: unknown) => Promise<void> | void;
+    }) => {
+      await options?.recordBackfillAnomaly?.({
+        candidateReason: "resultDtoOnly",
+        errorName: "TypeError",
+        outcome: "failed",
+        reason: "readException",
+        runKind: "user",
+      });
+      return { selected: 1, migrated: 0, skipped: 0, failed: 1, candidates: [] };
+    });
+    const result = await runOpsSafetyPipeline({
+      cwd: root,
+      opsPipelineRunner: async () => ({
+        ok: true,
+        report: { steps: [] },
+        reportPath: ".data/planning/ops/reports/ops.json",
+        logPath: ".data/planning/ops/logs/ops.log",
+      }),
+      legacyHelpers: {
+        summarizeLegacyRunBackfill: async () => ({ totalRuns: 1, legacyCandidates: 0 }),
+        listLegacyRunBackfillCandidates: async () => [],
+        backfillLegacyRuns: backfillSpy,
+      },
+      legacyMode: "apply",
+      confirm: "BACKFILL LEGACY RUNS",
+      legacyFailThreshold: 0,
+    });
+
+    expect(result.ok).toBe(false);
+    const legacy = result.report.legacyBackfill as LegacyBackfillReport;
+    expect(legacy.applyAnomalies).toEqual({
+      total: 1,
+      skipped: 0,
+      failed: 1,
+      byReason: { readException: 1 },
+      byCandidateReason: { resultDtoOnly: 1 },
+      byErrorName: { TypeError: 1 },
+      byRunKind: { user: 1 },
+    });
+    const log = fs.readFileSync(path.join(root, result.logPath), "utf8");
+    expect(log).toContain("[apply-anomalies]");
+    expect(log).toContain("reason.readException=1");
+    expect(log).toContain("errorName.TypeError=1");
+    const anomalyBlock = log.split("[apply-anomalies]")[1]?.split("[post-apply]")[0] ?? "";
+    expect(anomalyBlock).not.toContain("profile=");
+    expect(anomalyBlock).not.toContain("run-");
   });
 
   it("uses synthetic file-backed legacy data to report post-apply inventory", async () => {

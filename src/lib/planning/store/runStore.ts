@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { sanitizeRecordId } from "./paths";
 import { createRunBlobReadStore } from "./runBlobReadStore";
 import {
+  type LegacyRunBackfillAnomalyRecorder,
   type LegacyRunBackfillCandidate,
   type LegacyRunBackfillResult,
   type LegacyRunBackfillSummary,
@@ -39,6 +40,9 @@ import { type PlanningRunRecord } from "./types";
 
 export type { RunBlobName } from "./runBlobStore";
 export type {
+  LegacyRunBackfillAnomaly,
+  LegacyRunBackfillAnomalyReason,
+  LegacyRunBackfillAnomalyRecorder,
   LegacyRunBackfillCandidate,
   LegacyRunBackfillCandidateReason,
   LegacyRunBackfillResult,
@@ -210,6 +214,7 @@ export async function listLegacyRunBackfillCandidates(options?: {
 export async function backfillLegacyRuns(options?: {
   limit?: number;
   includeOpsDoctor?: boolean;
+  recordBackfillAnomaly?: LegacyRunBackfillAnomalyRecorder;
 }): Promise<LegacyRunBackfillResult> {
   assertServerOnly();
   return legacyRunBackfillStore.backfill(options);
