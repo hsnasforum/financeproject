@@ -22,6 +22,12 @@ import { pathToId } from "@/lib/forms/ids";
 import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 import {
+  buildRecommendHistoryHref,
+  buildRecommendInitialProfileState,
+  RECOMMEND_PROFILE_STORAGE_KEY,
+  resolveRecommendAutorunContinuation,
+} from "@/lib/recommend/recommendPageController";
+import {
   buildRunFromRecommend,
   exportRunCsv,
   exportRunJson,
@@ -47,7 +53,6 @@ import {
 } from "@/lib/recommend/recommendResultsViewModel";
 import {
   defaults as recommendProfileDefaults,
-  fromSearchParams as recommendProfileFromSearchParams,
   parseRecommendProfile,
   type RecommendProfileNormalized,
 } from "@/lib/schemas/recommendProfile";
@@ -62,42 +67,9 @@ type StatusApiResponse = {
   data?: SourceStatusRow[];
 };
 
-const STORAGE_KEY = "recommend_profile_v1";
 const ERROR_SUMMARY_ID = "recommend_error_summary";
 
 const defaultProfile: StoredProfile = recommendProfileDefaults();
-
-function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
-  profilePatch: Partial<StoredProfile>;
-  hasQuery: boolean;
-  autoRun: boolean;
-  autoSave: boolean;
-  goHistory: boolean;
-  source: string | null;
-  issues: Issue[];
-} {
-  const parsedPatch = recommendProfileFromSearchParams(searchParams);
-  const patch = parsedPatch.value;
-
-  const autorunRaw = (searchParams.get("autorun") ?? "").toLowerCase();
-  const autoRun = autorunRaw === "1" || autorunRaw === "true" || autorunRaw === "yes";
-  const saveRaw = (searchParams.get("save") ?? "").toLowerCase();
-  const autoSave = saveRaw === "1" || saveRaw === "true" || saveRaw === "yes";
-  const goRaw = (searchParams.get("go") ?? "").toLowerCase();
-  const goHistory = goRaw === "history";
-  const source = searchParams.get("from");
-  const hasQuery = Object.keys(patch).length > 0;
-
-  return {
-    profilePatch: patch,
-    hasQuery,
-    autoRun,
-    autoSave,
-    goHistory,
-    source,
-    issues: parsedPatch.issues,
-  };
-}
 
 function toSavedRunProfile(profile: StoredProfile): SavedRunProfile {
   return {
@@ -210,16 +182,17 @@ function RecommendPageInner() {
       if (options?.autoSave) {
         const sig = options.autorunSig ?? buildRecommendAutorunSignature(requestProfile);
         const previous = readRecommendAutorunSessionPayload();
-        if (previous?.sig === sig && previous.runId) {
-          if (options.goHistory) {
-            router.push(`/recommend/history?open=${encodeURIComponent(previous.runId)}`);
-          }
+        const continuation = resolveRecommendAutorunContinuation({
+          signature: sig,
+          previous,
+          goHistory: options.goHistory === true,
+        });
+        if (continuation.kind === "reuse") {
+          if (continuation.historyHref) router.push(continuation.historyHref);
         } else {
           const runId = saveRunFromRecommend(toSavedRunProfile(requestProfile), json);
-          writeRecommendAutorunSessionPayload({ sig, runId });
-          if (options.goHistory) {
-            router.push(`/recommend/history?open=${encodeURIComponent(runId)}`);
-          }
+          writeRecommendAutorunSessionPayload({ sig: continuation.signature, runId });
+          if (continuation.goHistory) router.push(buildRecommendHistoryHref(runId));
         }
       }
     } catch {
@@ -233,25 +206,16 @@ function RecommendPageInner() {
 
   useEffect(() => {
     let active = true;
-    let nextProfile: StoredProfile = recommendProfileDefaults();
+    let storedProfileRaw: string | null = null;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        const normalized = parseRecommendProfile({
-          ...nextProfile,
-          ...(typeof parsed === "object" && parsed ? (parsed as Record<string, unknown>) : {}),
-        });
-        nextProfile = normalized.value;
-      }
+      storedProfileRaw = localStorage.getItem(RECOMMEND_PROFILE_STORAGE_KEY);
     } catch {
       // ignore
     }
 
-    const queryOverrides = parseQueryOverrides(searchParams);
-    if (queryOverrides.hasQuery) {
-      nextProfile = parseRecommendProfile({ ...nextProfile, ...queryOverrides.profilePatch }).value;
-    }
+    const initialState = buildRecommendInitialProfileState({ searchParams, storedProfileRaw });
+    const nextProfile = initialState.profile;
+    const queryOverrides = initialState.queryOverrides;
     const stored = parseStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>(
       localStorage.getItem(RECOMMEND_RESULT_STORAGE_KEY),
     );
@@ -288,7 +252,7 @@ function RecommendPageInner() {
 
   useEffect(() => {
     if (!readyToPersist) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    localStorage.setItem(RECOMMEND_PROFILE_STORAGE_KEY, JSON.stringify(profile));
   }, [profile, readyToPersist]);
 
   useEffect(() => {

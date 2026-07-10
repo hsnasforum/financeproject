@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "scannedAt": "2026-06-23",
+  "scannedAt": "2026-07-11",
   "sourceGlob": "src/**/*.{ts,tsx}",
   "scanPattern": "localStorage|sessionStorage",
   "allowedCategories": [
@@ -10,17 +10,17 @@
     "legacy-fallback"
   ],
   "notes": [
-    "2026-06-23 current scan finds 35 src files, not the older /work note count of 44.",
+    "2026-07-11 current scan finds 36 src files, not the older /work note count of 44.",
     "Files with mixed storage purposes list multiple categories.",
     "This inventory documents the current client-storage boundary; it does not approve adding new storage references without classification."
   ],
   "files": [
     {
       "file": "src/app/recommend/page.tsx",
-      "storage": ["localStorage", "sessionStorage"],
+      "storage": ["localStorage"],
       "categories": ["permanent-user-setting", "temporary-draft"],
-      "purpose": "추천 입력 프로필과 마지막 결과를 보존하고, 자동 실행 중복 방지 신호를 탭 세션에 저장합니다.",
-      "rscPlan": "프로필과 결과는 서버 저장소 또는 URL 기반 run id로 옮길 후보이고, autorun 신호는 탭 단위 client state로 유지합니다."
+      "purpose": "추천 입력 프로필과 마지막 결과를 브라우저에 보존해 재방문 시 이전 조건과 결과 요약을 복원합니다.",
+      "rscPlan": "프로필과 결과는 서버 저장소 또는 URL 기반 run id로 옮길 후보입니다."
     },
     {
       "file": "src/components/AlertRulesClient.tsx",
@@ -245,6 +245,13 @@
       "categories": ["permanent-user-setting"],
       "purpose": "planner link open mode preference를 저장합니다.",
       "rscPlan": "사용자 preference API 후보입니다."
+    },
+    {
+      "file": "src/lib/recommend/recommendStorageAdapter.ts",
+      "storage": ["sessionStorage"],
+      "categories": ["temporary-draft"],
+      "purpose": "같은 추천 자동 실행 signature의 중복 저장을 막기 위해 run id를 탭 세션에 보존합니다.",
+      "rscPlan": "탭 단위 중복 실행 방지 상태이므로 서버 초기 데이터보다 짧은 client session state로 유지합니다."
     },
     {
       "file": "src/lib/recommend/savedRunsStore.ts",

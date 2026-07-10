@@ -27,23 +27,7 @@ async function expectNoCspConsoleErrors(page: Page, routePath: string) {
   expect(violations).toEqual([]);
 }
 
-test("dashboard renders", async ({ page }) => {
-  await page.goto("/dashboard");
-  await expect(page.getByTestId("dashboard-root")).toBeVisible();
-});
-
-test("planning page renders", async ({ page }) => {
-  await page.goto("/planning");
-  await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
-});
-
-test("recommend page renders", async ({ page }) => {
-  await page.goto("/recommend");
-  await expect(page.getByTestId("recommend-root")).toBeVisible();
-  await expect(page.getByTestId("recommend-submit")).toBeVisible();
-});
-
-test("recommend result panel keeps the submit-to-detail flow", async ({ page }) => {
+async function mockRecommendResult(page: Page) {
   await page.route("**/api/recommend**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -99,6 +83,26 @@ test("recommend result panel keeps the submit-to-detail flow", async ({ page }) 
       body: JSON.stringify({ ok: true, data: [] }),
     });
   });
+}
+
+test("dashboard renders", async ({ page }) => {
+  await page.goto("/dashboard");
+  await expect(page.getByTestId("dashboard-root")).toBeVisible();
+});
+
+test("planning page renders", async ({ page }) => {
+  await page.goto("/planning");
+  await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
+});
+
+test("recommend page renders", async ({ page }) => {
+  await page.goto("/recommend");
+  await expect(page.getByTestId("recommend-root")).toBeVisible();
+  await expect(page.getByTestId("recommend-submit")).toBeVisible();
+});
+
+test("recommend result panel keeps the submit-to-detail flow", async ({ page }) => {
+  await mockRecommendResult(page);
 
   await page.goto("/recommend");
   await page.waitForLoadState("networkidle");
@@ -114,6 +118,30 @@ test("recommend result panel keeps the submit-to-detail flow", async ({ page }) 
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "닫기", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
+});
+
+test("recommend autorun reuses the saved history run for the same signature", async ({ page }) => {
+  await mockRecommendResult(page);
+  const autorunUrl = "/recommend?purpose=emergency&kind=deposit&preferredTerm=3&liquidityPref=high&rateMode=max&pool=unified&autorun=1&save=1&go=history";
+
+  await page.goto(autorunUrl);
+  await expect(page).toHaveURL(/\/recommend\/history\?open=run_/, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "추천 비교 기록" })).toBeVisible();
+  await expect(page.getByText("결과 패널 검증 예금").first()).toBeVisible();
+  const firstRunId = new URL(page.url()).searchParams.get("open");
+  expect(firstRunId).toMatch(/^run_/);
+  expect(await page.evaluate(() => {
+    const raw = localStorage.getItem("recommend_saved_runs_v1");
+    return raw ? JSON.parse(raw).length : 0;
+  })).toBe(1);
+
+  await page.goto(autorunUrl);
+  await expect(page).toHaveURL(/\/recommend\/history\?open=run_/, { timeout: 30_000 });
+  expect(new URL(page.url()).searchParams.get("open")).toBe(firstRunId);
+  expect(await page.evaluate(() => {
+    const raw = localStorage.getItem("recommend_saved_runs_v1");
+    return raw ? JSON.parse(raw).length : 0;
+  })).toBe(1);
 });
 
 test("dart page shows missing index guidance when index absent", async ({ page, request }) => {
