@@ -234,6 +234,21 @@
 - 커밋: `chore(release): vX.Y.Z`
 - 태그: `vX.Y.Z`
 
+자동 릴리즈 조건:
+
+1. 태그는 `package.json`의 정확한 버전(`vX.Y.Z`)과 일치해야 합니다.
+2. 태그 커밋은 원격 기본 브랜치의 조상이어야 하며, checkout SHA·로컬 태그·원격 태그가 모두 같은 커밋을 가리켜야 합니다.
+3. `pnpm release:verify`가 통과한 뒤 같은 checkout에서 Planning v2 desktop artifact를 한 번만 빌드합니다.
+4. 검증 전후에 tracked/untracked 변경과 desktop 빌더가 복사하는 source root의 ignored 파일이 없어야 합니다.
+5. 릴리즈에는 태그가 포함된 archive, inventory, manifest 3개만 게시합니다. manifest에는 source SHA, package/tag, Node·pnpm·OS·architecture, desktop manifest·lockfile·artifact checksum, archive·inventory checksum과 file count를 기록합니다.
+6. 게시 직전에 원격 태그와 다운로드한 provenance를 다시 검증합니다. 같은 태그의 GitHub Release가 이미 있으면 자동 덮어쓰기하지 않고 실패합니다.
+
+자동화 권한은 검증·패키징 job의 `contents: read`와 게시 job의 `contents: write`로 분리합니다. 실제 tag push와 Release 생성은 운영 변경이므로 이 절차를 검증할 때 임의 태그를 만들지 않습니다.
+
+[검증 필요] 저장소 설정의 protected tag 또는 release environment 승인 규칙은 workflow 파일만으로 강제할 수 없습니다. 특히 tag push는 태그가 가리키는 과거 커밋의 workflow를 실행할 수 있으므로, 이 hardening이 들어가기 전 커밋에 새 release tag를 만들면 과거 릴리스 절차가 다시 실행될 위험이 있습니다. `v*` 태그 생성자를 release owner로 제한하고 hardening 이전 커밋에는 새 태그를 만들지 않는 ruleset을 운영 정책에서 먼저 적용해야 합니다.
+
+[현재 제약] raw `.next/standalone`에 허용되지 않은 pnpm 내부 symlink가 남으면 desktop artifact builder가 fail-closed로 중단합니다. 자동 릴리즈는 이를 우회하거나 임의로 materialize하지 않으며, 해당 원인은 Issue #223의 별도 해결 범위입니다.
+
 롤백:
 
 1. 직전 안정 태그로 코드 복구

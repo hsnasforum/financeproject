@@ -34,9 +34,18 @@
 
 - [ ] 커밋: `chore(release): vX.Y.Z`
 - [ ] 태그: `vX.Y.Z`
+- [ ] 태그가 `package.json` 버전과 정확히 일치하는지 확인
+- [ ] 태그 커밋이 최신 원격 `main`의 조상인지 확인
+- [ ] `v*` protected tag/ruleset이 release owner만 태그를 만들도록 제한하는지 확인
+- [ ] release hardening 이전 과거 커밋에는 새 태그를 만들지 않았는지 확인
 - [ ] 푸시:
   - [ ] `git push origin <branch>`
   - [ ] `git push origin vX.Y.Z`
+- [ ] Release workflow의 `Required release verification`과 `Build desktop artifact`가 PASS인지 확인
+- [ ] 게시 asset이 `planning-v2-desktop-vX.Y.Z.tar.gz`, `.inventory.json`, `.manifest.json` 3개인지 확인
+- [ ] manifest의 source SHA·toolchain·lockfile·artifact/archive/inventory checksum과 file count를 확인
+- [ ] 같은 태그의 기존 GitHub Release가 없는지 확인; 있으면 덮어쓰지 말고 중단
+- [ ] workflow 실패 시 Release와 asset이 생성되지 않았는지 확인
 
 ## 5) Rollback Notes
 
