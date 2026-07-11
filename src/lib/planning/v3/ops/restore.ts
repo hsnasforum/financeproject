@@ -2,6 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import {
+  assertPlanningOwnerAuxiliaryPathOutsideOwners,
+  previewPlanningOwnerArchive,
+  readPlanningOwnerArchiveFile,
+  readPlanningOwnerSecretFile,
+  type PlanningOwnerArchivePreview,
+} from "@/lib/ops/backup/planningOwnerArchive";
+import {
+  createPlanningArchiveContext,
+  resolvePlanningDataOwners,
+} from "@/lib/ops/backup/planningOwnerRegistry";
 import { decodeZip } from "@/lib/ops/backup/zipCodec";
 import { AlertEventSchema } from "../alerts/contracts";
 import { ExposureProfileSchema } from "../exposure/contracts";
@@ -40,6 +51,8 @@ type RestorePlan = {
 type ParsedArgs = {
   archivePath: string;
   apply: boolean;
+  format: "legacy" | "owner";
+  passphraseFile?: string;
 };
 
 type RunV3RestoreInput = {
@@ -48,6 +61,23 @@ type RunV3RestoreInput = {
   apply?: boolean;
   now?: Date;
 };
+
+type RunV3OwnerRestorePreviewInput = {
+  cwd?: string;
+  archivePath?: string;
+  apply?: boolean;
+  now?: Date;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  userId?: string;
+  secret: Uint8Array;
+};
+
+export type V3OwnerRestorePreviewSummary = PlanningOwnerArchivePreview & Readonly<{
+  mode: "preview";
+  archivePath: string;
+  checkedAt: string;
+}>;
 
 export const V3_RESTORE_APPLY_DISABLED_CODE = "V3_RESTORE_APPLY_DISABLED";
 
@@ -58,6 +88,10 @@ export class V3RestoreApplyDisabledError extends Error {
     super("owner-aware staged restore가 준비될 때까지 --apply는 비활성 상태입니다.");
     this.name = "V3RestoreApplyDisabledError";
   }
+}
+
+function assertV3RestoreApplyDisabled(apply: boolean | undefined): void {
+  if (apply) throw new V3RestoreApplyDisabledError();
 }
 
 export type V3RestoreSummary = {
@@ -340,12 +374,29 @@ function restoreEntries(rootDir: string, entries: RestoreEntry[]): { restoredFil
 function parseArgs(argv: string[]): ParsedArgs {
   let archivePath = "";
   let apply = false;
+  let format: ParsedArgs["format"] = "legacy";
+  let passphraseFile = "";
 
   for (const token of argv) {
     const normalized = asString(token);
     if (!normalized.startsWith("--")) continue;
     if (normalized === "--apply") {
       apply = true;
+      continue;
+    }
+    if (normalized.startsWith("--passphrase=")) {
+      throw new Error("ARG_FORBIDDEN:--passphrase=<literal>");
+    }
+    if (normalized.startsWith("--format=")) {
+      const requested = normalized.slice("--format=".length);
+      if (requested !== "legacy" && requested !== "owner") {
+        throw new Error("ARG_INVALID:--format=<legacy|owner>");
+      }
+      format = requested;
+      continue;
+    }
+    if (normalized.startsWith("--passphrase-file=")) {
+      passphraseFile = normalized.slice("--passphrase-file=".length);
       continue;
     }
     if (normalized.startsWith("--in=")) {
@@ -360,13 +411,13 @@ function parseArgs(argv: string[]): ParsedArgs {
   return {
     archivePath,
     apply,
+    format,
+    ...(passphraseFile ? { passphraseFile } : {}),
   };
 }
 
 export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3RestoreSummary> {
-  if (input.apply) {
-    throw new V3RestoreApplyDisabledError();
-  }
+  assertV3RestoreApplyDisabled(input.apply);
 
   const rootDir = path.resolve(asString(input.cwd) || process.cwd());
   const now = input.now instanceof Date ? input.now : new Date();
@@ -446,6 +497,52 @@ export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3Res
   }
 }
 
+export async function runV3OwnerRestorePreview(
+  input: RunV3OwnerRestorePreviewInput,
+): Promise<V3OwnerRestorePreviewSummary> {
+  assertV3RestoreApplyDisabled(input.apply);
+  const rootDir = path.resolve(asString(input.cwd) || process.cwd());
+  const archivePathRaw = asString(input.archivePath);
+  if (!archivePathRaw) {
+    throw new Error("ARG_REQUIRED:archivePath");
+  }
+  const archivePath = path.isAbsolute(archivePathRaw)
+    ? path.resolve(archivePathRaw)
+    : path.resolve(rootDir, archivePathRaw);
+  const context = createPlanningArchiveContext({
+    cwd: rootDir,
+    env: input.env,
+    platform: input.platform,
+    userId: input.userId,
+  });
+  const owners = resolvePlanningDataOwners(context);
+  await assertPlanningOwnerAuxiliaryPathOutsideOwners({
+    owners,
+    candidatePath: archivePath,
+    platform: context.platform,
+    purpose: "archive",
+  });
+  const encryptedBytes = await readPlanningOwnerArchiveFile({
+    archivePath,
+    platform: context.platform,
+  });
+  try {
+    const preview = await previewPlanningOwnerArchive({
+      encryptedBytes,
+      secret: input.secret,
+      owners,
+    });
+    return Object.freeze({
+      ...preview,
+      mode: "preview",
+      archivePath,
+      checkedAt: (input.now instanceof Date ? input.now : new Date()).toISOString(),
+    });
+  } finally {
+    encryptedBytes.fill(0);
+  }
+}
+
 function printSummary(summary: V3RestoreSummary): void {
   console.log(`[v3:restore] mode=${summary.mode} checkedAt=${summary.checkedAt}`);
   console.log(`[v3:restore] archive=${summary.archivePath}`);
@@ -464,8 +561,45 @@ function printSummary(summary: V3RestoreSummary): void {
   }
 }
 
+function printOwnerPreviewSummary(summary: V3OwnerRestorePreviewSummary): void {
+  console.log(`[v3:restore] mode=${summary.mode} format=${summary.archiveFormat} checkedAt=${summary.checkedAt}`);
+  console.log(`[v3:restore] archive=${summary.archivePath}`);
+  console.log(`[v3:restore] totals owners=${summary.totals.owners} files=${summary.totals.files} emptyOwners=${summary.totals.emptyOwners} bytes=${summary.totals.bytes}`);
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  assertV3RestoreApplyDisabled(args.apply);
+  if (args.format === "owner") {
+    if (!args.passphraseFile) {
+      throw new Error("ARG_REQUIRED:--passphrase-file=<path>");
+    }
+    const rootDir = process.cwd();
+    const context = createPlanningArchiveContext({ cwd: rootDir });
+    const owners = resolvePlanningDataOwners(context);
+    const secretPath = path.resolve(rootDir, args.passphraseFile);
+    await assertPlanningOwnerAuxiliaryPathOutsideOwners({
+      owners,
+      candidatePath: secretPath,
+      platform: context.platform,
+      purpose: "secret",
+    });
+    const secret = await readPlanningOwnerSecretFile({
+      secretPath,
+      platform: context.platform,
+    });
+    try {
+      const summary = await runV3OwnerRestorePreview({
+        archivePath: args.archivePath,
+        secret,
+      });
+      printOwnerPreviewSummary(summary);
+      console.log("[v3:restore] owner archive preview completed. --apply remains disabled.");
+    } finally {
+      secret.fill(0);
+    }
+    return;
+  }
   const summary = await runV3Restore({
     archivePath: args.archivePath,
     apply: args.apply,
