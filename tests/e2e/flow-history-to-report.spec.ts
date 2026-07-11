@@ -1,4 +1,4 @@
-import { type APIRequestContext } from "@playwright/test";
+import { type APIRequestContext, type ConsoleMessage } from "@playwright/test";
 import { expect, test, type Page } from "./helpers/e2eTest";
 
 const DEFAULT_RUN_INPUT = {
@@ -149,6 +149,25 @@ async function gotoWithAbortRetry(page: Page, url: string) {
   }
 }
 
+function collectHydrationMismatchMessages(page: Page) {
+  const messages: string[] = [];
+  const onConsole = (message: ConsoleMessage) => {
+    const text = message.text();
+    if (
+      text.includes("A tree hydrated")
+      || text.includes("Hydration failed")
+      || text.includes("server rendered HTML didn't match")
+    ) {
+      messages.push(text);
+    }
+  };
+  page.on("console", onConsole);
+  return {
+    messages,
+    stop: () => page.off("console", onConsole),
+  };
+}
+
 test("planning runs and reports pages render", async ({ page }) => {
   await page.goto("/planning/runs");
   await expect(page.getByRole("heading", { name: "실행 기록", exact: true })).toBeVisible({ timeout: 30_000 });
@@ -214,6 +233,7 @@ test("planning runs selected and compare states show distinct report follow-thro
 
 test("planning reports preserve compare and recommendation deep links", async ({ page, request }) => {
   const profileId = await createSeedProfile(request);
+  const hydration = collectHydrationMismatchMessages(page);
   try {
     const baselineRunTitle = `딥링크 기준 실행 ${Date.now()}`;
     const selectedRunTitle = `딥링크 선택 실행 ${Date.now()}`;
@@ -269,7 +289,9 @@ test("planning reports preserve compare and recommendation deep links", async ({
     await expect(page.getByRole("link", { name: "추천 비교 기록으로 돌아가기" })).toHaveAttribute("href", recommendHistoryHref);
     await expect(page.getByText("추천 실행 ID")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(recommendRunId)).toBeVisible({ timeout: 30_000 });
+    expect(hydration.messages).toEqual([]);
   } finally {
+    hydration.stop();
     await deleteSeedProfile(request, profileId);
   }
 });
