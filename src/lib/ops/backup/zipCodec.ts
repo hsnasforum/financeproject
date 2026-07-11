@@ -283,6 +283,15 @@ export function encodeZip(entriesInput: ZipFileEntry[]): Buffer {
   return Buffer.concat([...localParts, ...centralParts, eocd]);
 }
 
+function byteRangesOverlap(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.buffer !== right.buffer) return false;
+  const leftStart = left.byteOffset;
+  const leftEnd = leftStart + left.byteLength;
+  const rightStart = right.byteOffset;
+  const rightEnd = rightStart + right.byteLength;
+  return leftStart < rightEnd && rightStart < leftEnd;
+}
+
 export async function decodeZip(
   input: Uint8Array | Buffer,
   options: {
@@ -295,6 +304,7 @@ export async function decodeZip(
   const maxEntries = Math.max(1, Math.trunc(options.maxEntries));
   const maxTotalBytes = Math.max(1, Math.trunc(options.maxTotalBytes));
   const maxEntryBytes = Math.max(1, Math.trunc(options.maxEntryBytes ?? maxTotalBytes));
+  const ownsSource = !Buffer.isBuffer(input);
   const source = Buffer.isBuffer(input) ? input : Buffer.from(input);
   const strict = options.strict;
   const maxArchiveBytes = strict
@@ -307,28 +317,44 @@ export async function decodeZip(
     ? asSafeLimit(strict.maxTotalCompressedBytes, maxTotalBytes)
     : Number.MAX_SAFE_INTEGER;
 
-  if (source.length > maxArchiveBytes) {
-    throw new Error("ZIP_ARCHIVE_LIMIT_EXCEEDED");
-  }
+  try {
+    if (source.length > maxArchiveBytes) {
+      throw new Error("ZIP_ARCHIVE_LIMIT_EXCEEDED");
+    }
 
-  return new Promise<Map<string, Buffer>>((resolve, reject) => {
-    yauzl.fromBuffer(source, {
-      lazyEntries: true,
-      decodeStrings: true,
-      strictFileNames: Boolean(strict),
-      validateEntrySizes: true,
-    }, (openErr, zipfile) => {
-      if (openErr || !zipfile) {
-        const message = openErr instanceof Error ? openErr.message : "open failed";
-        reject(new Error(`INVALID_ZIP:${message}`));
-        return;
-      }
+    return await new Promise<Map<string, Buffer>>((resolve, reject) => {
+      yauzl.fromBuffer(source, {
+        lazyEntries: true,
+        decodeStrings: true,
+        strictFileNames: Boolean(strict),
+        validateEntrySizes: true,
+      }, (openErr, zipfile) => {
+        if (openErr || !zipfile) {
+          const message = openErr instanceof Error ? openErr.message : "open failed";
+          reject(new Error(`INVALID_ZIP:${message}`));
+          return;
+        }
 
       const out = new Map<string, Buffer>();
       let totalBytes = 0;
       let totalCompressedBytes = 0;
       let seenCentralEntries = 0;
       let finished = false;
+      let activeChunks: Buffer[] | undefined;
+
+      const zeroBuffers = (buffers: Iterable<Buffer>): void => {
+        for (const bytes of buffers) bytes.fill(0);
+      };
+
+      const discardPartialOutput = (): void => {
+        if (activeChunks) {
+          zeroBuffers(activeChunks);
+          activeChunks.length = 0;
+          activeChunks = undefined;
+        }
+        zeroBuffers(out.values());
+        out.clear();
+      };
 
       if (!Number.isSafeInteger(zipfile.entryCount) || zipfile.entryCount > maxEntries) {
         zipfile.close();
@@ -339,6 +365,7 @@ export async function decodeZip(
       const fail = (error: Error) => {
         if (finished) return;
         finished = true;
+        discardPartialOutput();
         zipfile.close();
         reject(error);
       };
@@ -434,16 +461,24 @@ export async function decodeZip(
             return;
           }
           const chunks: Buffer[] = [];
+          activeChunks = chunks;
           let entryBytes = 0;
 
           stream.on("data", (chunk: Buffer | Uint8Array | string) => {
-            if (finished) return;
-            const bytes = Buffer.isBuffer(chunk)
-              ? chunk
-              : (typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+            const bytes = typeof chunk === "string"
+              ? Buffer.from(chunk)
+              : Buffer.from(chunk);
+            if (typeof chunk !== "string" && !byteRangesOverlap(chunk, source)) {
+              chunk.fill(0);
+            }
+            if (finished) {
+              bytes.fill(0);
+              return;
+            }
             entryBytes += bytes.length;
             totalBytes += bytes.length;
             if (entryBytes > maxEntryBytes || totalBytes > maxTotalBytes) {
+              bytes.fill(0);
               fail(new Error("ZIP_SIZE_LIMIT_EXCEEDED"));
               stream.destroy(new Error("ZIP_SIZE_LIMIT_EXCEEDED"));
               return;
@@ -456,8 +491,34 @@ export async function decodeZip(
           });
           stream.on("end", () => {
             if (finished) return;
-            out.set(fileName, Buffer.concat(chunks));
-            zipfile.readEntry();
+            let decodedBytes: Buffer | undefined;
+            let returned = false;
+            try {
+              decodedBytes = Buffer.allocUnsafe(entryBytes);
+              let offset = 0;
+              for (const chunk of chunks) {
+                offset += chunk.copy(decodedBytes, offset);
+              }
+              if (offset !== entryBytes) {
+                throw new Error("ZIP_ENTRY_SIZE_CHANGED");
+              }
+              out.set(fileName, decodedBytes);
+              returned = true;
+              activeChunks = undefined;
+              zeroBuffers(chunks);
+              chunks.length = 0;
+              zipfile.readEntry();
+            } catch (error) {
+              if (!returned) decodedBytes?.fill(0);
+              const message = error instanceof Error ? error.message : "read_entry_failed";
+              fail(new Error(`INVALID_ZIP_ENTRY:${message}`));
+            } finally {
+              if (activeChunks === chunks) {
+                zeroBuffers(chunks);
+                chunks.length = 0;
+                activeChunks = undefined;
+              }
+            }
           });
         });
       });
@@ -468,7 +529,10 @@ export async function decodeZip(
         resolve(out);
       });
 
-      zipfile.readEntry();
+        zipfile.readEntry();
+      });
     });
-  });
+  } finally {
+    if (ownsSource) source.fill(0);
+  }
 }

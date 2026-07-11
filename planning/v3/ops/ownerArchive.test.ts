@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import crypto, { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_PLANNING_OWNER_ARCHIVE_LIMITS,
   buildPlanningOwnerArchive,
@@ -59,6 +59,21 @@ async function errorCode(run: () => unknown | Promise<unknown>): Promise<string>
   throw new Error("expected failure");
 }
 
+function observeBufferZeroization(
+  matches: (bytes: Buffer) => boolean,
+): { captured: Buffer[]; restore: () => void } {
+  const captured: Buffer[] = [];
+  const originalFill = Buffer.prototype.fill;
+  const spy = vi.spyOn(Buffer.prototype, "fill").mockImplementation(function (
+    this: Buffer,
+    ...args: unknown[]
+  ): Buffer {
+    if (matches(this)) captured.push(this);
+    return Reflect.apply(originalFill, this, args) as Buffer;
+  });
+  return { captured, restore: () => spy.mockRestore() };
+}
+
 function createContext(
   root: string,
   options: {
@@ -98,20 +113,31 @@ async function rewrapArchive(input: {
   encryptedBytes: Buffer;
   mutate: (entries: Map<string, Buffer>) => void;
 }): Promise<Buffer> {
-  const zipBytes = await decryptPlanningOwnerArchiveBytes({
-    encryptedBytes: input.encryptedBytes,
-    secret: SECRET,
-  });
-  const entries = await decodeZip(zipBytes, {
-    maxEntries: 20_000,
-    maxEntryBytes: 64 * 1024 * 1024,
-    maxTotalBytes: 70 * 1024 * 1024,
-  });
-  input.mutate(entries);
-  return encryptPlanningOwnerArchiveBytes({
-    zipBytes: encodeZip([...entries].map(([entryPath, bytes]) => ({ path: entryPath, bytes }))),
-    secret: SECRET,
-  });
+  let zipBytes: Buffer | undefined;
+  let entries: Map<string, Buffer> | undefined;
+  let encoded: Buffer | undefined;
+  try {
+    zipBytes = await decryptPlanningOwnerArchiveBytes({
+      encryptedBytes: input.encryptedBytes,
+      secret: SECRET,
+    });
+    entries = await decodeZip(zipBytes, {
+      maxEntries: 20_000,
+      maxEntryBytes: 64 * 1024 * 1024,
+      maxTotalBytes: 70 * 1024 * 1024,
+    });
+    input.mutate(entries);
+    encoded = encodeZip([...entries].map(([entryPath, bytes]) => ({ path: entryPath, bytes })));
+    return await encryptPlanningOwnerArchiveBytes({
+      zipBytes: encoded,
+      secret: SECRET,
+    });
+  } finally {
+    zipBytes?.fill(0);
+    encoded?.fill(0);
+    for (const bytes of entries?.values() ?? []) bytes.fill(0);
+    entries?.clear();
+  }
 }
 
 function replaceZipNames(bytes: Buffer, from: string, to: string): Buffer {
@@ -303,6 +329,225 @@ describe("planning owner encrypted archive", () => {
     }
     expect(errorPathPayload).toBeDefined();
     expect(errorPathPayload?.every((byte) => byte === 0)).toBe(true);
+  });
+
+  it("zeroizes decrypted plaintext when AES-GCM final authentication fails", async () => {
+    const root = createRoot("auth-failure-zeroize");
+    const item = createContext(root);
+    writeBytes(ownerLocation(item.owners, "v3.accounts", "accounts.json"), '{"secret":"auth-failure-sensitive"}\n');
+    const built = await buildArchive(item);
+    const envelope = JSON.parse(built.encryptedBytes.toString("utf-8")) as {
+      aead: { tag: string };
+    };
+    const tag = Buffer.from(envelope.aead.tag, "base64");
+    tag[0] ^= 0xff;
+    envelope.aead.tag = tag.toString("base64");
+    const tampered = Buffer.from(JSON.stringify(envelope), "utf-8");
+    const zipMagic = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+    const observed = observeBufferZeroization((bytes) => bytes.subarray(0, zipMagic.length).equals(zipMagic));
+    let code: string;
+    try {
+      code = await errorCode(() => decryptPlanningOwnerArchiveBytes({
+        encryptedBytes: tampered,
+        secret: SECRET,
+      }));
+    } finally {
+      observed.restore();
+    }
+
+    expect(code!).toBe("OWNER_ARCHIVE_AUTH_FAILED");
+    expect(observed.captured.length).toBeGreaterThan(0);
+    expect(observed.captured.every((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
+  });
+
+  it("zeroizes ZIP intermediates on success and partial output on decode failure", async () => {
+    const successMarker = Buffer.from("zip-success-sensitive-payload", "utf-8");
+    const successArchive = encodeZip([{ path: "success.txt", bytes: successMarker }]);
+    const successArchiveBefore = Buffer.from(successArchive);
+    const successObserved = observeBufferZeroization((bytes) => bytes.includes(successMarker));
+    let decoded: Map<string, Buffer> | undefined;
+    try {
+      decoded = await decodeZip(successArchive, {
+        maxEntries: 10,
+        maxEntryBytes: 1024,
+        maxTotalBytes: 2048,
+      });
+    } finally {
+      successObserved.restore();
+    }
+    expect(decoded?.get("success.txt")).toEqual(successMarker);
+    expect(successArchive).toEqual(successArchiveBefore);
+    expect(successObserved.captured.length).toBeGreaterThan(0);
+    expect(successObserved.captured.every((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
+    for (const bytes of decoded?.values() ?? []) bytes.fill(0);
+
+    const firstMarker = Buffer.from("zip-completed-output-sensitive", "utf-8");
+    const secondMarker = Buffer.from("zip-active-chunk-sensitive", "utf-8");
+    const failingArchive = encodeZip([
+      { path: "first.txt", bytes: firstMarker },
+      { path: "second.txt", bytes: secondMarker },
+    ]);
+    const failingArchiveBefore = Buffer.from(failingArchive);
+    const failureObserved = observeBufferZeroization((bytes) => (
+      bytes.includes(firstMarker) || bytes.includes(secondMarker)
+    ));
+    let failure: unknown;
+    try {
+      await decodeZip(failingArchive, {
+        maxEntries: 10,
+        maxEntryBytes: 1024,
+        maxTotalBytes: firstMarker.length + secondMarker.length - 1,
+      }).catch((error: unknown) => {
+        failure = error;
+      });
+    } finally {
+      failureObserved.restore();
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain("ZIP_SIZE_LIMIT_EXCEEDED");
+    expect(failingArchive).toEqual(failingArchiveBefore);
+    expect(failureObserved.captured.length).toBeGreaterThanOrEqual(3);
+    expect(failureObserved.captured.every((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
+
+    const typedArchive = Uint8Array.from(successArchiveBefore);
+    const typedArchiveBefore = Uint8Array.from(typedArchive);
+    const typedObserved = observeBufferZeroization((bytes) => (
+      bytes.length === successArchiveBefore.length && bytes.equals(successArchiveBefore)
+    ));
+    let typedDecoded: Map<string, Buffer> | undefined;
+    try {
+      typedDecoded = await decodeZip(typedArchive, {
+        maxEntries: 10,
+        maxEntryBytes: 1024,
+        maxTotalBytes: 2048,
+      });
+    } finally {
+      typedObserved.restore();
+    }
+    expect(typedArchive).toEqual(typedArchiveBefore);
+    expect(typedDecoded?.get("success.txt")).toEqual(successMarker);
+    expect(typedObserved.captured.some((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
+    for (const bytes of typedDecoded?.values() ?? []) bytes.fill(0);
+
+    const limitedArchive = Uint8Array.from(successArchiveBefore);
+    const limitedArchiveBefore = Uint8Array.from(limitedArchive);
+    const limitedObserved = observeBufferZeroization((bytes) => (
+      bytes.length === successArchiveBefore.length && bytes.equals(successArchiveBefore)
+    ));
+    let limitedFailure: unknown;
+    try {
+      await decodeZip(limitedArchive, {
+        maxEntries: 10,
+        maxEntryBytes: 1024,
+        maxTotalBytes: 2048,
+        strict: {
+          maxArchiveBytes: successArchiveBefore.length - 1,
+          maxCompressedEntryBytes: 1024,
+          maxTotalCompressedBytes: 2048,
+        },
+      }).catch((error: unknown) => {
+        limitedFailure = error;
+      });
+    } finally {
+      limitedObserved.restore();
+    }
+    expect((limitedFailure as Error).message).toBe("ZIP_ARCHIVE_LIMIT_EXCEEDED");
+    expect(limitedArchive).toEqual(limitedArchiveBefore);
+    expect(limitedObserved.captured.some((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
+  });
+
+  it("zeroizes encrypt copies on early failure and the original scrypt key", async () => {
+    const zipInput = Buffer.from("encrypt-early-sensitive", "utf-8");
+    const zipBefore = Buffer.from(zipInput);
+    const observed = observeBufferZeroization((bytes) => bytes.equals(zipBefore));
+    try {
+      const tinyLimits = {
+        ...DEFAULT_PLANNING_OWNER_ARCHIVE_LIMITS,
+        maxEntryBytes: 1,
+        maxSourceBytes: 1,
+        maxManifestBytes: 1,
+        maxZipBytes: 1,
+        maxEnvelopeBytes: 2,
+      };
+      expect(await errorCode(() => encryptPlanningOwnerArchiveBytes({
+        zipBytes: zipInput,
+        secret: SECRET,
+        limits: tinyLimits,
+      }))).toBe("OWNER_ARCHIVE_ZIP_SIZE_LIMIT_EXCEEDED");
+      expect(await errorCode(() => encryptPlanningOwnerArchiveBytes({
+        zipBytes: zipInput,
+        secret: Buffer.from("short"),
+      }))).toBe("OWNER_ARCHIVE_SECRET_INVALID");
+    } finally {
+      observed.restore();
+    }
+    expect(zipInput).toEqual(zipBefore);
+    expect(observed.captured.length).toBeGreaterThanOrEqual(2);
+    expect(observed.captured.every((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
+
+    const randomZip = Buffer.from("random-failure-sensitive", "utf-8");
+    const randomSecret = Buffer.from("random-failure-secret", "utf-8");
+    const randomObserved = observeBufferZeroization((bytes) => (
+      bytes.equals(randomZip) || bytes.equals(randomSecret)
+    ));
+    const randomSpy = vi.spyOn(crypto, "randomBytes").mockImplementation((() => {
+      throw new Error("random-failure");
+    }) as typeof crypto.randomBytes);
+    try {
+      await expect(encryptPlanningOwnerArchiveBytes({
+        zipBytes: randomZip,
+        secret: randomSecret,
+      })).rejects.toThrow("random-failure");
+    } finally {
+      randomSpy.mockRestore();
+      randomObserved.restore();
+    }
+    expect(randomObserved.captured.length).toBeGreaterThanOrEqual(2);
+    expect(randomObserved.captured.every((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
+
+    const derivedKey = Buffer.alloc(32, 0x5a);
+    const scryptSpy = vi.spyOn(crypto, "scrypt").mockImplementation(((...args: unknown[]) => {
+      const callback = args.at(-1) as (error: Error | null, key: Buffer) => void;
+      callback(null, derivedKey);
+    }) as typeof crypto.scrypt);
+    let encrypted: Buffer | undefined;
+    try {
+      encrypted = await encryptPlanningOwnerArchiveBytes({
+        zipBytes: Buffer.from("derived-key-sensitive", "utf-8"),
+        secret: SECRET,
+      });
+    } finally {
+      scryptSpy.mockRestore();
+    }
+    expect(derivedKey.every((byte) => byte === 0)).toBe(true);
+    encrypted?.fill(0);
+  });
+
+  it("zeroizes decoded payloads when manifest parsing fails", async () => {
+    const root = createRoot("parse-failure-zeroize");
+    const item = createContext(root);
+    const marker = Buffer.from('{"secret":"parse-failure-sensitive"}\n', "utf-8");
+    writeBytes(ownerLocation(item.owners, "v3.accounts", "accounts.json"), marker);
+    const built = await buildArchive(item);
+    const invalidManifest = await rewrapArchive({
+      encryptedBytes: built.encryptedBytes,
+      mutate: (entries) => entries.set("manifest.json", Buffer.from("{", "utf-8")),
+    });
+    const observed = observeBufferZeroization((bytes) => bytes.includes(marker));
+    let code: string;
+    try {
+      code = await errorCode(() => withValidatedPlanningOwnerArchivePayload({
+        encryptedBytes: invalidManifest,
+        secret: SECRET,
+        owners: item.owners,
+      }, () => "must-not-run"));
+    } finally {
+      observed.restore();
+    }
+
+    expect(code!).toBe("OWNER_ARCHIVE_MANIFEST_JSON_INVALID");
+    expect(observed.captured.length).toBeGreaterThanOrEqual(2);
+    expect(observed.captured.every((bytes) => bytes.every((byte) => byte === 0))).toBe(true);
   });
 
   it("rejects a user A archive in user B before creating user B data", async () => {

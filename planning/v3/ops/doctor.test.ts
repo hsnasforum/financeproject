@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { PLANNING_DATA_OWNER_IDS } from "../../../src/lib/ops/backup/planningOwnerRegistry";
 import { runV3Doctor } from "./doctor";
 
 function writeJson(filePath: string, value: unknown): void {
@@ -125,11 +126,19 @@ describe("planning v3 doctor", () => {
       updatedAt: "2026-03-04T00:10:00.000Z",
     });
 
-    const report = runV3Doctor({ cwd: root });
+    const report = runV3Doctor({
+      cwd: root,
+      env: { NODE_ENV: "test" },
+      platform: "linux",
+      checkedAt: "2026-03-04T00:00:00.000Z",
+    });
     expect(report.ok).toBe(true);
+    expect(report.checkedAt).toBe("2026-03-04T00:00:00.000Z");
+    expect(report.counts.checks).toBe(PLANNING_DATA_OWNER_IDS.length);
     expect(report.counts.errors).toBe(0);
     expect(report.counts.warnings).toBe(0);
     expect(report.counts.files).toBeGreaterThan(0);
+    expect(report.summaries.map((row) => row.check)).toEqual(PLANNING_DATA_OWNER_IDS);
   });
 
   it("reports schema errors and missing paths without mutating data", () => {
@@ -138,14 +147,28 @@ describe("planning v3 doctor", () => {
     writeText(path.join(root, ".data/alerts/events.jsonl"), "{\"invalid\":true}\n");
 
     const before = fs.readFileSync(path.join(root, ".data/news/items/bad.json"), "utf-8");
-    const report = runV3Doctor({ cwd: root });
+    const report = runV3Doctor({
+      cwd: root,
+      env: { NODE_ENV: "test" },
+      platform: "linux",
+    });
     const after = fs.readFileSync(path.join(root, ".data/news/items/bad.json"), "utf-8");
 
     expect(report.ok).toBe(false);
     expect(report.counts.errors).toBeGreaterThan(0);
-    expect(report.counts.warnings).toBeGreaterThan(0);
-    expect(report.issues.some((row) => row.path.endsWith(".data/news/items/bad.json"))).toBe(true);
-    expect(report.issues.some((row) => row.path.endsWith(".data/alerts/events.jsonl"))).toBe(true);
+    expect(report.counts.warnings).toBe(0);
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        check: "v3.news",
+        path: "news/items/bad.json",
+        code: "OWNER_DOCTOR_SCHEMA_INVALID",
+      }),
+      expect.objectContaining({
+        check: "v3.alerts",
+        path: "alerts/events.jsonl",
+        code: "OWNER_DOCTOR_SCHEMA_INVALID",
+      }),
+    ]));
     expect(before).toBe(after);
   });
 });

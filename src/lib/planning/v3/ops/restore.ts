@@ -19,7 +19,6 @@ import { ExposureProfileSchema } from "../exposure/contracts";
 import { IndicatorsStateSchema, ObservationSchema, SeriesSnapshotMetaSchema } from "../indicators/contracts";
 import { JournalEntrySchema } from "../journal/contracts";
 import { NewsItemSchema, RuntimeStateSchema, TopicDailyStatSchema } from "../news/contracts";
-import { runV3Doctor } from "./doctor";
 
 type IssueLevel = "error" | "warning";
 
@@ -336,41 +335,6 @@ async function buildRestorePlan(input: {
   };
 }
 
-function makeBackupPath(rootDir: string, now: Date): string {
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(now.getUTCDate()).padStart(2, "0");
-  const hh = String(now.getUTCHours()).padStart(2, "0");
-  const mi = String(now.getUTCMinutes()).padStart(2, "0");
-  const ss = String(now.getUTCSeconds()).padStart(2, "0");
-  const base = path.join(rootDir, `.data.bak-${yyyy}${mm}${dd}${hh}${mi}${ss}`);
-
-  if (!fs.existsSync(base)) return base;
-  for (let i = 1; i < 1000; i += 1) {
-    const candidate = `${base}-${i}`;
-    if (!fs.existsSync(candidate)) return candidate;
-  }
-  throw new Error("BACKUP_PATH_EXHAUSTED");
-}
-
-function restoreEntries(rootDir: string, entries: RestoreEntry[]): { restoredFiles: number; restoredBytes: number } {
-  let restoredFiles = 0;
-  let restoredBytes = 0;
-
-  for (const entry of entries.sort((a, b) => a.path.localeCompare(b.path))) {
-    const targetPath = path.resolve(rootDir, entry.path);
-    if (!toPosix(targetPath).startsWith(toPosix(path.resolve(rootDir)) + "/")) {
-      throw new Error(`RESTORE_PATH_ESCAPE:${entry.path}`);
-    }
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.writeFileSync(targetPath, entry.bytes);
-    restoredFiles += 1;
-    restoredBytes += entry.bytes.length;
-  }
-
-  return { restoredFiles, restoredBytes };
-}
-
 function parseArgs(argv: string[]): ParsedArgs {
   let archivePath = "";
   let apply = false;
@@ -433,9 +397,8 @@ export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3Res
     now,
   });
 
-  const mode: V3RestoreSummary["mode"] = input.apply ? "apply" : "preview";
-  const baseSummary: V3RestoreSummary = {
-    mode,
+  return {
+    mode: "preview",
     archivePath: plan.archivePath,
     checkedAt: plan.checkedAt,
     totals: {
@@ -447,54 +410,6 @@ export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3Res
     },
     issues: plan.issues,
   };
-
-  if (!input.apply) {
-    return baseSummary;
-  }
-
-  if (plan.totals.errors > 0) {
-    throw new Error("RESTORE_BLOCKED:VALIDATION_FAILED");
-  }
-
-  const dataDir = path.join(rootDir, ".data");
-  const backupPath = makeBackupPath(rootDir, now);
-  let backupCreated = false;
-
-  try {
-    if (fs.existsSync(dataDir)) {
-      fs.renameSync(dataDir, backupPath);
-      backupCreated = true;
-    }
-    fs.mkdirSync(dataDir, { recursive: true });
-    const restored = restoreEntries(rootDir, plan.entries);
-
-    const doctor = runV3Doctor({ cwd: rootDir });
-    return {
-      ...baseSummary,
-      backupPath: backupCreated ? backupPath : undefined,
-      totals: {
-        ...baseSummary.totals,
-        restoredFiles: restored.restoredFiles,
-        restoredBytes: restored.restoredBytes,
-      },
-      doctor: {
-        ok: doctor.ok,
-        errors: doctor.counts.errors,
-        warnings: doctor.counts.warnings,
-      },
-    };
-  } catch (error) {
-    if (backupCreated && fs.existsSync(backupPath)) {
-      try {
-        fs.rmSync(dataDir, { recursive: true, force: true });
-        fs.renameSync(backupPath, dataDir);
-      } catch {
-        // ignore rollback failure; keep primary error.
-      }
-    }
-    const message = error instanceof Error ? error.message : "restore_failed";
-    throw new Error(`RESTORE_FAILED:${message}`);
-  }
 }
 
 export async function runV3OwnerRestorePreview(
