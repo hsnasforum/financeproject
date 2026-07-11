@@ -69,6 +69,14 @@
 
 첫 full test에서 ZIP stream chunk가 caller ZIP buffer와 alias되어 preview 뒤 동일 fixture 재사용 시 `MANIFEST_INVALID_JSON`이 발생했습니다. stream chunk를 소유 복사한 뒤 자체 buffer만 zeroize하도록 수정하고, caller `Buffer`/`Uint8Array` 불변 회귀 테스트를 추가한 뒤 full test와 verify를 재통과했습니다.
 
+## 원격 CI
+
+- PR: [#254](https://github.com/hsnasforum/financeproject/pull/254)
+- CI run `29155768103`: `verify` job이 `steps=null`인 채 즉시 failure
+- E2E Smoke run `29155768100`: `dart_index_present`, `dart_index_missing`, `core_flows`가 모두 `steps=null`인 채 즉시 failure
+- job log 다운로드: GitHub/Azure storage `BlobNotFound` 404
+- 판정: checkout·install·test 등 repository code step이 실행되지 않은 원격 Actions 인프라 실패입니다. PR-B/C에 이어 동일 현상이 반복됐으므로 코드 수정이나 자동 재실행 근거로 사용하지 않습니다.
+
 ## 이번 라운드 완료 항목
 
 - [완료] 17-owner read-only doctor와 validator exact-set
