@@ -59,6 +59,9 @@
 - `corepack pnpm planning:user-scope:check` — PASS, 15 files / 88 tests
 - `corepack pnpm multi-agent:guard` — PASS
 - `git diff --check` — PASS
+- stacked draft PR: [#253](https://github.com/hsnasforum/financeproject/pull/253), base `codex/229-owner-archive-preview`, open·draft·mergeable
+- PR #253 원격 CI: run `29153255895`의 `verify`, run `29153255904`의 `core_flows`·`dart_index_missing`·`dart_index_present`가 모두 job step 생성 전 실패했습니다. 네 job 모두 `steps=[]`이고 verify log는 `BlobNotFound` 404이므로 로컬 코드 수정 근거가 없는 GitHub Actions 실행 계층 장애입니다.
+- 실제 사용자 데이터 restore apply: 실행하지 않음
 
 clean worktree에서 `DATABASE_URL` 없이 readiness 테스트를 실행하면 기존 Prisma config 계약 때문에 4건이 실패합니다. PR-B에서도 동일 재현되고 관련 파일은 PR-C에서 변경하지 않았습니다. non-secret SQLite fixture URL을 명령 환경으로 명시하면 15/15 통과하며, 저장소 전체 clean-worktree 기본값 문제는 별도 P2입니다.
 
@@ -76,6 +79,7 @@ clean worktree에서 `DATABASE_URL` 없이 readiness 테스트를 실행하면 �
 - 같은 Node 프로세스의 동일 journal 동시 호출은 차단하지만 실제 앱 writer와 다른 프로세스를 멈추는 offline/quiesced cross-process lock은 아직 없습니다.
 - native Windows junction/reparse point, ACL, rename/open-handle 동작은 검증하지 않았습니다.
 - runtime-shared owner를 사용자 archive와 함께 교체하는 제품 정책이 확정되지 않았습니다.
+- GitHub Actions runner/실행 계층이 정상화된 뒤 PR #253 required check 재실행이 필요합니다.
 - 위 조건이 남아 있으므로 production apply 차단을 해제하지 않습니다.
 
 ## 롤백 기준
@@ -89,3 +93,4 @@ clean worktree에서 `DATABASE_URL` 없이 readiness 테스트를 실행하면 �
 1. PR-D에서 17개 owner의 semantic schema와 registry 전체 doctor 진단을 구현합니다.
 2. cross-process lock과 실제 writer drain/offline 절차, orphan lock 판정·정리 정책을 결정하고 fixture로 검증합니다.
 3. native Windows junction/reparse point, ACL, rename/open-handle 동작이 검증되기 전에는 제한적 apply도 활성화하지 않습니다.
+4. GitHub Actions runner가 정상화되면 PR #253의 required check를 재실행합니다.
