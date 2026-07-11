@@ -68,3 +68,88 @@ test("specialized product list applies the pure result pipeline to query filters
   await expect(page.getByRole("heading", { name: "알파 연금" })).toHaveCount(0);
   await expect(page).toHaveURL(/\/products\/pension\?.*q=%EA%B0%90%EB%A7%88/);
 });
+
+test("specialized product list ignores a superseded FINLIFE response", async ({ page }) => {
+  let releaseInitialResponse: (() => void) | undefined;
+  const initialResponseGate = new Promise<void>((resolve) => {
+    releaseInitialResponse = resolve;
+  });
+  let markInitialRequestStarted: (() => void) | undefined;
+  const initialRequestStarted = new Promise<void>((resolve) => {
+    markInitialRequestStarted = resolve;
+  });
+  let initialRequests = 0;
+  let settledInitialRequests = 0;
+  let browserSettledInitialRequests = 0;
+
+  const markInitialBrowserRequestSettled = (requestUrl: string) => {
+    const url = new URL(requestUrl);
+    if (
+      url.pathname === "/api/finlife/pension"
+      && url.searchParams.get("topFinGrpNo") === "020000"
+    ) {
+      browserSettledInitialRequests += 1;
+    }
+  };
+  page.on("requestfinished", (request) => markInitialBrowserRequestSettled(request.url()));
+  page.on("requestfailed", (request) => markInitialBrowserRequestSettled(request.url()));
+
+  await page.route("**/api/finlife/pension?**", async (route) => {
+    const url = new URL(route.request().url());
+    const topFinGrpNo = url.searchParams.get("topFinGrpNo") ?? "";
+    const isInitialRequest = topFinGrpNo === "020000";
+    if (isInitialRequest) {
+      initialRequests += 1;
+      markInitialRequestStarted?.();
+      await initialResponseGate;
+    }
+
+    const latest = !isInitialRequest;
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          mode: "live",
+          meta: {
+            kind: "pension",
+            pageNo: 1,
+            topFinGrpNo,
+            fallbackUsed: false,
+            hasNext: false,
+            totalProducts: 1,
+            totalOptions: 1,
+          },
+          data: [
+            {
+              fin_prdt_cd: latest ? "PENSION-LATEST" : "PENSION-STALE",
+              fin_co_no: latest ? "0010002" : "0010001",
+              kor_co_nm: latest ? "최신금융" : "이전금융",
+              fin_prdt_nm: latest ? "최신 연금" : "이전 연금",
+              options: [{ save_trm: "12", intr_rate: 3, intr_rate2: 3.4, raw: {} }],
+              best: { save_trm: "12", intr_rate: 3, intr_rate2: 3.4 },
+              raw: {},
+            },
+          ],
+        }),
+      });
+    } finally {
+      if (isInitialRequest) settledInitialRequests += 1;
+    }
+  });
+
+  await page.goto("/products/pension");
+  await initialRequestStarted;
+  await page.getByRole("button", { name: "저축은행", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "최신 연금" })).toBeVisible({ timeout: 30_000 });
+  releaseInitialResponse?.();
+  await expect.poll(() => settledInitialRequests).toBe(initialRequests);
+  await expect.poll(() => browserSettledInitialRequests).toBe(initialRequests);
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  await expect(page.getByRole("heading", { name: "이전 연금" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "최신 연금" })).toBeVisible();
+});

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
-import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
 import { pruneOpen, toggleOpen } from "@/lib/finlife/groupOpenState";
 import { type RatePreference } from "@/lib/finlife/uiSort";
 import {
@@ -21,6 +20,7 @@ import { ProductExplorerHeaderCard } from "./products/ProductExplorerHeaderCard"
 import { ProductResultsHeader } from "./products/ProductResultsHeader";
 import { ProductRowItem } from "./products/ProductRowItem";
 import { ProductOptionRowItem } from "./products/ProductOptionRowItem";
+import { useFinlifeProductListData } from "./products/useFinlifeProductListData";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -28,8 +28,6 @@ import { Card } from "@/components/ui/Card";
 import { type ProductListSortKey } from "@/lib/products/listUtils";
 import { buildProductListViewModel } from "@/lib/products/productListViewModel";
 import {
-  buildFinlifeRequestParams,
-  buildProductExplorerApiUrl,
   buildProductExplorerUrlParams,
   FINLIFE_PAGE_SIZE,
   isValidProductExplorerSortKey,
@@ -223,9 +221,13 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   const [searchQuery, setSearchQuery] = useState(initialUrlState.searchQuery);
   const [onlyFavorites, setOnlyFavorites] = useState(initialUrlState.onlyFavorites);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>("");
-  const [payload, setPayload] = useState<FinlifeSourceResult | null>(null);
+  const { loading, error, payload } = useFinlifeProductListData({
+    kind,
+    topFinGrpNo,
+    pageNo,
+    scanMode,
+    maxPages,
+  });
   const [sourceStatusRows, setSourceStatusRows] = useState<SourceStatusRow[]>([]);
   const [availability, setAvailability] = useState<AvailabilityRow[]>([]);
   const [availabilityNotice, setAvailabilityNotice] = useState("");
@@ -321,50 +323,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     }, 0);
     return () => window.clearTimeout(providerFallbackTimer);
   }, [providerOptions, topFinGrpNo]);
-
-  useEffect(() => {
-    let aborted = false;
-
-    async function run() {
-      setLoading(true);
-      setError("");
-
-      const params = buildFinlifeRequestParams({
-        topFinGrpNo,
-        pageNo,
-        scanMode,
-        maxPages,
-        pageSize: FINLIFE_PAGE_SIZE,
-      });
-
-      try {
-        const res = await fetch(buildProductExplorerApiUrl(kind, params), { cache: "no-store" });
-        const raw = await res.json();
-        const parsed = parseFinlifeApiResponse(raw);
-
-        if (aborted) return;
-
-        if (!parsed.ok) {
-          setError(parsed.error?.message ?? "데이터를 불러오지 못해요. 잠시 후 다시 시도해주세요.");
-          return;
-        }
-
-        setPayload(parsed);
-      } catch {
-        if (aborted) return;
-        setError("데이터를 불러오지 못해요. 잠시 후 다시 시도해주세요.");
-      } finally {
-        if (!aborted) setLoading(false);
-      }
-    }
-
-    if (topFinGrpNo) {
-      void run();
-    }
-    return () => {
-      aborted = true;
-    };
-  }, [kind, maxPages, pageNo, scanMode, topFinGrpNo]);
 
   useEffect(() => {
     const params = buildProductExplorerUrlParams({
