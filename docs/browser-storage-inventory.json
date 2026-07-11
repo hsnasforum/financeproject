@@ -121,10 +121,10 @@
       "rscPlan": "URL query 또는 서버 초기 선택 상태로 옮길 후보입니다."
     },
     {
-      "file": "src/components/ProductListPage.tsx",
+      "file": "src/components/products/useProductShelfController.ts",
       "storage": ["localStorage"],
       "categories": ["permanent-user-setting", "legacy-fallback"],
-      "purpose": "상품 비교함 count bootstrap을 위해 현재 shelf와 legacy compare basket을 읽습니다.",
+      "purpose": "상품 shelf와 legacy compare basket snapshot을 구독해 favorite, compare, recent UI 상태로 투영합니다.",
       "rscPlan": "비교함은 서버 사용자 설정 후보이고 legacy compare key는 migration 종료 후 제거 후보입니다."
     },
     {

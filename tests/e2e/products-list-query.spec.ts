@@ -69,6 +69,88 @@ test("specialized product list applies the pure result pipeline to query filters
   await expect(page).toHaveURL(/\/products\/pension\?.*q=%EA%B0%90%EB%A7%88/);
 });
 
+test("specialized product list hydrates and updates the product shelf without script warnings", async ({ page }) => {
+  await page.route("**/api/finlife/pension?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        mode: "live",
+        meta: {
+          kind: "pension",
+          pageNo: 1,
+          topFinGrpNo: "020000",
+          fallbackUsed: false,
+          hasNext: false,
+          totalProducts: 1,
+          totalOptions: 1,
+        },
+        data: [
+          {
+            fin_prdt_cd: "PENSION-SHELF",
+            fin_co_no: "0010003",
+            kor_co_nm: "보관금융",
+            fin_prdt_nm: "보관 연금",
+            options: [{ save_trm: "12", intr_rate: 3, intr_rate2: 3.4, raw: {} }],
+            best: { save_trm: "12", intr_rate: 3, intr_rate2: 3.4 },
+            raw: {},
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.setItem("products_shelf_v1", JSON.stringify({
+      schemaVersion: 1,
+      favorites: [],
+      recentViewed: [],
+      compareBasket: ["fixture-compare-a", "fixture-compare-b"],
+    }));
+  });
+
+  const runtimeWarnings: string[] = [];
+  const captureRuntimeWarning = (message: string) => {
+    if (message.includes("Encountered a script tag") || message.includes("Hydration failed")) {
+      runtimeWarnings.push(message);
+    }
+  };
+  page.on("console", (message) => captureRuntimeWarning(message.text()));
+  page.on("pageerror", (error) => captureRuntimeWarning(error.message));
+
+  await page.goto("/products/pension");
+
+  const compareCount = page.locator("[data-product-compare-count]");
+  await expect(compareCount).toHaveText("비교함 2", { timeout: 30_000 });
+  await page.getByTitle("즐겨찾기").click();
+  await page.getByTitle("비교").click();
+  await expect(compareCount).toHaveText("비교함 3");
+  await expect.poll(() => page.evaluate(() => {
+    const raw = window.localStorage.getItem("products_shelf_v1");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      favorites?: string[];
+      recentViewed?: string[];
+      compareBasket?: string[];
+    };
+    return {
+      favorites: parsed.favorites ?? [],
+      recentViewed: parsed.recentViewed ?? [],
+      compareBasket: parsed.compareBasket ?? [],
+    };
+  })).toEqual({
+    favorites: ["PENSION-SHELF"],
+    recentViewed: ["PENSION-SHELF"],
+    compareBasket: ["fixture-compare-a", "fixture-compare-b", "PENSION-SHELF"],
+  });
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  expect(runtimeWarnings).toEqual([]);
+});
+
 test("specialized product list ignores a superseded FINLIFE response", async ({ page }) => {
   let releaseInitialResponse: (() => void) | undefined;
   const initialResponseGate = new Promise<void>((resolve) => {

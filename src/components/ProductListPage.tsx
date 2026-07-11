@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { pruneOpen, toggleOpen } from "@/lib/finlife/groupOpenState";
@@ -21,6 +21,7 @@ import { ProductResultsHeader } from "./products/ProductResultsHeader";
 import { ProductRowItem } from "./products/ProductRowItem";
 import { ProductOptionRowItem } from "./products/ProductOptionRowItem";
 import { useFinlifeProductListData } from "./products/useFinlifeProductListData";
+import { useProductShelfController } from "./products/useProductShelfController";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -36,15 +37,6 @@ import {
   type ProductExplorerScanMode,
   type ProductExplorerViewMode,
 } from "@/lib/products/productExplorerUrlState";
-import {
-  addRecent,
-  loadShelfFromSnapshot,
-  PRODUCT_SHELF_UPDATED_EVENT,
-  productShelfConfig,
-  toggleCompare,
-  toggleFavorite,
-  type ProductShelfState,
-} from "@/lib/state/productShelf";
 import { type SourceStatusRow } from "@/lib/sources/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -110,42 +102,6 @@ function formatFinlifeFallbackMode(payload: FinlifeSourceResult | null): string 
   return null;
 }
 
-function subscribeProductShelf(onStoreChange: () => void): () => void {
-  if (typeof window === "undefined") return () => undefined;
-  const handleStoreChange = () => onStoreChange();
-  const hydrationTimer = window.setTimeout(handleStoreChange, 0);
-  window.addEventListener("storage", handleStoreChange);
-  window.addEventListener(PRODUCT_SHELF_UPDATED_EVENT, handleStoreChange);
-  return () => {
-    window.clearTimeout(hydrationTimer);
-    window.removeEventListener("storage", handleStoreChange);
-    window.removeEventListener(PRODUCT_SHELF_UPDATED_EVENT, handleStoreChange);
-  };
-}
-
-function getProductShelfStorageSnapshot(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    return [
-      window.localStorage.getItem(productShelfConfig.storageKey) ?? "",
-      window.localStorage.getItem(productShelfConfig.legacyCompareStorageKey) ?? "",
-    ].join("\n---product-shelf---\n");
-  } catch {
-    return "";
-  }
-}
-
-function getServerProductShelfStorageSnapshot(): string {
-  return "";
-}
-
-function readProductShelfFromSnapshot(snapshot: string): ProductShelfState {
-  const [currentRaw = "", legacyCompareRaw = ""] = snapshot.split("\n---product-shelf---\n");
-  return loadShelfFromSnapshot(currentRaw || null, legacyCompareRaw || null);
-}
-
-const COMPARE_COUNT_BOOTSTRAP_SCRIPT = `(function(){try{var raw=window.localStorage.getItem(${JSON.stringify(productShelfConfig.storageKey)});var ids=[];if(raw){var parsed=JSON.parse(raw);if(parsed&&Array.isArray(parsed.compareBasket))ids=parsed.compareBasket;}if(!ids.length){var legacy=window.localStorage.getItem(${JSON.stringify(productShelfConfig.legacyCompareStorageKey)});if(legacy){var legacyParsed=JSON.parse(legacy);if(Array.isArray(legacyParsed))ids=legacyParsed;}}var seen=Object.create(null);var count=0;ids.forEach(function(entry){if(typeof entry!=="string")return;var id=entry.trim();if(!id||seen[id])return;seen[id]=true;count+=1;});count=Math.min(count,${productShelfConfig.maxCompareBasket});document.querySelectorAll("[data-product-compare-count]").forEach(function(node){node.textContent="비교함 "+count;});}catch(error){}})();`;
-
 function buildUnifiedDetailId(product: NormalizedProduct): string | null {
   const raw = (product.raw as Record<string, unknown> | null) ?? null;
   const stableId = typeof raw?.stableId === "string" ? raw.stableId.trim() : "";
@@ -188,15 +144,18 @@ function GroupedOptionMobileItem({ row }: { row: OptionRow }) {
   );
 }
 
-export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1, scriptNonce }: Props) {
+export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const productShelfStorageSnapshot = useSyncExternalStore(
-    subscribeProductShelf,
-    getProductShelfStorageSnapshot,
-    getServerProductShelfStorageSnapshot,
-  );
-  const shelf = readProductShelfFromSnapshot(productShelfStorageSnapshot);
+  const {
+    favoriteIds: shelfFavoriteIds,
+    comparedIds: shelfCompareSet,
+    compareCount,
+    compareLimit,
+    toggleFavorite: handleToggleFavorite,
+    toggleCompare: handleToggleCompare,
+    addRecent: handleViewed,
+  } = useProductShelfController();
   const defaultSortKey: SortKey = ratePreference === "higher" ? "rateDesc" : "rateAsc";
   const initialUrlState = useMemo(
     () => parseProductExplorerUrlState(searchParams, { defaultSortKey, initialTopFinGrpNo, initialPageNo }),
@@ -366,9 +325,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     viewMode,
   ]);
 
-  const shelfFavoriteIds = useMemo(() => shelf?.favorites ?? new Set<string>(), [shelf]);
-  const shelfCompareSet = useMemo(() => new Set(shelf?.compareBasket ?? []), [shelf]);
-
   const productListViewModel = useMemo(
     () => buildProductListViewModel({
       payload,
@@ -442,20 +398,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     setAmountInput("10000000");
     setSearchQuery("");
     setOnlyFavorites(false);
-  };
-
-  const compareCount = shelf?.compareBasket.length ?? 0;
-
-  const handleToggleFavorite = (id: string) => {
-    toggleFavorite(id);
-  };
-
-  const handleToggleCompare = (id: string) => {
-    toggleCompare(id);
-  };
-
-  const handleViewed = (id: string) => {
-    addRecent(id);
   };
 
   const snapshotStatus = useMemo(() => {
@@ -638,7 +580,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                   비교함 {compareCount}
                 </span>
               </Link>
-              <script nonce={scriptNonce} dangerouslySetInnerHTML={{ __html: COMPARE_COUNT_BOOTSTRAP_SCRIPT }} />
             </div>
           </div>
 
@@ -707,7 +648,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                       reasonLines={highlightReasons}
                       isFavorite={shelfFavoriteIds.has(productId)}
                       isCompared={shelfCompareSet.has(productId)}
-                      compareLimit={productShelfConfig.maxCompareBasket}
+                      compareLimit={compareLimit}
                       onToggleFavorite={() => handleToggleFavorite(productId)}
                       onToggleCompare={() => handleToggleCompare(productId)}
                       onViewed={() => handleViewed(productId)}
