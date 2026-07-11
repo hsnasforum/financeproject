@@ -68,7 +68,7 @@ function sampleRunSource(overrides: Partial<RunCreateStoreSource> = {}): RunCrea
         goalsStatus: [],
         keyTimelinePoints: [],
       },
-    },
+    } as unknown as RunCreateStoreSource["outputs"],
     ...overrides,
   };
 }

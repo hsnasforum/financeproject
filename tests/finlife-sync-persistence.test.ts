@@ -352,7 +352,7 @@ describe("FINLIFE sync persistence contract", () => {
     }, {
       syncProductsToDb: vi.fn(async () => {
         calls.push("db");
-        return { productsUpserted: 1 };
+        return dbSyncResult();
       }),
       writeCompletionEvidence: vi.fn(async (input: { state: string }) => {
         calls.push(`evidence:${input.state}`);

@@ -537,7 +537,7 @@ describe("planning v2 persistence routes", () => {
       runPipeline: async () => ({
         overallStatus: "SUCCESS",
         stages,
-        get outputs() {
+        get outputs(): never {
           throw new Error("stage outputs unavailable");
         },
       }),

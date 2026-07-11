@@ -216,7 +216,9 @@ describe("planning run legacy backfill store", () => {
     });
 
     await expect(store.backfill({
-      recordBackfillAnomaly: (event) => anomalies.push(event),
+      recordBackfillAnomaly: (event) => {
+        anomalies.push(event);
+      },
     })).resolves.toMatchObject({
       selected: 2,
       migrated: 0,
@@ -301,7 +303,9 @@ describe("planning run legacy backfill store", () => {
     });
 
     await expect(store.backfill({
-      recordBackfillAnomaly: (event) => anomalies.push(event),
+      recordBackfillAnomaly: (event) => {
+        anomalies.push(event);
+      },
     })).resolves.toMatchObject({
       selected: 2,
       migrated: 1,
@@ -392,7 +396,9 @@ describe("planning run legacy backfill store", () => {
 
     await expect(store.backfill({
       limit: 1,
-      recordBackfillAnomaly: (event) => anomalies.push(event),
+      recordBackfillAnomaly: (event) => {
+        anomalies.push(event);
+      },
     })).resolves.toMatchObject({
       selected: 1,
       migrated: 1,
@@ -494,7 +500,9 @@ describe("planning run legacy backfill store", () => {
     });
 
     await expect(store.backfill({
-      recordBackfillAnomaly: (event) => anomalies.push(event),
+      recordBackfillAnomaly: (event) => {
+        anomalies.push(event);
+      },
     })).resolves.toMatchObject({ failed: 2, migrated: 0, selected: 2, skipped: 0 });
     expect(anomalies.map((event) => event.reason)).toEqual([
       "postCheckMissingRun",

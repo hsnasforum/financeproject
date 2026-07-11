@@ -43,7 +43,6 @@ describe("planning create run success response", () => {
       stages: [
         {
           id: "simulate",
-          label: "simulate",
           status: "SUCCESS",
           durationMs: 12,
         },
@@ -74,7 +73,6 @@ describe("planning create run success response", () => {
           stages: [
             {
               id: "simulate",
-              label: "simulate",
               status: "SUCCESS",
               durationMs: 12,
             },

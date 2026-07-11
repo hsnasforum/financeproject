@@ -39,7 +39,7 @@ describe("planning storage mode guard", () => {
       NODE_ENV: "production",
       PLANNING_NAMESPACE_ENABLED: "0",
       PLANNING_SINGLE_USER_MODE: "0",
-    };
+    } as const;
 
     expect(resolvePlanningStorageMode(env)).toMatchObject({
       ok: false,

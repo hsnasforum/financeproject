@@ -49,7 +49,7 @@ describe("run meta record", () => {
             goalsStatus: [],
             keyTimelinePoints: [],
           },
-        },
+        } as unknown as PlanningRunRecord["outputs"],
       },
       runId: "run-1",
       profileId: "profile-1",

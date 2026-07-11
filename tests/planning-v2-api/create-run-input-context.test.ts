@@ -42,6 +42,7 @@ function sampleProfile(): ProfileV2 {
 
 function profileRecord(profile: ProfileV2 = sampleProfile()): CurrentUserPlanningProfileRecord {
   return {
+    version: 1,
     id: "profile-1",
     name: "Profile 1",
     profile,

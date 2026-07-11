@@ -31,6 +31,10 @@ function makeRun(overrides: Partial<PlanningRunRecord> = {}): PlanningRunRecord 
     meta: {},
     outputs: {
       simulate: {
+        ref: {
+          name: "simulate",
+          path: ".data/planning/runs/run-1/blobs/simulate.json",
+        },
         summary: {
           endNetWorthKrw: 1000,
         },

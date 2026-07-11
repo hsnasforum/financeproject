@@ -21,7 +21,7 @@ function makeOutputs(): PlanningRunRecord["outputs"] {
     actions: {
       actions: [],
     },
-  };
+  } as unknown as PlanningRunRecord["outputs"];
 }
 
 describe("planning run blob write store", () => {
@@ -33,7 +33,7 @@ describe("planning run blob write store", () => {
           endNetWorthKrw: 5678,
         },
       },
-    } as PlanningRunRecord["outputs"];
+    } as unknown as PlanningRunRecord["outputs"];
     const simulateRef: RunBlobRef = {
       name: "simulate",
       path: ".data/planning/vault/profiles/profile-1/runs/run-1/blobs/simulate.json",
