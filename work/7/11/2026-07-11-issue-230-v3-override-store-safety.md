@@ -19,11 +19,13 @@
 - `planning-v3-batch-contract-narrowing`: stored-first reader, batch-scoped override, raw/derived projection과 성공 응답 shape를 유지했습니다.
 - `work-log-closeout`: 실제 변경, 실행한 검증, 롤백과 잔여 위험을 표준 한글 종료 기록으로 정리했습니다.
 - `github:github`: Issue #230과 기존 Issue #32/#33, PR #111의 중복 여부와 현재 main 상태를 확인했습니다.
-- `github:yeet`: clean worktree의 의도된 변경만 commit·push하고 draft PR로 발행합니다.
+- `github:yeet`: clean worktree의 의도된 변경만 commit·push하고 draft PR #255로 발행했습니다.
+- `github:gh-fix-ci`: PR #255의 GitHub Actions failure를 job·step·로그 수준에서 확인하고 한 차례 재실행했습니다.
 
 ## 변경 이유
 
 - Issue: https://github.com/hsnasforum/financeproject/issues/230
+- PR: https://github.com/hsnasforum/financeproject/pull/255
 - 기준 main: `5c831932634556cc3b807ca69e4e8bb31b626e6d`
 - 작업 브랜치: `codex/230-v3-store-safety`
 - 네 JSON store가 동일 파일의 병렬 read-modify-write를 직렬화하지 않아 update를 유실했고, JSON 손상·권한·I/O 오류를 missing/default로 축약한 뒤 일반 mutation이 원문을 덮어쓸 수 있었습니다.
@@ -51,6 +53,8 @@
 - 깨끗한 상태의 `DATABASE_URL=file:./prisma/dev.db corepack pnpm test`: PASS, 805 files / 2730 tests
 - 최종 `DATABASE_URL=file:./prisma/dev.db corepack pnpm build`: PASS, 250 static pages
 - 독립 store/API/test 재검토: blocking P0/P1 없음
+- 최초 원격 CI run `29157486505`와 E2E run `29157486480`: FAIL, 모든 job의 `steps`가 비어 있고 로그가 Azure `BlobNotFound` 404라 코드 실행 전 GitHub Actions 인프라 실패로 분류
+- failed jobs 1회 재실행: FAIL, 새 job `86557004158`, `86557005290`, `86557005311`, `86557005315`도 `steps=[]`와 동일한 `BlobNotFound` 404; 추가 코드 변경 근거 없음
 
 ## 남은 리스크
 
