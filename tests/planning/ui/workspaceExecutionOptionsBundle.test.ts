@@ -85,7 +85,7 @@ describe("workspaceExecutionOptionsBundle", () => {
   it("forces execution toggles off for health and server-disabled states", () => {
     expect(applyWorkspaceExecutionDisableState({
       current: executionOptionsFixture(),
-      saveBlockedByHealth: true,
+      advancedActionsBlockedByHealth: true,
       monteCarloServerDisabled: true,
       includeProductsServerDisabled: true,
       optimizerServerDisabled: true,

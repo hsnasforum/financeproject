@@ -15,9 +15,9 @@ function hasNamedRef(value: unknown): value is { name: string; path?: string; si
   );
 }
 
-function sanitizeRefFieldsDeep<T>(value: T): T {
+function sanitizeRefFieldsDeep<T>(value: T, parentKey = ""): T {
   if (Array.isArray(value)) {
-    return value.map((entry) => sanitizeRefFieldsDeep(entry)) as T;
+    return value.map((entry) => sanitizeRefFieldsDeep(entry, parentKey)) as T;
   }
   if (!value || typeof value !== "object") {
     return value;
@@ -26,11 +26,14 @@ function sanitizeRefFieldsDeep<T>(value: T): T {
   const row = value as Record<string, unknown>;
   const next: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(row)) {
+    if (parentKey === "meta" && key === "idempotency") {
+      continue;
+    }
     if (key === "ref" && hasNamedRef(entry)) {
       next[key] = sanitizeNamedRef(entry);
       continue;
     }
-    next[key] = sanitizeRefFieldsDeep(entry);
+    next[key] = sanitizeRefFieldsDeep(entry, key);
   }
   return next as T;
 }
@@ -39,9 +42,17 @@ export function sanitizeRunBlobForResponse<T>(blob: T): T {
   return sanitizeRefFieldsDeep(blob);
 }
 
+function sanitizeRunMetaForResponse(meta: PlanningRunRecord["meta"] | undefined): PlanningRunRecord["meta"] {
+  const { idempotency, ...publicMeta } = meta ?? {};
+  void idempotency;
+  return publicMeta;
+}
+
 export function sanitizeRunRecordForResponse<TRun extends PlanningRunRecord>(run: TRun): TRun {
+  const outputs: PlanningRunRecord["outputs"] = run.outputs ?? {};
   return {
     ...run,
+    meta: sanitizeRunMetaForResponse(run.meta),
     ...(run.stages
       ? {
         stages: run.stages.map((stage) => ({
@@ -58,44 +69,44 @@ export function sanitizeRunRecordForResponse<TRun extends PlanningRunRecord>(run
       }
       : {}),
     outputs: {
-      ...run.outputs,
-      ...(run.outputs.simulate?.ref
+      ...outputs,
+      ...(outputs.simulate?.ref
         ? {
           simulate: {
-            ...run.outputs.simulate,
-            ref: sanitizeNamedRef(run.outputs.simulate.ref),
+            ...outputs.simulate,
+            ref: sanitizeNamedRef(outputs.simulate.ref),
           },
         }
         : {}),
-      ...(run.outputs.scenarios?.ref
+      ...(outputs.scenarios?.ref
         ? {
           scenarios: {
-            ...run.outputs.scenarios,
-            ref: sanitizeNamedRef(run.outputs.scenarios.ref),
+            ...outputs.scenarios,
+            ref: sanitizeNamedRef(outputs.scenarios.ref),
           },
         }
         : {}),
-      ...(run.outputs.monteCarlo?.ref
+      ...(outputs.monteCarlo?.ref
         ? {
           monteCarlo: {
-            ...run.outputs.monteCarlo,
-            ref: sanitizeNamedRef(run.outputs.monteCarlo.ref),
+            ...outputs.monteCarlo,
+            ref: sanitizeNamedRef(outputs.monteCarlo.ref),
           },
         }
         : {}),
-      ...(run.outputs.actions?.ref
+      ...(outputs.actions?.ref
         ? {
           actions: {
-            ...run.outputs.actions,
-            ref: sanitizeNamedRef(run.outputs.actions.ref),
+            ...outputs.actions,
+            ref: sanitizeNamedRef(outputs.actions.ref),
           },
         }
         : {}),
-      ...(run.outputs.debtStrategy?.ref
+      ...(outputs.debtStrategy?.ref
         ? {
           debtStrategy: {
-            ...run.outputs.debtStrategy,
-            ref: sanitizeNamedRef(run.outputs.debtStrategy.ref),
+            ...outputs.debtStrategy,
+            ref: sanitizeNamedRef(outputs.debtStrategy.ref),
           },
         }
         : {}),

@@ -159,6 +159,13 @@ export type PlanningRunRecord = {
       criticalCount: number;
       snapshotStaleDays?: number;
     };
+    /** Server-only replay metadata. Public run responses must remove this field. */
+    idempotency?: {
+      version: 1;
+      keyHash: string;
+      requestFingerprint: string;
+      responseMeta: Record<string, unknown>;
+    };
   };
   reproducibility?: {
     appVersion: string;

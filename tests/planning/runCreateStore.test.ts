@@ -239,5 +239,49 @@ describe("planning run create store", () => {
       event: "ROLLBACK",
       note: "index write failed",
     });
+
+    const retryUpsertIndexEntry = vi.fn<CreateRunInFileStoreInput["upsertIndexEntry"]>(async () => undefined);
+    const retried = await createRunInFileStore({
+      source: sampleRunSource(),
+      runId: "run-fail",
+      profileId: "profile-1",
+      createdAt: "2026-07-03T00:00:00.000Z",
+      upsertIndexEntry: retryUpsertIndexEntry,
+      removeIndexEntry,
+      applyRetention,
+    });
+    expect(retried.id).toBe("run-fail");
+    expect(retryUpsertIndexEntry).toHaveBeenCalledTimes(1);
+    expect(fs.existsSync(resolveProfileRunMetaPath("profile-1", "run-fail"))).toBe(true);
+  });
+
+  it("fails closed without touching an existing deterministic run directory", async () => {
+    const runDir = resolveProfileRunDir("profile-1", "planning_idem_existing");
+    const sentinelPath = path.join(runDir, "sentinel.bin");
+    await fsPromises.mkdir(runDir, { recursive: true });
+    await fsPromises.writeFile(sentinelPath, Buffer.from([0, 1, 2, 3]));
+
+    const writeRunStageBlobs = vi.fn<NonNullable<CreateRunInFileStoreInput["writeRunStageBlobs"]>>();
+    const upsertIndexEntry = vi.fn<CreateRunInFileStoreInput["upsertIndexEntry"]>();
+    const removeIndexEntry = vi.fn<CreateRunInFileStoreInput["removeIndexEntry"]>();
+    const applyRetention = vi.fn<CreateRunInFileStoreInput["applyRetention"]>();
+
+    await expect(createRunInFileStore({
+      source: sampleRunSource(),
+      runId: "planning_idem_existing",
+      profileId: "profile-1",
+      createdAt: "2026-07-03T00:00:00.000Z",
+      upsertIndexEntry,
+      removeIndexEntry,
+      applyRetention,
+      writeRunStageBlobs,
+    })).rejects.toThrow("동일한 실행 기록 대상이 이미 존재합니다.");
+
+    expect(await fsPromises.readFile(sentinelPath)).toEqual(Buffer.from([0, 1, 2, 3]));
+    expect(writeRunStageBlobs).not.toHaveBeenCalled();
+    expect(upsertIndexEntry).not.toHaveBeenCalled();
+    expect(removeIndexEntry).not.toHaveBeenCalled();
+    expect(applyRetention).not.toHaveBeenCalled();
+    expect(await readStorageJournalEvents()).toEqual([]);
   });
 });

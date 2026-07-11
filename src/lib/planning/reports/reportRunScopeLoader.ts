@@ -4,6 +4,7 @@ import {
   resolveRequestedReportRunContext,
   resolveRequestedReportRunScope,
 } from "@/lib/planning/reports/runSelection";
+import { sanitizeRunRecordForResponse } from "@/lib/planning/api/runResponseSanitizer";
 import {
   toPlanningPageLoadMessage,
   withCurrentPlanningPageUser,
@@ -114,7 +115,7 @@ export async function loadCurrentUserReportRunScope(
 
       return {
         effectiveProfileId,
-        runs,
+        runs: runs.map((run) => sanitizeRunRecordForResponse(run)),
         initialRunId,
         initialLoadNotice,
         initialScopeReady,
@@ -124,7 +125,7 @@ export async function loadCurrentUserReportRunScope(
     console.error(`[${options.logContext}] failed to load initial report scope in user scope`, error);
     return {
       effectiveProfileId,
-      runs,
+      runs: runs.map((run) => sanitizeRunRecordForResponse(run)),
       initialRunId,
       initialLoadNotice: toPlanningPageLoadMessage(error, options.scopeFailureMessage),
       initialScopeReady,

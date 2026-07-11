@@ -102,6 +102,7 @@ describe("workspacePresenters", () => {
       runHasSimulateResult: false,
       runMatchesCurrentProfile: false,
       runStatusReviewRequired: false,
+      runNeedsWarningConfirmation: false,
       savedRun: null,
       reportsPageHref: "/planning/reports",
       selectedProfileReportHref: (runId) => `/planning/reports?runId=${runId}`,
@@ -115,6 +116,7 @@ describe("workspacePresenters", () => {
       runHasSimulateResult: true,
       runMatchesCurrentProfile: true,
       runStatusReviewRequired: false,
+      runNeedsWarningConfirmation: false,
       savedRun: savedRunFixture(),
       reportsPageHref: "/planning/reports?profileId=profile-1",
       selectedProfileReportHref: (runId) => `/planning/reports?profileId=profile-1&runId=${runId}`,
@@ -122,6 +124,27 @@ describe("workspacePresenters", () => {
 
     expect(savedPresenter.quickStartNextStep.targetId).toBe("planning-quickstart-report-button");
     expect(savedPresenter.quickStartVm.selectedRunReportHref).toBe("/planning/reports?profileId=profile-1&runId=run-1");
+  });
+
+  it("targets the warning confirmation control before a blocked quick-start run CTA", () => {
+    const presenter = buildWorkspaceQuickStartPresenter({
+      selectedProfileId: "profile-1",
+      profileSyncState: "saved",
+      profileForm: profileFixture(),
+      profileValidationErrorCount: 0,
+      runHasSimulateResult: false,
+      runMatchesCurrentProfile: false,
+      runStatusReviewRequired: false,
+      runNeedsWarningConfirmation: true,
+      savedRun: null,
+      reportsPageHref: "/planning/reports?profileId=profile-1",
+      selectedProfileReportHref: (runId) => `/planning/reports?profileId=profile-1&runId=${runId}`,
+    });
+
+    expect(presenter.quickStartNextStep).toMatchObject({
+      label: "먼저 실행 경고 확인",
+      targetId: "planning-run-warning-confirm-checkbox",
+    });
   });
 
   it("builds result tabs and debug VM from DTO plus step statuses", () => {

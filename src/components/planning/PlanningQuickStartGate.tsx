@@ -25,7 +25,6 @@ type PlanningQuickStartGateProps = {
   profileSyncState?: WorkspaceSelectedProfileSyncState;
   runStatusReviewRequired?: boolean;
   runDone?: boolean;
-  saveDone?: boolean;
   onApply: (output: PlanningWizardOutput) => void;
 };
 
@@ -50,6 +49,20 @@ function formatSignedAmount(value: number): string {
   return `${formatted}원`;
 }
 
+export function resolvePlanningQuickStartAppliedNextStepSummary(input: {
+  nextStepLabel?: string;
+  runDone: boolean;
+  runStatusReviewRequired: boolean;
+  profileSyncState: WorkspaceSelectedProfileSyncState;
+  profileSavedAfterApply: boolean;
+}): string {
+  if (input.nextStepLabel) return input.nextStepLabel;
+  if (input.runDone) return "저장된 리포트 확인";
+  if (input.runStatusReviewRequired || input.profileSyncState === "unknown") return "진행 상태 다시 확인";
+  if (input.profileSyncState === "dirty") return "프로필 저장";
+  return input.profileSavedAfterApply ? "첫 실행·기록 저장" : "프로필 저장";
+}
+
 function renderPreviewSummary(preview: PlanningQuickStartPreview): string[] {
   return [
     `월 실수령 ${formatSignedAmount(preview.monthlyIncomeNet)}에서 월 고정지출 ${formatSignedAmount(preview.fixedExpense)}을 먼저 반영한 첫 초안 월 잉여금은 ${formatSignedAmount(preview.monthlySurplus)}입니다.`,
@@ -72,7 +85,6 @@ export default function PlanningQuickStartGate({
   profileSyncState = "missing",
   runStatusReviewRequired = false,
   runDone = false,
-  saveDone = false,
   onApply,
 }: PlanningQuickStartGateProps) {
   const [draft, setDraft] = useState<PlanningQuickStartDraft>({
@@ -145,10 +157,8 @@ export default function PlanningQuickStartGate({
     focusWorkspaceQuickStartTarget(nextStepTargetId);
   }
 
-  const appliedCompletedSummary = saveDone
-    ? "초안 적용 완료 · 프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료"
-    : runDone
-      ? "초안 적용 완료 · 프로필 저장 완료 · 첫 실행 완료"
+  const appliedCompletedSummary = runDone
+      ? "초안 적용 완료 · 프로필 저장 완료 · 첫 실행·기록 저장 완료"
       : runStatusReviewRequired
         ? "초안 적용 완료 · 실행 상태 확인 필요"
         : profileSyncState === "dirty" || profileSyncState === "unknown"
@@ -156,23 +166,15 @@ export default function PlanningQuickStartGate({
         : profileSavedAfterApply
         ? "초안 적용 완료 · 프로필 저장 완료"
         : "초안 적용 완료";
-  const appliedNextStepSummary = saveDone
-    ? "저장된 리포트 확인"
-    : runDone
-      ? "결과 저장 후 리포트 확인"
-      : runStatusReviewRequired
-        ? "진행 상태 다시 확인"
-        : profileSyncState === "unknown"
-        ? "진행 상태 다시 확인"
-        : profileSyncState === "dirty"
-          ? "프로필 저장"
-          : profileSavedAfterApply
-            ? "첫 실행 시작"
-            : "프로필 저장";
-  const appliedTitle = saveDone
-    ? "첫 실행과 결과 저장까지 완료했습니다. 이제 저장된 리포트를 확인하면 됩니다."
-    : runDone
-      ? "첫 실행이 끝났습니다. 결과를 저장하면 저장된 리포트 확인으로 이어집니다."
+  const appliedNextStepSummary = resolvePlanningQuickStartAppliedNextStepSummary({
+    nextStepLabel,
+    runDone,
+    runStatusReviewRequired,
+    profileSyncState,
+    profileSavedAfterApply,
+  });
+  const appliedTitle = runDone
+      ? "첫 실행과 기록 저장을 완료했습니다. 이제 저장된 리포트를 확인하면 됩니다."
       : runStatusReviewRequired
         ? "최근 실행 상태를 자동 확인하지 못했습니다. 진행 상태를 다시 확인해 주세요."
         : profileSyncState === "unknown"
@@ -180,30 +182,26 @@ export default function PlanningQuickStartGate({
         : profileSyncState === "dirty"
           ? "선택한 프로필에 미저장 변경이 있습니다. 먼저 저장을 확인해 주세요."
           : profileSaveCompletedAfterApply
-            ? "프로필 저장 완료. 이제 첫 실행만 남았습니다."
+            ? "프로필 저장 완료. 이제 첫 실행·기록 저장만 남았습니다."
             : profileSavedAfterApply
-              ? "프로필 저장이 되어 있어 바로 첫 실행으로 이어갈 수 있습니다."
+              ? "프로필 저장이 되어 있어 바로 첫 실행·기록 저장으로 이어갈 수 있습니다."
               : "초안 적용 완료. 이제 프로필 저장만 하면 됩니다.";
-  const appliedDescription = saveDone
-    ? (nextStepDescription ?? "아래 리포트 버튼으로 저장된 결과를 다시 보고, 실행 내역 비교로 이어갈 수 있습니다.")
-    : runDone
-      ? (nextStepDescription ?? "아래 결과 저장 버튼으로 현재 상태를 보관하면 저장된 리포트와 실행 내역 비교로 이어집니다.")
+  const appliedDescription = runDone
+      ? (nextStepDescription ?? "아래 리포트 버튼으로 저장된 결과를 다시 보고, 실행 내역 비교로 이어갈 수 있습니다.")
       : runStatusReviewRequired
         ? (nextStepDescription ?? "현재 환경에서는 최근 저장 실행과 현재 프로필의 일치 여부를 자동 확인하지 못했습니다. 아래 실행 내역에서 진행 상태를 다시 확인해 주세요.")
         : profileSyncState === "unknown"
         ? (nextStepDescription ?? "프로필 목록을 새로고침한 뒤 저장 상태를 다시 확인해 주세요.")
         : profileSyncState === "dirty"
-          ? (nextStepDescription ?? "현재 편집값은 아직 저장 전이라 1단계를 완료로 보지 않습니다. 아래 저장 버튼으로 반영한 뒤 첫 실행으로 이어가세요.")
+          ? (nextStepDescription ?? "현재 편집값은 아직 저장 전이라 1단계를 완료로 보지 않습니다. 아래 저장 버튼으로 반영한 뒤 첫 실행·기록 저장으로 이어가세요.")
           : profileSavedAfterApply
-            ? (nextStepDescription ?? "아래 첫 실행 시작 버튼으로 요약, 액션, 경고를 한 번에 계산하고, 결과 저장 뒤 저장된 리포트 확인으로 이어집니다.")
-            : (nextStepDescription ?? "아래 프로필 영역의 새로 만들기를 눌러 저장을 마치면 첫 실행과 결과 저장 단계로 이어집니다.");
+            ? (nextStepDescription ?? "아래 첫 실행·기록 저장 버튼으로 요약, 액션, 경고를 계산하고 저장된 리포트 확인으로 이어집니다.")
+            : (nextStepDescription ?? "아래 프로필 영역의 새로 만들기를 눌러 저장을 마치면 첫 실행·기록 저장 단계로 이어집니다.");
   const restoredFollowthroughVisible = !appliedPreview
     && !previewOpen
-    && (profileSyncState === "saved" || profileSyncState === "dirty" || profileSyncState === "unknown" || runDone || saveDone);
-  const restoredCompletedSummary = saveDone
-    ? "프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료"
-    : runDone
-      ? "프로필 저장 완료 · 첫 실행 완료"
+    && (profileSyncState === "saved" || profileSyncState === "dirty" || profileSyncState === "unknown" || runDone);
+  const restoredCompletedSummary = runDone
+      ? "프로필 저장 완료 · 첫 실행·기록 저장 완료"
     : runStatusReviewRequired
       ? "프로필 저장 완료 · 실행 상태 확인 필요"
       : profileSyncState === "dirty"
@@ -212,21 +210,17 @@ export default function PlanningQuickStartGate({
         ? "저장 상태 다시 확인"
         : "프로필 저장 완료";
   const restoredNextStepSummary = nextStepLabel
-    ?? (saveDone
-      ? "저장된 리포트 확인"
-      : runDone
-        ? "결과 저장 후 리포트 확인"
+    ?? (runDone
+        ? "저장된 리포트 확인"
         : runStatusReviewRequired
           ? "진행 상태 다시 확인"
           : profileSyncState === "dirty"
           ? "프로필 저장"
           : profileSyncState === "unknown"
             ? "진행 상태 다시 확인"
-            : "첫 실행 시작");
-  const restoredTitle = saveDone
-    ? "현재 워크스페이스 상태 기준으로 결과 저장까지 완료됐습니다."
-    : runDone
-      ? "현재 워크스페이스 상태 기준으로 첫 실행까지 확인됐습니다."
+            : "첫 실행·기록 저장");
+  const restoredTitle = runDone
+      ? "현재 워크스페이스 상태 기준으로 첫 실행·기록 저장까지 확인됐습니다."
       : runStatusReviewRequired
         ? "최근 실행 상태를 자동 확인하지 못했습니다. 진행 상태를 다시 확인해 주세요."
         : profileSyncState === "dirty"
@@ -234,17 +228,15 @@ export default function PlanningQuickStartGate({
         : profileSyncState === "unknown"
           ? "저장 상태를 아직 확인하지 못했습니다. 진행 상태를 다시 확인해 주세요."
           : "현재 워크스페이스 상태 기준으로 프로필 저장이 확인됐습니다.";
-  const restoredDescription = saveDone
-    ? (nextStepDescription ?? "아래 리포트 버튼으로 저장된 결과를 다시 보고, 실행 내역 비교를 이어서 볼 수 있습니다.")
-    : runDone
-      ? (nextStepDescription ?? "첫 실행이 끝났다면 아래 결과 저장으로 현재 상태를 보관한 뒤, 저장된 리포트 확인으로 이어가세요.")
+  const restoredDescription = runDone
+      ? (nextStepDescription ?? "아래 리포트 버튼으로 저장된 결과를 다시 보고, 실행 내역 비교를 이어서 볼 수 있습니다.")
       : runStatusReviewRequired
         ? (nextStepDescription ?? "현재 환경에서는 최근 저장 실행과 현재 프로필의 일치 여부를 자동 확인하지 못했습니다. 아래 실행 내역에서 진행 상태를 다시 확인해 주세요.")
         : profileSyncState === "dirty"
-        ? (nextStepDescription ?? "현재 편집값은 아직 저장 전이라 1단계를 완료로 보지 않습니다. 아래 저장 버튼으로 반영한 뒤 첫 실행으로 이어가세요.")
+        ? (nextStepDescription ?? "현재 편집값은 아직 저장 전이라 1단계를 완료로 보지 않습니다. 아래 저장 버튼으로 반영한 뒤 첫 실행·기록 저장으로 이어가세요.")
         : profileSyncState === "unknown"
           ? (nextStepDescription ?? "프로필 목록을 새로고침한 뒤 저장 상태를 다시 확인해 주세요.")
-          : (nextStepDescription ?? "새로고침 뒤에는 간단 시작 적용 여부를 완전히 복원할 수 없어도, 실제 저장 상태를 기준으로 첫 실행, 결과 저장, 리포트 확인 안내를 이어서 보여줍니다.");
+          : (nextStepDescription ?? "새로고침 뒤에는 간단 시작 적용 여부를 완전히 복원할 수 없어도, 실제 저장 상태를 기준으로 첫 실행·기록 저장과 리포트 확인 안내를 이어서 보여줍니다.");
 
   return (
     <Card className="mb-6 border border-sky-200 bg-gradient-to-br from-sky-50 to-white" data-testid="planning-quickstart-gate">

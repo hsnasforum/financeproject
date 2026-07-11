@@ -56,20 +56,35 @@ describe("loadCurrentUserReportRunScope pageAuth boundary", () => {
     mocks.getCurrentUserRun.mockImplementation(async (runId: string) => {
       expect(insidePageAuth).toBe(true);
       return {
+        version: 1,
         id: runId,
         profileId: "profile-1",
         title: "Requested run",
         createdAt: "2026-01-01T00:00:00.000Z",
+        input: { horizonMonths: 12 },
+        meta: {},
+        outputs: {},
       };
     });
     mocks.listCurrentUserRuns.mockImplementation(async () => {
       expect(insidePageAuth).toBe(true);
       return [
         {
+          version: 1,
           id: "run-1",
           profileId: "profile-1",
           title: "Run 1",
           createdAt: "2026-01-01T00:00:00.000Z",
+          input: { horizonMonths: 12 },
+          meta: {
+            idempotency: {
+              version: 1,
+              keyHash: "key-hash",
+              requestFingerprint: "request-fingerprint",
+              responseMeta: { generatedAt: "2026-01-01T00:00:00.000Z" },
+            },
+          },
+          outputs: {},
         },
       ];
     });
@@ -112,6 +127,7 @@ describe("loadCurrentUserReportRunScope pageAuth boundary", () => {
       initialScopeReady: true,
     });
     expect(result.runs).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toMatch(/idempotency|keyHash|requestFingerprint|responseMeta/);
     expect(mocks.getCurrentUserDefaultProfileId).toHaveBeenCalledTimes(1);
     expect(mocks.getCurrentUserRun).toHaveBeenCalledTimes(2);
     expect(mocks.listCurrentUserRuns).toHaveBeenCalledTimes(1);

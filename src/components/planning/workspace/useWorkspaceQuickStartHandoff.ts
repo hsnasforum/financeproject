@@ -21,8 +21,8 @@ export function resolveWorkspaceWizardAppliedNotice(): string {
 
 export function resolveWorkspaceQuickStartAppliedNotice(selectedProfileId: string): string {
   return selectedProfileId
-    ? "간단 시작 입력을 적용했습니다. 현재 프로필과 편집값이 달라졌을 수 있으니 저장 여부를 먼저 확인하고 첫 실행으로 이어가세요."
-    : "간단 시작 입력을 적용했습니다. 다음 단계는 프로필 저장이며, 저장 뒤 첫 실행과 결과 저장을 거쳐 리포트를 확인할 수 있습니다.";
+    ? "간단 시작 입력을 적용했습니다. 현재 프로필과 편집값이 달라졌을 수 있으니 저장 여부를 먼저 확인하고 첫 실행·기록 저장으로 이어가세요."
+    : "간단 시작 입력을 적용했습니다. 다음 단계는 프로필 저장이며, 저장 뒤 첫 실행·기록 저장을 거쳐 리포트를 확인할 수 있습니다.";
 }
 
 export function useWorkspaceQuickStartHandoff({

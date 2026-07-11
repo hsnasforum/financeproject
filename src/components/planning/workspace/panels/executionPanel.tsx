@@ -5,7 +5,6 @@ import { ASSUMPTIONS_FORM_DEFAULT } from "@/app/planning/_lib/workspaceAssumptio
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {
-  bodyChoiceRowClassName,
   bodyCompactFieldClassName,
   bodyFieldClassName,
   bodyLabelClassName,
@@ -102,7 +101,7 @@ export function PlanningWorkspaceExecutionPanel({
     scenarioPatchesPreview,
     healthWarnings,
     hasCriticalHealth,
-    saveBlockedByHealth,
+    advancedActionsBlockedByHealth,
     monteCarloServerDisabled,
     includeProductsServerDisabled,
     optimizerServerDisabled,
@@ -111,17 +110,14 @@ export function PlanningWorkspaceExecutionPanel({
     preflightWarnIssues,
     preflightHasBlockers,
     preflightWarnSummary,
-    saveNeedsWarningConfirmation,
-    saveButtonDescribedBy,
+    runNeedsWarningConfirmation,
+    runButtonDescribedBy,
     currentStepStatuses,
     monteCarloBudgetSkipped,
     healthAck,
     healthDisabledReason,
-    saveWarningConfirmed,
-    autoSaveRunAfterSuccess,
+    runWarningConfirmed,
     running,
-    runResult,
-    savingRun,
     runningOptimize,
   } = execution;
   const {
@@ -149,13 +145,11 @@ export function PlanningWorkspaceExecutionPanel({
     replaceAssumptionsFromJsonText,
     replaceDebtOffersFromJsonText,
     setHealthAck,
-    setSaveWarningConfirmed,
-    setAutoSaveRunAfterSuccess,
+    setRunWarningConfirmed,
     setBaselineRunId,
     setScenarioTemplateId,
     runPlanAction,
     runScenarioAction,
-    saveRunAction,
     runOptimizeAction,
   } = actions;
 
@@ -300,12 +294,12 @@ export function PlanningWorkspaceExecutionPanel({
               </label>
               {!monteCarloServerDisabled ? (
                 <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-                  <input checked={runMonteCarloEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunMonteCarloEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                  <input checked={runMonteCarloEnabled} disabled={advancedActionsBlockedByHealth} onChange={(event) => setRunMonteCarloEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
                   <span className="text-xs font-bold text-slate-700">몬테카를로 실행</span>
                 </label>
               ) : null}
               <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-                <input checked={runActionsEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunActionsEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                <input checked={runActionsEnabled} disabled={advancedActionsBlockedByHealth} onChange={(event) => setRunActionsEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
                 <span className="text-xs font-bold text-slate-700">실행 계획 생성</span>
               </label>
               <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -314,7 +308,7 @@ export function PlanningWorkspaceExecutionPanel({
               </label>
               {!optimizerServerDisabled ? (
                 <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-                  <input checked={runOptimizeEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunOptimizeEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                  <input checked={runOptimizeEnabled} disabled={advancedActionsBlockedByHealth} onChange={(event) => setRunOptimizeEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
                   <span className="text-xs font-bold text-slate-700">최적화기 실행</span>
                 </label>
               ) : null}
@@ -341,7 +335,7 @@ export function PlanningWorkspaceExecutionPanel({
               <div className="grid grid-cols-2 gap-4">
                 {!includeProductsServerDisabled ? (
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-surface-muted p-3">
-                    <input checked={includeProducts} disabled={saveBlockedByHealth} onChange={(event) => setIncludeProducts(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                    <input checked={includeProducts} disabled={advancedActionsBlockedByHealth} onChange={(event) => setIncludeProducts(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
                     <span className="text-xs font-bold text-slate-700">상품 후보 포함</span>
                   </label>
                 ) : <div />}
@@ -456,7 +450,7 @@ export function PlanningWorkspaceExecutionPanel({
               onChange={(event) => setOptimizerSearchJson(event.target.value)}
             />
           </label>
-          <Button disabled={runningOptimize || optimizerServerDisabled || saveBlockedByHealth} onClick={() => void runOptimizeAction()} size="sm" variant="outline" className="h-10 rounded-xl border-indigo-200 bg-white px-6 font-bold text-indigo-700">
+          <Button disabled={runningOptimize || optimizerServerDisabled || advancedActionsBlockedByHealth} onClick={() => void runOptimizeAction()} size="sm" variant="outline" className="h-10 rounded-xl border-indigo-200 bg-white px-6 font-bold text-indigo-700">
             {runningOptimize ? "최적화 실행 중..." : "최적화 실행"}
           </Button>
         </div>
@@ -537,7 +531,7 @@ export function PlanningWorkspaceExecutionPanel({
       </div>
 
       {healthDisabledReason ? (
-        <p className="px-1 text-xs italic font-bold text-slate-400" id="planning-save-disabled-reason">{healthDisabledReason}</p>
+        <p className="px-1 text-xs italic font-bold text-slate-400" id="planning-advanced-actions-disabled-reason">{healthDisabledReason}</p>
       ) : null}
       {monteCarloBudgetSkipped ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-600">Monte Carlo는 예산 초과로 생략되었습니다.</p>
@@ -636,58 +630,39 @@ export function PlanningWorkspaceExecutionPanel({
       </div>
 
       {preflightWarnIssues.length > 0 ? (
-        <label className="cursor-pointer rounded-2xl border border-amber-100 bg-amber-50 p-4" id="planning-save-warning-confirm-hint">
+        <label className="cursor-pointer rounded-2xl border border-amber-100 bg-amber-50 p-4" id="planning-run-warning-confirm-hint">
           <span className="flex items-start gap-3">
             <input
-              checked={saveWarningConfirmed}
-              disabled={savingRun || preflightHasBlockers}
-              onChange={(event) => setSaveWarningConfirmed(event.target.checked)}
+              id="planning-run-warning-confirm-checkbox"
+              checked={runWarningConfirmed}
+              disabled={running || preflightHasBlockers}
+              onChange={(event) => setRunWarningConfirmed(event.target.checked)}
               type="checkbox"
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
             />
-            <span className="text-xs font-bold leading-relaxed text-amber-800">사전 점검 경고를 확인했고, 이 상태로 저장을 진행합니다.</span>
+            <span className="text-xs font-bold leading-relaxed text-amber-800">사전 점검 경고를 확인했고, 이 상태로 실행하고 기록을 저장합니다.</span>
           </span>
         </label>
       ) : null}
 
-      <label className={cn(bodyChoiceRowClassName, "px-1")}>
-        <input
-          checked={autoSaveRunAfterSuccess}
-          disabled={running || savingRun || saveBlockedByHealth || preflightHasBlockers || preflightWarnIssues.length > 0}
-          onChange={(event) => setAutoSaveRunAfterSuccess(event.target.checked)}
-          type="checkbox"
-          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-        />
-        <span className="text-xs font-bold text-slate-600">실행 성공 시 실행 기록 자동 저장</span>
-      </label>
-
       <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
         <Button
-          aria-describedby={preflightHasBlockers ? "planning-preflight-block-reason" : undefined}
+          aria-describedby={runButtonDescribedBy}
           data-testid="run-button"
-          disabled={running || !selectedProfileId || preflightHasBlockers}
+          disabled={running || !selectedProfileId || preflightHasBlockers || runNeedsWarningConfirmation}
           onClick={() => void runPlanAction()}
           variant="primary"
           className="h-12 rounded-full px-8 text-base font-black shadow-lg shadow-primary/20"
         >
-          {running ? "실행 중..." : "플래닝 실행"}
+          {running ? "실행 중..." : "플래닝 실행·기록 저장"}
         </Button>
         <Button
-          disabled={running || !selectedProfileId || preflightHasBlockers || scenarioPatchesPreview.length < 1}
+          disabled={running || !selectedProfileId || preflightHasBlockers || runNeedsWarningConfirmation || scenarioPatchesPreview.length < 1}
           onClick={() => void runScenarioAction()}
           variant="outline"
           className="h-12 rounded-full bg-white px-6 text-sm font-bold"
         >
-          {running ? "실행 중..." : "시나리오 실행"}
-        </Button>
-        <Button
-          aria-describedby={saveButtonDescribedBy}
-          disabled={savingRun || !selectedProfileId || !runResult?.hasSimulateResult || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
-          onClick={() => void saveRunAction()}
-          variant="outline"
-          className="h-12 rounded-full bg-white px-6 text-sm font-bold"
-        >
-          {savingRun ? "저장 중..." : "결과 저장"}
+          {running ? "실행 중..." : "시나리오 실행·기록 저장"}
         </Button>
       </div>
     </Card>

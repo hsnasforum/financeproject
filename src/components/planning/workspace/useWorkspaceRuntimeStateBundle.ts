@@ -29,9 +29,7 @@ export function useWorkspaceRuntimeStateBundle({
   isMountedRef,
 }: RuntimeStateBundleInput) {
   const [running, setRunning] = useState(false);
-  const [savingRun, setSavingRun] = useState(false);
   const [runningOptimize, setRunningOptimize] = useState(false);
-  const [autoSaveRunAfterSuccess, setAutoSaveRunAfterSuccess] = useState(false);
   const [pipelineStatuses, setPipelineStatuses] = useState<StepStatus[]>(() => createInitialStepStatuses());
   const [runResult, setRunResult] = useState<WorkspaceRunResult | null>(null);
   const [optimizeResult, setOptimizeResult] = useState<{
@@ -52,7 +50,7 @@ export function useWorkspaceRuntimeStateBundle({
   const [activeTab, setActiveTab] = useState<"summary" | "warningsGoals" | "actions" | "scenarios" | "monteCarlo" | "debt">("summary");
   const [showAllActions, setShowAllActions] = useState(false);
   const [healthAck, setHealthAck] = useState(false);
-  const [saveWarningConfirmed, setSaveWarningConfirmed] = useState(false);
+  const [runWarningConfirmed, setRunWarningConfirmed] = useState(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -64,12 +62,8 @@ export function useWorkspaceRuntimeStateBundle({
   return {
     running,
     setRunning,
-    savingRun,
-    setSavingRun,
     runningOptimize,
     setRunningOptimize,
-    autoSaveRunAfterSuccess,
-    setAutoSaveRunAfterSuccess,
     pipelineStatuses,
     setPipelineStatuses,
     runResult,
@@ -94,7 +88,7 @@ export function useWorkspaceRuntimeStateBundle({
     setShowAllActions,
     healthAck,
     setHealthAck,
-    saveWarningConfirmed,
-    setSaveWarningConfirmed,
+    runWarningConfirmed,
+    setRunWarningConfirmed,
   };
 }

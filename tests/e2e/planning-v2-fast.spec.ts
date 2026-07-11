@@ -137,7 +137,7 @@ test("key interactive controls expose accessible names", async ({ page, request 
   const seeded = await seedRunForReports(request);
   await page.goto("/planning");
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
-  await expect(page.getByTestId("run-button")).toHaveAccessibleName("플래닝 실행");
+  await expect(page.getByTestId("run-button")).toHaveAccessibleName("플래닝 실행·기록 저장");
   await expect(page.getByTestId("planning-snapshot-ops-link")).toBeVisible();
 
   await page.goto(

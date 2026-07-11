@@ -38,6 +38,7 @@ import {
 } from "./runUpdateStore";
 import { ensurePlanningStartupMigrations } from "./startupMigrationGate";
 import { type PlanningRunRecord } from "./types";
+import { hasRunIdReservation as hasStoredRunIdReservation } from "./runIdReservationStore";
 
 export type { RunBlobName } from "./runBlobStore";
 export type {
@@ -189,6 +190,11 @@ export async function getRun(id: string): Promise<PlanningRunRecord | null> {
   const indexRows = await runIndexStore.read();
   const hintedProfileId = indexRows.find((row) => row.id === safeId)?.profileId;
   return readRunMeta(safeId, hintedProfileId);
+}
+
+export async function hasRunIdReservation(id: string): Promise<boolean> {
+  assertServerOnly();
+  return hasStoredRunIdReservation(id);
 }
 
 export async function diagnoseRunRead(id: string, profileIdHint?: string): Promise<RunReadDiagnostic> {

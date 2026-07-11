@@ -200,14 +200,14 @@ describe("workspaceRunResult", () => {
       healthAck: false,
     });
     expect(blocked.summary?.warningCodes).toEqual(["SNAPSHOT_VERY_STALE"]);
-    expect(blocked.saveBlockedByHealth).toBe(true);
+    expect(blocked.advancedActionsBlockedByHealth).toBe(true);
     expect(blocked.disabledReason).toContain("매우 오래되었습니다");
 
     const acknowledged = buildWorkspaceHealthGuardState({
       runResult,
       healthAck: true,
     });
-    expect(acknowledged.saveBlockedByHealth).toBe(false);
+    expect(acknowledged.advancedActionsBlockedByHealth).toBe(false);
     expect(acknowledged.disabledReason).toBe("");
   });
 
@@ -248,7 +248,7 @@ describe("workspaceRunResult", () => {
         data: { days: 47 },
       },
     ]);
-    expect(blocked.saveBlockedByHealth).toBe(true);
+    expect(blocked.advancedActionsBlockedByHealth).toBe(true);
   });
 
   it("builds snapshot state for feedback, outcomes, and debug display", () => {

@@ -418,7 +418,7 @@ describe("planning reports page fallback", () => {
     expect(html).toContain("아직 저장된 상담 기록이 없습니다");
     expect(html).toContain("먼저 /planning에서 상담 결과를 저장해 두면");
     expect(html).toContain("상담 기록 화면과 비교할 수 있습니다.");
-    expect(html).toContain("상담 계산으로 돌아가 결과 저장하기");
+    expect(html).toContain("플래닝으로 돌아가 실행·기록 저장하기");
     expect(html).toContain("href=\"/planning?profileId=profile-1\"");
   });
 });
