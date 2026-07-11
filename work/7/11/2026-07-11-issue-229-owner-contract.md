@@ -15,6 +15,7 @@
 - `work-log-closeout`: 변경·검증·잔여 위험을 `/work` 형식으로 기록
 - `github:github`: 기존 Issue·PR과 선행 PR 상태 확인
 - `github:yeet`: 명시 파일만 커밋·push하고 stacked draft PR을 게시하는 절차 확인
+- `github:gh-fix-ci`: PR #251의 실패 job step·로그를 확인하고 코드 실패와 Actions 선행 실패를 분리
 
 ## 변경 이유
 
@@ -53,6 +54,7 @@ Issue #229의 첫 단계로, 현재 cwd 고정 export/restore가 놓치는 실�
 - `DATABASE_URL=file:./prisma/dev.db corepack pnpm verify`: PASS, exit 0. 현재 snapshot 8개 stale 및 `rules_eval.json` 부재에 따른 DART rules gate SKIP은 기존 외부 데이터 상태로 별도 기록하며 자동 생성 보고서 변경은 원복했습니다.
 - `DATABASE_URL=file:./prisma/dev.db corepack pnpm build`: PASS, 351.2초
 - 독립 read-only 재검토: P0/P1 잔존 finding 없음
+- PR #251 원격 CI: push·pull_request의 5개 job 모두 `steps=[]`, 로그 미생성으로 Actions 계층 선행 실패. 로컬 코드 수정 근거 없음
 - 실제 사용자 데이터 restore apply: 실행하지 않음
 
 ## 남은 리스크
@@ -61,6 +63,7 @@ Issue #229의 첫 단계로, 현재 cwd 고정 export/restore가 놓치는 실�
 - `[운영 결정 필요]` `active-namespace-and-runtime-shared` archive는 다른 사용자 namespace를 포함하지 않으면서 shared owner를 포함합니다. multi-user 환경 apply 정책과 offline/quiesced single-writer 보장이 필요합니다.
 - `[검증 필요]` archive entry symlink, Linux alias/escape, 실제 Windows junction·rename·open-handle fixture가 아직 없습니다.
 - `[검증 필요]` owner별 schema validator, exact ZIP entry set, archive 크기 제한, same-volume staging, durable journal, rollback incomplete evidence는 후속 PR 범위입니다.
+- `[운영 필요]` PR #251 required check는 GitHub Actions runner/실행 환경이 정상화된 뒤 재실행해야 합니다. 현재 실패 run에는 실행 step과 로그가 없습니다.
 - apply 차단은 위 조건과 후속 PR-B/C/D 전체 gate가 끝날 때까지 해제하지 않습니다.
 
 ## 롤백 기준
