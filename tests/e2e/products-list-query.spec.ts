@@ -60,13 +60,23 @@ test("specialized product list applies the pure result pipeline to query filters
     });
   });
 
+  await page.goto("/");
   await page.goto("/products/pension?q=%EA%B0%90%EB%A7%88&sort=nameAsc");
 
   await expect(page.getByRole("heading", { name: "연금저축 상품" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByPlaceholder("은행명 또는 상품명을 입력하세요")).toHaveValue("감마");
+  const searchInput = page.getByPlaceholder("은행명 또는 상품명을 입력하세요");
+  await expect(searchInput).toHaveValue("감마");
   await expect(page.getByRole("heading", { name: "감마 연금" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "알파 연금" })).toHaveCount(0);
   await expect(page).toHaveURL(/\/products\/pension\?.*q=%EA%B0%90%EB%A7%88/);
+
+  await searchInput.fill("알파");
+  await expect(page.getByRole("heading", { name: "알파 연금" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "감마 연금" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/products\/pension\?.*q=%EC%95%8C%ED%8C%8C/);
+
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/");
 });
 
 test("specialized product list hydrates and updates the product shelf without script warnings", async ({ page }) => {

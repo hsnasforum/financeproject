@@ -35,6 +35,29 @@ describe("product explorer url state", () => {
     });
   });
 
+  it("keeps invalid query values on the existing safe defaults", () => {
+    const state = parseProductExplorerUrlState(
+      new URLSearchParams("sort=unknown&optSort=unknown&maxPages=999&view=unknown&fav=true&q=%20%20&amount=%20"),
+      {
+        defaultSortKey: "rateAsc",
+        initialTopFinGrpNo: "030300",
+        initialPageNo: 2,
+      },
+    );
+
+    expect(state).toMatchObject({
+      topFinGrpNo: "030300",
+      pageNo: 2,
+      maxPages: 80,
+      viewMode: "product",
+      optionSortKey: "best_desc",
+      sortKey: "rateAsc",
+      onlyFavorites: false,
+      searchQuery: "",
+      amountInput: "10000000",
+    });
+  });
+
   it("builds FINLIFE request and URL params consistently", () => {
     const request = buildFinlifeRequestParams({
       topFinGrpNo: "020000",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { pruneOpen, toggleOpen } from "@/lib/finlife/groupOpenState";
 import { type RatePreference } from "@/lib/finlife/uiSort";
@@ -10,7 +10,6 @@ import {
   formatOptionRate,
   getOptionRates,
   type OptionRow,
-  type OptionSortKey,
 } from "@/lib/finlife/optionView";
 import { FINLIFE_TOP_GROUPS } from "@/lib/finlife/topGroups";
 import { PageShell } from "@/components/ui/PageShell";
@@ -20,22 +19,20 @@ import { ProductExplorerHeaderCard } from "./products/ProductExplorerHeaderCard"
 import { ProductResultsHeader } from "./products/ProductResultsHeader";
 import { ProductRowItem } from "./products/ProductRowItem";
 import { ProductOptionRowItem } from "./products/ProductOptionRowItem";
+import {
+  useProductExplorerQueryController,
+  useProductExplorerQuerySync,
+} from "./products/useProductExplorerQueryController";
 import { useFinlifeProductListData } from "./products/useFinlifeProductListData";
 import { useProductShelfController } from "./products/useProductShelfController";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
-import { type ProductListSortKey } from "@/lib/products/listUtils";
 import { buildProductListViewModel } from "@/lib/products/productListViewModel";
 import {
-  buildProductExplorerUrlParams,
-  FINLIFE_PAGE_SIZE,
   isValidProductExplorerSortKey,
   parseAmountInput,
-  parseProductExplorerUrlState,
-  type ProductExplorerScanMode,
-  type ProductExplorerViewMode,
 } from "@/lib/products/productExplorerUrlState";
 import { type SourceStatusRow } from "@/lib/sources/types";
 import { cn } from "@/lib/utils";
@@ -49,8 +46,6 @@ type Props = {
   initialPageNo?: number;
   scriptNonce?: string;
 };
-
-type SortKey = ProductListSortKey;
 
 type AvailabilityRow = {
   topFinGrpNo: string;
@@ -146,7 +141,6 @@ function GroupedOptionMobileItem({ row }: { row: OptionRow }) {
 
 export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1 }: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const {
     favoriteIds: shelfFavoriteIds,
     comparedIds: shelfCompareSet,
@@ -156,29 +150,45 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     toggleCompare: handleToggleCompare,
     addRecent: handleViewed,
   } = useProductShelfController();
-  const defaultSortKey: SortKey = ratePreference === "higher" ? "rateDesc" : "rateAsc";
-  const initialUrlState = useMemo(
-    () => parseProductExplorerUrlState(searchParams, { defaultSortKey, initialTopFinGrpNo, initialPageNo }),
-    [defaultSortKey, initialPageNo, initialTopFinGrpNo, searchParams],
-  );
-  const [topFinGrpNo, setTopFinGrpNo] = useState(initialUrlState.topFinGrpNo);
-  const [selectedFinCoNo, setSelectedFinCoNo] = useState<string | null>(initialUrlState.selectedFinCoNo);
-  const [pageNo, setPageNo] = useState(initialUrlState.pageNo);
-  const [scanMode, setScanMode] = useState<ProductExplorerScanMode>(initialUrlState.scanMode);
-  const [maxPages, setMaxPages] = useState<number | "auto">(initialUrlState.maxPages);
-  const [viewMode, setViewMode] = useState<ProductExplorerViewMode>(initialUrlState.viewMode);
-  const [sortKey, setSortKey] = useState<SortKey>(initialUrlState.sortKey);
-  const [optionSortKey, setOptionSortKey] = useState<OptionSortKey>(initialUrlState.optionSortKey);
-  const [optionGroup, setOptionGroup] = useState(initialUrlState.optionGroup);
+  const defaultSortKey = ratePreference === "higher" ? "rateDesc" as const : "rateAsc" as const;
+  const {
+    topFinGrpNo,
+    setTopFinGrpNo,
+    selectedFinCoNo,
+    setSelectedFinCoNo,
+    pageNo,
+    setPageNo,
+    scanMode,
+    setScanMode,
+    maxPages,
+    setMaxPages,
+    viewMode,
+    setViewMode,
+    sortKey,
+    setSortKey,
+    optionSortKey,
+    setOptionSortKey,
+    optionGroup,
+    setOptionGroup,
+    selectedTerms,
+    setSelectedTerms,
+    amountInput,
+    setAmountInput,
+    selectedProductTypes,
+    setSelectedProductTypes,
+    selectedBenefits,
+    setSelectedBenefits,
+    searchQuery,
+    setSearchQuery,
+    onlyFavorites,
+    setOnlyFavorites,
+  } = useProductExplorerQueryController({
+    defaultSortKey,
+    initialTopFinGrpNo,
+    initialPageNo,
+  });
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [showAllProviders, setShowAllProviders] = useState(false);
-
-  const [selectedTerms, setSelectedTerms] = useState<string[]>(initialUrlState.selectedTerms);
-  const [amountInput, setAmountInput] = useState(initialUrlState.amountInput);
-  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>(initialUrlState.selectedProductTypes);
-  const [selectedBenefits, setSelectedBenefits] = useState<string[]>(initialUrlState.selectedBenefits);
-  const [searchQuery, setSearchQuery] = useState(initialUrlState.searchQuery);
-  const [onlyFavorites, setOnlyFavorites] = useState(initialUrlState.onlyFavorites);
 
   const { loading, error, payload } = useFinlifeProductListData({
     kind,
@@ -281,49 +291,27 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
       setSelectionNotice("선택한 권역에 공시 상품이 없어 가능한 권역으로 자동 변경했습니다.");
     }, 0);
     return () => window.clearTimeout(providerFallbackTimer);
-  }, [providerOptions, topFinGrpNo]);
+  }, [providerOptions, setPageNo, setTopFinGrpNo, topFinGrpNo]);
 
-  useEffect(() => {
-    const params = buildProductExplorerUrlParams({
-      topFinGrpNo,
-      pageNo,
-      scanMode,
-      maxPages,
-      viewMode,
-      optionSortKey,
-      optionGroup,
-      selectedFinCoNo,
-      searchQuery,
-      onlyFavorites,
-      sortKey,
-      defaultSortKey,
-      selectedTerms,
-      selectedProductTypes,
-      selectedBenefits,
-      amountInput,
-      pageSize: FINLIFE_PAGE_SIZE,
-    });
-    router.replace(`?${params.toString()}`, { scroll: false });
-  }, [
-    amountInput,
-    defaultSortKey,
+  useProductExplorerQuerySync({
     kind,
-    maxPages,
-    onlyFavorites,
-    optionGroup,
-    optionSortKey,
-    pageNo,
-    router,
-    scanMode,
-    searchQuery,
-    selectedBenefits,
-    selectedFinCoNo,
-    selectedProductTypes,
-    selectedTerms,
-    sortKey,
     topFinGrpNo,
+    pageNo,
+    scanMode,
+    maxPages,
     viewMode,
-  ]);
+    optionSortKey,
+    optionGroup,
+    selectedFinCoNo,
+    searchQuery,
+    onlyFavorites,
+    sortKey,
+    defaultSortKey,
+    selectedTerms,
+    selectedProductTypes,
+    selectedBenefits,
+    amountInput,
+  });
 
   const productListViewModel = useMemo(
     () => buildProductListViewModel({
