@@ -20,6 +20,11 @@ const REQUIRED_V3_ARTIFACT_FILES = [
   "tsconfig.planning-v3.json",
 ];
 
+const SOURCE_ONLY_STANDALONE_ALIASES = [
+  "tmp/txn-batch-detail-client-audit.tsx",
+  "tmp/flow-v3-import-to-cashflow-audit.spec.ts",
+];
+
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -212,6 +217,10 @@ async function main() {
       path.join(artifactStandaloneDir, "node_modules", ...packagePath),
       { replaceDestination: true, dereferenceSource: true },
     );
+  }
+  // Next tracing copies these repository audit aliases into standalone even though runtime does not use them.
+  for (const relativePath of SOURCE_ONLY_STANDALONE_ALIASES) {
+    await removeCopiedSymlink(path.join(artifactStandaloneDir, ...relativePath.split("/")));
   }
   await removeCopiedSymlink(path.join(artifactStandaloneDir, "public"));
   await removeCopiedSymlink(path.join(artifactStandaloneDir, "prisma"));

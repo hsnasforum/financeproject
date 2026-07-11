@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { listArtifactFiles } from "../scripts/planning_v2_desktop_provenance.mjs";
 import { STANDALONE_RUNTIME_LINKED_PACKAGES } from "../scripts/standalone_runtime_assets.mjs";
 
 const tempRoots: string[] = [];
@@ -44,6 +45,15 @@ function linkDirectory(source: string, target: string): void {
   );
 }
 
+function linkSourceAlias(sourceFile: string, target: string): void {
+  if (process.platform === "win32") {
+    linkDirectory(path.dirname(sourceFile), target);
+    return;
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.symlinkSync(fs.realpathSync(sourceFile), target, "file");
+}
+
 function initializeFixtureGit(root: string): void {
   const initialized = spawnSync("git", ["init", "--quiet"], { cwd: root, encoding: "utf8" });
   if (initialized.status !== 0) throw new Error(initialized.stderr || "fixture git init failed");
@@ -80,6 +90,19 @@ describe("desktop artifact provenance", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe("");
+  });
+
+  it("rejects a symlinked provenance manifest before manifest exclusion", async () => {
+    const root = makeRoot();
+    const artifactDir = path.join(root, "artifact");
+    const externalManifestDir = path.join(root, "external-manifest");
+    fs.mkdirSync(artifactDir, { recursive: true });
+    fs.mkdirSync(externalManifestDir, { recursive: true });
+    linkDirectory(externalManifestDir, path.join(artifactDir, "desktop-manifest.json"));
+
+    await expect(listArtifactFiles(artifactDir)).rejects.toThrow(
+      "desktop artifact contains unsupported symlink: desktop-manifest.json",
+    );
   });
 
   it("writes package, git, lockfile, and checksum provenance into the generated manifest", () => {
@@ -131,9 +154,19 @@ describe("desktop artifact provenance", () => {
 
     const sourceStatic = path.join(projectRoot, ".next", "static");
     const sourceRuntimeStatic = path.join(projectRoot, ".next", "standalone", ".next", "static");
+    const sourceOnlyAuditTarget = path.join(projectRoot, ".next", "standalone", "audit-source");
+    const sourceOnlyAuditLinks = [
+      "txn-batch-detail-client-audit.tsx",
+      "flow-v3-import-to-cashflow-audit.spec.ts",
+    ].map((filename) => path.join(projectRoot, ".next", "standalone", "tmp", filename));
+    writeFixtureFile(sourceOnlyAuditTarget, "marker.txt", "source-only audit alias\n");
+    const sourceOnlyAuditFile = path.join(sourceOnlyAuditTarget, "marker.txt");
     linkDirectory(sourceStatic, sourceRuntimeStatic);
     linkDirectory(path.join(projectRoot, "public"), path.join(projectRoot, ".next", "standalone", "public"));
     linkDirectory(path.join(projectRoot, "prisma"), path.join(projectRoot, ".next", "standalone", "prisma"));
+    for (const sourceOnlyAuditLink of sourceOnlyAuditLinks) {
+      linkSourceAlias(sourceOnlyAuditFile, sourceOnlyAuditLink);
+    }
 
     const sourcePackageLinks = STANDALONE_RUNTIME_LINKED_PACKAGES.map((packageName) => {
       const packagePath = packageName.split("/");
@@ -159,12 +192,21 @@ describe("desktop artifact provenance", () => {
     expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
     expect(fs.lstatSync(sourceRuntimeStatic).isSymbolicLink()).toBe(true);
     expect(fs.realpathSync(sourceRuntimeStatic)).toBe(fs.realpathSync(sourceStatic));
+    for (const sourceOnlyAuditLink of sourceOnlyAuditLinks) {
+      expect(fs.lstatSync(sourceOnlyAuditLink).isSymbolicLink()).toBe(true);
+    }
 
     const artifactRuntimeStatic = path.join(artifactDir, ".next", "standalone", ".next", "static");
     expect(fs.lstatSync(artifactRuntimeStatic).isSymbolicLink()).toBe(false);
     expect(fs.readFileSync(path.join(artifactRuntimeStatic, "chunks", "app.js"), "utf8")).toContain("fixture");
     expect(fs.lstatSync(path.join(artifactDir, ".next", "standalone", "public"), { throwIfNoEntry: false })).toBeUndefined();
     expect(fs.lstatSync(path.join(artifactDir, ".next", "standalone", "prisma"), { throwIfNoEntry: false })).toBeUndefined();
+    for (const sourceOnlyAuditLink of sourceOnlyAuditLinks) {
+      expect(fs.lstatSync(
+        path.join(artifactDir, ".next", "standalone", "tmp", path.basename(sourceOnlyAuditLink)),
+        { throwIfNoEntry: false },
+      )).toBeUndefined();
+    }
     for (const { packageName, packageLink } of sourcePackageLinks) {
       expect(fs.lstatSync(packageLink).isSymbolicLink()).toBe(true);
       const artifactPackage = path.join(
@@ -197,7 +239,7 @@ describe("desktop artifact provenance", () => {
     expect(fs.existsSync(toDir)).toBe(false);
   });
 
-  it("rejects stale desktop artifacts after their content changes", () => {
+  it("rejects symlinked and stale desktop artifacts", () => {
     const root = makeRoot();
     const artifactDir = path.join(root, "planning-v2-desktop");
     const toDir = path.join(root, "installed");
@@ -207,11 +249,22 @@ describe("desktop artifact provenance", () => {
     const built = runNode(buildScript, ["--no-next-build", `--artifact-dir=${artifactDir}`]);
     expect(built.status).toBe(0);
 
-    fs.appendFileSync(path.join(artifactDir, "run.sh"), "\n# stale artifact mutation\n", "utf8");
-    const installed = runNode(installScript, ["--skip-install", `--from=${artifactDir}`, `--to=${toDir}`]);
+    const linkedPublic = path.join(artifactDir, "linked-public");
+    linkDirectory(path.join(artifactDir, "public"), linkedPublic);
+    const symlinkedInstall = runNode(installScript, ["--skip-install", `--from=${artifactDir}`, `--to=${toDir}`]);
 
-    expect(installed.status).not.toBe(0);
-    expect(`${installed.stderr}\n${installed.stdout}`).toContain("artifactChecksum");
+    expect(symlinkedInstall.status).not.toBe(0);
+    expect(`${symlinkedInstall.stderr}\n${symlinkedInstall.stdout}`).toContain(
+      "desktop artifact contains unsupported symlink: linked-public",
+    );
+    expect(fs.existsSync(toDir)).toBe(false);
+
+    fs.rmSync(linkedPublic, { recursive: true, force: true });
+    fs.appendFileSync(path.join(artifactDir, "run.sh"), "\n# stale artifact mutation\n", "utf8");
+    const staleInstall = runNode(installScript, ["--skip-install", `--from=${artifactDir}`, `--to=${toDir}`]);
+
+    expect(staleInstall.status).not.toBe(0);
+    expect(`${staleInstall.stderr}\n${staleInstall.stdout}`).toContain("artifactChecksum");
     expect(fs.existsSync(toDir)).toBe(false);
   }, 180_000);
 });

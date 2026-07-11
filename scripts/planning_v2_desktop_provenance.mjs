@@ -68,6 +68,9 @@ async function walkArtifactFiles(rootDir, currentDir, files) {
   for (const entry of entries) {
     const absolutePath = path.join(currentDir, entry.name);
     const relativePath = toPosixPath(path.relative(rootDir, absolutePath));
+    if (entry.isSymbolicLink()) {
+      throw new Error(`desktop artifact contains unsupported symlink: ${relativePath}`);
+    }
     if (relativePath === DESKTOP_MANIFEST_FILENAME) continue;
     if (entry.isDirectory()) {
       await walkArtifactFiles(rootDir, absolutePath, files);
