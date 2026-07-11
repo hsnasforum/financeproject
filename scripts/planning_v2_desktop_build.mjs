@@ -9,6 +9,7 @@ import {
   lockfileSha256,
   readPackageVersion,
 } from "./planning_v2_desktop_provenance.mjs";
+import { STANDALONE_RUNTIME_LINKED_PACKAGES } from "./standalone_runtime_assets.mjs";
 
 const REQUIRED_V3_ARTIFACT_FILES = [
   "src/lib/planning/v3/ops/doctor.ts",
@@ -54,13 +55,33 @@ async function ensureFileExists(target) {
   }
 }
 
-async function copyIfExists(source, destination) {
+async function copyIfExists(source, destination, options = {}) {
   try {
     await fs.access(source);
   } catch {
     return false;
   }
-  await fs.cp(source, destination, { recursive: true, force: true });
+  if (options.replaceDestination === true) {
+    await fs.rm(destination, { recursive: true, force: true });
+  }
+  await fs.cp(source, destination, {
+    recursive: true,
+    force: true,
+    dereference: options.dereferenceSource === true,
+  });
+  return true;
+}
+
+async function removeCopiedSymlink(target) {
+  let stats;
+  try {
+    stats = await fs.lstat(target);
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") return false;
+    throw error;
+  }
+  if (!stats.isSymbolicLink()) return false;
+  await fs.rm(target, { recursive: true, force: true });
   return true;
 }
 
@@ -181,11 +202,24 @@ async function main() {
   await copyIfExists(path.join(cwd, "tsconfig.planning-v3.json"), path.join(artifactDir, "tsconfig.planning-v3.json"));
   await copyIfExists(path.join(cwd, "middleware.ts"), path.join(artifactDir, "middleware.ts"));
   await copyIfExists(path.join(cwd, ".env.local.example"), path.join(artifactDir, ".env.local.example"));
-  await copyIfExists(path.join(cwd, ".next", "standalone"), path.join(artifactDir, ".next", "standalone"));
+  const sourceStandaloneDir = path.join(cwd, ".next", "standalone");
+  const artifactStandaloneDir = path.join(artifactDir, ".next", "standalone");
+  await copyIfExists(sourceStandaloneDir, artifactStandaloneDir);
+  for (const packageName of STANDALONE_RUNTIME_LINKED_PACKAGES) {
+    const packagePath = packageName.split("/");
+    await copyIfExists(
+      path.join(sourceStandaloneDir, "node_modules", ...packagePath),
+      path.join(artifactStandaloneDir, "node_modules", ...packagePath),
+      { replaceDestination: true, dereferenceSource: true },
+    );
+  }
+  await removeCopiedSymlink(path.join(artifactStandaloneDir, "public"));
+  await removeCopiedSymlink(path.join(artifactStandaloneDir, "prisma"));
   await copyIfExists(path.join(cwd, ".next", "static"), path.join(artifactDir, ".next", "static"));
   await copyIfExists(
     path.join(cwd, ".next", "static"),
-    path.join(artifactDir, ".next", "standalone", ".next", "static"),
+    path.join(artifactStandaloneDir, ".next", "static"),
+    { replaceDestination: true },
   );
 
   await fs.copyFile(path.join(cwd, "package.json"), path.join(artifactDir, "package.json"));

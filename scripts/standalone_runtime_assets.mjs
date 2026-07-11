@@ -5,6 +5,12 @@ const PRISMA_DRIVER_ADAPTER_UTILS = "@prisma/driver-adapter-utils";
 const BINDINGS = "bindings";
 const FILE_URI_TO_PATH = "file-uri-to-path";
 
+export const STANDALONE_RUNTIME_LINKED_PACKAGES = [
+  PRISMA_DRIVER_ADAPTER_UTILS,
+  BINDINGS,
+  FILE_URI_TO_PATH,
+];
+
 function sameResolvedPath(left, right) {
   try {
     return fs.realpathSync(left) === fs.realpathSync(right);

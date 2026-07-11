@@ -3,8 +3,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { STANDALONE_RUNTIME_LINKED_PACKAGES } from "../scripts/standalone_runtime_assets.mjs";
 
 const tempRoots: string[] = [];
+const REQUIRED_V3_FILES = [
+  "src/lib/planning/v3/ops/doctor.ts",
+  "src/lib/planning/v3/ops/refreshAll.ts",
+  "src/lib/planning/v3/ops/export.ts",
+  "src/lib/planning/v3/ops/restore.ts",
+  "src/lib/planning/v3/report/weeklyHtml.ts",
+  "tsconfig.planning-v3.json",
+];
 
 function makeRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-desktop-artifact-"));
@@ -12,12 +21,48 @@ function makeRoot(): string {
   return root;
 }
 
-function runNode(script: string, args: string[]) {
+function runNode(script: string, args: string[], options: { cwd?: string } = {}) {
   return spawnSync(process.execPath, [script, ...args], {
-    cwd: process.cwd(),
+    cwd: options.cwd ?? process.cwd(),
     encoding: "utf8",
     env: process.env,
   });
+}
+
+function writeFixtureFile(root: string, relativePath: string, content = "fixture\n"): void {
+  const filePath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, "utf8");
+}
+
+function linkDirectory(source: string, target: string): void {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.symlinkSync(
+    fs.realpathSync(source),
+    target,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+}
+
+function initializeFixtureGit(root: string): void {
+  const initialized = spawnSync("git", ["init", "--quiet"], { cwd: root, encoding: "utf8" });
+  if (initialized.status !== 0) throw new Error(initialized.stderr || "fixture git init failed");
+  const committed = spawnSync(
+    "git",
+    [
+      "-c",
+      "user.name=finance-test",
+      "-c",
+      "user.email=finance-test@example.invalid",
+      "commit",
+      "--allow-empty",
+      "--quiet",
+      "-m",
+      "fixture",
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (committed.status !== 0) throw new Error(committed.stderr || "fixture git commit failed");
 }
 
 afterEach(() => {
@@ -62,16 +107,78 @@ describe("desktop artifact provenance", () => {
     expect(manifest.artifactChecksum?.value).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.artifactChecksum?.fileCount).toBeGreaterThan(0);
 
-    const requiredV3Files = [
-      "src/lib/planning/v3/ops/doctor.ts",
-      "src/lib/planning/v3/ops/refreshAll.ts",
-      "src/lib/planning/v3/ops/export.ts",
-      "src/lib/planning/v3/ops/restore.ts",
-      "src/lib/planning/v3/report/weeklyHtml.ts",
-      "tsconfig.planning-v3.json",
-    ];
-    for (const relativePath of requiredV3Files) {
+    for (const relativePath of REQUIRED_V3_FILES) {
       expect(fs.existsSync(path.join(artifactDir, relativePath))).toBe(true);
+    }
+  }, 180_000);
+
+  it("replaces a copied runtime static link without mutating the source standalone", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    fs.mkdirSync(projectRoot, { recursive: true });
+    writeFixtureFile(projectRoot, "package.json", `${JSON.stringify({ version: "1.0.0" })}\n`);
+    writeFixtureFile(projectRoot, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+    writeFixtureFile(projectRoot, "scripts/placeholder.mjs");
+    writeFixtureFile(projectRoot, "public/placeholder.txt");
+    writeFixtureFile(projectRoot, "prisma/schema.prisma", "generator client {}\n");
+    for (const relativePath of REQUIRED_V3_FILES) {
+      writeFixtureFile(projectRoot, relativePath, relativePath.endsWith(".json") ? "{}\n" : "export {};\n");
+    }
+    writeFixtureFile(projectRoot, ".next/static/chunks/app.js", "console.log('fixture');\n");
+    writeFixtureFile(projectRoot, ".next/standalone/server.js", "module.exports = {};\n");
+    initializeFixtureGit(projectRoot);
+
+    const sourceStatic = path.join(projectRoot, ".next", "static");
+    const sourceRuntimeStatic = path.join(projectRoot, ".next", "standalone", ".next", "static");
+    linkDirectory(sourceStatic, sourceRuntimeStatic);
+    linkDirectory(path.join(projectRoot, "public"), path.join(projectRoot, ".next", "standalone", "public"));
+    linkDirectory(path.join(projectRoot, "prisma"), path.join(projectRoot, ".next", "standalone", "prisma"));
+
+    const sourcePackageLinks = STANDALONE_RUNTIME_LINKED_PACKAGES.map((packageName) => {
+      const packagePath = packageName.split("/");
+      const packageSource = path.join(
+        projectRoot,
+        ".next",
+        "standalone",
+        "node_modules",
+        ".pnpm",
+        `${packageName.replace("/", "+")}@1.0.0`,
+        "node_modules",
+        ...packagePath,
+      );
+      writeFixtureFile(packageSource, "package.json", `${JSON.stringify({ name: packageName, version: "1.0.0" })}\n`);
+      const packageLink = path.join(projectRoot, ".next", "standalone", "node_modules", ...packagePath);
+      linkDirectory(packageSource, packageLink);
+      return { packageName, packageLink };
+    });
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
+    expect(fs.lstatSync(sourceRuntimeStatic).isSymbolicLink()).toBe(true);
+    expect(fs.realpathSync(sourceRuntimeStatic)).toBe(fs.realpathSync(sourceStatic));
+
+    const artifactRuntimeStatic = path.join(artifactDir, ".next", "standalone", ".next", "static");
+    expect(fs.lstatSync(artifactRuntimeStatic).isSymbolicLink()).toBe(false);
+    expect(fs.readFileSync(path.join(artifactRuntimeStatic, "chunks", "app.js"), "utf8")).toContain("fixture");
+    expect(fs.lstatSync(path.join(artifactDir, ".next", "standalone", "public"), { throwIfNoEntry: false })).toBeUndefined();
+    expect(fs.lstatSync(path.join(artifactDir, ".next", "standalone", "prisma"), { throwIfNoEntry: false })).toBeUndefined();
+    for (const { packageName, packageLink } of sourcePackageLinks) {
+      expect(fs.lstatSync(packageLink).isSymbolicLink()).toBe(true);
+      const artifactPackage = path.join(
+        artifactDir,
+        ".next",
+        "standalone",
+        "node_modules",
+        ...packageName.split("/"),
+      );
+      expect(fs.lstatSync(artifactPackage).isSymbolicLink()).toBe(false);
+      expect(JSON.parse(fs.readFileSync(path.join(artifactPackage, "package.json"), "utf8"))).toMatchObject({
+        name: packageName,
+        version: "1.0.0",
+      });
     }
   }, 180_000);
 
