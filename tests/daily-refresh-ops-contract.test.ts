@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 const tempRoots: string[] = [];
 
 type DailyRefreshResult = {
+  schemaVersion?: number;
+  mode?: string;
   ok?: boolean;
   steps?: Array<{
     name?: string;
@@ -34,7 +36,22 @@ function okScript(label: string): string {
   return `node -e "console.log('${label}:ok')"`;
 }
 
-function runDailyRefresh(root: string, args: string[] = []) {
+function failScript(label: string): string {
+  return `node -e "console.error('${label}:failed'); process.exit(7)"`;
+}
+
+function writeStrictChildScript(root: string): void {
+  fs.writeFileSync(path.join(root, "strict-child.mjs"), [
+    "const label = process.argv[2] ?? 'unknown';",
+    "if (!process.argv.includes('--strict')) {",
+    "  console.error(`${label}:strict-missing`);",
+    "  process.exit(9);",
+    "}",
+    "console.log(`${label}:strict-ok`);",
+  ].join("\n") + "\n", "utf-8");
+}
+
+function runDailyRefresh(root: string, args: string[] = [], envOverrides: Record<string, string> = {}) {
   return spawnSync(process.execPath, [
     path.join(process.cwd(), "scripts", "daily_refresh.mjs"),
     ...args,
@@ -44,6 +61,7 @@ function runDailyRefresh(root: string, args: string[] = []) {
     env: {
       ...process.env,
       OPENDART_API_KEY: "",
+      ...envOverrides,
     },
   });
 }
@@ -97,6 +115,8 @@ describe("daily refresh ops contract", () => {
 
     expect(result.status).toBe(0);
     const payload = readResult(root);
+    expect(payload.schemaVersion).toBe(1);
+    expect(payload.mode).toBe("best-effort");
     expect(payload.ok).toBe(true);
     expect(payload.steps?.map((step) => step.name)).toEqual([
       "warm:if-stale",
@@ -131,6 +151,82 @@ describe("daily refresh ops contract", () => {
     });
   }, 20_000);
 
+  it("keeps local best-effort exit zero while exposing required failure in summary.ok", () => {
+    const root = createTempRoot();
+    writePackage(root, {
+      "warm:if-stale": okScript("warm"),
+      "finlife:sync:if-stale": failScript("finlife"),
+      "datago:sync": okScript("datago"),
+      "gov24:sync:if-stale": okScript("gov24"),
+      "news:refresh": okScript("news"),
+      "indicators:refresh": okScript("indicators"),
+      "dart:watch": okScript("dart"),
+      cleanup: okScript("cleanup"),
+    });
+
+    const result = runDailyRefresh(root, ["--skip-doctor"]);
+
+    expect(result.status).toBe(0);
+    expect(readResult(root)).toMatchObject({
+      schemaVersion: 1,
+      mode: "best-effort",
+      ok: false,
+      steps: expect.arrayContaining([
+        expect.objectContaining({ name: "finlife:sync:if-stale", status: "failed" }),
+      ]),
+    });
+  }, 20_000);
+
+  it("tolerates cleanup failure only in local best-effort mode", () => {
+    const bestEffortRoot = createTempRoot();
+    const strictRoot = createTempRoot();
+    const scripts = {
+      "warm:if-stale": okScript("warm"),
+      "finlife:sync:if-stale": okScript("finlife"),
+      "datago:sync": okScript("datago"),
+      "gov24:sync:if-stale": okScript("gov24"),
+      "news:refresh": okScript("news"),
+      "indicators:refresh": okScript("indicators"),
+      "dart:watch": okScript("dart"),
+      cleanup: failScript("cleanup"),
+    };
+    writePackage(bestEffortRoot, scripts);
+    writePackage(strictRoot, scripts);
+
+    const bestEffort = runDailyRefresh(bestEffortRoot, ["--skip-doctor"]);
+    const strict = runDailyRefresh(strictRoot, ["--strict", "--skip-doctor"]);
+
+    expect(bestEffort.status).toBe(0);
+    expect(readResult(bestEffortRoot)).toMatchObject({ mode: "best-effort", ok: true });
+    expect(strict.status).toBe(1);
+    expect(readResult(strictRoot)).toMatchObject({ mode: "strict", ok: false });
+  }, 30_000);
+
+  it("forwards strict mode to news, indicators, dart, and freshness doctor children", () => {
+    const root = createTempRoot();
+    writeStrictChildScript(root);
+    writePackage(root, {
+      "warm:if-stale": okScript("warm"),
+      "finlife:sync:if-stale": okScript("finlife"),
+      "datago:sync": okScript("datago"),
+      "gov24:sync:if-stale": okScript("gov24"),
+      "news:refresh": "node strict-child.mjs news",
+      "indicators:refresh": "node strict-child.mjs indicators",
+      "dart:watch": "node strict-child.mjs dart",
+      "data:doctor": "node strict-child.mjs doctor",
+      cleanup: okScript("cleanup"),
+    });
+
+    const result = runDailyRefresh(root, ["--strict"], { OPENDART_API_KEY: "fixture-key" });
+
+    expect(result.status, result.stderr).toBe(0);
+    const payload = readResult(root);
+    expect(payload).toMatchObject({ mode: "strict", ok: true });
+    for (const name of ["news:refresh", "indicators:refresh", "dart:watch", "data:doctor"]) {
+      expect(payload.steps?.find((step) => step.name === name)?.stdoutTail).toContain("strict-ok");
+    }
+  }, 30_000);
+
   it("marks missing public source refresh scripts as required failures in strict mode", () => {
     const root = createTempRoot();
     writePackage(root, {
@@ -145,6 +241,7 @@ describe("daily refresh ops contract", () => {
 
     expect(result.status).toBe(1);
     const payload = readResult(root);
+    expect(payload.mode).toBe("strict");
     expect(payload.ok).toBe(false);
     expect(payload.steps?.find((step) => step.name === "finlife:sync:if-stale")).toMatchObject({
       status: "failed",

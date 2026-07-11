@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
+import { resolveDailyRefreshOutcome } from "./daily_refresh_contract.mjs";
 import { runPnpmBuffered } from "./pnpm_runner.mjs";
 
 const MAX_TAIL_LENGTH = 2_000;
@@ -59,10 +60,10 @@ function sanitizeTail(text) {
   return normalized.slice(-MAX_TAIL_LENGTH);
 }
 
-function runPnpmScript(scriptName, cwd) {
+function runPnpmScript(scriptName, cwd, args = []) {
   let stdoutTail = "";
   let stderrTail = "";
-  return runPnpmBuffered([scriptName], {
+  return runPnpmBuffered([scriptName, ...args], {
     cwd,
     env: process.env,
     onStdout: (text) => {
@@ -132,19 +133,19 @@ async function main() {
   }
 
   if (typeof scripts["news:refresh"] === "string" && scripts["news:refresh"].trim()) {
-    plan.push({ name: "news:refresh", required: true, runnable: true });
+    plan.push({ name: "news:refresh", required: true, runnable: true, passStrict: true });
   } else {
     plan.push({ name: "news:refresh", required: true, runnable: false, reason: "script_not_found" });
   }
 
   if (typeof scripts["indicators:refresh"] === "string" && scripts["indicators:refresh"].trim()) {
-    plan.push({ name: "indicators:refresh", required: true, runnable: true });
+    plan.push({ name: "indicators:refresh", required: true, runnable: true, passStrict: true });
   } else {
     plan.push({ name: "indicators:refresh", required: true, runnable: false, reason: "script_not_found" });
   }
 
   if (typeof scripts["dart:watch"] === "string" && scripts["dart:watch"].trim()) {
-    plan.push({ name: "dart:watch", required: true, runnable: true });
+    plan.push({ name: "dart:watch", required: true, runnable: true, passStrict: true });
   } else {
     plan.push({ name: "dart:watch", required: true, runnable: false, reason: "script_not_found" });
   }
@@ -152,7 +153,7 @@ async function main() {
   if (options.skipDoctor) {
     plan.push({ name: "data:doctor", required: false, runnable: false, reason: "cli_skip_doctor" });
   } else if (typeof scripts["data:doctor"] === "string" && scripts["data:doctor"].trim()) {
-    plan.push({ name: "data:doctor", required: false, runnable: true });
+    plan.push({ name: "data:doctor", required: false, runnable: true, passStrict: true });
   } else {
     plan.push({ name: "data:doctor", required: false, runnable: false, reason: "script_not_found" });
   }
@@ -186,7 +187,8 @@ async function main() {
 
     addLog(`${stepPrefix} start`);
     const startedAt = Date.now();
-    const result = await runPnpmScript(step.name, cwd);
+    const childArgs = options.strict && step.passStrict ? ["--", "--strict"] : [];
+    const result = await runPnpmScript(step.name, cwd, childArgs);
     const tookMs = Date.now() - startedAt;
 
     let status = result.code === 0 ? "ok" : "failed";
@@ -217,20 +219,12 @@ async function main() {
     });
   }
 
-  let failedCount = 0;
-  for (let i = 0; i < records.length; i += 1) {
-    const record = records[i];
-    if (record.status !== "failed") continue;
-    const planStep = plan[i];
-    const ignoredFailure = !options.strict && planStep?.tolerateFailureInNonStrict === true;
-    if (ignoredFailure) continue;
-    failedCount += 1;
-  }
-  const summary = {
+  const { summary, failedCount, exitCode } = resolveDailyRefreshOutcome({
     generatedAt,
-    steps: records,
-    ok: failedCount === 0,
-  };
+    strict: options.strict,
+    plan,
+    records,
+  });
 
   const tmpDir = path.join(cwd, "tmp");
   const resultPath = path.join(tmpDir, "daily_refresh_result.json");
@@ -249,10 +243,7 @@ async function main() {
   addLog(`result json: ${path.relative(cwd, resultPath)}`);
   addLog(`log file: ${path.relative(cwd, logPath)}`);
 
-  if (options.strict && failedCount > 0) {
-    process.exit(1);
-  }
-  process.exit(0);
+  process.exit(exitCode);
 }
 
 main().catch((error) => {
