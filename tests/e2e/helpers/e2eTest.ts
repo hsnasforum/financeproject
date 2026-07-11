@@ -22,6 +22,7 @@ const test = base.extend({
           || pathname.startsWith("/products/")
           || pathname === "/recommend"
           || pathname.startsWith("/recommend/")
+          || pathname === "/invest/companies"
           || pathname.startsWith("/public/dart")
           || pathname === "/settings/data-sources"
         ) {

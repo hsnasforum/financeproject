@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     const status = getCorpIndexStatus();
     return NextResponse.json(
       {
-        ...buildMissingCorpIndexPayload(status),
+        ...buildMissingCorpIndexPayload(status, { includeOpsHints: debug }),
         primaryPath: status.primaryPath,
         path: getCorpIndexPath(),
         triedPaths: status.triedPaths,

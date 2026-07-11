@@ -46,7 +46,9 @@ describe("disclosure corpcodes routes", () => {
     const legacyRes = await searchGET(legacyReq);
     expect(legacyRes.status).toBe(200);
 
-    const statusRes = await statusGET();
+    const statusRes = await statusGET(
+      new Request("http://localhost/api/public/disclosure/corpcodes/status"),
+    );
     const statusJson = await statusRes.json() as {
       exists?: boolean;
       primaryPath?: string;
@@ -81,18 +83,59 @@ describe("disclosure corpcodes routes", () => {
 
     expect(searchRes.status).toBe(409);
     expect(searchJson.error).toBe("CORPCODES_INDEX_MISSING");
-    expect(typeof searchJson.message).toBe("string");
-    expect(typeof searchJson.hintCommand).toBe("string");
-    expect(typeof searchJson.hintCommandWithPath).toBe("string");
+    expect(searchJson.message).toBe("회사 검색 기준 데이터가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+    expect(searchJson.message).not.toMatch(/scripts\/|python|pnpm|\/api\/dev/i);
+    expect(searchJson.hintCommand).toBe("");
+    expect(searchJson.hintCommandWithPath).toBe("");
     expect(typeof searchJson.primaryPath).toBe("string");
     expect(Array.isArray(searchJson.triedPaths)).toBe(true);
     expect(searchJson.buildEndpoint).toBe("/api/public/disclosure/corpcodes/build");
     expect(searchJson.statusEndpoint).toBe("/api/public/disclosure/corpcodes/status");
     expect(typeof searchJson.canAutoBuild).toBe("boolean");
 
-    const statusRes = await statusGET();
-    const statusJson = await statusRes.json() as { error?: string };
+    const debugSearchRes = await searchGET(
+      new Request("http://localhost/api/public/disclosure/corpcodes/search?query=%EC%82%BC%EC%84%B1&debug=1"),
+    );
+    const debugSearchJson = await debugSearchRes.json() as {
+      message?: string;
+      hintCommand?: string;
+      hintCommandWithPath?: string;
+    };
+    expect(debugSearchRes.status).toBe(409);
+    expect(debugSearchJson.message).toBe(searchJson.message);
+    expect(debugSearchJson.hintCommand).toBe("python3 scripts/dart_corpcode_build.py");
+    expect(debugSearchJson.hintCommandWithPath).toBe(
+      "DART_CORPCODES_INDEX_PATH=tmp/dart/corpCodes.index.json python3 scripts/dart_corpcode_build.py",
+    );
+
+    const statusRes = await statusGET(
+      new Request("http://localhost/api/public/disclosure/corpcodes/status"),
+    );
+    const statusJson = await statusRes.json() as {
+      error?: string;
+      message?: string;
+      hintCommand?: string;
+      hintCommandWithPath?: string;
+    };
     expect(statusRes.status).toBe(409);
     expect(statusJson.error).toBe("CORPCODES_INDEX_MISSING");
+    expect(statusJson.message).toBe(searchJson.message);
+    expect(statusJson.hintCommand).toBe("");
+    expect(statusJson.hintCommandWithPath).toBe("");
+
+    const debugStatusRes = await statusGET(
+      new Request("http://localhost/api/public/disclosure/corpcodes/status?debug=1"),
+    );
+    const debugStatusJson = await debugStatusRes.json() as {
+      message?: string;
+      hintCommand?: string;
+      hintCommandWithPath?: string;
+    };
+    expect(debugStatusRes.status).toBe(409);
+    expect(debugStatusJson.message).toBe(searchJson.message);
+    expect(debugStatusJson.hintCommand).toBe("python3 scripts/dart_corpcode_build.py");
+    expect(debugStatusJson.hintCommandWithPath).toBe(
+      "DART_CORPCODES_INDEX_PATH=tmp/dart/corpCodes.index.json python3 scripts/dart_corpcode_build.py",
+    );
   });
 });

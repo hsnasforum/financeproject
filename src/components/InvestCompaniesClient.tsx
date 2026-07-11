@@ -39,8 +39,6 @@ type IndexMeta = {
   generatedAt?: string;
 };
 
-const INDEX_HINT = "python3 scripts/dart_corpcode_build.py";
-
 function formatCompanySourceLabel(source?: string): string {
   if (!source) return "DART";
   if (source === "dart") return "DART";
@@ -299,7 +297,10 @@ export function InvestCompaniesClient() {
             ) : searchError && !indexMissing ? (
               <ErrorState message={searchError} />
             ) : indexMissing ? (
-              <div className="rounded-[2rem] border border-dashed border-amber-200 bg-amber-50/30 p-10 text-center">
+              <div
+                data-testid="invest-companies-missing-index"
+                className="rounded-[2rem] border border-dashed border-amber-200 bg-amber-50/30 p-10 text-center"
+              >
                 <p className="text-base font-black text-amber-800">회사 검색 준비가 아직 끝나지 않았습니다.</p>
                 <p className="mt-2 text-sm font-medium text-amber-600/70 leading-relaxed">안정적인 검색을 위해 회사 목록 준비가 필요합니다. 먼저 상태 확인이나 자동 생성을 시도해 주세요.</p>
                 
@@ -322,16 +323,6 @@ export function InvestCompaniesClient() {
                     자동 생성 불가: {autoBuildDisabledReason}
                   </div>
                 )}
-                <details className="mt-6 rounded-[1.5rem] border border-slate-100 bg-white text-left shadow-sm">
-                  <summary className="cursor-pointer list-none px-5 py-4 text-[11px] font-black text-slate-700">
-                    개발용 수동 복구 가이드
-                  </summary>
-                  <div className="border-t border-slate-100 px-5 py-4">
-                    <code className="block break-all text-[11px] font-bold text-slate-500 font-mono leading-relaxed">
-                      {INDEX_HINT}
-                    </code>
-                  </div>
-                </details>
               </div>
             ) : searchItems.length === 0 ? (
               <div className="py-12">

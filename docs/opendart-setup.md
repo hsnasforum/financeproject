@@ -48,7 +48,9 @@ pnpm dart:ensure-corpindex
 
 - `409 CORPCODES_INDEX_MISSING`
   - corpCodes 인덱스 미생성 상태
-  - UI에 `message/hintCommand/primaryPath/triedPaths/canAutoBuild/buildEndpoint/statusEndpoint` 표시
+  - 기본 응답의 `message`는 사용자 안내만 포함하며 `hintCommand/hintCommandWithPath` 키는 호환성을 위해 빈 문자열로 유지
+  - 운영 명령은 명시적인 `debug=1` 진단 응답과 이 문서에서만 확인하고 public UI에는 표시하지 않음
+  - UI는 `message/canAutoBuild/buildEndpoint/statusEndpoint`를 사용하고 개발 상세 화면에서 경로 상태를 확인
   - 개발 환경 + `canAutoBuild=true`이면 자동 생성 버튼 노출
 - `CONFIG`
   - `OPENDART_API_KEY` 미설정 또는 설정 문제
