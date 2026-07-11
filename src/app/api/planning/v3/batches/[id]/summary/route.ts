@@ -15,6 +15,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -62,6 +63,8 @@ export async function GET(request: Request, context: RouteContext) {
       assertNoForbiddenDraftKeys(payload);
       return NextResponse.json(payload);
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof GetBatchSummaryError) {
         if (error.code === "INPUT") {
           return NextResponse.json(

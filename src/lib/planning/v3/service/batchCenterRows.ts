@@ -5,6 +5,10 @@ import {
 } from "@/lib/planning/v3/service/batchListMetadata";
 import { getBatchSummary } from "@/lib/planning/v3/service/getBatchSummary";
 import { listStoredBatchListCandidates } from "@/lib/planning/v3/service/storedBatchListCandidates";
+import {
+  StorageCorruptedError,
+  StorageUnavailableError,
+} from "@/lib/planning/storage/serverFileRead";
 
 export type BatchCenterRow = {
   batchId: string;
@@ -48,7 +52,8 @@ export async function listBatchCenterRows({
           transfers: summary.counts.transfers,
         },
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof StorageCorruptedError || error instanceof StorageUnavailableError) throw error;
       const publicMeta = toBatchListPublicImportBatchMeta(row);
       return {
         batchId: row.meta.id,

@@ -13,6 +13,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -54,6 +55,8 @@ export async function DELETE(request: Request, context: RouteContext) {
       const deleted = await deleteCurrentUserCategoryRule(id);
       return NextResponse.json({ ok: true, deleted, meta: userMeta });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof CategoryRulesStoreInputError) {
         return NextResponse.json(
           {

@@ -13,6 +13,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -68,6 +69,8 @@ export async function GET(request: Request) {
         meta: userMeta,
       });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof MonthlyBalanceProjectionError && error.code === "NO_DATA") {
         return NextResponse.json(
           { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." }, meta: userMeta },

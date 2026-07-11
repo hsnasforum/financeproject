@@ -23,7 +23,7 @@ export async function loadCurrentUserBatchDetail(batchIdInput: string) {
   const batchId = sanitizeRecordId(batchIdInput);
   const [loaded, overridesByTxnId] = await Promise.all([
     loadStoredFirstBatchTransactions(batchId),
-    getBatchTxnOverrides(batchId).catch(() => ({})),
+    getBatchTxnOverrides(batchId),
   ]);
   if (!isUserFacingStoredBatchRead(loaded)) {
     return { batchId, loaded: null, overridesByTxnId };
