@@ -49,6 +49,17 @@ type RunV3RestoreInput = {
   now?: Date;
 };
 
+export const V3_RESTORE_APPLY_DISABLED_CODE = "V3_RESTORE_APPLY_DISABLED";
+
+export class V3RestoreApplyDisabledError extends Error {
+  readonly code = V3_RESTORE_APPLY_DISABLED_CODE;
+
+  constructor() {
+    super("owner-aware staged restore가 준비될 때까지 --apply는 비활성 상태입니다.");
+    this.name = "V3RestoreApplyDisabledError";
+  }
+}
+
 export type V3RestoreSummary = {
   mode: "preview" | "apply";
   archivePath: string;
@@ -353,6 +364,10 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3RestoreSummary> {
+  if (input.apply) {
+    throw new V3RestoreApplyDisabledError();
+  }
+
   const rootDir = path.resolve(asString(input.cwd) || process.cwd());
   const now = input.now instanceof Date ? input.now : new Date();
   const archivePath = asString(input.archivePath);
@@ -457,7 +472,7 @@ async function main(): Promise<void> {
   });
   printSummary(summary);
   if (!args.apply) {
-    console.log("[v3:restore] dry-run completed. Re-run with --apply to restore.");
+    console.log("[v3:restore] dry-run completed. --apply is disabled until owner-aware staged restore is available.");
   }
 }
 
@@ -469,6 +484,11 @@ const isMain = (() => {
 
 if (isMain) {
   main().catch((error: unknown) => {
+    if (error instanceof V3RestoreApplyDisabledError) {
+      console.error(`[v3:restore] code=${error.code} ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
     const message = error instanceof Error ? error.message : "restore_failed";
     console.error(`[v3:restore] ${message}`);
     process.exitCode = 1;
