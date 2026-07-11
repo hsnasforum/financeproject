@@ -3,6 +3,7 @@
 ## 대상
 
 - Issue: https://github.com/hsnasforum/financeproject/issues/231
+- Draft PR: https://github.com/hsnasforum/financeproject/pull/256
 - 기준 main: 5c831932634556cc3b807ca69e4e8bb31b626e6d
 - 작업 브랜치: codex/231-single-persisted-run
 - 실제 사용자 데이터에는 restore/apply 또는 저장 검증을 실행하지 않았습니다. 모든 저장·실패·브라우저 검증은 임시 데이터 디렉터리, fixture와 테스트 격리 환경에서 수행했습니다.
@@ -82,6 +83,10 @@
 - DATABASE_URL=file:./prisma/dev.db corepack pnpm build: PASS, TypeScript 검사와 250 static pages 생성
 - corepack pnpm multi-agent:guard: PASS
 - git diff --check: PASS
+- GitHub Actions initial head 153a5a371b2d529b9bdcf30fde70fe2d677ea7a7: CI와 E2E Smoke가 코드 step 시작 전 실패
+  - CI verify와 E2E Smoke 3개 job 모두 steps가 비어 있어 저장소 코드를 실행한 흔적이 없습니다.
+  - job log 조회도 GitHub 로그 저장소의 404 BlobNotFound를 반환했습니다.
+  - 따라서 이 원격 실패는 코드 검증 실패로 판정하지 않았고, 로컬 전체 gate 결과와 분리해 PR에 기록합니다.
 
 ### 검증 중 발견하고 해소한 회귀
 
