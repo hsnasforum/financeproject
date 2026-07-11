@@ -30,6 +30,18 @@ describe("news alerts", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-alerts-"));
     roots.push(cwd);
 
+    writeJson(path.join(cwd, "config", "indicators-sources.json"), {
+      version: 1,
+      sources: [
+        {
+          id: "ecos",
+          name: "ECOS",
+          type: "ecos",
+          enabled: true,
+        },
+      ],
+    });
+
     writeJson(path.join(cwd, "config", "indicators-series.json"), {
       version: 1,
       series: [
@@ -167,6 +179,73 @@ describe("news alerts", () => {
 
     expect(evaluated.events).toHaveLength(1);
     expect(evaluated.events[0]?.ruleId).toBe("fx_zscore_high");
+  });
+
+  it("uses effective runtime specs when deciding which indicator alerts are eligible", () => {
+    const cwd = createFixtureCwd();
+    writeJson(path.join(cwd, ".data", "indicators", "specOverrides.json"), {
+      schemaVersion: 1,
+      updatedAt: "2026-03-04T00:00:00.000Z",
+      specs: [
+        {
+          id: "kr_usdkrw",
+          sourceId: "ecos",
+          externalId: "dummy",
+          name: "KRW",
+          frequency: "D",
+          transform: "none",
+          enabled: false,
+        },
+      ],
+    });
+
+    const evaluated = evaluateAlertEvents({
+      cwd,
+      generatedAt: "2026-03-04T00:00:00.000Z",
+      source: "indicators:refresh",
+    });
+
+    expect(evaluated.events.some((row) => row.ruleId === "fx_zscore_high")).toBe(false);
+    expect(evaluated.events.some((row) => row.ruleId === "topic_fx_high")).toBe(true);
+  });
+
+  it("does not evaluate stale indicator rows when their source is disabled", () => {
+    const cwd = createFixtureCwd();
+    writeJson(path.join(cwd, "config", "indicators-sources.json"), {
+      version: 1,
+      sources: [
+        {
+          id: "ecos",
+          name: "ECOS",
+          type: "ecos",
+          enabled: false,
+        },
+      ],
+    });
+    writeJson(path.join(cwd, ".data", "indicators", "specOverrides.json"), {
+      schemaVersion: 1,
+      updatedAt: "2026-03-04T00:00:00.000Z",
+      specs: [
+        {
+          id: "kr_usdkrw",
+          sourceId: "ecos",
+          externalId: "dummy",
+          name: "KRW",
+          frequency: "D",
+          transform: "none",
+          enabled: true,
+        },
+      ],
+    });
+
+    const evaluated = evaluateAlertEvents({
+      cwd,
+      generatedAt: "2026-03-04T00:00:00.000Z",
+      source: "news:refresh",
+    });
+
+    expect(evaluated.events.some((row) => row.ruleId === "fx_zscore_high")).toBe(false);
+    expect(evaluated.events.some((row) => row.ruleId === "topic_fx_high")).toBe(true);
   });
 
   it("uses planning user trend cache and scoped alert events when namespace is enabled", () => {

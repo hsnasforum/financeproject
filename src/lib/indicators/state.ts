@@ -3,6 +3,10 @@ import path from "node:path";
 import { IndicatorsStateSchema, parseIndicatorsState } from "./contracts.ts";
 import { resolveIndicatorsRoot } from "./store.ts";
 import { type IndicatorsState } from "./types.ts";
+import {
+  storageSchemaCorrupted,
+  toStorageReadError,
+} from "../planning/storage/serverFileRead.ts";
 
 const EMPTY_STATE: IndicatorsState = {
   lastRunAt: undefined,
@@ -16,11 +20,16 @@ export function resolveIndicatorsStatePath(rootDir = resolveIndicatorsRoot()): s
 export function readIndicatorsState(rootDir = resolveIndicatorsRoot()): IndicatorsState {
   const statePath = resolveIndicatorsStatePath(rootDir);
   if (!fs.existsSync(statePath)) return EMPTY_STATE;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(fs.readFileSync(statePath, "utf-8")) as unknown;
+    parsed = JSON.parse(fs.readFileSync(statePath, "utf-8")) as unknown;
+  } catch (error) {
+    throw toStorageReadError(error, statePath);
+  }
+  try {
     return parseIndicatorsState(parsed);
   } catch {
-    return EMPTY_STATE;
+    throw storageSchemaCorrupted(statePath, "indicator state schema is invalid");
   }
 }
 

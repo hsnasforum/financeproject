@@ -71,9 +71,17 @@ export const SourceRuntimeStateSchema = z.object({
   cursor: z.string().trim().min(1).optional(),
 });
 
+const V3SeriesRuntimeStateSchema = z.object({
+  updatedAt: z.string().datetime().optional(),
+  lastObservationDate: z.string().trim().min(1).optional(),
+  observationsCount: z.number().int().nonnegative().default(0),
+});
+
 export const IndicatorsStateSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   lastRunAt: z.string().datetime().optional(),
   sources: z.record(z.string(), SourceRuntimeStateSchema).default({}),
+  series: z.record(z.string(), V3SeriesRuntimeStateSchema).optional(),
 });
 
 export const IndicatorsRefreshErrorSchema = z.object({

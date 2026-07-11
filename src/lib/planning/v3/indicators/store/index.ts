@@ -5,6 +5,7 @@ import {
   IndicatorsStateSchema,
   ObservationSchema,
   SeriesSnapshotSchema,
+  type SeriesFrequency,
   type IndicatorsState,
   type Observation,
   type SeriesSnapshot,
@@ -12,12 +13,28 @@ import {
 import { normalizeSeriesId } from "../aliases";
 import { parseWithV3Whitelist } from "../../security/whitelist";
 import { resolveIndicatorsRootDir } from "../rootDir";
+import {
+  StorageCorruptedError,
+  StorageUnavailableError,
+} from "@/lib/planning/storage/serverFileRead";
 
 const EMPTY_STATE: IndicatorsState = {
   schemaVersion: 1,
   lastRunAt: undefined,
   series: {},
 };
+
+export class IndicatorObservationConflictError extends Error {
+  readonly seriesId: string;
+  readonly periodKey: string;
+
+  constructor(seriesId: string, periodKey: string) {
+    super("indicator observation conflict: " + seriesId + "/" + periodKey);
+    this.name = "IndicatorObservationConflictError";
+    this.seriesId = seriesId;
+    this.periodKey = periodKey;
+  }
+}
 
 function defaultRootDir(): string {
   return resolveIndicatorsRootDir();
@@ -52,14 +69,47 @@ function ensureDirs(rootDir = defaultRootDir()): void {
   fs.mkdirSync(resolveMetaDir(rootDir), { recursive: true });
 }
 
+function observationPeriodKey(date: string, frequency: SeriesFrequency | undefined): string {
+  if (frequency === "M") return date.slice(0, 7);
+  if (frequency === "Q") {
+    const quarter = /^(\d{4})(?:-Q([1-4])|-(\d{2}))/.exec(date);
+    if (!quarter) return date;
+    const quarterNumber = quarter[2]
+      ? Number(quarter[2])
+      : Math.floor((Number(quarter[3]) - 1) / 3) + 1;
+    return quarter[1] + "-Q" + String(quarterNumber);
+  }
+  if (frequency === "Y") return date.slice(0, 4);
+  return date;
+}
+
+function assertSameObservationValue(
+  seriesId: string,
+  periodKey: string,
+  left: Observation,
+  right: Observation,
+): void {
+  if (Object.is(left.value, right.value)) return;
+  throw new IndicatorObservationConflictError(seriesId, periodKey);
+}
+
 export function readState(rootDir = defaultRootDir()): IndicatorsState {
   const filePath = resolveStatePath(rootDir);
   if (!fs.existsSync(filePath)) return EMPTY_STATE;
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
     return IndicatorsStateSchema.parse(parsed);
-  } catch {
-    return EMPTY_STATE;
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof z.ZodError) {
+      throw new StorageCorruptedError("indicator state is malformed", {
+        filePath,
+        cause: error,
+      });
+    }
+    throw new StorageUnavailableError("indicator state is unavailable", {
+      filePath,
+      cause: error,
+    });
   }
 }
 
@@ -95,7 +145,12 @@ export function readSeriesObservations(seriesId: string, rootDir = defaultRootDi
   return out;
 }
 
-export function appendSeriesObservations(seriesId: string, observations: Observation[], rootDir = defaultRootDir()): {
+export function appendSeriesObservations(
+  seriesId: string,
+  observations: Observation[],
+  rootDir = defaultRootDir(),
+  options: { frequency?: SeriesFrequency } = {},
+): {
   appended: number;
   skippedDuplicate: number;
   total: number;
@@ -105,7 +160,16 @@ export function appendSeriesObservations(seriesId: string, observations: Observa
 
   const normalizedSeriesId = normalizeSeriesId(seriesId);
   const existing = readSeriesObservations(normalizedSeriesId, rootDir);
-  const existingDates = new Set(existing.map((row) => row.date));
+  const existingByPeriod = new Map<string, Observation>();
+  for (const row of existing) {
+    const periodKey = observationPeriodKey(row.date, options.frequency);
+    const previous = existingByPeriod.get(periodKey);
+    if (previous) {
+      assertSameObservationValue(normalizedSeriesId, periodKey, previous, row);
+      continue;
+    }
+    existingByPeriod.set(periodKey, row);
+  }
   const incoming = observations.map((row) => parseWithV3Whitelist(ObservationSchema, row, {
     scope: "persistence",
     context: "indicators.store.observation",
@@ -113,13 +177,23 @@ export function appendSeriesObservations(seriesId: string, observations: Observa
 
   const dedupedIncoming = new Map<string, Observation>();
   for (const row of incoming) {
-    if (!dedupedIncoming.has(row.date)) {
-      dedupedIncoming.set(row.date, row);
+    const periodKey = observationPeriodKey(row.date, options.frequency);
+    const previous = dedupedIncoming.get(periodKey);
+    if (previous) {
+      assertSameObservationValue(normalizedSeriesId, periodKey, previous, row);
+      continue;
     }
+    dedupedIncoming.set(periodKey, row);
   }
 
   const rowsToAppend = Array.from(dedupedIncoming.values())
-    .filter((row) => !existingDates.has(row.date))
+    .filter((row) => {
+      const periodKey = observationPeriodKey(row.date, options.frequency);
+      const previous = existingByPeriod.get(periodKey);
+      if (!previous) return true;
+      assertSameObservationValue(normalizedSeriesId, periodKey, previous, row);
+      return false;
+    })
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const filePath = resolveSeriesPath(normalizedSeriesId, rootDir);

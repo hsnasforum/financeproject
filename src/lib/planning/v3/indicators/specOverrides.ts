@@ -14,6 +14,49 @@ const SpecOverridesSchema = z.object({
 });
 type SpecOverrides = z.infer<typeof SpecOverridesSchema>;
 
+const LegacyIndicatorSourcesFileSchema = z.object({
+  version: z.number().int().positive(),
+  generatedAt: z.string().datetime().optional(),
+  sources: z.array(IndicatorSourceSchema),
+});
+
+const LegacySeriesSpecSchema = SeriesSpecSchema.omit({
+  frequency: true,
+  enabled: true,
+}).extend({
+  frequency: z.enum(["D", "W", "M", "Q", "Y", "A"]),
+  enabled: z.boolean().optional(),
+});
+
+const LegacyIndicatorSeriesFileSchema = z.object({
+  version: z.number().int().positive(),
+  generatedAt: z.string().datetime().optional(),
+  series: z.array(LegacySeriesSpecSchema),
+});
+
+export type IndicatorConfigErrorCode =
+  | "INCOMPLETE_LEGACY_CONFIG"
+  | "INVALID_LEGACY_CONFIG"
+  | "INVALID_RUNTIME_OVERRIDES"
+  | "UNSAFE_BUILT_IN_CONFIG";
+
+export class IndicatorConfigError extends Error {
+  readonly code: IndicatorConfigErrorCode;
+
+  constructor(code: IndicatorConfigErrorCode, message: string) {
+    super(message);
+    this.name = "IndicatorConfigError";
+    this.code = code;
+  }
+}
+
+export type EffectiveIndicatorConfig = {
+  baseSource: "built-in" | "legacy-compat";
+  sources: Array<z.infer<typeof IndicatorSourceSchema>>;
+  specs: SeriesSpec[];
+  runtimeOverrideCount: number;
+};
+
 const ImportIssueSchema = z.object({
   index: z.number().int().nonnegative(),
   code: z.enum(["INVALID_ITEM", "DUPLICATE_ID", "UNKNOWN_SOURCE"]),
@@ -61,6 +104,86 @@ function defaultOverrides(): SpecOverrides {
   };
 }
 
+function readCompatibilityJson(filePath: string): unknown {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+  } catch {
+    throw new IndicatorConfigError(
+      "INVALID_LEGACY_CONFIG",
+      "지표 compatibility config를 읽을 수 없습니다: " + path.basename(filePath),
+    );
+  }
+}
+
+export function loadLegacyIndicatorConfigAdapter(cwd = process.cwd()): {
+  status: "absent" | "loaded";
+  sources: Array<z.infer<typeof IndicatorSourceSchema>>;
+  specs: SeriesSpec[];
+} {
+  const sourcesPath = path.join(cwd, "config", "indicators-sources.json");
+  const seriesPath = path.join(cwd, "config", "indicators-series.json");
+  const hasSources = fs.existsSync(sourcesPath);
+  const hasSeries = fs.existsSync(seriesPath);
+
+  if (!hasSources && !hasSeries) {
+    return { status: "absent", sources: [], specs: [] };
+  }
+  if (hasSources !== hasSeries) {
+    throw new IndicatorConfigError(
+      "INCOMPLETE_LEGACY_CONFIG",
+      "지표 compatibility config 두 파일이 모두 필요합니다.",
+    );
+  }
+
+  try {
+    const sourcesFile = LegacyIndicatorSourcesFileSchema.parse(readCompatibilityJson(sourcesPath));
+    const seriesFile = LegacyIndicatorSeriesFileSchema.parse(readCompatibilityJson(seriesPath));
+    const sources = sourcesFile.sources.map((row) => IndicatorSourceSchema.parse({
+      ...row,
+      id: row.id.trim().toLowerCase(),
+    }));
+    if (new Set(sources.map((row) => row.id)).size !== sources.length) {
+      throw new IndicatorConfigError(
+        "INVALID_LEGACY_CONFIG",
+        "지표 compatibility source id가 중복되었습니다.",
+      );
+    }
+    const sourceById = new Map(sources.map((row) => [row.id, row] as const));
+    const sourceIds = new Set(sourceById.keys());
+    const specs = seriesFile.series.map((row) => {
+      const sourceId = row.sourceId.trim().toLowerCase();
+      return SeriesSpecSchema.parse({
+        ...row,
+        id: normalizeSeriesId(row.id),
+        sourceId,
+        frequency: row.frequency === "A" ? "Y" : row.frequency,
+        transform: row.transform ?? "none",
+        enabled: row.enabled ?? sourceById.get(sourceId)?.enabled ?? false,
+      });
+    });
+    const unknownSource = specs.find((row) => !sourceIds.has(row.sourceId));
+    if (unknownSource) {
+      throw new IndicatorConfigError(
+        "INVALID_LEGACY_CONFIG",
+        "지표 compatibility series의 sourceId를 찾을 수 없습니다: " + unknownSource.sourceId,
+      );
+    }
+    if (new Set(specs.map((row) => row.id)).size !== specs.length) {
+      throw new IndicatorConfigError(
+        "INVALID_LEGACY_CONFIG",
+        "지표 compatibility series id가 중복되었습니다.",
+      );
+    }
+    return { status: "loaded", sources, specs };
+  } catch (error) {
+    if (error instanceof IndicatorConfigError) throw error;
+    throw new IndicatorConfigError(
+      "INVALID_LEGACY_CONFIG",
+      "지표 compatibility config 형식이 올바르지 않습니다.",
+    );
+  }
+}
+
 export function resolveSpecOverridesPath(rootDir = defaultRootDir()): string {
   return path.join(rootDir, "specOverrides.json");
 }
@@ -70,9 +193,21 @@ export function readSeriesSpecOverrides(rootDir = defaultRootDir()): SpecOverrid
   if (!fs.existsSync(filePath)) return defaultOverrides();
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
-    return SpecOverridesSchema.parse(parsed);
-  } catch {
-    return defaultOverrides();
+    const overrides = SpecOverridesSchema.parse(parsed);
+    const normalizedIds = overrides.specs.map((row) => normalizeSeriesId(row.id));
+    if (new Set(normalizedIds).size !== normalizedIds.length) {
+      throw new IndicatorConfigError(
+        "INVALID_RUNTIME_OVERRIDES",
+        "지표 runtime override id가 중복되었습니다.",
+      );
+    }
+    return overrides;
+  } catch (error) {
+    if (error instanceof IndicatorConfigError) throw error;
+    throw new IndicatorConfigError(
+      "INVALID_RUNTIME_OVERRIDES",
+      "지표 runtime override 형식이 올바르지 않습니다.",
+    );
   }
 }
 
@@ -100,32 +235,75 @@ function canonicalizeSpec(input: SeriesSpec): SeriesSpec {
   });
 }
 
-export function loadEffectiveSeriesSpecs(rootDir = defaultRootDir()): SeriesSpec[] {
+export function loadEffectiveIndicatorConfig(options: {
+  rootDir?: string;
+  cwd?: string;
+} = {}): EffectiveIndicatorConfig {
+  const rootDir = options.rootDir ?? defaultRootDir();
+  const legacy = loadLegacyIndicatorConfigAdapter(options.cwd ?? process.cwd());
+  const sourceMap = new Map<string, z.infer<typeof IndicatorSourceSchema>>();
+  for (const row of INDICATOR_SOURCES) {
+    const source = IndicatorSourceSchema.parse({
+      ...row,
+      id: row.id.trim().toLowerCase(),
+    });
+    sourceMap.set(source.id, source);
+  }
+  for (const row of legacy.sources) {
+    sourceMap.set(row.id, row);
+  }
+
   const overrides = readSeriesSpecOverrides(rootDir);
   const map = new Map<string, SeriesSpec>();
-  for (const row of INDICATOR_SERIES_SPECS) {
-    map.set(normalizeSeriesId(row.id), canonicalizeSpec(row));
-  }
-  for (const row of overrides.specs) {
+  const baseSpecs = legacy.status === "loaded" ? legacy.specs : INDICATOR_SERIES_SPECS;
+  for (const row of baseSpecs) {
     const spec = canonicalizeSpec(row);
     map.set(spec.id, spec);
   }
-  return [...map.values()].sort((a, b) => a.id.localeCompare(b.id));
+  for (const row of overrides.specs) {
+    const spec = canonicalizeSpec(row);
+    if (!sourceMap.has(spec.sourceId)) {
+      throw new IndicatorConfigError(
+        "INVALID_RUNTIME_OVERRIDES",
+        "지표 runtime override의 sourceId를 찾을 수 없습니다: " + spec.sourceId,
+      );
+    }
+    map.set(spec.id, spec);
+  }
+
+  return {
+    baseSource: legacy.status === "loaded" ? "legacy-compat" : "built-in",
+    sources: [...sourceMap.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    specs: [...map.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    runtimeOverrideCount: overrides.specs.length,
+  };
 }
 
-export function exportSeriesSpecList(rootDir?: string): SeriesSpec[] {
-  return loadEffectiveSeriesSpecs(rootDir)
+export function loadEffectiveSeriesSpecs(
+  rootDir = defaultRootDir(),
+  cwd = process.cwd(),
+): SeriesSpec[] {
+  return loadEffectiveIndicatorConfig({ rootDir, cwd }).specs;
+}
+
+export function exportSeriesSpecList(rootDir?: string, cwd = process.cwd()): SeriesSpec[] {
+  return loadEffectiveSeriesSpecs(rootDir, cwd)
     .map((row) => SeriesSpecSchema.parse(row))
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-function buildPreviewRows(items: unknown[], rootDir = defaultRootDir()): IndicatorSpecsImportPreview {
-  const sourceIds = new Set(INDICATOR_SOURCES.map((row) => IndicatorSourceSchema.parse(row).id));
+function buildPreviewRows(
+  items: unknown[],
+  rootDir = defaultRootDir(),
+  cwd = process.cwd(),
+): IndicatorSpecsImportPreview {
+  const effective = loadEffectiveIndicatorConfig({ rootDir, cwd });
+  const sourceIds = new Set(effective.sources.map((row) => row.id));
   const issues: ImportIssue[] = [];
   const rows: PreviewRow[] = [];
   const specs: SeriesSpec[] = [];
   const seenIds = new Set<string>();
-  const defaultIds = new Set(INDICATOR_SERIES_SPECS.map((row) => normalizeSeriesId(row.id)));
+  const defaultIds = new Set(effective.specs.map((row) => normalizeSeriesId(row.id)));
   const overrideIds = new Set(readSeriesSpecOverrides(rootDir).specs.map((row) => normalizeSeriesId(row.id)));
 
   for (let index = 0; index < items.length; index += 1) {
@@ -180,12 +358,20 @@ function buildPreviewRows(items: unknown[], rootDir = defaultRootDir()): Indicat
   });
 }
 
-export function previewImportSeriesSpecs(items: unknown[], rootDir = defaultRootDir()): IndicatorSpecsImportPreview {
-  return buildPreviewRows(items, rootDir);
+export function previewImportSeriesSpecs(
+  items: unknown[],
+  rootDir = defaultRootDir(),
+  cwd = process.cwd(),
+): IndicatorSpecsImportPreview {
+  return buildPreviewRows(items, rootDir, cwd);
 }
 
-export function applyImportSeriesSpecs(items: unknown[], rootDir = defaultRootDir()): IndicatorSpecsImportApplyResult {
-  const preview = buildPreviewRows(items, rootDir);
+export function applyImportSeriesSpecs(
+  items: unknown[],
+  rootDir = defaultRootDir(),
+  cwd = process.cwd(),
+): IndicatorSpecsImportApplyResult {
+  const preview = buildPreviewRows(items, rootDir, cwd);
   const current = readSeriesSpecOverrides(rootDir);
   const map = new Map<string, SeriesSpec>(
     (current.specs ?? []).map((row) => {
@@ -205,6 +391,6 @@ export function applyImportSeriesSpecs(items: unknown[], rootDir = defaultRootDi
   return IndicatorSpecsImportApplyResultSchema.parse({
     preview,
     overridesCount: next.specs.length,
-    effectiveCount: loadEffectiveSeriesSpecs(rootDir).length,
+    effectiveCount: loadEffectiveSeriesSpecs(rootDir, cwd).length,
   });
 }
