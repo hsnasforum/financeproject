@@ -62,6 +62,9 @@ Issue #229 PR-A의 17-owner registry와 manifest 계약을 실제 read-only coll
 - `git diff --check`: PASS
 - 자동 생성 `schema-drift`, `data-freshness`, `dart-rules-quality` 보고서 변경: 원복. 검증 시점 snapshot 8건 stale과 `rules_eval.json` 부재 DART gate SKIP은 기존 외부 데이터 상태로 기록합니다.
 - 암호화·ZIP/path·CLI 세 관점 독립 read-only 재검토: 잔존 P0/P1 없음
+- commit: `8ce00413412ef15012890991ed6156075be2e98e`
+- stacked draft PR: [#252](https://github.com/hsnasforum/financeproject/pull/252), base `codex/229-owner-manifest`, open·draft·mergeable
+- PR #252 원격 CI: run `29150610155`의 `verify`, run `29150610134`의 `dart_index_missing`·`core_flows`·`dart_index_present`가 모두 `steps=[]`, 로그 blob 404로 선행 실패했습니다. 로컬 코드 수정 근거가 없는 GitHub Actions 계층 실패이며 runner 정상화 후 재실행이 필요합니다.
 - 실제 사용자 데이터 restore apply: 실행하지 않음
 
 ## 남은 리스크
@@ -72,6 +75,7 @@ Issue #229 PR-A의 17-owner registry와 manifest 계약을 실제 read-only coll
 - `[낮은 잔존 위험]` publish 전 process crash는 최종 파일 대신 암호화된 `0600` orphan temp를 남길 수 있습니다. 최종 이름은 incomplete 상태로 게시되지 않으며 후속 운영 cleanup 정책은 PR-D에서 결정합니다.
 - `[낮은 잔존 위험]` POSIX `openat2`를 사용하지 않지만 untrusted writable directory chain은 거부합니다. 동일 UID·root의 경쟁은 이미 owner 직접 변경 권한을 가진 주체라 추가 권한 확대는 아닙니다.
 - `[외부 상태]` 현재 fixture snapshot 8건은 freshness 기준 stale이고 DART rules evaluation 파일이 없어 해당 quality gate는 SKIP입니다. PR-B 코드 실패는 아닙니다.
+- `[운영 필요]` PR #252 required check는 GitHub Actions가 job step을 시작하지 못한 상태라 runner/실행 환경 정상화 후 재실행해야 합니다.
 - `[후속 PR]` same-volume staging, durable journal, injected failure rollback, pending recovery, owner별 schema doctor는 PR-C/D 범위입니다.
 - apply 차단은 PR-C/D와 전체 gate가 끝날 때까지 유지합니다.
 
@@ -83,6 +87,6 @@ Issue #229 PR-A의 17-owner registry와 manifest 계약을 실제 read-only coll
 
 ## 다음 라운드
 
-1. PR-B를 선행 PR-A 위 stacked draft PR로 게시하고 원격 required check 상태를 확인합니다.
-2. PR-C에서 target별 same-volume staging, durable journal state machine, injected failure rollback과 pending recovery를 구현합니다.
-3. PR-D에서 registry 기반 doctor와 제한적 apply 활성화 조건을 검증하되 Windows·single-writer 조건이 충족되지 않으면 apply 차단을 유지합니다.
+1. PR-C에서 target별 same-volume staging, durable journal state machine, injected failure rollback과 pending recovery를 구현합니다.
+2. PR-D에서 registry 기반 doctor와 제한적 apply 활성화 조건을 검증하되 Windows·single-writer 조건이 충족되지 않으면 apply 차단을 유지합니다.
+3. GitHub Actions runner가 정상화되면 PR #251·#252의 required check를 재실행합니다.
