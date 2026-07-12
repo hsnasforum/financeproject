@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { AutoMergePolicyClient } from "@/components/AutoMergePolicyClient";
+import { AutoMergePolicyClient } from "./_components/AutoMergePolicyClient";
 import { loadAutoMergePolicy } from "@/lib/ops/autoMergePolicy";
 
 function parseEnvEnabledFlag(): boolean {

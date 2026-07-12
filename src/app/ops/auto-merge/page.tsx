@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { AutoMergeClient } from "@/components/AutoMergeClient";
+import { AutoMergeClient } from "./_components/AutoMergeClient";
 import { getGithubClient } from "@/lib/github/client";
 import { requireGithubEnv } from "@/lib/github/env";
 import { buildEffectiveAutoMergePolicy, loadAutoMergePolicy } from "@/lib/ops/autoMergePolicy";

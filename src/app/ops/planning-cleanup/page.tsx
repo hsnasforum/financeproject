@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { OpsPlanningCleanupClient } from "@/components/OpsPlanningCleanupClient";
+import { OpsPlanningCleanupClient } from "./_components/OpsPlanningCleanupClient";
 import { loadPlanningRetentionPolicy } from "@/lib/planning/retention/policy";
 
 export default async function OpsPlanningCleanupPage() {
@@ -14,4 +14,3 @@ export default async function OpsPlanningCleanupPage() {
 
   return <OpsPlanningCleanupClient csrf={csrf} initialPolicy={policy} />;
 }
-

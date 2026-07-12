@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { applyCleanupAction, dryRunCleanupAction } from "@/app/ops/planning-cleanup/actions";
+import { applyCleanupAction, dryRunCleanupAction } from "../actions";
 import { DevUnlockShortcutLink, isDevUnlockCsrfMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
