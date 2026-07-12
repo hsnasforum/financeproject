@@ -28,7 +28,19 @@ type BenefitsSnapshot = {
   items: BenefitCandidate[];
 };
 
-const memoryCache = new Map<string, BenefitsSnapshot>();
+type SnapshotFileIdentity = {
+  mtimeMs: number;
+  ctimeMs: number;
+  size: number;
+  ino: number;
+};
+
+type CachedSnapshot = {
+  identity: SnapshotFileIdentity;
+  snapshot: BenefitsSnapshot;
+};
+
+const memoryCache = new Map<string, CachedSnapshot>();
 const BENEFITS_TTL_MS = getCachePolicy("benefits").ttlMs;
 
 function defaultSnapshotPath(): string {
@@ -57,30 +69,78 @@ function sanitizeItem(item: BenefitCandidate): BenefitCandidate {
   };
 }
 
-export function loadSnapshot(filePath = defaultSnapshotPath()): BenefitsSnapshot | null {
-  const cached = memoryCache.get(filePath);
-  if (cached) return cached;
+function readSnapshotFileIdentity(filePath: string): SnapshotFileIdentity | null {
   try {
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const parsed = JSON.parse(raw) as BenefitsSnapshot;
-    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.items) || !parsed.meta?.generatedAt) return null;
-    memoryCache.set(filePath, parsed);
-    return parsed;
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return null;
+    return {
+      mtimeMs: stat.mtimeMs,
+      ctimeMs: stat.ctimeMs,
+      size: stat.size,
+      ino: stat.ino,
+    };
   } catch {
     return null;
   }
 }
 
+function isSameFileIdentity(left: SnapshotFileIdentity, right: SnapshotFileIdentity): boolean {
+  return left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs
+    && left.size === right.size
+    && left.ino === right.ino;
+}
+
+function loadSnapshotEntry(filePath: string): {
+  snapshot: BenefitsSnapshot;
+  fromCache: "memory" | "disk";
+} | null {
+  const currentIdentity = readSnapshotFileIdentity(filePath);
+  if (!currentIdentity) {
+    memoryCache.delete(filePath);
+    return null;
+  }
+
+  const cached = memoryCache.get(filePath);
+  if (cached && isSameFileIdentity(cached.identity, currentIdentity)) {
+    return { snapshot: cached.snapshot, fromCache: "memory" };
+  }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const beforeRead = readSnapshotFileIdentity(filePath);
+    if (!beforeRead) break;
+    try {
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const afterRead = readSnapshotFileIdentity(filePath);
+      if (!afterRead || !isSameFileIdentity(beforeRead, afterRead)) continue;
+
+      const parsed = JSON.parse(raw) as BenefitsSnapshot;
+      if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.items) || !parsed.meta?.generatedAt) break;
+      memoryCache.set(filePath, { identity: afterRead, snapshot: parsed });
+      return { snapshot: parsed, fromCache: "disk" };
+    } catch {
+      break;
+    }
+  }
+
+  memoryCache.delete(filePath);
+  return null;
+}
+
+export function loadSnapshot(filePath = defaultSnapshotPath()): BenefitsSnapshot | null {
+  return loadSnapshotEntry(filePath)?.snapshot ?? null;
+}
+
 export function getSnapshotOrNull(params?: { filePath?: string; ttlMs?: number }): { snapshot: BenefitsSnapshot; fromCache: "memory" | "disk"; isStale: boolean } | null {
   const filePath = params?.filePath ?? defaultSnapshotPath();
   const ttlMs = Math.max(60_000, params?.ttlMs ?? BENEFITS_TTL_MS);
-  const mem = memoryCache.get(filePath);
-  if (mem) {
-    return { snapshot: mem, fromCache: "memory", isStale: !isSnapshotFresh(mem.meta.generatedAt, ttlMs) };
-  }
-  const disk = loadSnapshot(filePath);
-  if (!disk) return null;
-  return { snapshot: disk, fromCache: "disk", isStale: !isSnapshotFresh(disk.meta.generatedAt, ttlMs) };
+  const loaded = loadSnapshotEntry(filePath);
+  if (!loaded) return null;
+  return {
+    snapshot: loaded.snapshot,
+    fromCache: loaded.fromCache,
+    isStale: !isSnapshotFresh(loaded.snapshot.meta.generatedAt, ttlMs),
+  };
 }
 
 export function saveSnapshot(filePath: string, snapshot: BenefitsSnapshot): void {
@@ -88,7 +148,9 @@ export function saveSnapshot(filePath: string, snapshot: BenefitsSnapshot): void
   const tempPath = `${filePath}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(snapshot), "utf-8");
   fs.renameSync(tempPath, filePath);
-  memoryCache.set(filePath, snapshot);
+  const identity = readSnapshotFileIdentity(filePath);
+  if (identity) memoryCache.set(filePath, { identity, snapshot });
+  else memoryCache.delete(filePath);
 }
 
 export function isSnapshotFresh(generatedAt: string, ttlMs: number): boolean {
@@ -107,10 +169,10 @@ export async function getOrBuildSnapshot(params: {
   const ttlMs = Math.max(60_000, params.ttlMs ?? BENEFITS_TTL_MS);
 
   if (!params.forceRefresh) {
-    const mem = memoryCache.get(filePath);
-    if (mem && isSnapshotFresh(mem.meta.generatedAt, ttlMs)) return { snapshot: mem, fromCache: "memory" };
-    const disk = loadSnapshot(filePath);
-    if (disk && isSnapshotFresh(disk.meta.generatedAt, ttlMs)) return { snapshot: disk, fromCache: "disk" };
+    const loaded = loadSnapshotEntry(filePath);
+    if (loaded && isSnapshotFresh(loaded.snapshot.meta.generatedAt, ttlMs)) {
+      return { snapshot: loaded.snapshot, fromCache: loaded.fromCache };
+    }
   }
 
   const built = await params.build();

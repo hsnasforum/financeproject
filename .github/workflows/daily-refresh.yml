@@ -44,6 +44,8 @@ jobs:
           ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
           EXIM_EXCHANGE_API_KEY: ${{ secrets.EXIM_EXCHANGE_API_KEY }}
           EXIM_EXCHANGE_API_URL: ${{ secrets.EXIM_EXCHANGE_API_URL }}
+          MOIS_BENEFITS_API_KEY: ${{ secrets.MOIS_BENEFITS_API_KEY }}
+          MOIS_BENEFITS_API_URL: ${{ secrets.MOIS_BENEFITS_API_URL }}
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
         run: node scripts/daily_refresh_ci.mjs --check-env
 
@@ -60,6 +62,8 @@ jobs:
           KOSIS_API_KEY: ${{ secrets.KOSIS_API_KEY }}
           EXIM_EXCHANGE_API_KEY: ${{ secrets.EXIM_EXCHANGE_API_KEY }}
           EXIM_EXCHANGE_API_URL: ${{ secrets.EXIM_EXCHANGE_API_URL }}
+          MOIS_BENEFITS_API_KEY: ${{ secrets.MOIS_BENEFITS_API_KEY }}
+          MOIS_BENEFITS_API_URL: ${{ secrets.MOIS_BENEFITS_API_URL }}
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
           OPENDART_BASE_URL: "https://opendart.fss.or.kr"
         run: pnpm daily:refresh:strict

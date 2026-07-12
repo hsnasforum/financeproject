@@ -42,7 +42,7 @@ const RULES: MatchRule[] = [
       /opendart[^.\n]{0,80}(key|설정)[^.\n]{0,80}(missing|required|없|필요)/i,
       /OpenDART 설정이 필요/i,
     ],
-    suggestedFixIds: ["DART_WATCH", "DAILY_REFRESH"],
+    suggestedFixIds: ["DART_WATCH"],
   },
   {
     cause: "MISSING_CORP_INDEX",
@@ -83,7 +83,7 @@ const RULES: MatchRule[] = [
       /\b(502|503|504)\b/,
       /upstream/i,
     ],
-    suggestedFixIds: ["DATA_DOCTOR", "DAILY_REFRESH"],
+    suggestedFixIds: ["DATA_DOCTOR"],
   },
 ];
 

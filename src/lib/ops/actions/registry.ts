@@ -194,13 +194,6 @@ const SOURCE_REFRESH_ACTIONS = {
     previewText: "DataGo 기반 상품 스냅샷을 동기화합니다.",
     runLabel: "DataGo 상품 갱신",
   },
-  GOV24_SYNC_IF_STALE: {
-    fixId: "GOV24_SYNC_IF_STALE",
-    title: "Gov24 혜택 갱신",
-    description: "정부24 혜택 스냅샷이 오래됐으면 다시 동기화합니다.",
-    previewText: "Gov24 혜택 스냅샷이 오래됐으면 다시 동기화합니다.",
-    runLabel: "Gov24 혜택 갱신",
-  },
   NEWS_REFRESH: {
     fixId: "NEWS_REFRESH",
     title: "뉴스 갱신",
@@ -234,15 +227,6 @@ async function previewSourceRefreshAction(actionId: SourceRefreshActionId): Prom
     ok: true,
     summary: {
       text: SOURCE_REFRESH_ACTIONS[actionId].previewText,
-    },
-  };
-}
-
-async function previewDailyRefreshAction(): Promise<OpsActionPreviewResult> {
-  return {
-    ok: true,
-    summary: {
-      text: "일일 갱신을 실행해 FinLife, DataGo, Gov24, 뉴스, 지표, DART 산출물을 갱신합니다.",
     },
   };
 }
@@ -446,11 +430,6 @@ const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
     title: SOURCE_REFRESH_ACTIONS.DATAGO_SYNC.title,
     description: SOURCE_REFRESH_ACTIONS.DATAGO_SYNC.description,
   },
-  GOV24_SYNC_IF_STALE: {
-    id: "GOV24_SYNC_IF_STALE",
-    title: SOURCE_REFRESH_ACTIONS.GOV24_SYNC_IF_STALE.title,
-    description: SOURCE_REFRESH_ACTIONS.GOV24_SYNC_IF_STALE.description,
-  },
   NEWS_REFRESH: {
     id: "NEWS_REFRESH",
     title: SOURCE_REFRESH_ACTIONS.NEWS_REFRESH.title,
@@ -460,11 +439,6 @@ const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
     id: "INDICATORS_REFRESH",
     title: SOURCE_REFRESH_ACTIONS.INDICATORS_REFRESH.title,
     description: SOURCE_REFRESH_ACTIONS.INDICATORS_REFRESH.description,
-  },
-  DAILY_REFRESH: {
-    id: "DAILY_REFRESH",
-    title: "일일 갱신 실행",
-    description: "일일 갱신 workflow를 실행해 주요 외부 데이터와 운영 산출물을 다시 생성합니다.",
   },
 };
 
@@ -511,7 +485,6 @@ export async function previewOpsAction(actionId: OpsActionId, params: OpsActionP
   if (actionId === "DELETE_RUN") return previewDeleteRunAction(params);
   if (actionId === "DART_WATCH") return previewDartWatchAction();
   if (isSourceRefreshActionId(actionId)) return previewSourceRefreshAction(actionId);
-  if (actionId === "DAILY_REFRESH") return previewDailyRefreshAction();
 
   return {
     ok: true,
@@ -529,7 +502,6 @@ export async function runOpsAction(actionId: OpsActionId, params: OpsActionParam
   if (actionId === "DELETE_RUN") return runDeleteRunAction(params);
   if (actionId === "DART_WATCH") return runAllowedFixAction("DART_WATCH");
   if (isSourceRefreshActionId(actionId)) return runSourceRefreshAction(actionId);
-  if (actionId === "DAILY_REFRESH") return runAllowedFixAction("DAILY_REFRESH");
 
   return {
     ok: false,

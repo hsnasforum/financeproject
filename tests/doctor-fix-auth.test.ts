@@ -81,6 +81,19 @@ describe("doctor fix api auth", () => {
     expect(runAllowedFixMock).not.toHaveBeenCalled();
   });
 
+  it.each(["GOV24_SYNC_IF_STALE", "DAILY_REFRESH"])(
+    "does not execute %s through the HTTP doctor route",
+    async (fixId) => {
+      const response = await doctorFixPOST(buildRequest({ fixId, csrf: "csrf-token" }));
+      const payload = (await response.json()) as { ok?: boolean; error?: { code?: string } };
+
+      expect(response.status).toBe(400);
+      expect(payload.ok).toBe(false);
+      expect(payload.error?.code).toBe("INVALID_FIX_ID");
+      expect(runAllowedFixMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("executes only allowed fixId", async () => {
     const response = await doctorFixPOST(buildRequest({ fixId: "SEED_DEBUG", csrf: "csrf-token" }));
     const payload = (await response.json()) as { ok?: boolean; fixId?: string };

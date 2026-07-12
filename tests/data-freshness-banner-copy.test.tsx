@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("DataFreshnessBanner copy", () => {
-  it("keeps auto smoke copy aligned with the session-limited toggle behavior", () => {
+  it("keeps freshness UI read-only and points local operators to CLI refresh", () => {
     const html = renderToStaticMarkup(
       <DataFreshnessBanner
         sources={[{ sourceId: "finlife", kind: "deposit", label: "예금" }]}
@@ -15,7 +15,9 @@ describe("DataFreshnessBanner copy", () => {
       />,
     );
 
-    expect(html).toContain("자동 스모크 업데이트는 토글이 켜진 경우 세션당 1회만 시도합니다.");
-    expect(html).not.toContain("자동 동기화는 수행하지");
+    expect(html).toContain("이 화면은 저장된 상태만 확인합니다.");
+    expect(html).toContain("pnpm live:smoke");
+    expect(html).not.toContain("자동 스모크 업데이트");
+    expect(html).not.toContain("스모크 업데이트 중");
   });
 });

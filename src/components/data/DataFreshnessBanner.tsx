@@ -52,47 +52,12 @@ export function DataFreshnessBanner({
   showWhenFresh = false,
   infoDisplay = "banner",
 }: Props) {
-  const autoSmokeDefault = process.env.NODE_ENV !== "production";
   const searchParams = useSearchParams();
   const [rows, setRows] = useState<SourceStatusRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState("");
-  const [syncError, setSyncError] = useState("");
-  const [autoSmoke, setAutoSmoke] = useState(autoSmokeDefault);
-  const [autoSmokeReady, setAutoSmokeReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const strict = searchParams.get("strict") === "1" || searchParams.get("freshness") === "strict";
-  const autoSmokeSessionKeyRef = useRef<string>("");
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const path = typeof window !== "undefined" ? window.location.pathname : "global";
-      autoSmokeSessionKeyRef.current = `freshness:autoSmoke:run:${path}`;
-      try {
-        const stored = localStorage.getItem("freshness:autoSmoke");
-        if (stored === "1") setAutoSmoke(true);
-        else if (stored === "0") setAutoSmoke(false);
-        else setAutoSmoke(autoSmokeDefault);
-      } catch {
-        setAutoSmoke(autoSmokeDefault);
-      } finally {
-        setAutoSmokeReady(true);
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [autoSmokeDefault]);
-
-  useEffect(() => {
-    if (!autoSmokeReady) return;
-    try {
-      localStorage.setItem("freshness:autoSmoke", autoSmoke ? "1" : "0");
-    } catch {
-      // ignore storage errors
-    }
-  }, [autoSmoke, autoSmokeReady]);
 
   const refresh = useCallback(async () => {
     abortRef.current?.abort();
@@ -124,34 +89,6 @@ export function DataFreshnessBanner({
     }
   }, []);
 
-  const runSmokeSync = useCallback(async (trigger: "manual" | "auto") => {
-    setSyncing(true);
-    setSyncError("");
-    setSyncMessage("");
-    try {
-      const response = await fetch("/api/sync/smoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const json = (await response.json()) as { ok?: boolean; reportPath?: string | null; error?: { message?: string } };
-      if (!response.ok || !json.ok) {
-        setSyncError(json.error?.message ?? "스모크 업데이트에 실패했습니다.");
-        return;
-      }
-      setSyncMessage(
-        trigger === "auto"
-          ? "자동 스모크 업데이트를 완료했습니다."
-          : "스모크 업데이트를 완료했습니다.",
-      );
-      await refresh();
-    } catch {
-      setSyncError("스모크 업데이트에 실패했습니다.");
-    } finally {
-      setSyncing(false);
-    }
-  }, [refresh]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void refresh();
@@ -176,21 +113,6 @@ export function DataFreshnessBanner({
     [summary.items],
   );
   const effectiveInfoDisplay = strict && infoDisplay === "hidden" ? "compact" : infoDisplay;
-
-  useEffect(() => {
-    if (!autoSmoke || loading || syncing) return;
-    if (error) return;
-    if (summary.level !== "warn" && summary.level !== "error") return;
-    const key = autoSmokeSessionKeyRef.current;
-    if (!key) return;
-    try {
-      if (sessionStorage.getItem(key) === "1") return;
-      sessionStorage.setItem(key, "1");
-    } catch {
-      // ignore storage errors
-    }
-    void runSmokeSync("auto");
-  }, [autoSmoke, error, loading, runSmokeSync, summary.level, syncing]);
 
   if (sources.length === 0) return null;
   if (!loading && !error && summary.level === "info" && effectiveInfoDisplay === "hidden") return null;
@@ -286,7 +208,7 @@ export function DataFreshnessBanner({
             {error ? "상태 조회 실패" : summary.message}
           </p>
           <p className="mt-1 text-xs opacity-80">
-            자동 스모크 업데이트는 토글이 켜진 경우 세션당 1회만 시도합니다.
+            이 화면은 저장된 상태만 확인합니다. 갱신은 로컬 운영 명령으로 실행한 뒤 재확인하세요.
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] opacity-85">
             <span>Required 이슈 {summary.requiredIssuesCount}건</span>
@@ -376,27 +298,8 @@ export function DataFreshnessBanner({
 
       {(error || summary.level === "warn" || summary.level === "error") ? (
         <div className="mt-3 rounded-xl border border-current/25 bg-white/60 p-3 text-xs">
-          <p className="font-semibold">권장 액션(수동)</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void runSmokeSync("manual")}
-              disabled={syncing}
-              className="rounded-md border border-current/40 bg-white/80 px-3 py-1 font-semibold"
-            >
-              {syncing ? "스모크 업데이트 중..." : "스모크 업데이트"}
-            </button>
-            <label className="inline-flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={autoSmoke}
-                onChange={(event) => setAutoSmoke(event.target.checked)}
-              />
-              자동 스모크 업데이트(세션당 1회)
-            </label>
-          </div>
-          {syncMessage ? <p className="mt-2 text-navy">{syncMessage}</p> : null}
-          {syncError ? <p className="mt-2 text-rose-700">{syncError}</p> : null}
+          <p className="font-semibold">로컬 운영 명령</p>
+          <p className="mt-1">아래 명령을 로컬 터미널에서 실행한 뒤 이 화면의 재확인을 누르세요.</p>
           <pre className="mt-2 overflow-x-auto rounded-xl bg-surface-muted border border-slate-200 p-4 text-[11px] font-bold leading-5 text-slate-600 shadow-inner">
 {`pnpm live:smoke
 pnpm live:sync

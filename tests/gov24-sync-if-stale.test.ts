@@ -24,5 +24,13 @@ describe("gov24 sync if-stale policy", () => {
     expect(result.shouldRun).toBe(false);
     expect(result.reason).toBe("fresh");
   });
-});
 
+  it("runs when snapshot is fresh but completionRate is below the required boundary", () => {
+    const now = Date.now();
+    const fresh = new Date(now - (60 * 60 * 1000)).toISOString();
+    const result = shouldRunGov24Sync({ generatedAt: fresh, completionRate: 0.8 }, now);
+
+    expect(result.shouldRun).toBe(true);
+    expect(result.reason).toBe("low_completion_rate");
+  });
+});

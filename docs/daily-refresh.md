@@ -7,7 +7,7 @@ pnpm daily:refresh
 ```
 
 - 기본 순서:
-  - `pnpm warm:if-stale` (스크립트가 있으면 실행)
+  - `pnpm warm:if-stale -- --exchange-only` (환율 snapshot만 확인하며, FinLife/Gov24는 아래 canonical 단계를 한 번씩 실행)
   - `pnpm finlife:sync:if-stale`
   - `pnpm datago:sync`
   - `pnpm gov24:sync:if-stale`
@@ -49,6 +49,7 @@ pnpm daily:refresh
 - DataGo 인증은 `KDB_DATAGO_SERVICE_KEY` 또는 `DATAGO_SERVICE_KEY` 중 하나가 필요합니다.
 - 지표 수집에는 `BOK_ECOS_API_KEY` 또는 `ECOS_API_KEY` 중 하나가 필요합니다.
 - 환율 수집에는 `EXIM_EXCHANGE_API_KEY`와 HTTPS 형식의 `EXIM_EXCHANGE_API_URL`이 모두 필요합니다.
+- Gov24 수집에는 `MOIS_BENEFITS_API_KEY`와 HTTPS 형식의 `MOIS_BENEFITS_API_URL`이 모두 필요합니다. 두 값이 없으면 strict preflight가 실행 전에 실패합니다.
 - DART strict 수집에는 `OPENDART_API_KEY`가 필요합니다.
 - `FRED_API_KEY`, `KOSIS_API_KEY`는 현재 daily workflow에서 선택 설정입니다.
 - workflow는 `pnpm daily:refresh:strict`만 사용합니다. 별도 evidence 단계가 result schema, `mode=strict`, `summary.ok=true`, freshness report, 승인 경로 checksum을 검증합니다.

@@ -119,7 +119,6 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   const [syncing, setSyncing] = useState(false);
   const [syncUniqueCount, setSyncUniqueCount] = useState<number | null>(null);
   const [snapshotGeneratedAt, setSnapshotGeneratedAt] = useState<string>("");
-  const [syncError, setSyncError] = useState<string>("");
   const [snapshotTotal, setSnapshotTotal] = useState<number | null>(null);
   const [completionRate, setCompletionRate] = useState<number | null>(null);
   const [syncMetaNote, setSyncMetaNote] = useState<string>("");
@@ -200,24 +199,6 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [checkSnapshotStatus]);
-
-  const runManualSync = useCallback(async () => {
-    setSyncing(true);
-    setSyncState("syncing");
-    setSyncError("");
-    try {
-      const res = await fetch("/api/gov24/sync", { method: "POST" });
-      const json = await res.json() as { ok?: boolean; error?: { message?: string } };
-      if (!json.ok) {
-        setSyncError(readBenefitErrorMessage(json, BENEFITS_FLOW_COPY.requestFailed));
-      }
-    } catch {
-      setSyncError(BENEFITS_FLOW_COPY.requestFailed);
-    } finally {
-      setSyncing(false);
-      await checkSnapshotStatus();
-    }
   }, [checkSnapshotStatus]);
 
   const buildInput = useCallback((): Gov24SimpleFindInput => {
@@ -312,16 +293,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
         title="보조금24"
         description="입력한 조건을 기준으로 정부 혜택 후보를 다시 찾고, 신청 전에 무엇을 확인할지 정리하는 화면입니다."
         action={
-          <div className="flex items-center gap-2">
-            <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border transition-all", syncing ? "bg-primary/5 text-primary border-primary/20 animate-pulse" : "bg-surface-muted text-slate-400 border-slate-200")}>
-              {snapshotStatus.stateLabel}
-            </span>
-            {process.env.NODE_ENV !== "production" && (
-              <Button type="button" size="sm" variant="outline" className="rounded-xl font-black h-8" onClick={() => void runManualSync()} disabled={syncing}>
-                {syncing ? "갱신 중..." : "수동 갱신"}
-              </Button>
-            )}
-          </div>
+          <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border transition-all", syncing ? "bg-primary/5 text-primary border-primary/20 animate-pulse" : "bg-surface-muted text-slate-400 border-slate-200")}>
+            {snapshotStatus.stateLabel}
+          </span>
         }
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
@@ -353,9 +327,6 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
           </div>
           {syncMetaNote ? (
             <p className="mt-3 text-[10px] font-bold text-amber-600 bg-amber-50/50 p-2 rounded-lg">{syncMetaNote}</p>
-          ) : null}
-          {syncError ? (
-            <p className="mt-3 text-[10px] font-bold text-rose-600 bg-rose-50/50 p-2 rounded-lg">동기화 실패: {syncError}</p>
           ) : null}
         </Card>
 

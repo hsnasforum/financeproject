@@ -164,7 +164,7 @@ afterEach(() => {
 describe("daily refresh CI evidence contract", () => {
   it("requires the exact CI env groups without exposing their values", () => {
     expect(() => validateDailyRefreshEnvironment({})).toThrowError(
-      /FINLIFE_API_KEY.*FINLIFE_TOPFIN_GRP_LIST.*DATAGO.*ECOS.*EXIM_EXCHANGE_API_KEY.*EXIM_EXCHANGE_API_URL.*OPENDART_API_KEY/,
+      /FINLIFE_API_KEY.*FINLIFE_TOPFIN_GRP_LIST.*DATAGO.*ECOS.*EXIM_EXCHANGE_API_KEY.*EXIM_EXCHANGE_API_URL.*MOIS_BENEFITS_API_KEY.*MOIS_BENEFITS_API_URL.*OPENDART_API_KEY/,
     );
     expect(validateDailyRefreshEnvironment({
       FINLIFE_API_KEY: "finlife",
@@ -173,8 +173,24 @@ describe("daily refresh CI evidence contract", () => {
       ECOS_API_KEY: "ecos",
       EXIM_EXCHANGE_API_KEY: "exchange",
       EXIM_EXCHANGE_API_URL: "https://example.test/exchange",
+      MOIS_BENEFITS_API_KEY: "benefits",
+      MOIS_BENEFITS_API_URL: "https://example.test/gov24/v3/serviceList",
       OPENDART_API_KEY: "dart",
     })).toMatchObject({ ok: true });
+  });
+
+  it("rejects an insecure Gov24 endpoint before running the strict workflow", () => {
+    expect(() => validateDailyRefreshEnvironment({
+      FINLIFE_API_KEY: "finlife",
+      FINLIFE_TOPFIN_GRP_LIST: "020000",
+      DATAGO_SERVICE_KEY: "datago",
+      ECOS_API_KEY: "ecos",
+      EXIM_EXCHANGE_API_KEY: "exchange",
+      EXIM_EXCHANGE_API_URL: "https://example.test/exchange",
+      MOIS_BENEFITS_API_KEY: "benefits",
+      MOIS_BENEFITS_API_URL: "http://example.test/gov24/v3/serviceList",
+      OPENDART_API_KEY: "dart",
+    })).toThrowError(/MOIS_BENEFITS_API_URL must use https/);
   });
 
   it("validates strict success and emits freshness plus approved path checksums", () => {

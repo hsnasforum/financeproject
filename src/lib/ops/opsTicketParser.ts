@@ -1,19 +1,6 @@
-const KNOWN_FIX_IDS = [
-  "PRISMA_DB_PUSH",
-  "PRISMA_PUSH",
-  "SEED_DEBUG",
-  "DATA_DOCTOR",
-  "DART_WATCH",
-  "DAILY_REFRESH",
-] as const;
-
-type AllowedFixId = (typeof KNOWN_FIX_IDS)[number];
+import { isAllowedFixId, type AllowedFixId } from "@/lib/dev/fixCatalog";
 
 const KNOWN_CHAIN_IDS = ["DB_REPAIR", "DART_SETUP", "FULL_REPAIR"] as const;
-
-function isAllowedFixId(value: string): value is AllowedFixId {
-  return (KNOWN_FIX_IDS as readonly string[]).includes(value);
-}
 
 function isChainId(value: string): value is (typeof KNOWN_CHAIN_IDS)[number] {
   return (KNOWN_CHAIN_IDS as readonly string[]).includes(value);
@@ -147,6 +134,8 @@ export function parseOpsAction(item: OpsTicketLike): OpsAction | null {
   }
 
   if (!kind || !id) return null;
+  if (kind === "FIX" && !isAllowedFixId(id)) return null;
+  if (kind === "CHAIN" && !isChainId(id)) return null;
 
   const suggestedFixIds = parseSuggestedFixIdsFromNote(note);
   return {

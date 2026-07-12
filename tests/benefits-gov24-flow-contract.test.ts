@@ -25,6 +25,24 @@ describe("benefits/gov24 shared flow contract", () => {
     });
   });
 
+  it("keeps stale snapshot guidance distinct from a missing snapshot", () => {
+    expect(buildBenefitsSnapshotStatus({
+      fallback: { reason: "snapshot_stale" },
+      sync: { state: "needs_sync" },
+      snapshot: {
+        totalItems: 25,
+        generatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      message: BENEFITS_FLOW_COPY.snapshotStale,
+    })).toMatchObject({
+      state: "needs_sync",
+      stateLabel: "기준 시점 오래됨",
+      totalItems: 25,
+      generatedAt: "2026-07-01T00:00:00.000Z",
+      notice: BENEFITS_FLOW_COPY.snapshotStale,
+    });
+  });
+
   it("normalizes ready and partial snapshot metadata", () => {
     expect(buildBenefitsSnapshotStatus({
       snapshot: {

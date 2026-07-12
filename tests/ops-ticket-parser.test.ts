@@ -62,7 +62,16 @@ describe("ops ticket parser", () => {
       kind: "CHAIN",
       id: "FULL_REPAIR",
       cause: "UPSTREAM_UNAVAILABLE",
-      suggestedFixIds: ["DATA_DOCTOR", "DAILY_REFRESH"],
+      suggestedFixIds: ["DATA_DOCTOR"],
     });
+  });
+
+  it("does not expose removed operator commands as executable fixes", () => {
+    expect(parseOpsAction({
+      priority: "P0",
+      tags: ["ops", "fix"],
+      message: "[OPS][DAILY_REFRESH] 실패: UPSTREAM_UNAVAILABLE",
+      note: "- type: FIX",
+    })).toBeNull();
   });
 });

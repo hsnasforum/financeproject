@@ -51,6 +51,16 @@ function writeStrictChildScript(root: string): void {
   ].join("\n") + "\n", "utf-8");
 }
 
+function writeWarmChildScript(root: string): void {
+  fs.writeFileSync(path.join(root, "warm-child.mjs"), [
+    "if (!process.argv.includes('--exchange-only')) {",
+    "  console.error('warm:exchange-only-missing');",
+    "  process.exit(9);",
+    "}",
+    "console.log('warm:exchange-only-ok');",
+  ].join("\n") + "\n", "utf-8");
+}
+
 function runDailyRefresh(root: string, args: string[] = [], envOverrides: Record<string, string> = {}) {
   return spawnSync(process.execPath, [
     path.join(process.cwd(), "scripts", "daily_refresh.mjs"),
@@ -98,10 +108,33 @@ describe("daily refresh ops contract", () => {
     expect(ifStaleSource).not.toContain("[\"deposit\", \"saving\"]");
   });
 
-  it("runs public source refresh steps before news and indicators", () => {
+  it("keeps daily warm-up from invoking FinLife or Gov24 a second time", () => {
     const root = createTempRoot();
     writePackage(root, {
-      "warm:if-stale": okScript("warm"),
+      "finlife:sync:if-stale": failScript("finlife-should-not-run"),
+      "gov24:sync:if-stale": failScript("gov24-should-not-run"),
+    });
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "warm_if_stale.mjs"),
+      "--exchange-only",
+      "--offline",
+    ], {
+      cwd: root,
+      encoding: "utf-8",
+      env: process.env,
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("covered by canonical daily steps, skip");
+    expect(result.stdout).not.toContain("should-not-run");
+  });
+
+  it("runs public source refresh steps before news and indicators", () => {
+    const root = createTempRoot();
+    writeWarmChildScript(root);
+    writePackage(root, {
+      "warm:if-stale": "node warm-child.mjs",
       "finlife:sync:if-stale": okScript("finlife"),
       "datago:sync": okScript("datago"),
       "gov24:sync:if-stale": okScript("gov24"),
@@ -132,6 +165,10 @@ describe("daily refresh ops contract", () => {
     expect(payload.steps?.find((step) => step.name === "finlife:sync:if-stale")).toMatchObject({
       status: "ok",
       stdoutTail: expect.stringContaining("finlife:ok"),
+    });
+    expect(payload.steps?.find((step) => step.name === "warm:if-stale")).toMatchObject({
+      status: "ok",
+      stdoutTail: expect.stringContaining("warm:exchange-only-ok"),
     });
     expect(payload.steps?.find((step) => step.name === "datago:sync")).toMatchObject({
       status: "ok",
