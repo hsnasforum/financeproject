@@ -81,6 +81,38 @@ describe("security middleware", () => {
     expect(response.status).toBe(403);
   });
 
+  it("blocks remote access to feedback management pages and APIs", () => {
+    for (const path of ["/feedback/list", "/feedback/feedback-id", "/api/feedback/list", "/api/feedback/feedback-id"]) {
+      const response = middleware(makeRequest(`https://example.com${path}`, {
+        headers: { host: "example.com" },
+      }));
+      expect(response.status).toBe(403);
+    }
+  });
+
+  it("keeps public feedback submission paths outside the local-only boundary", () => {
+    const pageResponse = middleware(makeRequest("https://example.com/feedback", {
+      headers: { host: "example.com" },
+    }));
+    const apiResponse = middleware(makeRequest("https://example.com/api/feedback", {
+      method: "POST",
+      headers: { host: "example.com" },
+    }));
+
+    expect(pageResponse.status).toBe(200);
+    expect(apiResponse.status).toBe(200);
+  });
+
+  it("hides feedback management pages and APIs in production", () => {
+    mutableEnv.NODE_ENV = "production";
+    for (const path of ["/feedback/list", "/api/feedback/list"]) {
+      const response = middleware(makeRequest(`https://example.com${path}`, {
+        headers: { host: "example.com" },
+      }));
+      expect(response.status).toBe(404);
+    }
+  });
+
   it("blocks remote state-changing request to /api/planning/run", async () => {
     const response = middleware(makeRequest("https://example.com/api/planning/run", {
       method: "POST",

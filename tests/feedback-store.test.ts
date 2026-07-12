@@ -128,6 +128,28 @@ describe("feedback store", () => {
     expect(updated?.tasks[0]?.done).toBe(true);
   });
 
+  it("infers legacy OPS records once and persists their immutable record kind on update", () => {
+    fs.mkdirSync(path.dirname(TEST_STORE_PATH), { recursive: true });
+    fs.writeFileSync(TEST_STORE_PATH, JSON.stringify([{
+      id: "legacy-ops",
+      createdAt: "2026-07-12T00:00:00.000Z",
+      category: "bug",
+      message: "[OPS][DATA_DOCTOR] 실패: DB_NOT_READY",
+      priority: "P0",
+      tags: ["ops", "auto"],
+    }]), "utf-8");
+
+    expect(getFeedbackById("legacy-ops")?.recordKind).toBe("ops-ticket");
+    const updated = updateFeedback("legacy-ops", {
+      priority: "P1",
+      tags: ["resolved"],
+    });
+    expect(updated?.recordKind).toBe("ops-ticket");
+
+    const persisted = JSON.parse(fs.readFileSync(TEST_STORE_PATH, "utf-8")) as Array<Record<string, unknown>>;
+    expect(persisted[0]?.recordKind).toBe("ops-ticket");
+  });
+
   it("resets file when stored json is invalid", () => {
     fs.mkdirSync(path.dirname(TEST_STORE_PATH), { recursive: true });
     fs.writeFileSync(TEST_STORE_PATH, "{ invalid json", "utf-8");

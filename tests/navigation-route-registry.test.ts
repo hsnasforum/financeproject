@@ -40,6 +40,21 @@ describe("navigation route registry", () => {
     expect(getAdminNavItems().map((item) => item.href)).toEqual(["/ops"]);
   });
 
+  it("classifies feedback management pages as local ops while keeping submission public", () => {
+    expect(resolveRouteVisibility("/feedback")).toMatchObject({
+      visibility: "public-stable",
+      status: "stable",
+    });
+    expect(resolveRouteVisibility("/feedback/list")).toMatchObject({
+      visibility: "ops",
+      status: "ops",
+    });
+    expect(resolveRouteVisibility("/feedback/feedback-id")).toMatchObject({
+      visibility: "ops",
+      status: "ops",
+    });
+  });
+
   it("separates planning v3 official beta entries from internal v3 routes", () => {
     expect(resolveRouteVisibility("/planning/reports/prototype")).toMatchObject({
       visibility: "public-beta",

@@ -7,6 +7,7 @@ import {
   toGuardErrorResponse,
 } from "../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../lib/dev/onlyDev";
+import { issueFeedbackManagementCapability } from "../../../../lib/feedback/feedbackManagementCapability";
 
 const DEV_ACTION_COOKIE_NAME = "dev_action";
 const DEV_ACTION_COOKIE_MAX_AGE_SECONDS = 12 * 60 * 60;
@@ -85,6 +86,18 @@ export async function POST(request: Request) {
       path: "/",
       maxAge: DEV_ACTION_COOKIE_MAX_AGE_SECONDS,
     });
+    const feedbackCapability = issueFeedbackManagementCapability();
+    if (feedbackCapability) {
+      response.cookies.set({
+        name: feedbackCapability.name,
+        value: feedbackCapability.value,
+        httpOnly: true,
+        sameSite: "strict",
+        secure: false,
+        path: "/",
+        maxAge: feedbackCapability.maxAge,
+      });
+    }
     auditUnlock("Dev unlock 성공", {
       ok: true,
     });

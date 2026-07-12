@@ -1,5 +1,5 @@
 import {
-  addFeedback,
+  addOpsFeedback,
   appendNote,
   findRecentByFingerprint,
   listFeedback,
@@ -158,7 +158,7 @@ export function createOrAppendOpsTicket(input: CreateOrAppendOpsTicketInput): {
     };
   }
 
-  const next = addFeedback({
+  const next = addOpsFeedback({
     category: "bug",
     message: `[OPS][${normalizedId}] 실패: ${normalizedCause}`,
     traceId: null,

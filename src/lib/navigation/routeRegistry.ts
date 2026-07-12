@@ -203,8 +203,6 @@ const PUBLIC_STABLE_PAGE_PATTERNS = [
   "/benefits",
   "/dashboard",
   "/feedback",
-  "/feedback/[id]",
-  "/feedback/list",
   "/gov24",
   "/help",
   "/housing/afford",
@@ -272,6 +270,8 @@ const INTERNAL_PAGE_PATTERNS = [
 ] as const;
 
 const OPS_PAGE_PATTERNS = [
+  "/feedback/list",
+  "/feedback/[id]",
   "/ops",
   "/ops/about",
   "/ops/assumptions",

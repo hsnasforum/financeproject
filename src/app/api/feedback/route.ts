@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { addFeedback, type FeedbackCategory } from "@/lib/feedback/feedbackStore";
+import { addPublicFeedback, type FeedbackCategory } from "@/lib/feedback/feedbackStore";
+import { toFeedbackPublicReceipt } from "@/lib/feedback/feedbackContracts";
 import {
   buildDiagnosticsSnapshot,
   normalizeDiagnosticsSnapshot,
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
   try {
     const pageInfo = parseDiagnosticsPageInfoFromRequest(request);
     const snapshot = normalizeDiagnosticsSnapshot(body.snapshot) ?? buildDiagnosticsSnapshot({ req: request, pageInfo });
-    addFeedback({
+    addPublicFeedback({
       category: categoryText,
       message,
       traceId: toHeaderString(request.headers.get("x-trace-id")),
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
       appVersion: toHeaderString(APP_VERSION),
       snapshot,
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(toFeedbackPublicReceipt());
   } catch {
     return NextResponse.json(
       { ok: false, error: { code: "STORE_FAILED", message: "피드백 저장에 실패했습니다." } },

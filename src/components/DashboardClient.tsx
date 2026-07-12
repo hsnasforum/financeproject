@@ -92,13 +92,6 @@ type DashboardAction = {
   href: string;
 };
 
-type DashboardFeedback = {
-  id: string;
-  category: string;
-  message: string;
-  createdAt: string;
-};
-
 type DashboardState = {
   runs: DashboardRun[];
   runsLoadState: DashboardRunsLoadState;
@@ -109,7 +102,6 @@ type DashboardState = {
   exchangeAsOf: string;
   exchangeUsdRate: number | null;
   benefits: DashboardBenefit[];
-  feedback: DashboardFeedback[];
   warnings: string[];
 };
 
@@ -122,7 +114,6 @@ const INITIAL_STATE: DashboardState = {
   exchangeAsOf: "",
   exchangeUsdRate: null,
   benefits: [],
-  feedback: [],
   warnings: [],
 };
 
@@ -255,21 +246,6 @@ function parseBenefits(payload: unknown): DashboardBenefit[] {
       };
     })
     .filter((row) => row.title);
-}
-
-function parseFeedback(payload: unknown): DashboardFeedback[] {
-  const rows = isRecord(payload) ? asArray(payload.data) : [];
-  return rows
-    .map((entry) => {
-      const row = isRecord(entry) ? entry : {};
-      return {
-        id: asString(row.id),
-        category: asString(row.category),
-        message: asString(row.message),
-        createdAt: asString(row.createdAt),
-      };
-    })
-    .filter((row) => row.id && row.message);
 }
 
 function parseCandidates(actionsPayload: unknown): DashboardCandidate[] {
@@ -405,7 +381,6 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
         fetchJson("/api/public/fx?pairs=USD:1000,JPY:100000,EUR:1000"),
         fetchJson("/api/public/exchange"),
         fetchJson("/api/public/benefits/search?limit=3&includeFacets=0"),
-        fetchJson("/api/feedback/recent"),
       ]);
 
       const labels = [
@@ -414,7 +389,6 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
         "환율 계산",
         "기준 환율",
         "혜택 탐색",
-        "최근 피드백",
       ];
 
       results.forEach((result, index) => {
@@ -434,7 +408,6 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
           nextState.exchangeUsdRate = asNumber(rates.USD);
         }
         if (index === 4) nextState.benefits = parseBenefits(result.value);
-        if (index === 5) nextState.feedback = parseFeedback(result.value);
       });
 
       if (!cancelled) {
@@ -906,29 +879,19 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
 
           <Card className="p-8 space-y-8">
             <SubSectionHeader
-              title="최근 피드백"
-              description="최근에 남긴 메모와 개선 요청 흐름을 다시 확인하세요"
-              action={<Link href="/feedback/list" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">View Feed →</Link>}
+              title="의견과 도움 요청"
+              description="문제 상황과 개선 아이디어를 운영자에게 안전하게 전달합니다"
+              action={<Link href="/feedback" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">의견 남기기 →</Link>}
             />
-            {state.feedback.length > 0 ? (
-              <div className="space-y-4">
-                {state.feedback.slice(0, 4).map((item) => (
-                  <Link className="block rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 p-5 transition-all hover:border-primary/10 hover:bg-white group" href={`/feedback/${encodeURIComponent(item.id)}`} key={item.id}>
-                    <div className="flex items-center justify-between gap-4">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{item.category || "메모"}</p>
-                      <p className="text-[10px] font-bold text-slate-300 tabular-nums">{formatDate(item.createdAt)}</p>
-                    </div>
-                    <p className="mt-3 text-sm font-bold text-slate-700 line-clamp-2 leading-relaxed group-hover:text-navy transition-colors">{truncate(item.message, 72)}</p>
-                    <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-primary">자세한 내용 다시 보기</p>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="py-10 text-center rounded-[2rem] border border-dashed border-slate-200">
-                <p className="text-xs font-bold text-slate-300 italic">최근 피드백이 아직 없습니다.</p>
-                <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-400">메모와 개선 요청이 쌓이면 이곳에서 최근 흐름을 다시 이어볼 수 있습니다.</p>
-              </div>
-            )}
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-surface-muted/40 px-6 py-10 text-center">
+              <p className="text-sm font-black text-navy">공개 화면에는 운영 피드백 기록을 표시하지 않습니다.</p>
+              <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-500">
+                의견 제출은 계속 사용할 수 있으며, 첨부 진단과 운영 메모는 로컬 운영자만 확인합니다.
+              </p>
+              <Link href="/feedback" className="mt-5 inline-block text-xs font-black text-primary hover:underline">
+                의견 남기기 →
+              </Link>
+            </div>
           </Card>
         </section>
       </div>

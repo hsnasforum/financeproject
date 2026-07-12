@@ -518,7 +518,11 @@ export function FeedbackDetailClient({ id }: Props) {
         {loading ? (
           <p className="text-sm text-slate-500">제출한 내용을 불러오고 있습니다.</p>
         ) : error ? (
-          <p className="text-sm text-rose-600">{error}</p>
+          <DevUnlockShortcutMessage
+            message={error}
+            className="text-sm text-rose-600"
+            linkClassName="text-primary"
+          />
         ) : !item ? (
           <p className="text-sm text-slate-500">표시할 데이터가 없습니다.</p>
         ) : (

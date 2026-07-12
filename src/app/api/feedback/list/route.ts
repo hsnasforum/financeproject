@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { listFeedback } from "@/lib/feedback/feedbackStore";
+import { toFeedbackAdminRecord } from "@/lib/feedback/feedbackContracts";
 import { filterAndSearch, type FeedbackQuery } from "@/lib/feedback/feedbackQuery";
+import { guardFeedbackManagementAccess } from "../_lib/managementGuard";
 
 export async function GET(request: Request) {
+  const accessGuard = guardFeedbackManagementAccess(request);
+  if (accessGuard) return accessGuard;
+
   try {
     const { searchParams } = new URL(request.url);
     const rawLimit = Number(searchParams.get("limit") ?? "50");
@@ -26,7 +31,7 @@ export async function GET(request: Request) {
       ...(status ? { status } : {}),
       ...(tag ? { tag } : {}),
     };
-    const all = listFeedback(200);
+    const all = listFeedback(200).map(toFeedbackAdminRecord);
     const filtered = filterAndSearch(all, query);
     const limited = filtered.slice(0, limit);
 

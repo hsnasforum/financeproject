@@ -38,8 +38,6 @@
 - `/housing/subscription`
 - `/invest/companies`
 - `/feedback`
-- `/feedback/list`
-- `/feedback/[id]`
 - `/planning`
 - `/planning/runs`
 - `/planning/runs/[id]`
@@ -129,6 +127,9 @@
 - `/planning/v3/start`, `/planning/v3/news*`, `/planning/v3/journal`, `/planning/v3/exposure`, `/planning/v3/scenarios`, raw `/planning/v3/batches`, `/planning/v3/batches/[id]`, `/planning/v3/import/csv`, `/planning/v3/drafts*`, `/planning/v3/accounts`는 current official entry policy 밖의 non-entry/internal 또는 onboarding wrapper 후보로 둔다.
 
 ## Ops/Admin 화면 (Local-only Ops / local-only 또는 packaged runtime)
+- 아래 피드백 관리 2개 경로는 개발 local-ops 전용이며 packaged production 지원 범위에 포함하지 않는다.
+- `/feedback/list` (개발 로컬 직접 연결 + Dev unlock 피드백 관리 capability 필요, production 404)
+- `/feedback/[id]` (개발 로컬 직접 연결 + Dev unlock 피드백 관리 capability 필요, production 404)
 - `/ops`
 - `/ops/about`
 - `/ops/assumptions`
@@ -161,7 +162,7 @@
 
 ## API 노출 규칙
 - `/api/dev/*`는 production에서 공통 차단(404)된다.
-- 예외: packaged desktop runtime의 로컬 요청에서는 `/api/dev/unlock`만 vault/ops action CSRF 발급을 위해 허용한다. 다른 `/api/dev/*` action은 계속 production 차단을 유지한다.
+- 현재 코드에는 production 예외가 없다. `/api/dev/unlock`도 development local-ops에서만 사용하며 packaged production에서는 404를 유지한다.
 - `/api/auth/*`는 Auth.js 로그인/콜백/session route로 취급한다. 이 phase의 provider는 GitHub/Google OAuth만 활성화하며, Credentials/Email provider는 후속 phase로 둔다. `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` 또는 `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` 묶음이 없으면 해당 provider는 비활성화된다. Prisma adapter는 Auth.js 테이블 마이그레이션 후 `AUTH_PRISMA_ADAPTER_ENABLED=true`에서만 활성화한다.
 - `/api/planning/*`는 production에서 항상 인증을 요구한다. production에서는 `PLANNING_AUTH_REQUIRED=false`를 설정해도 middleware와 routeAuth가 Auth.js session cookie 또는 내부 신뢰 auth header가 없는 요청을 401로 차단한다. 신뢰 auth header가 비활성화됐거나 원격 요청에서 쓰이면 403으로 차단한다. local/dev에서 임시 fallback을 쓰려면 `PLANNING_AUTH_REQUIRED=false`를 명시해야 한다. route handler에서는 routeAuth 계층의 current-user scope를 사용해 저장소 접근을 현재 사용자 경계 안에서 수행하고, public meta는 `meta.userId`와 `meta.authSource` 키를 유지한다.
 - `/api/planning/run`과 `/api/planning/v2/run`은 `/api/planning/v2/runs`의 deprecated alias다. 제거 또는 redirect 전환은 telemetry/access log와 사용처 확인 후 별도 결정한다.
@@ -173,7 +174,7 @@
 ## 정합성 체크 규칙
 - runtime 문서의 `<main id="main-content">` owner는 root `src/app/layout.tsx` 하나다. `PageShell`과 page/client wrapper는 neutral element를 사용하고, 첫 keyboard focus는 `본문으로 건너뛰기` skip link로 main target에 이동한다.
 - 헤더/홈/문서의 내부 링크(`href`)는 반드시 위 실존 경로만 가리킨다.
-- Ops 계열 경로(`/ops/*`)는 public 기능 안내가 아니라 local-only 또는 packaged runtime 기준 운영 화면으로 취급한다.
+- Ops 계열 경로(`/ops/*`, `/feedback/list`, `/feedback/[id]`)는 public 기능 안내가 아니라 local-only 또는 packaged runtime 기준 운영 화면으로 취급한다.
 - Dev/Debug 경로는 운영 문서/사용자 안내에서 기본 노출하지 않는다.
 - `pnpm planning:current-screens:guard`는 이 문서와 실제 route 집합을 테스트로 비교하는 체크다.
 - `pnpm planning:ssot:check`는 `node scripts/planning_ssot_guard.mjs && pnpm planning:current-screens:guard` 순서로 실행된다.

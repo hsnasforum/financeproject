@@ -12,11 +12,16 @@ import {
   type FeedbackStatus,
   type FeedbackTask,
 } from "@/lib/feedback/feedbackStore";
+import { toFeedbackAdminRecord } from "@/lib/feedback/feedbackContracts";
+import { guardFeedbackManagementAccess } from "../_lib/managementGuard";
 import { guardFeedbackMutationOrigin } from "../_lib/trustedOriginGuard";
 
 type Params = { id: string };
 
-export async function GET(_request: Request, context: { params: Promise<Params> }) {
+export async function GET(request: Request, context: { params: Promise<Params> }) {
+  const accessGuard = guardFeedbackManagementAccess(request);
+  if (accessGuard) return accessGuard;
+
   try {
     const params = await context.params;
     const id = String(params.id ?? "").trim();
@@ -37,7 +42,7 @@ export async function GET(_request: Request, context: { params: Promise<Params> 
 
     return NextResponse.json({
       ok: true,
-      data: item,
+      data: toFeedbackAdminRecord(item),
     });
   } catch {
     return NextResponse.json(
@@ -115,6 +120,9 @@ function normalizeTaskList(value: unknown): FeedbackTask[] | null {
 }
 
 export async function PATCH(request: Request, context: { params: Promise<Params> }) {
+  const accessGuard = guardFeedbackManagementAccess(request);
+  if (accessGuard) return accessGuard;
+
   const originGuard = guardFeedbackMutationOrigin(request);
   if (originGuard) return originGuard;
 
@@ -246,7 +254,7 @@ export async function PATCH(request: Request, context: { params: Promise<Params>
       );
     }
 
-    return NextResponse.json({ ok: true, data: updated });
+    return NextResponse.json({ ok: true, data: toFeedbackAdminRecord(updated) });
   } catch {
     return NextResponse.json(
       { ok: false, error: { code: "STORE_FAILED", message: "피드백 저장에 실패했습니다." } },
