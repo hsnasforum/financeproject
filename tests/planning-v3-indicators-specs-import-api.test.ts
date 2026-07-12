@@ -150,4 +150,21 @@ describe("planning v3 indicators specs import api", () => {
       },
     )));
   });
+
+  it("returns a typed storage error instead of silently ignoring malformed overrides", async () => {
+    const indicatorsRoot = path.join(root, "indicators");
+    fs.mkdirSync(indicatorsRoot, { recursive: true });
+    fs.writeFileSync(path.join(indicatorsRoot, "specOverrides.json"), "{not-json", "utf-8");
+
+    const response = await indicatorsSpecsGET(requestGet("/api/planning/v3/indicators/specs"));
+    expect(response.status).toBe(500);
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: { code?: string };
+      meta?: { userId?: string };
+    };
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("STORAGE_CORRUPT");
+    expect(payload.meta?.userId).toBe("default");
+  });
 });

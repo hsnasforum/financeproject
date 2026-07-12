@@ -18,8 +18,10 @@ import {
   resolvePlanningUserId,
 } from "../planning/store/namespace.ts";
 import { resolveDataDir } from "../planning/storage/dataDir.ts";
-import { readIndicatorSeriesSnapshots } from "../indicators/query.ts";
-import { type Observation, type SeriesSnapshot } from "../indicators/types.ts";
+import { type Observation } from "@/lib/planning/v3/indicators/contracts";
+import { resolveIndicatorsRootDir } from "@/lib/planning/v3/indicators/rootDir";
+import { loadEffectiveIndicatorConfig } from "@/lib/planning/v3/indicators/specOverrides";
+import { readSeriesObservations } from "@/lib/planning/v3/indicators/store";
 import { resolveNewsRootDir } from "../../../planning/v3/news/rootDir.ts";
 import { readTrendsCache } from "../../../planning/v3/news/store/index.ts";
 import { resolveNewsTrendsJsonPath } from "./storageSqlite.ts";
@@ -136,6 +138,11 @@ const AlertEventStateStoreSchema = z.object({
 export type AlertEventStateItem = z.infer<typeof AlertEventStateItemSchema>;
 export type AlertEventStateStore = z.infer<typeof AlertEventStateStoreSchema>;
 export type AlertEventStateAction = "ack" | "unack" | "hide" | "unhide";
+
+type IndicatorSeriesSnapshot = {
+  seriesId: string;
+  observations: Observation[];
+};
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -460,18 +467,31 @@ export function appendAlertEvents(events: AlertEvent[], cwd = process.cwd()): { 
   };
 }
 
-function readSnapshotsBySeriesId(cwd: string, rules: AlertRule[]): Map<string, SeriesSnapshot> {
+function readSnapshotsBySeriesId(cwd: string, rules: AlertRule[]): Map<string, IndicatorSeriesSnapshot> {
   const seriesIds = [...new Set(rules
     .filter((row): row is z.infer<typeof IndicatorRuleSchema> => row.kind === "indicator")
     .map((row) => normalizeSeriesId(row.seriesId))
     .filter(Boolean))];
 
-  const snapshots = readIndicatorSeriesSnapshots({ cwd, seriesIds });
-  const bySeriesId = new Map<string, SeriesSnapshot>();
-  for (const snapshot of snapshots) {
-    const normalized = normalizeSeriesId(snapshot.seriesId);
-    if (!normalized) continue;
-    bySeriesId.set(normalized, snapshot);
+  const rootDir = resolveIndicatorsRootDir(cwd);
+  const effective = loadEffectiveIndicatorConfig({ cwd, rootDir });
+  const enabledSourceIds = new Set(
+    effective.sources
+      .filter((row) => row.enabled)
+      .map((row) => row.id),
+  );
+  const enabledSeriesIds = new Set(
+    effective.specs
+      .filter((row) => row.enabled !== false && enabledSourceIds.has(row.sourceId))
+      .map((row) => normalizeSeriesId(row.id)),
+  );
+  const bySeriesId = new Map<string, IndicatorSeriesSnapshot>();
+  for (const seriesId of seriesIds) {
+    if (!enabledSeriesIds.has(seriesId)) continue;
+    bySeriesId.set(seriesId, {
+      seriesId,
+      observations: readSeriesObservations(seriesId, rootDir),
+    });
   }
   return bySeriesId;
 }
@@ -581,7 +601,7 @@ function metricValue(input: {
 
 function evaluateIndicatorRule(input: {
   rule: z.infer<typeof IndicatorRuleSchema>;
-  snapshotsBySeriesId: Map<string, SeriesSnapshot>;
+  snapshotsBySeriesId: Map<string, IndicatorSeriesSnapshot>;
   source: "news:refresh" | "indicators:refresh";
   generatedAt: string;
   dayKst: string;

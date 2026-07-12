@@ -8,11 +8,19 @@ import {
   type SeriesSpec,
 } from "../contracts";
 import { getConnector } from "../connectors/registry";
-import { normalizeConnectorError, shouldRetryConnectorError, toRefreshError } from "../connectors/errors";
+import { ConnectorError, normalizeConnectorError, shouldRetryConnectorError, toRefreshError } from "../connectors/errors";
 import type { ConnectorSeriesResult, SeriesConnector } from "../connectors/types";
-import { INDICATOR_SOURCES } from "../specs";
-import { loadEffectiveSeriesSpecs } from "../specOverrides";
-import { appendSeriesObservations, readState, writeSeriesMeta, writeState } from "../store";
+import {
+  IndicatorConfigError,
+  loadEffectiveIndicatorConfig,
+} from "../specOverrides";
+import {
+  IndicatorObservationConflictError,
+  appendSeriesObservations,
+  readState,
+  writeSeriesMeta,
+  writeState,
+} from "../store";
 import { sanitizeV3LogMessage } from "../../security/whitelist";
 import { clampFlooredInteger } from "../../../calc/roundingPolicy";
 
@@ -28,10 +36,12 @@ type ResolvedRetryPolicy = {
   sleep: (ms: number) => Promise<void>;
 };
 
-type RunIndicatorsRefreshOptions = {
+export type RunIndicatorsRefreshOptions = {
+  cwd?: string;
   rootDir?: string;
   sources?: IndicatorSource[];
   specs?: SeriesSpec[];
+  dry?: boolean;
   now?: Date;
   retry?: RetryPolicy;
   connectorResolver?: (source: IndicatorSource) => SeriesConnector;
@@ -55,6 +65,85 @@ function resolveRetryPolicy(retry: RetryPolicy | undefined): ResolvedRetryPolicy
 
 function uniqueSources(specs: SeriesSpec[]): Set<string> {
   return new Set(specs.map((row) => row.sourceId));
+}
+
+function daysAgo(base: Date, dayOffset: number): string {
+  return new Date(base.getTime() - (dayOffset * 24 * 60 * 60 * 1_000))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function monthsAgo(base: Date, monthOffset: number): string {
+  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - monthOffset, 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function quartersAgo(base: Date, quarterOffset: number): string {
+  const month = Math.trunc(base.getUTCMonth() / 3) * 3;
+  return new Date(Date.UTC(base.getUTCFullYear(), month - (quarterOffset * 3), 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function yearsAgo(base: Date, yearOffset: number): string {
+  return new Date(Date.UTC(base.getUTCFullYear() - yearOffset, 0, 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function dryObservationSeed(spec: SeriesSpec): number {
+  let seed = 0;
+  for (let index = 0; index < spec.id.length; index += 1) {
+    seed = ((seed * 31) + spec.id.charCodeAt(index)) % 100_000;
+  }
+  return seed;
+}
+
+function buildDryObservations(spec: SeriesSpec, now: Date) {
+  const count = spec.frequency === "D" || spec.frequency === "W"
+    ? 30
+    : spec.frequency === "M"
+      ? 24
+      : spec.frequency === "Q"
+        ? 16
+        : 12;
+  const seed = dryObservationSeed(spec);
+  return Array.from({ length: count }, (_, index) => {
+    const offset = count - index - 1;
+    const date = spec.frequency === "D"
+      ? daysAgo(now, offset)
+      : spec.frequency === "W"
+        ? daysAgo(now, offset * 7)
+        : spec.frequency === "M"
+          ? monthsAgo(now, offset)
+          : spec.frequency === "Q"
+            ? quartersAgo(now, offset)
+            : yearsAgo(now, offset);
+    return {
+      date,
+      value: Number(((seed % 300) / 10 + (index + 1) * 0.17).toFixed(4)),
+    };
+  });
+}
+
+function createDryConnector(source: IndicatorSource): SeriesConnector {
+  return {
+    sourceType: source.type,
+    async fetchSeries(spec, options) {
+      return {
+        observations: buildDryObservations(spec, options.asOf),
+        meta: {
+          sourceId: spec.sourceId,
+          externalId: spec.externalId,
+          frequency: spec.frequency,
+          units: spec.units,
+          transform: spec.transform,
+          notes: spec.notes,
+        },
+      };
+    },
+  };
 }
 
 async function fetchWithRetry(
@@ -93,9 +182,23 @@ async function fetchWithRetry(
 export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions = {}): Promise<RefreshResult> {
   const now = options.now ?? new Date();
   const retryPolicy = resolveRetryPolicy(options.retry);
-  const sources = (options.sources ?? INDICATOR_SOURCES).filter((source) => source.enabled);
+  const hasCompleteExplicitConfig = Array.isArray(options.sources) && Array.isArray(options.specs);
+  const effective = hasCompleteExplicitConfig
+    ? null
+    : loadEffectiveIndicatorConfig({
+      cwd: options.cwd,
+      rootDir: options.rootDir,
+    });
+  if (effective?.baseSource === "built-in" && !options.dry) {
+    throw new IndicatorConfigError(
+      "UNSAFE_BUILT_IN_CONFIG",
+      "non-dry indicator refresh requires explicit compatibility config",
+    );
+  }
+  const sources = (options.sources ?? effective?.sources ?? []).filter((source) => source.enabled);
   const sourceMap = new Map(sources.map((source) => [source.id, source]));
-  const specs = (options.specs ?? loadEffectiveSeriesSpecs(options.rootDir)).filter((spec) => spec.enabled !== false);
+  const specs = (options.specs ?? effective?.specs ?? []).filter((spec) => spec.enabled !== false);
+  const configSource = options.sources || options.specs ? "explicit" : effective?.baseSource ?? "built-in";
 
   const state = readState(options.rootDir);
   const nextState = {
@@ -123,7 +226,11 @@ export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions 
     seriesProcessed += 1;
 
     try {
-      const connector = options.connectorResolver ? options.connectorResolver(source) : getConnector(source);
+      const connector = options.dry
+        ? createDryConnector(source)
+        : options.connectorResolver
+          ? options.connectorResolver(source)
+          : getConnector(source);
       const fetched = await fetchWithRetry(connector, spec, now, retryPolicy);
 
       const snapshot = SeriesSnapshotSchema.parse({
@@ -133,7 +240,12 @@ export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions 
         meta: fetched.meta,
       });
 
-      const appended = appendSeriesObservations(spec.id, snapshot.observations, options.rootDir);
+      const appended = appendSeriesObservations(
+        spec.id,
+        snapshot.observations,
+        options.rootDir,
+        { frequency: spec.frequency },
+      );
       writeSeriesMeta(snapshot, options.rootDir);
 
       observationsAppended += appended.appended;
@@ -147,7 +259,10 @@ export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions 
         observationsCount: appended.total,
       };
     } catch (error) {
-      errors.push(toRefreshError(error, spec.sourceId, spec.id));
+      const refreshError = error instanceof IndicatorObservationConflictError
+        ? new ConnectorError("PARSE", error.message)
+        : error;
+      errors.push(toRefreshError(refreshError, spec.sourceId, spec.id));
     }
   }
 
@@ -155,6 +270,10 @@ export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions 
   writeState(nextState, options.rootDir);
 
   return RefreshResultSchema.parse({
+    generatedAt: now.toISOString(),
+    configSource,
+    enabledSourceCount: sources.length,
+    enabledSeriesCount: specs.length,
     sourcesProcessed: uniqueSources(specs.filter((spec) => sourceMap.has(spec.sourceId))).size,
     seriesProcessed,
     seriesUpdated,

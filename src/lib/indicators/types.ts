@@ -60,8 +60,14 @@ export type SourceRuntimeState = {
 };
 
 export type IndicatorsState = {
+  schemaVersion?: number;
   lastRunAt?: string;
   sources: Record<string, SourceRuntimeState>;
+  series?: Record<string, {
+    updatedAt?: string;
+    lastObservationDate?: string;
+    observationsCount: number;
+  }>;
 };
 
 export type IndicatorsRefreshError = {

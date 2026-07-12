@@ -15,6 +15,7 @@ import { SeriesSpecSchema } from "@/lib/planning/v3/indicators/contracts";
 import {
   IndicatorSpecsImportApplyResultSchema,
   IndicatorSpecsImportPreviewSchema,
+  IndicatorConfigError,
   applyImportSeriesSpecs,
   exportSeriesSpecList,
   previewImportSeriesSpecs,
@@ -65,6 +66,27 @@ function toGuardResponse(error: unknown): Response {
   );
 }
 
+function toIndicatorConfigResponse(
+  error: unknown,
+  meta: Record<string, string>,
+): Response | null {
+  if (!(error instanceof IndicatorConfigError)) return null;
+  const isRuntimeOverride = error.code === "INVALID_RUNTIME_OVERRIDES";
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: isRuntimeOverride ? "STORAGE_CORRUPT" : "INDICATOR_CONFIG_INVALID",
+        message: isRuntimeOverride
+          ? "저장된 지표 설정을 읽을 수 없습니다. 설정 파일을 점검해 주세요."
+          : "지표 compatibility 설정을 읽을 수 없습니다. 배포 설정을 점검해 주세요.",
+      },
+      meta,
+    },
+    { status: 500 },
+  );
+}
+
 export async function GET(request: Request) {
   try {
     assertSameOrigin(request);
@@ -74,15 +96,20 @@ export async function GET(request: Request) {
 
   return await withPlanningRouteUser(request, async (currentUser) => {
     const userMeta = planningUserMeta(currentUser);
-
-    const specs = exportSeriesSpecList();
-    const catalog = buildIndicatorCatalogRows(specs);
-    const payload = parseWithV3Whitelist(SpecsGetResponseSchema, {
-      ok: true,
-      meta: userMeta,
-      data: { specs, catalog },
-    }, { scope: "response", context: "api.v3.indicators.specs.get" });
-    return NextResponse.json(payload);
+    try {
+      const specs = exportSeriesSpecList();
+      const catalog = buildIndicatorCatalogRows(specs);
+      const payload = parseWithV3Whitelist(SpecsGetResponseSchema, {
+        ok: true,
+        meta: userMeta,
+        data: { specs, catalog },
+      }, { scope: "response", context: "api.v3.indicators.specs.get" });
+      return NextResponse.json(payload);
+    } catch (error) {
+      const configResponse = toIndicatorConfigResponse(error, userMeta);
+      if (configResponse) return configResponse;
+      throw error;
+    }
   });
 }
 
@@ -112,20 +139,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const preview = previewImportSeriesSpecs(parsed.data.specs);
-    const applied = parsed.data.mode === "apply"
-      ? applyImportSeriesSpecs(parsed.data.specs)
-      : null;
+    try {
+      const preview = previewImportSeriesSpecs(parsed.data.specs);
+      const applied = parsed.data.mode === "apply"
+        ? applyImportSeriesSpecs(parsed.data.specs)
+        : null;
 
-    const payload = parseWithV3Whitelist(SpecsPostResponseSchema, {
-      ok: true,
-      meta: userMeta,
-      data: {
-        mode: parsed.data.mode,
-        preview,
-        applied,
-      },
-    }, { scope: "response", context: "api.v3.indicators.specs.post" });
-    return NextResponse.json(payload);
+      const payload = parseWithV3Whitelist(SpecsPostResponseSchema, {
+        ok: true,
+        meta: userMeta,
+        data: {
+          mode: parsed.data.mode,
+          preview,
+          applied,
+        },
+      }, { scope: "response", context: "api.v3.indicators.specs.post" });
+      return NextResponse.json(payload);
+    } catch (error) {
+      const configResponse = toIndicatorConfigResponse(error, userMeta);
+      if (configResponse) return configResponse;
+      throw error;
+    }
   });
 }
