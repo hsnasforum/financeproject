@@ -3,6 +3,7 @@
 ## 변경 파일
 
 - Issue: https://github.com/hsnasforum/financeproject/issues/249
+- Draft PR: https://github.com/hsnasforum/financeproject/pull/266
 - 기준 branch/commit: `codex/231-single-persisted-run` / `22d7b7dc117cfd253dd0f99bd8cf2b05a891134d` (Draft PR #256 위 stacked 작업)
 - Planning 공용 모델: `src/app/planning/_lib/**`의 순수 UI 모듈 16개를 `src/lib/planning/ui/**`로 이동
 - Report 공용 모델·UI: `src/app/planning/reports/_lib/**` 5개를 `src/lib/planning/reports/**`로, 공용 client section 4개를 `src/components/planning/reports/**`로 이동
@@ -66,6 +67,9 @@
 - `DATABASE_URL=file:./prisma/dev.db pnpm e2e:rc`: PASS, 26 passed / production-only 조건부 1 skipped
 - `pnpm multi-agent:guard`: PASS, 최신 변경 기록·skill·검증·남은 위험·다음 라운드 계약 확인
 - `git diff --check`: PASS
+- GitHub Actions implementation head `aec6afbe5df52c98eed3e8d61abdee8ff0f1e014`: repository code step 시작 전 외부 인프라 실패
+  - CI run `29179444928`: 최초와 재시도(attempt 2) 모두 `verify.steps=[]`
+  - E2E Smoke run `29179444923`: 최초와 재시도(attempt 2)의 3개 job 모두 `steps=[]`
 - restore/apply 또는 실제 사용자 데이터 대상 작업은 실행하지 않았습니다.
 
 ## 남은 리스크
@@ -74,10 +78,10 @@
 - 경로 이동량이 많아 동시에 같은 Planning 파일을 수정하는 PR과 충돌할 수 있습니다. 동작 변경은 없지만 rename detection을 유지한 상태로 병합해야 합니다.
 - `planning_ssot_guard`의 파일 단위 rounding baseline 4개는 이동 전 계산식을 그대로 허용합니다. 해당 계산을 별도 정규화할 때 exclude를 함께 제거해야 합니다.
 - 롤백은 Planning UI model, report model/UI, ops route-private client, AST guard·CI 연결의 네 묶음으로 되돌립니다. reverse-import guard만 제거해 fail-open으로 복귀하지 말고 문제가 있는 이동 묶음을 app owner로 함께 되돌립니다.
-- GitHub Actions 원격 결과와 Draft PR URL은 branch push와 PR 생성 후 이 기록 및 PR에 추가합니다.
+- GitHub Actions 계정/runner 상태가 복구되기 전에는 원격 CI/E2E 결과를 repository code PASS/FAIL로 판정할 수 없습니다. 로컬 전체 gate와 분리해 PR에 기록했습니다.
 
 ## 다음 라운드 우선순위
 
-1. 모듈 묶음별 commit을 만든 뒤 branch를 push하고, base를 `codex/231-single-persisted-run`으로 지정한 Draft PR을 생성합니다.
-2. Draft PR에 Issue #249, 계약 영향, 검증 결과, #256 선행 의존과 rollback 기준을 기록합니다.
-3. GitHub Actions 결과를 확인하고 원격 인프라 실패와 repository code 실패를 구분해 PR·Issue에 남깁니다.
+1. Draft PR #256을 먼저 병합한 뒤 #266을 main으로 rebase/retarget하고 import 경계 guard를 다시 실행합니다.
+2. GitHub Actions 계정/runner 상태를 복구한 뒤 #266의 CI와 E2E Smoke를 재실행합니다.
+3. rename conflict가 없다면 네 rollback 단위와 계약 영향 표를 기준으로 review를 진행합니다.
