@@ -2,6 +2,10 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  ROUTE_POLICY_REGISTRY,
+  resolveRouteVisibility,
+} from "../../../src/lib/navigation/routeRegistry";
 
 const currentScreensPath = fileURLToPath(new URL("../../../docs/current-screens.md", import.meta.url));
 const appRoot = path.resolve(path.dirname(currentScreensPath), "../src/app");
@@ -101,5 +105,38 @@ describe("current screens full route set", () => {
 
     expect([...pageRoutes].filter((route) => !documentedRoutes.has(route))).toEqual([]);
     expect([...documentedRoutes].filter((route) => !pageRoutes.has(route))).toEqual([]);
+  });
+
+  it("keeps every page route explicitly classified exactly once", () => {
+    const pageRoutes = new Set(listKnownPageRoutes());
+    const policyPatterns = ROUTE_POLICY_REGISTRY.map((entry) => entry.pattern);
+    const registeredRoutes = new Set(policyPatterns);
+
+    expect(registeredRoutes.size).toBe(policyPatterns.length);
+    expect([...pageRoutes].filter((route) => !registeredRoutes.has(route))).toEqual([]);
+    expect([...registeredRoutes].filter((route) => !pageRoutes.has(route))).toEqual([]);
+  });
+
+  it("keeps every redirect alias connected to a classified canonical page", () => {
+    const redirects = ROUTE_POLICY_REGISTRY.filter((entry) => entry.kind === "redirect");
+    expect(redirects.map((entry) => entry.pattern).sort()).toEqual([
+      "/compare",
+      "/planner",
+      "/planner/[...slug]",
+      "/planning/v3/transactions",
+      "/products/deposit",
+      "/products/saving",
+      "/report",
+    ]);
+
+    for (const redirect of redirects) {
+      const target = resolveRouteVisibility(redirect.canonicalHref);
+      expect(target.kind, redirect.pattern).toBe("page");
+      if (redirect.visibility === "legacy") {
+        expect(target.visibility, redirect.pattern).toBe("public-stable");
+      } else {
+        expect(target.visibility, redirect.pattern).toBe(redirect.visibility);
+      }
+    }
   });
 });

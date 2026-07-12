@@ -5,7 +5,9 @@ import {
   getAdminNavItems,
   getPublicBottomNavItems,
   getPublicDesktopNavItems,
+  isExplicitPageRoute,
   isNavigationItemActive,
+  isRoutePatternMatch,
   isSegmentAwarePrefixMatch,
   resolveRouteVisibility,
 } from "../src/lib/navigation/routeRegistry";
@@ -39,9 +41,16 @@ describe("navigation route registry", () => {
   });
 
   it("separates planning v3 official beta entries from internal v3 routes", () => {
+    expect(resolveRouteVisibility("/planning/reports/prototype")).toMatchObject({
+      visibility: "public-beta",
+      status: "beta",
+      kind: "page",
+    });
     expect(resolveRouteVisibility("/planning/v3/transactions")).toMatchObject({
       visibility: "public-beta",
       status: "official-beta-entry",
+      kind: "redirect",
+      canonicalHref: "/planning/v3/transactions/batches",
     });
     expect(resolveRouteVisibility("/planning/v3/transactions/batches")).toMatchObject({
       visibility: "public-beta",
@@ -86,6 +95,44 @@ describe("navigation route registry", () => {
     expect(isNavigationItemActive("/products-old", products)).toBe(false);
     expect(isNavigationItemActive("/benefits-plus", products)).toBe(false);
     expect(isNavigationItemActive("/publicity", products)).toBe(false);
+  });
+
+  it("matches dynamic page patterns without swallowing deeper or sibling routes", () => {
+    expect(isRoutePatternMatch("/products/catalog/deposit-1", "/products/catalog/[id]")).toBe(true);
+    expect(isRoutePatternMatch("/products/catalog/deposit-1/detail", "/products/catalog/[id]")).toBe(false);
+    expect(isRoutePatternMatch("/planner/reports/detail", "/planner/[...slug]")).toBe(true);
+    expect(isRoutePatternMatch("/planner", "/planner/[...slug]")).toBe(false);
+
+    expect(resolveRouteVisibility("/planning/reports/run-1")).toMatchObject({
+      href: "/planning/reports/[id]",
+      kind: "page",
+      visibility: "public-stable",
+      status: "stable",
+    });
+    expect(resolveRouteVisibility("/planning/reports/prototype")).toMatchObject({
+      href: "/planning/reports/prototype",
+      status: "beta",
+    });
+    expect(resolveRouteVisibility("/planning/reports/run-1/detail")).toMatchObject({
+      kind: "unknown",
+      visibility: "internal",
+      status: "unknown",
+    });
+    expect(isExplicitPageRoute("/planning/runs/run-1")).toBe(true);
+    expect(isExplicitPageRoute("/planning/runs/run-1/detail")).toBe(false);
+    expect(isExplicitPageRoute("/report")).toBe(false);
+  });
+
+  it("fails closed for unregistered runtime paths", () => {
+    for (const route of ["/unregistered", "/products-old", "/planning-v4", "/ops-center", "/devtools"]) {
+      expect(resolveRouteVisibility(route)).toMatchObject({
+        id: "unknown-route",
+        href: route,
+        kind: "unknown",
+        visibility: "internal",
+        status: "unknown",
+      });
+    }
   });
 
   it("keeps nav consumers on the shared registry instead of local item arrays", () => {
