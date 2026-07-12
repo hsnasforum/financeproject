@@ -54,6 +54,17 @@ function linkSourceAlias(sourceFile: string, target: string): void {
   fs.symlinkSync(fs.realpathSync(sourceFile), target, "file");
 }
 
+function linkRelativeDirectory(source: string, target: string): void {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.symlinkSync(
+    process.platform === "win32"
+      ? fs.realpathSync(source)
+      : path.relative(path.dirname(target), fs.realpathSync(source)),
+    target,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+}
+
 function initializeFixtureGit(root: string): void {
   const initialized = spawnSync("git", ["init", "--quiet"], { cwd: root, encoding: "utf8" });
   if (initialized.status !== 0) throw new Error(initialized.stderr || "fixture git init failed");
@@ -73,6 +84,42 @@ function initializeFixtureGit(root: string): void {
     { cwd: root, encoding: "utf8" },
   );
   if (committed.status !== 0) throw new Error(committed.stderr || "fixture git commit failed");
+}
+
+function initializeDesktopProjectFixture(projectRoot: string): void {
+  fs.mkdirSync(projectRoot, { recursive: true });
+  writeFixtureFile(projectRoot, "package.json", `${JSON.stringify({ version: "1.0.0" })}\n`);
+  writeFixtureFile(projectRoot, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+  writeFixtureFile(projectRoot, "scripts/placeholder.mjs");
+  writeFixtureFile(projectRoot, "public/placeholder.txt");
+  writeFixtureFile(projectRoot, "prisma/schema.prisma", "generator client {}\n");
+  for (const relativePath of REQUIRED_V3_FILES) {
+    writeFixtureFile(projectRoot, relativePath, relativePath.endsWith(".json") ? "{}\n" : "export {};\n");
+  }
+  writeFixtureFile(projectRoot, ".next/static/chunks/app.js", "console.log('fixture');\n");
+  writeFixtureFile(projectRoot, ".next/standalone/server.js", "module.exports = {};\n");
+  initializeFixtureGit(projectRoot);
+}
+
+function seedCyclicPackageGraph(projectRoot: string, shadowAncestor = false): string {
+  const standaloneDir = path.join(projectRoot, ".next", "standalone");
+  const packageA = path.join(standaloneDir, "node_modules", ".pnpm", "package-a@1.0.0", "node_modules", "package-a");
+  const packageB = path.join(standaloneDir, "node_modules", ".pnpm", "package-b@1.0.0", "node_modules", "package-b");
+  writeFixtureFile(packageA, "package.json", `${JSON.stringify({ name: "package-a", version: "1.0.0", main: "index.js" })}\n`);
+  writeFixtureFile(packageA, "index.js", "exports.name = 'package-a'; exports.loadB = () => require('package-b');\n");
+  writeFixtureFile(packageB, "package.json", `${JSON.stringify({ name: "package-b", version: "1.0.0", main: "index.js" })}\n`);
+  writeFixtureFile(packageB, "index.js", "exports.name = 'package-b'; exports.loadA = () => require('package-a');\n");
+  linkRelativeDirectory(packageB, path.join(path.dirname(packageA), "package-b"));
+  linkRelativeDirectory(packageA, path.join(path.dirname(packageB), "package-a"));
+  if (shadowAncestor) {
+    writeFixtureFile(packageA, "node_modules/package-a/package.json", `${JSON.stringify({
+      name: "package-a",
+      version: "9.9.9",
+    })}\n`);
+  }
+  const packageALink = path.join(standaloneDir, "node_modules", "package-a");
+  linkRelativeDirectory(packageA, packageALink);
+  return packageALink;
 }
 
 afterEach(() => {
@@ -135,22 +182,11 @@ describe("desktop artifact provenance", () => {
     }
   }, 180_000);
 
-  it("replaces a copied runtime static link without mutating the source standalone", () => {
+  it("materializes internal standalone links without mutating the source standalone", async () => {
     const root = makeRoot();
     const projectRoot = path.join(root, "project");
     const artifactDir = path.join(root, "artifact");
-    fs.mkdirSync(projectRoot, { recursive: true });
-    writeFixtureFile(projectRoot, "package.json", `${JSON.stringify({ version: "1.0.0" })}\n`);
-    writeFixtureFile(projectRoot, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
-    writeFixtureFile(projectRoot, "scripts/placeholder.mjs");
-    writeFixtureFile(projectRoot, "public/placeholder.txt");
-    writeFixtureFile(projectRoot, "prisma/schema.prisma", "generator client {}\n");
-    for (const relativePath of REQUIRED_V3_FILES) {
-      writeFixtureFile(projectRoot, relativePath, relativePath.endsWith(".json") ? "{}\n" : "export {};\n");
-    }
-    writeFixtureFile(projectRoot, ".next/static/chunks/app.js", "console.log('fixture');\n");
-    writeFixtureFile(projectRoot, ".next/standalone/server.js", "module.exports = {};\n");
-    initializeFixtureGit(projectRoot);
+    initializeDesktopProjectFixture(projectRoot);
 
     const sourceStatic = path.join(projectRoot, ".next", "static");
     const sourceRuntimeStatic = path.join(projectRoot, ".next", "standalone", ".next", "static");
@@ -185,6 +221,65 @@ describe("desktop artifact provenance", () => {
       linkDirectory(packageSource, packageLink);
       return { packageName, packageLink };
     });
+    const internalPackageSource = path.join(
+      projectRoot,
+      ".next",
+      "standalone",
+      "node_modules",
+      ".pnpm",
+      "internal-package@1.0.0",
+      "node_modules",
+      "internal-package",
+    );
+    const internalPackageLink = path.join(
+      projectRoot,
+      ".next",
+      "standalone",
+      "node_modules",
+      ".pnpm",
+      "consumer@1.0.0",
+      "node_modules",
+      "internal-package",
+    );
+    writeFixtureFile(internalPackageSource, "package.json", `${JSON.stringify({
+      name: "internal-package",
+      version: "1.0.0",
+      main: "index.js",
+    })}\n`);
+    writeFixtureFile(
+      internalPackageSource,
+      "index.js",
+      "module.exports = `${require('bar')}:${require('.prisma/client/default')}`;\n",
+    );
+    const internalExecutable = path.join(internalPackageSource, "bin", "run.js");
+    writeFixtureFile(internalPackageSource, "bin/run.js", "#!/usr/bin/env node\n");
+    fs.chmodSync(internalExecutable, 0o755);
+    const internalDependencySource = path.join(
+      projectRoot,
+      ".next",
+      "standalone",
+      "node_modules",
+      ".pnpm",
+      "bar@2.0.0",
+      "node_modules",
+      "bar",
+    );
+    writeFixtureFile(internalDependencySource, "package.json", `${JSON.stringify({
+      name: "bar",
+      version: "2.0.0",
+      main: "index.js",
+    })}\n`);
+    writeFixtureFile(internalDependencySource, "index.js", "module.exports = 'bar@2.0.0';\n");
+    writeFixtureFile(
+      path.dirname(internalPackageSource),
+      ".prisma/client/default.js",
+      "module.exports = 'generated-client';\n",
+    );
+    linkRelativeDirectory(
+      internalDependencySource,
+      path.join(path.dirname(internalPackageSource), "bar"),
+    );
+    linkRelativeDirectory(internalPackageSource, internalPackageLink);
 
     const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
     const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
@@ -222,7 +317,276 @@ describe("desktop artifact provenance", () => {
         version: "1.0.0",
       });
     }
+    expect(fs.lstatSync(internalPackageLink).isSymbolicLink()).toBe(true);
+    const artifactInternalPackage = path.join(
+      artifactDir,
+      ".next",
+      "standalone",
+      "node_modules",
+      ".pnpm",
+      "consumer@1.0.0",
+      "node_modules",
+      "internal-package",
+    );
+    expect(fs.lstatSync(artifactInternalPackage).isSymbolicLink()).toBe(false);
+    expect(JSON.parse(fs.readFileSync(path.join(artifactInternalPackage, "package.json"), "utf8"))).toMatchObject({
+      name: "internal-package",
+      version: "1.0.0",
+    });
+    const nestedDependencyResolution = spawnSync(
+      process.execPath,
+      ["-e", `const value = require(${JSON.stringify(artifactInternalPackage)}); if (value !== "bar@2.0.0:generated-client") process.exit(1);`],
+      { encoding: "utf8" },
+    );
+    expect(
+      nestedDependencyResolution.status,
+      `${nestedDependencyResolution.stderr}\n${nestedDependencyResolution.stdout}`,
+    ).toBe(0);
+    if (process.platform !== "win32") {
+      expect(fs.statSync(path.join(artifactInternalPackage, "bin", "run.js")).mode & 0o111).not.toBe(0);
+    }
+    await expect(listArtifactFiles(artifactDir)).resolves.toEqual(expect.arrayContaining([
+      ".next/standalone/server.js",
+    ]));
   }, 180_000);
+
+  it("keeps virtual-store dependency versions local to each materialized package", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    const standaloneDir = path.join(projectRoot, ".next", "standalone");
+    initializeDesktopProjectFixture(projectRoot);
+
+    const seedConsumer = (packageName: string, dependencyVersion: string, consumerName: string): string => {
+      const packageSource = path.join(
+        standaloneDir,
+        "node_modules",
+        ".pnpm",
+        `${packageName}@1.0.0`,
+        "node_modules",
+        packageName,
+      );
+      writeFixtureFile(packageSource, "package.json", `${JSON.stringify({
+        name: packageName,
+        version: "1.0.0",
+        main: "index.js",
+      })}\n`);
+      writeFixtureFile(packageSource, "index.js", "module.exports = require('shared-dependency');\n");
+      const dependencySource = path.join(
+        standaloneDir,
+        "node_modules",
+        ".pnpm",
+        `shared-dependency@${dependencyVersion}`,
+        "node_modules",
+        "shared-dependency",
+      );
+      writeFixtureFile(dependencySource, "package.json", `${JSON.stringify({
+        name: "shared-dependency",
+        version: dependencyVersion,
+        main: "index.js",
+      })}\n`);
+      writeFixtureFile(dependencySource, "index.js", `module.exports = ${JSON.stringify(dependencyVersion)};\n`);
+      linkRelativeDirectory(dependencySource, path.join(path.dirname(packageSource), "shared-dependency"));
+      const packageLink = path.join(
+        standaloneDir,
+        "node_modules",
+        ".pnpm",
+        `${consumerName}@1.0.0`,
+        "node_modules",
+        packageName,
+      );
+      linkRelativeDirectory(packageSource, packageLink);
+      return packageLink;
+    };
+
+    const firstPackage = seedConsumer("first-package", "1.0.0", "first-consumer");
+    const secondPackage = seedConsumer("second-package", "2.0.0", "second-consumer");
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
+    const artifactStandalone = path.join(artifactDir, ".next", "standalone");
+    const artifactFirstPackage = path.join(artifactStandalone, path.relative(standaloneDir, firstPackage));
+    const artifactSecondPackage = path.join(artifactStandalone, path.relative(standaloneDir, secondPackage));
+    const resolution = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `const first = require(${JSON.stringify(artifactFirstPackage)}); const second = require(${JSON.stringify(artifactSecondPackage)}); if (first !== "1.0.0" || second !== "2.0.0") process.exit(1);`,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(resolution.status, `${resolution.stderr}\n${resolution.stdout}`).toBe(0);
+    expect(fs.existsSync(path.join(artifactStandalone, "node_modules", "shared-dependency"))).toBe(false);
+    expect(JSON.parse(fs.readFileSync(
+      path.join(artifactFirstPackage, "node_modules", "shared-dependency", "package.json"),
+      "utf8",
+    ))).toMatchObject({ version: "1.0.0" });
+    expect(JSON.parse(fs.readFileSync(
+      path.join(artifactSecondPackage, "node_modules", "shared-dependency", "package.json"),
+      "utf8",
+    ))).toMatchObject({ version: "2.0.0" });
+  });
+
+  it("preserves a valid cyclic package dependency through ancestor resolution", async () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const packageALink = seedCyclicPackageGraph(projectRoot);
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
+    const standaloneDir = path.join(projectRoot, ".next", "standalone");
+    const artifactPackageA = path.join(artifactDir, ".next", "standalone", path.relative(standaloneDir, packageALink));
+    const resolution = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `const a = require(${JSON.stringify(artifactPackageA)}); const b = a.loadB(); if (a.name !== "package-a" || b.name !== "package-b" || b.loadA().name !== "package-a") process.exit(1);`,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(resolution.status, `${resolution.stderr}\n${resolution.stdout}`).toBe(0);
+    await expect(listArtifactFiles(artifactDir)).resolves.toEqual(expect.arrayContaining([
+      ".next/standalone/node_modules/package-a/index.js",
+    ]));
+  });
+
+  it("rejects an active package cycle when an intermediate package shadows the ancestor", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    seedCyclicPackageGraph(projectRoot, true);
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain("desktop standalone symlink cycle detected");
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+  });
+
+  it("rejects a standalone symlink whose target escapes the source root", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    const externalTarget = path.join(root, "external-package");
+    initializeDesktopProjectFixture(projectRoot);
+    writeFixtureFile(externalTarget, "package.json", `${JSON.stringify({ name: "external-package" })}\n`);
+    linkDirectory(
+      externalTarget,
+      path.join(projectRoot, ".next", "standalone", "node_modules", "external-package"),
+    );
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop standalone symlink escapes source root: node_modules/external-package",
+    );
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+  });
+
+  it("rejects an artifact destination inside the source standalone before mutation", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
+    const sourceServer = path.join(projectRoot, ".next", "standalone", "server.js");
+    const artifactDir = path.join(projectRoot, ".next", "standalone", "generated-artifact");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop artifact directory overlaps source standalone",
+    );
+    expect(fs.readFileSync(sourceServer, "utf8")).toContain("module.exports");
+    expect(fs.existsSync(artifactDir)).toBe(false);
+  });
+
+  it.runIf(process.platform !== "win32")("rejects a dangling standalone symlink", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const danglingLink = path.join(projectRoot, ".next", "standalone", "node_modules", "dangling-package");
+    fs.mkdirSync(path.dirname(danglingLink), { recursive: true });
+    fs.symlinkSync("missing-package", danglingLink, "dir");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop standalone contains dangling symlink: node_modules/dangling-package",
+    );
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+  });
+
+  it.runIf(process.platform !== "win32")("rejects a standalone file symlink", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const standaloneDir = path.join(projectRoot, ".next", "standalone");
+    const targetFile = path.join(standaloneDir, "node_modules", ".pnpm", "tool", "bin", "run.js");
+    writeFixtureFile(standaloneDir, "node_modules/.pnpm/tool/bin/run.js", "#!/usr/bin/env node\n");
+    const fileLink = path.join(standaloneDir, "node_modules", ".bin", "tool");
+    fs.mkdirSync(path.dirname(fileLink), { recursive: true });
+    fs.symlinkSync(path.relative(path.dirname(fileLink), targetFile), fileLink, "file");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop standalone contains unsupported file symlink: node_modules/.bin/tool",
+    );
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+  });
+
+  it("rejects a standalone symlink cycle", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const standaloneDir = path.join(projectRoot, ".next", "standalone");
+    linkRelativeDirectory(standaloneDir, path.join(standaloneDir, "node_modules", "cycle"));
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop standalone symlink cycle detected: node_modules/cycle",
+    );
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+  });
+
+  it.runIf(process.platform !== "win32")("rejects a special filesystem entry in standalone", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const fifoPath = path.join(projectRoot, ".next", "standalone", "runtime.pipe");
+    const created = spawnSync("mkfifo", [fifoPath], { encoding: "utf8" });
+    expect(created.status, created.stderr).toBe(0);
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop standalone contains unsupported filesystem entry: runtime.pipe",
+    );
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+  });
 
   it("rejects install input without a provenance manifest", () => {
     const root = makeRoot();

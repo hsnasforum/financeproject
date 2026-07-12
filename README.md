@@ -133,7 +133,7 @@ pnpm e2e
   - `pnpm build`
 - E2E 스모크/플로우: `.github/workflows/e2e-smoke.yml`
 - Daily refresh: `.github/workflows/daily-refresh.yml`
-- Tag release: `.github/workflows/release.yml` (`v*` 태그 푸시 시 GitHub Release 생성)
+- Tag release: `.github/workflows/release.yml` (`vX.Y.Z`와 package version·원격 `main` ancestry·`release:verify`·desktop artifact provenance가 모두 일치할 때만 GitHub Release 생성, 기존 Release 덮어쓰기 금지)
 
 ### Release Ops
 
