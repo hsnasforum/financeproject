@@ -14,6 +14,7 @@
 - `내 설정` → 대표 경로 `/settings` (`/settings/data-sources`, `/settings/backup`, `/settings/alerts` 포함)
 - 위 기준은 Public navigation/홈 바로가기의 상위 IA 기준이며, 개별 세부 경로 분류와 노출 정책은 별도 route policy에서 관리한다.
 - Header와 MobileBottomNav는 같은 navigation registry를 소비한다. Ops/Dev/Debug 경로는 public nav source에 넣지 않는다.
+- primary navigation owner는 `<768px`에서 MobileBottomNav, `768~1023px`에서 header horizontal strip, `>=1024px`에서 desktop header다. public 경로의 `<768px` header는 브랜드만 유지하며 fixed bottom nav 높이와 safe area는 같은 CSS contract로 본문 뒤 공간에 예약한다.
 
 ## Route Policy 분류 기준
 - `Public Stable`: 사용자 문서, 헤더, 홈 바로가기에서 기본 노출 가능한 공식 경로

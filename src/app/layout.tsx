@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -17,6 +17,12 @@ export const metadata: Metadata = {
   description: uiTextKo.app.description,
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   await connection();
 
@@ -24,7 +30,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="ko" className={pretendard.variable}>
       <body className="bg-background text-foreground antialiased scroll-smooth">
         <SiteHeader />
-        <main className="min-h-[calc(100vh-64px)] pb-20 md:pb-0">{children}</main>
+        <main className="min-h-[calc(100vh-64px)]">{children}</main>
         <MobileBottomNav />
       </body>
     </html>

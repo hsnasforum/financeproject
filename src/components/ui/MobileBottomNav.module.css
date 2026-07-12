@@ -1,0 +1,24 @@
+.root {
+  --mobile-bottom-nav-content-height: 5rem;
+  --mobile-bottom-nav-border-height: 1px;
+  --mobile-bottom-nav-safe-area: env(safe-area-inset-bottom, 0px);
+}
+
+.spacer {
+  height: calc(var(--mobile-bottom-nav-content-height) + var(--mobile-bottom-nav-border-height) + var(--mobile-bottom-nav-safe-area));
+}
+
+.nav {
+  min-height: calc(var(--mobile-bottom-nav-content-height) + var(--mobile-bottom-nav-border-height) + var(--mobile-bottom-nav-safe-area));
+  padding-bottom: var(--mobile-bottom-nav-safe-area);
+}
+
+.content {
+  min-height: var(--mobile-bottom-nav-content-height);
+}
+
+@media (min-width: 768px) {
+  .root {
+    display: none;
+  }
+}
