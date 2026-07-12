@@ -859,7 +859,7 @@ export function DartSearchClient() {
                   <Button
                     data-testid="dart-build-index-button"
                     variant="primary"
-                    className="bg-amber-600 hover:bg-amber-700 text-white border-none rounded-2xl px-8 h-12 font-black shadow-lg shadow-amber-200 shrink-0"
+                    className="bg-amber-700 hover:bg-amber-800 text-white border-none rounded-2xl px-8 h-12 font-black shadow-lg shadow-amber-200 shrink-0"
                     onClick={() => void buildIndex()}
                     disabled={buildLoading}
                   >

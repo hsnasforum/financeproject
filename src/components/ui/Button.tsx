@@ -12,7 +12,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function Button({ children, className = "", variant = "secondary", size = "md", ...props }: ButtonProps) {
   const byVariant: Record<ButtonVariant, string> = {
-    primary: "bg-primary text-primary-foreground border-transparent hover:bg-primary/10 shadow-md shadow-primary/20",
+    primary: "bg-primary text-primary-foreground border-transparent hover:bg-primary-hover focus-visible:ring-focus-ring shadow-md shadow-primary/20 disabled:bg-primary-disabled disabled:text-primary-disabled-foreground disabled:opacity-100 disabled:shadow-none disabled:hover:bg-primary-disabled",
     secondary: "bg-surface-muted text-slate-800 border-transparent hover:bg-slate-200",
     ghost: "bg-transparent text-slate-700 border-transparent hover:bg-primary/5 hover:text-primary",
     outline: "bg-white text-slate-700 border-slate-200 hover:border-primary/10 hover:bg-primary/5 hover:text-primary shadow-sm",
@@ -28,7 +28,7 @@ export function Button({ children, className = "", variant = "secondary", size =
     <button
       {...props}
       className={cn(
-        "inline-flex items-center justify-center border font-bold transition-all duration-300 hover:scale-[1.02] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/10 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100",
+        "button-focus-accessible inline-flex items-center justify-center border font-bold transition-all duration-300 hover:scale-[1.02] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/10 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100",
         byVariant[variant],
         bySize[size],
         className
