@@ -139,6 +139,8 @@ pnpm v3:restore -- --format=owner --passphrase-file=/secure/finance-owner-passph
 ```
 - This command decrypts and validates the manifest, exact ZIP entry set, checksums, namespace, and limits without writing restored data.
 - Linux fixtures are covered. Native Windows owner export/passphrase-file input fails closed with `OWNER_ARCHIVE_WINDOWS_ACL_UNVERIFIED` until junction/reparse-point, ACL, rename, and open-handle behavior are verified.
+- A same-volume staged transaction and durable rollback journal now exist only as an internal `os.tmpdir()` fixture engine. There is no operator command or HTTP API for it, and it must not be invoked against copied or live user data.
+- Restore apply remains blocked until owner-specific schema validation, registry-wide doctor coverage, offline single-writer enforcement, and native Windows rename/locking tests are complete.
 
 ## 5.5 Migrate (manual only)
 Preview migration:

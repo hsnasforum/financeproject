@@ -12,6 +12,7 @@ import {
   encryptPlanningOwnerArchiveBytes,
   previewPlanningOwnerArchive,
   readPlanningOwnerSecretFile,
+  withValidatedPlanningOwnerArchivePayload,
   writePlanningOwnerArchiveFile,
 } from "../../../src/lib/ops/backup/planningOwnerArchive";
 import {
@@ -259,6 +260,49 @@ describe("planning owner encrypted archive", () => {
       expect(preview.totals.files).toBe(1);
       expect(preview.manifest.owners.find((owner) => owner.ownerId === "v3.accounts")?.fileCount).toBe(1);
     }
+  });
+
+  it("limits validated payload buffers to the callback lifetime and preserves callback errors", async () => {
+    const root = createRoot("validated-callback");
+    const item = createContext(root);
+    const accountsPath = ownerLocation(item.owners, "v3.accounts", "accounts.json");
+    writeBytes(accountsPath, '{"version":2,"items":[{"id":"account-a"}]}\n');
+    const built = await buildArchive(item);
+    let capturedPayload: Buffer | undefined;
+
+    const result = await withValidatedPlanningOwnerArchivePayload({
+      encryptedBytes: built.encryptedBytes,
+      secret: SECRET,
+      owners: item.owners,
+    }, ({ manifest, payloadEntries }) => {
+      expect(manifest.archiveId).toBe(ARCHIVE_ID);
+      expect([...payloadEntries.keys()]).toEqual(["payload/v3.accounts/accounts.json"]);
+      capturedPayload = payloadEntries.get("payload/v3.accounts/accounts.json");
+      expect(capturedPayload?.toString("utf-8")).toContain("account-a");
+      return "validated";
+    });
+
+    expect(result).toBe("validated");
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload?.every((byte) => byte === 0)).toBe(true);
+
+    const callbackError = new Error("transaction-callback-failed");
+    let errorPathPayload: Buffer | undefined;
+    try {
+      await withValidatedPlanningOwnerArchivePayload({
+        encryptedBytes: built.encryptedBytes,
+        secret: SECRET,
+        owners: item.owners,
+      }, ({ payloadEntries }) => {
+        errorPathPayload = payloadEntries.get("payload/v3.accounts/accounts.json");
+        throw callbackError;
+      });
+      throw new Error("expected callback failure");
+    } catch (error) {
+      expect(error).toBe(callbackError);
+    }
+    expect(errorPathPayload).toBeDefined();
+    expect(errorPathPayload?.every((byte) => byte === 0)).toBe(true);
   });
 
   it("rejects a user A archive in user B before creating user B data", async () => {

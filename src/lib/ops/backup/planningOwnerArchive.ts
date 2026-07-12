@@ -77,6 +77,11 @@ export type PlanningOwnerArchivePreview = Readonly<{
   emptyOwnerIds: readonly string[];
 }>;
 
+export type ValidatedPlanningOwnerArchivePayload = Readonly<{
+  manifest: PlanningOwnerManifest;
+  payloadEntries: ReadonlyMap<string, Buffer>;
+}>;
+
 export class PlanningOwnerArchiveError extends Error {
   readonly code: string;
 
@@ -414,65 +419,7 @@ export async function previewPlanningOwnerArchive(input: {
   owners: readonly ResolvedPlanningDataOwner[];
   limits?: PlanningOwnerArchiveLimits;
 }): Promise<PlanningOwnerArchivePreview> {
-  const limits = validateLimits(input.limits ?? DEFAULT_PLANNING_OWNER_ARCHIVE_LIMITS);
-  const zipBytes = await decryptPlanningOwnerArchiveBytes({
-    encryptedBytes: input.encryptedBytes,
-    secret: input.secret,
-    limits,
-  });
-  let entries: Map<string, Buffer> | undefined;
-  try {
-    entries = await decodeZip(zipBytes, {
-      maxEntries: limits.maxEntries + 1,
-      maxEntryBytes: Math.max(limits.maxEntryBytes, limits.maxManifestBytes),
-      maxTotalBytes: limits.maxZipBytes,
-      strict: {
-        maxArchiveBytes: limits.maxZipBytes,
-        maxCompressedEntryBytes: Math.max(limits.maxEntryBytes, limits.maxManifestBytes),
-        maxTotalCompressedBytes: limits.maxZipBytes,
-        rejectDirectoryEntries: true,
-        rejectEncryptedEntries: true,
-        rejectNonRegularEntries: true,
-      },
-    });
-    const manifestBytes = entries.get(PLANNING_OWNER_MANIFEST_PATH);
-    if (!manifestBytes) {
-      throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_MANIFEST_MISSING");
-    }
-    if (manifestBytes.length > limits.maxManifestBytes) {
-      throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_MANIFEST_LIMIT_EXCEEDED");
-    }
-    let manifestRaw: unknown;
-    try {
-      manifestRaw = JSON.parse(manifestBytes.toString("utf-8")) as unknown;
-    } catch {
-      throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_MANIFEST_JSON_INVALID");
-    }
-    const manifest = parsePlanningOwnerManifest(manifestRaw, input.owners);
-    const expected = expectedArchiveEntries(manifest);
-    const actualPayloadPaths = [...entries.keys()].filter((entryPath) => entryPath !== PLANNING_OWNER_MANIFEST_PATH);
-
-    for (const actualPath of actualPayloadPaths) {
-      if (!expected.has(actualPath)) {
-        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_UNEXPECTED", actualPath);
-      }
-    }
-    for (const [expectedPath, file] of expected) {
-      const bytes = entries.get(expectedPath);
-      if (!bytes) {
-        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_MISSING", expectedPath);
-      }
-      if (bytes.length !== file.sizeBytes) {
-        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_SIZE_MISMATCH", expectedPath);
-      }
-      if (sha256PlanningOwnerBytes(bytes) !== file.sha256) {
-        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_CHECKSUM_MISMATCH", expectedPath);
-      }
-    }
-    if (actualPayloadPaths.length !== expected.size) {
-      throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_SET_MISMATCH");
-    }
-
+  return withValidatedPlanningOwnerArchivePayload(input, ({ manifest }) => {
     const emptyOwnerIds = manifest.owners
       .filter((owner) => owner.fileCount === 0)
       .map((owner) => owner.ownerId)
@@ -491,10 +438,89 @@ export async function previewPlanningOwnerArchive(input: {
       ownerIds: Object.freeze(manifest.owners.map((owner) => owner.ownerId).sort()),
       emptyOwnerIds: Object.freeze(emptyOwnerIds),
     });
-  } catch (error) {
-    if (error instanceof PlanningOwnerArchiveError || error instanceof PlanningOwnerContractError) throw error;
-    const detail = error instanceof Error ? error.message.split(":", 1)[0] : "invalid";
-    throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ZIP_INVALID", detail);
+  });
+}
+
+export async function withValidatedPlanningOwnerArchivePayload<T>(
+  input: {
+    encryptedBytes: Uint8Array;
+    secret: Uint8Array;
+    owners: readonly ResolvedPlanningDataOwner[];
+    limits?: PlanningOwnerArchiveLimits;
+  },
+  callback: (payload: ValidatedPlanningOwnerArchivePayload) => T | Promise<T>,
+): Promise<T> {
+  const limits = validateLimits(input.limits ?? DEFAULT_PLANNING_OWNER_ARCHIVE_LIMITS);
+  const zipBytes = await decryptPlanningOwnerArchiveBytes({
+    encryptedBytes: input.encryptedBytes,
+    secret: input.secret,
+    limits,
+  });
+  let entries: Map<string, Buffer> | undefined;
+  try {
+    let validated: ValidatedPlanningOwnerArchivePayload;
+    try {
+      entries = await decodeZip(zipBytes, {
+        maxEntries: limits.maxEntries + 1,
+        maxEntryBytes: Math.max(limits.maxEntryBytes, limits.maxManifestBytes),
+        maxTotalBytes: limits.maxZipBytes,
+        strict: {
+          maxArchiveBytes: limits.maxZipBytes,
+          maxCompressedEntryBytes: Math.max(limits.maxEntryBytes, limits.maxManifestBytes),
+          maxTotalCompressedBytes: limits.maxZipBytes,
+          rejectDirectoryEntries: true,
+          rejectEncryptedEntries: true,
+          rejectNonRegularEntries: true,
+        },
+      });
+      const manifestBytes = entries.get(PLANNING_OWNER_MANIFEST_PATH);
+      if (!manifestBytes) {
+        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_MANIFEST_MISSING");
+      }
+      if (manifestBytes.length > limits.maxManifestBytes) {
+        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_MANIFEST_LIMIT_EXCEEDED");
+      }
+      let manifestRaw: unknown;
+      try {
+        manifestRaw = JSON.parse(manifestBytes.toString("utf-8")) as unknown;
+      } catch {
+        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_MANIFEST_JSON_INVALID");
+      }
+      const manifest = parsePlanningOwnerManifest(manifestRaw, input.owners);
+      const expected = expectedArchiveEntries(manifest);
+      const actualPayloadPaths = [...entries.keys()].filter((entryPath) => entryPath !== PLANNING_OWNER_MANIFEST_PATH);
+
+      for (const actualPath of actualPayloadPaths) {
+        if (!expected.has(actualPath)) {
+          throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_UNEXPECTED", actualPath);
+        }
+      }
+      for (const [expectedPath, file] of expected) {
+        const bytes = entries.get(expectedPath);
+        if (!bytes) {
+          throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_MISSING", expectedPath);
+        }
+        if (bytes.length !== file.sizeBytes) {
+          throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_SIZE_MISMATCH", expectedPath);
+        }
+        if (sha256PlanningOwnerBytes(bytes) !== file.sha256) {
+          throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_CHECKSUM_MISMATCH", expectedPath);
+        }
+      }
+      if (actualPayloadPaths.length !== expected.size) {
+        throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ENTRY_SET_MISMATCH");
+      }
+
+      validated = Object.freeze({
+        manifest,
+        payloadEntries: new Map([...expected.keys()].map((entryPath) => [entryPath, entries!.get(entryPath)!])),
+      });
+    } catch (error) {
+      if (error instanceof PlanningOwnerArchiveError || error instanceof PlanningOwnerContractError) throw error;
+      const detail = error instanceof Error ? error.message.split(":", 1)[0] : "invalid";
+      throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ZIP_INVALID", detail);
+    }
+    return await callback(validated);
   } finally {
     zipBytes.fill(0);
     for (const bytes of entries?.values() ?? []) bytes.fill(0);

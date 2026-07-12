@@ -164,10 +164,28 @@ pnpm v3:restore -- --format=owner --passphrase-file=/secure/finance-owner-passph
 - 두 번째 명령은 암호 해제와 strict preview만 수행합니다. `--apply`를 함께 주면 파일·passphrase를 읽기 전에 `V3_RESTORE_APPLY_DISABLED`로 종료합니다.
 - Linux symlink·Unicode·권한 fixture는 검증했습니다. 실제 Windows junction/reparse point, ACL, rename·open-handle 동작은 아직 검증하지 않았으므로 native Windows의 owner writer와 passphrase-file 입력은 `OWNER_ARCHIVE_WINDOWS_ACL_UNVERIFIED`로 fail-closed합니다.
 
+## Fixture 전용 staged restore transaction
+
+PR-C는 검증된 owner archive payload를 callback 범위에서만 전달하고, `os.tmpdir()` 아래의 명시적 fixture boundary에서만 실행되는 내부 transaction API를 추가합니다. 이 API는 CLI, HTTP route, production restore 경로에 연결하지 않습니다.
+
+- archive envelope, manifest, namespace, exact entry set, file size와 SHA-256 검증을 모두 마친 뒤에만 transaction root, lock, journal, stage를 생성합니다. callback 종료 시 ZIP과 payload buffer는 성공·실패와 관계없이 0으로 덮습니다.
+- commit 단위는 owner 전체가 아니라 `ownerId + physical location`입니다. env override로 한 owner가 여러 volume에 나뉘어도 각 location은 자신의 target에서 가장 가까운 기존 ancestor 아래에 stage·backup workspace를 만들고 device id가 같은지 확인합니다.
+- 모든 location을 먼저 stage하고 stage checksum을 manifest와 다시 비교합니다. commit 직전과 각 location 교체 직전에 활성 checksum을 다시 확인하므로 prepare 이후 변경은 `OWNER_RESTORE_TARGET_CHANGED`로 중단합니다.
+- journal은 `0600` strict JSON이며 version, archive/transaction id, registry digest, namespace를 포함한 owner 계약, original/desired checksum, target-parent identity, per-location intent/state를 기록합니다. immutable plan 전체의 `planDigest`를 lock과 교차 확인해 checksum-valid journal의 target·anchor 재지정도 거부합니다. journal 갱신은 같은 directory의 temp file write, file `fsync`, rename, directory `fsync` 순서입니다.
+- commit은 journal intent를 먼저 기록한 뒤 `active -> backup`, `stage -> active`, parent directory `fsync` 순서로 진행합니다. file target은 hard-link no-clobber로 게시하고 directory target은 같은 volume의 rename으로 교체합니다. backup은 게시 직후와 committed 정리 전에 original checksum을 다시 검증합니다.
+- 일반 실패는 전체 location을 역순 rollback합니다. destructive rollback 전에 현재 target이 durable desired state인지, backup이 original checksum인지 먼저 확인하며 둘 중 하나라도 모호하면 target을 지우지 않고 evidence를 보존합니다.
+- process crash를 모사한 실패는 journal·lock·stage·backup을 보존합니다. pending recovery는 현재 registry에서 target을 다시 계산해 journal과 정확히 일치할 때만 rollback하거나, durable `committed` 상태라면 desired checksum을 확인한 뒤 evidence만 정리합니다.
+- journal 없이 lock만 남은 상태는 commit 전 crash와 journal 유실 뒤 partial commit을 구분할 수 없으므로 자동 삭제하지 않고 `OWNER_RESTORE_JOURNAL_MISSING_WITH_LOCK`로 fail-closed합니다. evidence 판정과 orphan 정리는 PR-D doctor·운영 절차가 필요합니다.
+- rollback이 실패하면 `OWNER_RESTORE_ROLLBACK_INCOMPLETE`로 종료하고 journal과 backup evidence를 보존합니다. 동일 journal의 recovery를 다시 실행해 original checksum으로 수렴할 수 있습니다.
+- manifest v1은 physical location의 missing과 empty directory를 구분하지 않습니다. PR-C의 고정 규칙은 directory location은 payload가 0개여도 빈 directory로 게시하고, file location은 대응 payload가 없으면 target file을 absent로 게시하는 것입니다. archive format v1 자체는 바꾸지 않습니다.
+- native Windows, fixture boundary 밖 target, transaction root가 fixture root의 직접 자식이 아닌 경우는 fail-closed입니다. actual apply를 활성화할 수 있는 production API는 제공하지 않습니다.
+
+fixture 검증은 accounts, batches, drafts, stable profiles/runs, news, shared indicators, unrelated data, explicit `PLANNING_DATA_DIR`, packaged XDG root, user A/B mismatch, cross-device 주입, mid-commit failure, crash recovery, rollback-incomplete, target/backup 동시 변경, no-clobber 게시, journal target·anchor 변조를 포함합니다. 실제 사용자 데이터나 `--apply` 경로는 호출하지 않습니다.
+
 ## 영향 계약
 
 - public HTTP API·응답 shape: 변경 없음
-- stored data: 기존 owner 파일은 read-only입니다. 별도 opt-in encrypted archive format v1만 추가합니다.
+- stored data: archive format v1과 owner 파일 schema는 변경하지 않습니다. fixture transaction 실행 중에만 별도 owner-external journal, lock, stage, backup artifact가 생기며 정상 commit/rollback 뒤 정리됩니다.
 - DB query·cache·revalidation: 변경 없음
 - migration: 변경 없음. legacy ZIP이나 runtime-key encrypted stable payload를 변환하지 않습니다.
 
@@ -175,7 +193,7 @@ pnpm v3:restore -- --format=owner --passphrase-file=/secure/finance-owner-passph
 
 1. registry·manifest 계약 — PR-A 완료
 2. 암호화된 archive writer와 strict preview reader — PR-B 구현, fixture·실험 단계
-3. target과 같은 volume의 staging 및 durable journal rollback
+3. target과 같은 volume의 staging 및 durable journal rollback — PR-C fixture engine 구현, production 비연결
 4. registry 기반 doctor와 제한적 apply 활성화
 
 stable profile/run 개인정보가 추가되므로 평문 `v3:export`를 그대로 확장하지 않습니다. portable encrypted backup과 동일 runtime key 전용 disaster-recovery snapshot 중 제품·보안 정책이 정해지기 전에는 writer를 운영 기본값으로 만들지 않습니다.
