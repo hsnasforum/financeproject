@@ -1,6 +1,6 @@
 # package scripts 분류 기준
 
-기준일: 2026-07-02
+기준일: 2026-07-12
 
 `package.json` scripts는 이름을 대량 변경하지 않고 아래 범주로 읽습니다. 실제 release suite 구성은 `scripts/quality_gates.mjs`가 단일 기준입니다.
 
@@ -11,6 +11,7 @@
 | `pnpm lint` | required / PR 기본 | ESLint 정적 검증입니다. React 훅, route handler, script 변경이 있으면 우선 실행합니다. |
 | `pnpm test` | required / PR 기본 | Vitest 전체 단위·계약 테스트입니다. 순수 로직, 저장소, API contract 변경의 기본 확인입니다. |
 | `pnpm build` | required / build 영향 | Next production build입니다. page, route, server/runtime, package script 영향이 있으면 실행합니다. |
+| `pnpm components:app-import:guard` | required / architecture | production `src/components/**`가 route-private `src/app/**`를 import하면 실패합니다. |
 | `pnpm verify` | recommended / 광범위 점검 | dumps/schema/freshness/DART/security/lint/typecheck/test를 한 번에 묶은 넓은 검증입니다. release registry suite는 아닙니다. |
 | `pnpm planning:v2:complete` | required / planning v2 core | planning v2 static guard, security route scan, report/guide tests, smoke, fast e2e를 실행합니다. |
 | `pnpm release:verify` | release primary | `scripts/quality_gates.mjs` registry의 release suite를 순차 실행하는 primary gate입니다. |
@@ -23,6 +24,7 @@
 - planning v2 core 변경 visibility가 잡히면: `pnpm planning:v2:regress`
 - 사용자 화면, 셀렉터, 주요 플로우 변경: `pnpm e2e:rc`
 - route SSOT/current screens 변경: `pnpm planning:ssot:check`
+- shared component 또는 App Router module 이동: `pnpm components:app-import:guard`
 
 ## Release 게이트
 

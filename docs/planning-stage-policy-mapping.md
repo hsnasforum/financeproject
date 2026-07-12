@@ -86,7 +86,7 @@ Last updated: 2026-03-06
 
 - 파일:
   - `src/lib/planning/core/v2/report.ts`
-  - `src/app/planning/reports/_lib/reportViewModel.ts`
+  - `src/lib/planning/reports/reportViewModel.ts`
 
 report는 현재:
 
