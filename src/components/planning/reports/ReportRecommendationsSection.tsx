@@ -12,8 +12,8 @@ import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
 import {
   rankPlanningProductRecommendations,
   type CandidateRecommendationsPayload,
-} from "../_lib/recommendationSignals";
-import { type ReportVM } from "../_lib/reportViewModel";
+} from "@/lib/planning/reports/recommendationSignals";
+import { type ReportVM } from "@/lib/planning/reports/reportViewModel";
 
 type ApiResponse<T> = {
   ok?: boolean;

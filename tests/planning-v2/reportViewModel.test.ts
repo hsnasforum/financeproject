@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildReportVM,
   buildReportVMFromRun,
-} from "../../src/app/planning/reports/_lib/reportViewModel";
+} from "../../src/lib/planning/reports/reportViewModel";
 import { buildResultDtoV1FromRunRecord } from "../../src/lib/planning/v2/resultDto";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 

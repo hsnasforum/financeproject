@@ -1,4 +1,4 @@
-import { buildStandaloneReportArtifactsFromRun } from "../../../../app/planning/reports/_lib/standaloneReportArtifacts";
+import { buildStandaloneReportArtifactsFromRun } from "../../reports/standaloneReportArtifacts";
 import { getCurrentUserRun } from "../runs/repository";
 
 export type CurrentUserRunReportHtml = {

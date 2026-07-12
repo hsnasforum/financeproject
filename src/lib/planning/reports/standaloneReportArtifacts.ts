@@ -1,10 +1,10 @@
 import {
   buildReportInputContractFromRun,
   type BuildReportInputContractOptions,
-} from "../../../../lib/planning/reports/reportInputContract";
-import { renderStandaloneHtml } from "../../../../lib/planning/reports/standaloneHtmlReport";
-import { type PlanningRunRecord } from "../../../../lib/planning/store/types";
-import { buildInterpretationVM } from "../../../../lib/planning/v2/insights/interpretationVm";
+} from "@/lib/planning/reports/reportInputContract";
+import { renderStandaloneHtml } from "@/lib/planning/reports/standaloneHtmlReport";
+import { type PlanningRunRecord } from "@/lib/planning/store/types";
+import { buildInterpretationVM } from "@/lib/planning/v2/insights/interpretationVm";
 import { toInterpretationInputFromReportVM } from "./reportInterpretationAdapter";
 import {
   buildReportVMFromContract,

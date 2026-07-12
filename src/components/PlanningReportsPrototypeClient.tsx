@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import CandidateComparisonSection from "@/app/planning/reports/_components/CandidateComparisonSection";
-import ReportAdvancedRaw from "@/app/planning/reports/_components/ReportAdvancedRaw";
-import ReportBenefitsSection from "@/app/planning/reports/_components/ReportBenefitsSection";
-import ReportRecommendationsSection from "@/app/planning/reports/_components/ReportRecommendationsSection";
+import CandidateComparisonSection from "@/components/planning/reports/CandidateComparisonSection";
+import ReportAdvancedRaw from "@/components/planning/reports/ReportAdvancedRaw";
+import ReportBenefitsSection from "@/components/planning/reports/ReportBenefitsSection";
+import ReportRecommendationsSection from "@/components/planning/reports/ReportRecommendationsSection";
 import {
   safeBuildReportVMFromRun,
   type ReportActionRow,
   type ReportVM,
-} from "@/app/planning/reports/_lib/reportViewModel";
+} from "@/lib/planning/reports/reportViewModel";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";

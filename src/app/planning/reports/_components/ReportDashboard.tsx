@@ -1,7 +1,7 @@
 "use client";
 
 import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
-import { type ReportVM } from "../_lib/reportViewModel";
+import { type ReportVM } from "@/lib/planning/reports/reportViewModel";
 import {
   ReportDashboardActionsSection,
   ReportDashboardDisclosureSection,

@@ -1,32 +1,32 @@
-import { type ActionItemV2 } from "../../../../lib/planning/v2/actions/types";
-import { type GoalRow } from "../../../../lib/planning/v2/report/mapGoals";
-import { type TimelineRow } from "../../../../lib/planning/v2/report/pickTimelinePoints";
+import { type ActionItemV2 } from "@/lib/planning/v2/actions/types";
+import { type GoalRow } from "@/lib/planning/v2/report/mapGoals";
+import { type TimelineRow } from "@/lib/planning/v2/report/pickTimelinePoints";
 import {
   buildResultDtoV1FromRunRecord,
   toMarkdownFromResultDto,
   type ResultDtoV1,
-} from "../../../../lib/planning/v2/resultDto";
-import { type Stage } from "../../../../lib/planning/engine";
+} from "@/lib/planning/v2/resultDto";
+import { type Stage } from "@/lib/planning/engine";
 import {
   buildInterpretationVM,
   type InterpretationVM,
   type InterpretationVerdict,
-} from "../../../../lib/planning/v2/insights/interpretationVm";
+} from "@/lib/planning/v2/insights/interpretationVm";
 import {
   type PlanningRunOverallStatus,
   type PlanningRunRecord,
   type PlanningRunStageId,
   type PlanningRunStageResult,
-} from "../../../../lib/planning/store/types";
-import { type PlanningInterpretationPolicy } from "../../../../lib/planning/catalog/planningPolicy";
-import { type AssumptionsOverrideEntry } from "../../../../lib/planning/assumptions/overrides";
+} from "@/lib/planning/store/types";
+import { type PlanningInterpretationPolicy } from "@/lib/planning/catalog/planningPolicy";
+import { type AssumptionsOverrideEntry } from "@/lib/planning/assumptions/overrides";
 import {
   parseProfileNormalizationDisclosure,
   type ProfileNormalizationDisclosure,
-} from "../../../../lib/planning/v2/normalizationDisclosure";
-import { type CalcEvidence } from "../../../../lib/planning/calc";
-import { buildResultSummaryMetrics } from "../../../../lib/planning/v2/resultSummary";
-import { buildEvidence, type EvidenceItem } from "../../../../lib/planning/v2/insights/evidence";
+} from "@/lib/planning/v2/normalizationDisclosure";
+import { type CalcEvidence } from "@/lib/planning/calc";
+import { buildResultSummaryMetrics } from "@/lib/planning/v2/resultSummary";
+import { buildEvidence, type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
 import {
   mapGoalStatus,
   pickKeyTimelinePoints,
@@ -35,17 +35,17 @@ import {
   type GoalStatusRow,
   type ResultBadgeSummary,
   type TimelinePointRow,
-} from "../../../../lib/planning/v2/resultGuide";
+} from "@/lib/planning/v2/resultGuide";
 import { aggregateWarningsByUniqueMonth, type DashboardWarningAggRow } from "./warningAggregation";
-import { resolveWarningCatalog, warningFallbackMessage } from "./warningCatalog";
+import { resolveWarningCatalog, warningFallbackMessage } from "@/lib/planning/catalog/warningCatalog";
 import {
   buildReportInputContractFromRun,
   type ReportContractFallbackSource,
   resolveReportResultDtoFromRun as resolveCanonicalReportResultDtoFromRun,
   type BuildReportInputContractOptions,
   type ReportInputContract,
-} from "../../../../lib/planning/reports/reportInputContract";
-import { DEFAULT_PLANNING_POLICY } from "../../../../lib/planning/catalog/planningPolicy";
+} from "@/lib/planning/reports/reportInputContract";
+import { DEFAULT_PLANNING_POLICY } from "@/lib/planning/catalog/planningPolicy";
 
 type ReportLike = {
   id?: string;

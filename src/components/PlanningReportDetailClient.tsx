@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import CandidateComparisonSection from "@/app/planning/reports/_components/CandidateComparisonSection";
-import ReportAdvancedRaw from "@/app/planning/reports/_components/ReportAdvancedRaw";
+import CandidateComparisonSection from "@/components/planning/reports/CandidateComparisonSection";
+import ReportAdvancedRaw from "@/components/planning/reports/ReportAdvancedRaw";
 import {
   safeBuildReportVMFromRun,
   type ReportVM,
-} from "@/app/planning/reports/_lib/reportViewModel";
-import { type CandidateRecommendationsPayload } from "@/app/planning/reports/_lib/recommendationSignals";
+} from "@/lib/planning/reports/reportViewModel";
+import { type CandidateRecommendationsPayload } from "@/lib/planning/reports/recommendationSignals";
 import {
   DEFAULT_PLANNING_POLICY,
   type InterpretationGuideProps,

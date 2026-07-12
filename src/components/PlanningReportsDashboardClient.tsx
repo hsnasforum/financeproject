@@ -4,11 +4,11 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useState, useSyncExternalStore } from "react";
-import { toInterpretationInputFromReportVM } from "@/app/planning/reports/_lib/reportInterpretationAdapter";
-import { type CandidateRecommendationsPayload } from "@/app/planning/reports/_lib/recommendationSignals";
+import { toInterpretationInputFromReportVM } from "@/lib/planning/reports/reportInterpretationAdapter";
+import { type CandidateRecommendationsPayload } from "@/lib/planning/reports/recommendationSignals";
 import {
   safeBuildReportVMFromRun,
-} from "@/app/planning/reports/_lib/reportViewModel";
+} from "@/lib/planning/reports/reportViewModel";
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
 import DisclosuresPanel from "@/components/planning/DisclosuresPanel";
 import {
@@ -99,7 +99,7 @@ function DeferredReportSectionPlaceholder({
 }
 
 const DeferredReportBenefitsSection = dynamic(
-  () => import("@/app/planning/reports/_components/ReportBenefitsSection"),
+  () => import("@/components/planning/reports/ReportBenefitsSection"),
   {
     ssr: false,
     loading: () => (
@@ -112,7 +112,7 @@ const DeferredReportBenefitsSection = dynamic(
 );
 
 const DeferredReportRecommendationsSection = dynamic(
-  () => import("@/app/planning/reports/_components/ReportRecommendationsSection"),
+  () => import("@/components/planning/reports/ReportRecommendationsSection"),
   {
     ssr: false,
     loading: () => (
@@ -125,7 +125,7 @@ const DeferredReportRecommendationsSection = dynamic(
 );
 
 const DeferredCandidateComparisonSection = dynamic(
-  () => import("@/app/planning/reports/_components/CandidateComparisonSection"),
+  () => import("@/components/planning/reports/CandidateComparisonSection"),
   {
     ssr: false,
     loading: () => (

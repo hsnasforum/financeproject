@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReportDashboard from "../../../src/app/planning/reports/_components/ReportDashboard";
-import { buildReportVM } from "../../../src/app/planning/reports/_lib/reportViewModel";
+import { buildReportVM } from "../../../src/lib/planning/reports/reportViewModel";
 import { type PlanningRunRecord } from "../../../src/lib/planning/store/types";
 
 function fixtureRun(): PlanningRunRecord {

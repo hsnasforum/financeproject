@@ -20,8 +20,8 @@ import {
   rankPlanningBenefitRecommendations,
   type PlanningBenefitSignals,
   type PlanningBenefitProfileContext,
-} from "../_lib/recommendationSignals";
-import { type ReportVM } from "../_lib/reportViewModel";
+} from "@/lib/planning/reports/recommendationSignals";
+import { type ReportVM } from "@/lib/planning/reports/reportViewModel";
 
 type BenefitsPayload = {
   items: BenefitCandidate[];

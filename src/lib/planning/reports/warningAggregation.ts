@@ -1,5 +1,5 @@
-import { WARNING_SEVERITY_BY_CODE, type WarningSeverity } from "../../../../lib/planning/v2/report/warningsAggregate";
-import { resolveWarningCatalog, warningFallbackMessage } from "./warningCatalog";
+import { WARNING_SEVERITY_BY_CODE, type WarningSeverity } from "@/lib/planning/v2/report/warningsAggregate";
+import { resolveWarningCatalog, warningFallbackMessage } from "@/lib/planning/catalog/warningCatalog";
 
 type WarningLike = {
   reasonCode?: unknown;

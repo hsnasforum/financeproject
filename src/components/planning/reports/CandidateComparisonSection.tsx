@@ -13,7 +13,7 @@ import {
   type CandidateComparisonRow,
 } from "@/lib/planning/candidates/comparison";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
-import { type CandidateRecommendationsPayload } from "../_lib/recommendationSignals";
+import { type CandidateRecommendationsPayload } from "@/lib/planning/reports/recommendationSignals";
 
 type ApiResponse<T> = {
   ok?: boolean;

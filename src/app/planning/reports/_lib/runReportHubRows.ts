@@ -1,4 +1,4 @@
-import { resolveReportResultDtoFromRun } from "./reportViewModel";
+import { resolveReportResultDtoFromRun } from "@/lib/planning/reports/reportViewModel";
 import { type ResultDtoV1 } from "../../../../lib/planning/v2/resultDto";
 import { type PlanningRunRecord } from "../../../../lib/planning/store/types";
 
