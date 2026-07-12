@@ -30,10 +30,38 @@ describe("legacy /planner redirect pages", () => {
     expect(mocked.redirect).toHaveBeenCalledWith("/planning/reports/prototype");
   });
 
+  it("keeps only deep links that match an explicitly registered planning page", async () => {
+    await expect(PlannerCatchAllPage({
+      params: Promise.resolve({ slug: ["runs", "run-1"] }),
+    })).rejects.toThrow("REDIRECT:/planning/runs/run-1");
+    expect(mocked.redirect).toHaveBeenLastCalledWith("/planning/runs/run-1");
+
+    await expect(PlannerCatchAllPage({
+      params: Promise.resolve({ slug: ["v3", "batches", "batch-1"] }),
+    })).rejects.toThrow("REDIRECT:/planning/v3/batches/batch-1");
+    expect(mocked.redirect).toHaveBeenLastCalledWith("/planning/v3/batches/batch-1");
+  });
+
+  it("resolves a registered planning redirect alias to its canonical page", async () => {
+    await expect(PlannerCatchAllPage({
+      params: Promise.resolve({ slug: ["v3", "transactions"] }),
+    })).rejects.toThrow("REDIRECT:/planning/v3/transactions/batches");
+    expect(mocked.redirect).toHaveBeenLastCalledWith("/planning/v3/transactions/batches");
+  });
+
   it("falls back to /planning for unsupported legacy planner deep links", async () => {
     await expect(PlannerCatchAllPage({
       params: Promise.resolve({ slug: ["legacy", "result"] }),
     })).rejects.toThrow("REDIRECT:/planning");
     expect(mocked.redirect).toHaveBeenCalledWith("/planning");
+  });
+
+  it("falls back when a supported head would still resolve to an unregistered page", async () => {
+    for (const slug of [["v3"], ["reports", "run-1", "detail"], ["trash", "item-1"]]) {
+      await expect(PlannerCatchAllPage({
+        params: Promise.resolve({ slug }),
+      })).rejects.toThrow("REDIRECT:/planning");
+      expect(mocked.redirect).toHaveBeenLastCalledWith("/planning");
+    }
   });
 });

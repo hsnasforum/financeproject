@@ -133,7 +133,7 @@ staging 3일, production 7일 관찰 중 치명 이슈가 없음을 전제로 �
   - `pnpm -C finance planning:v2:guard`
   - `pnpm -C finance planning:v2:compat`
   - `pnpm -C finance planning:v2:regress`
-  - `pnpm -C finance exec eslint src/lib/planning/reports/reportInputContract.ts src/app/api/planning/v2/simulate/route.ts src/app/api/planning/v2/actions/route.ts src/app/api/planning/v2/scenarios/route.ts src/app/api/planning/v2/monte-carlo/route.ts src/app/api/recommend/route.ts src/app/recommend/page.tsx src/components/PlanningReportDetailClient.tsx src/components/PlanningReportsClient.tsx src/components/PlanningReportsDashboardClient.tsx src/components/PlanningReportsPrototypeClient.tsx src/components/PlanningRunsClient.tsx src/components/PlanningWorkspaceClient.tsx src/app/planning/reports/_lib/reportViewModel.ts src/app/planning/reports/_components/ReportDashboard.tsx`
+  - `pnpm -C finance exec eslint src/lib/planning/reports/reportInputContract.ts src/app/api/planning/v2/simulate/route.ts src/app/api/planning/v2/actions/route.ts src/app/api/planning/v2/scenarios/route.ts src/app/api/planning/v2/monte-carlo/route.ts src/app/api/recommend/route.ts src/app/recommend/page.tsx src/components/PlanningReportDetailClient.tsx src/components/PlanningReportsClient.tsx src/components/PlanningReportsDashboardClient.tsx src/components/PlanningReportsPrototypeClient.tsx src/components/PlanningRunsClient.tsx src/components/PlanningWorkspaceClient.tsx src/lib/planning/reports/reportViewModel.ts src/app/planning/reports/_components/ReportDashboard.tsx`
 - 실행 결과:
   - `pnpm test` full suite PASS (`579 files / 1593 tests`).
   - `release:verify` PASS (`planning:ssot:check` advisory는 WARN 기록, required gate 영향 없음).

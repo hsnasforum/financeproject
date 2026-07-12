@@ -339,7 +339,7 @@ export default function DebugUnifiedPage() {
   }, [statuses, kind, unifiedSourceCounts]);
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6">
       <h1 className="text-2xl font-semibold">통합 디버그 보기</h1>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
@@ -611,6 +611,6 @@ export default function DebugUnifiedPage() {
 
       {loading ? <p className="text-sm text-slate-500">불러오는 중...</p> : null}
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
-    </main>
+    </div>
   );
 }

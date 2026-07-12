@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Container } from "@/components/ui/Container";
 import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
 import { cn } from "@/lib/utils";
@@ -77,20 +77,17 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
   const resolvedSlides = slides.length > 0 ? slides : DEFAULT_SLIDES;
   const [activeIndex, setActiveIndex] = useState(0);
 
-  useEffect(() => {
-    if (resolvedSlides.length < 2) return undefined;
-    const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % resolvedSlides.length);
-    }, 4500);
-    return () => window.clearInterval(timer);
-  }, [resolvedSlides.length]);
-
   const normalizedIndex = resolvedSlides.length > 0 ? activeIndex % resolvedSlides.length : 0;
   const activeSlide = resolvedSlides[normalizedIndex] ?? DEFAULT_SLIDES[0];
   const theme = THEME_MAP[activeSlide.theme];
 
   return (
-    <section className="relative overflow-hidden border-b border-slate-200/60 bg-gradient-to-b from-[#f5f7fa] via-white to-white">
+    <section
+      aria-label="시작 가이드 추천 슬라이드"
+      aria-roledescription="캐러셀"
+      className="relative overflow-hidden border-b border-slate-200/60 bg-gradient-to-b from-[#f5f7fa] via-white to-white"
+      role="region"
+    >
       <div
         aria-hidden
         className="bg-hero-gradient-surface pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-[0.06]"
@@ -134,7 +131,17 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
           <div className="relative flex min-h-[320px] items-center justify-center lg:min-h-[420px]">
             <div className="absolute h-72 w-72 rounded-full bg-[#7c3aed]/10 blur-3xl" />
             <div className="absolute -right-2 top-6 h-32 w-32 rounded-full bg-[#00d9a3]/20 blur-3xl" />
-            <div className="hero-card-stage relative h-[264px] w-[388px] md:h-[312px] md:w-[492px]">
+            <div
+              aria-atomic="true"
+              aria-label={`${normalizedIndex + 1} / ${resolvedSlides.length}: ${activeSlide.title}`}
+              aria-live="polite"
+              aria-roledescription="슬라이드"
+              className="hero-card-stage relative h-[264px] w-[388px] md:h-[312px] md:w-[492px]"
+              data-slide-id={activeSlide.id}
+              data-testid="home-hero-active-slide"
+              id="home-hero-active-slide"
+              role="group"
+            >
               <HeroCard className={cn("hero-card hero-card-back left-8 top-12 rotate-[-10deg]", theme.backA)} />
               <HeroCard className={cn("hero-card hero-card-mid left-14 top-7 rotate-[-4deg]", theme.backB)} />
               <HeroCard
@@ -153,15 +160,23 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
             const isActive = index === normalizedIndex;
             return (
               <button
-                aria-label={`${index + 1}번 슬라이드 보기`}
-                className={cn(
-                  "h-2.5 rounded-full transition-all duration-300",
-                  isActive ? "w-8 bg-primary" : "w-2.5 bg-slate-300 hover:bg-slate-400",
-                )}
+                aria-controls="home-hero-active-slide"
+                aria-current={isActive ? "true" : undefined}
+                aria-label={`${index + 1}번 슬라이드: ${slide.title}`}
+                className="group inline-flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                data-testid={`home-hero-slide-control-${slide.id}`}
                 key={slide.id}
                 onClick={() => setActiveIndex(index)}
                 type="button"
-              />
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "h-2.5 rounded-full transition-all duration-300",
+                    isActive ? "w-8 bg-primary" : "w-2.5 bg-slate-500 group-hover:bg-slate-600",
+                  )}
+                />
+              </button>
             );
           })}
         </div>

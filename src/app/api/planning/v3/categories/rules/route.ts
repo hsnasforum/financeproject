@@ -14,6 +14,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type RuleBody = {
   id?: unknown;
@@ -79,7 +80,9 @@ export async function GET(request: Request) {
     try {
       const items = await listCurrentUserCategoryRules();
       return NextResponse.json({ ok: true, items, meta: userMeta });
-    } catch {
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       return NextResponse.json(
         { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 목록 조회에 실패했습니다." }, meta: userMeta },
         { status: 500 },
@@ -119,6 +122,8 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ ok: true, rule, meta: userMeta });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof CategoryRulesStoreInputError) {
         return NextResponse.json(
           {

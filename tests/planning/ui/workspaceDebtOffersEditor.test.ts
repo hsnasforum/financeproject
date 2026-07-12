@@ -3,7 +3,7 @@ import {
   debtOfferRowsToPayload,
   parseDebtOffersEditorJson,
   parseDebtOffersFormRows,
-} from "../../../src/app/planning/_lib/workspaceDebtOffersEditor";
+} from "../../../src/lib/planning/ui/workspaceDebtOffersEditor";
 
 describe("workspaceDebtOffersEditor", () => {
   it("parses debt offer rows from raw json array", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ASSUMPTIONS_FORM_DEFAULT } from "../../../src/app/planning/_lib/workspaceAssumptionsEditor";
+import { ASSUMPTIONS_FORM_DEFAULT } from "../../../src/lib/planning/ui/workspaceAssumptionsEditor";
 import {
   transitionWorkspaceExecutionOptionsForMode,
   type WorkspaceAdvancedExecutionOptions,
@@ -85,7 +85,7 @@ describe("workspaceExecutionOptionsBundle", () => {
   it("forces execution toggles off for health and server-disabled states", () => {
     expect(applyWorkspaceExecutionDisableState({
       current: executionOptionsFixture(),
-      saveBlockedByHealth: true,
+      advancedActionsBlockedByHealth: true,
       monteCarloServerDisabled: true,
       includeProductsServerDisabled: true,
       optimizerServerDisabled: true,

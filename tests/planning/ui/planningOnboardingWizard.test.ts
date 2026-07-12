@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPlanningWizardOutput } from "../../../src/app/planning/_lib/planningOnboardingWizard";
+import { buildPlanningWizardOutput } from "../../../src/lib/planning/ui/planningOnboardingWizard";
 import { loadCanonicalProfile } from "../../../src/lib/planning/v2/loadCanonicalProfile";
 
 describe("planning onboarding wizard model", () => {

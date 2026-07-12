@@ -1,6 +1,8 @@
-import fs from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { readJsonFile, storageSchemaCorrupted, toStorageWriteError } from "../../storage/serverFileRead";
+import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type CategoryId, type CategoryRule } from "../domain/types";
@@ -9,6 +11,7 @@ import { resolvePlanningV3DataDir } from "./dataDir";
 type RulesState = {
   version: 1;
   items: CategoryRule[];
+  hadInvalidItems?: boolean;
 };
 
 type UpsertRuleInput = {
@@ -163,29 +166,42 @@ function sortRules(rows: CategoryRule[]): CategoryRule[] {
   });
 }
 
-async function readState(): Promise<RulesState> {
-  try {
-    const parsed = JSON.parse(await fs.readFile(resolveRulesPath(), "utf-8")) as unknown;
-    if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.items)) {
-      return { version: 1, items: sortRules(DEFAULT_RULES) };
-    }
-    const items = parsed.items
-      .map((row) => normalizeRule(row))
-      .filter((row): row is CategoryRule => row !== null);
-    return {
-      version: 1,
-      items: items.length > 0 ? sortRules(items) : sortRules(DEFAULT_RULES),
-    };
-  } catch {
+function parseState(parsed: unknown, filePath: string): RulesState {
+  if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.items)) {
+    throw storageSchemaCorrupted(filePath, "category rules storage schema is invalid");
+  }
+
+  const items: CategoryRule[] = [];
+  let hadInvalidItems = false;
+  for (const row of parsed.items) {
+    const normalized = normalizeRule(row);
+    if (normalized) items.push(normalized);
+    else hadInvalidItems = true;
+  }
+  return { version: 1, items: sortRules(items), ...(hadInvalidItems ? { hadInvalidItems: true } : {}) };
+}
+
+async function readState(filePath = resolveRulesPath()): Promise<RulesState> {
+  const loaded = await readJsonFile(filePath);
+  if (loaded.kind === "not-found") {
     return { version: 1, items: sortRules(DEFAULT_RULES) };
+  }
+  return parseState(loaded.value, filePath);
+}
+
+async function writeState(filePath: string, state: RulesState): Promise<void> {
+  try {
+    await atomicWriteJson(filePath, {
+      version: 1,
+      items: sortRules(state.items),
+    });
+  } catch (error) {
+    throw toStorageWriteError(error, filePath);
   }
 }
 
-async function writeState(state: RulesState): Promise<void> {
-  await atomicWriteJson(resolveRulesPath(), {
-    version: 1,
-    items: sortRules(state.items),
-  });
+function withRulesWriteLock<T>(filePath: string, callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning-v3:category-rules:${filePath}`, callback);
 }
 
 export async function listRules(): Promise<CategoryRule[]> {
@@ -196,14 +212,12 @@ export async function listRules(): Promise<CategoryRule[]> {
 
 export async function upsertRule(input: UpsertRuleInput): Promise<CategoryRule> {
   assertServerOnly();
-  const state = await readState();
-
   const categoryId = normalizeCategoryId(input.categoryId);
   const match = normalizeMatch(input.match);
   const priority = asInteger(input.priority, 0);
   const enabled = input.enabled !== false;
   const note = asString(input.note);
-  const id = asString(input.id) ? normalizeRuleId(input.id) : sanitizeRecordId(`rule_${Date.now()}`);
+  const id = asString(input.id) ? normalizeRuleId(input.id) : sanitizeRecordId(`rule_${randomUUID()}`);
 
   const next: CategoryRule = {
     id,
@@ -214,20 +228,33 @@ export async function upsertRule(input: UpsertRuleInput): Promise<CategoryRule> 
     ...(note ? { note: note.slice(0, 120) } : {}),
   };
 
-  const byId = new Map(state.items.map((row) => [row.id, row]));
-  byId.set(next.id, next);
-  state.items = sortRules([...byId.values()]);
-  await writeState(state);
-  return next;
+  const filePath = resolveRulesPath();
+  return withRulesWriteLock(filePath, async () => {
+    const state = await readState(filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "category rules storage contains invalid items");
+    }
+    const byId = new Map(state.items.map((row) => [row.id, row]));
+    byId.set(next.id, next);
+    state.items = sortRules([...byId.values()]);
+    await writeState(filePath, state);
+    return next;
+  });
 }
 
 export async function deleteRule(id: unknown): Promise<boolean> {
   assertServerOnly();
   const safeId = normalizeRuleId(id);
-  const state = await readState();
-  const next = state.items.filter((row) => row.id !== safeId);
-  if (next.length === state.items.length) return false;
-  state.items = next;
-  await writeState(state);
-  return true;
+  const filePath = resolveRulesPath();
+  return withRulesWriteLock(filePath, async () => {
+    const state = await readState(filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "category rules storage contains invalid items");
+    }
+    const next = state.items.filter((row) => row.id !== safeId);
+    if (next.length === state.items.length) return false;
+    state.items = next;
+    await writeState(filePath, state);
+    return true;
+  });
 }

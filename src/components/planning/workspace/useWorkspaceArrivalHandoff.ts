@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { focusWorkspaceQuickStartTarget } from "@/app/planning/_lib/workspaceQuickStart";
+import { focusWorkspaceQuickStartTarget } from "@/lib/planning/ui/workspaceQuickStart";
 import {
   shouldAutoFocusPlanningQuickStartTarget,
   shouldCompletePlanningQuickStartFocusAttempt,

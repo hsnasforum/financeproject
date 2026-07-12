@@ -69,10 +69,18 @@ export const SeriesStateSchema = z.object({
 
 export type SeriesState = z.infer<typeof SeriesStateSchema>;
 
+export const LegacySourceRuntimeStateSchema = z.object({
+  etag: z.string().trim().min(1).optional(),
+  lastModified: z.string().trim().min(1).optional(),
+  lastRunAt: z.string().datetime().optional(),
+  cursor: z.string().trim().min(1).optional(),
+});
+
 export const IndicatorsStateSchema = z.object({
   schemaVersion: z.number().int().positive().optional(),
   lastRunAt: z.string().datetime().optional(),
   series: z.record(z.string(), SeriesStateSchema).default({}),
+  sources: z.record(z.string(), LegacySourceRuntimeStateSchema).optional(),
 });
 
 export type IndicatorsState = z.infer<typeof IndicatorsStateSchema>;
@@ -88,6 +96,10 @@ export type RefreshError = z.infer<typeof RefreshErrorSchema>;
 export type ConnectorErrorCode = RefreshError["code"];
 
 export const RefreshResultSchema = z.object({
+  generatedAt: z.string().datetime(),
+  configSource: z.enum(["built-in", "legacy-compat", "explicit"]),
+  enabledSourceCount: z.number().int().nonnegative(),
+  enabledSeriesCount: z.number().int().nonnegative(),
   sourcesProcessed: z.number().int().nonnegative(),
   seriesProcessed: z.number().int().nonnegative(),
   seriesUpdated: z.number().int().nonnegative(),

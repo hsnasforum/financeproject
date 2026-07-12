@@ -2,13 +2,23 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import {
+  assertPlanningOwnerAuxiliaryPathOutsideOwners,
+  previewPlanningOwnerArchive,
+  readPlanningOwnerArchiveFile,
+  readPlanningOwnerSecretFile,
+  type PlanningOwnerArchivePreview,
+} from "@/lib/ops/backup/planningOwnerArchive";
+import {
+  createPlanningArchiveContext,
+  resolvePlanningDataOwners,
+} from "@/lib/ops/backup/planningOwnerRegistry";
 import { decodeZip } from "@/lib/ops/backup/zipCodec";
 import { AlertEventSchema } from "../alerts/contracts";
 import { ExposureProfileSchema } from "../exposure/contracts";
 import { IndicatorsStateSchema, ObservationSchema, SeriesSnapshotMetaSchema } from "../indicators/contracts";
 import { JournalEntrySchema } from "../journal/contracts";
 import { NewsItemSchema, RuntimeStateSchema, TopicDailyStatSchema } from "../news/contracts";
-import { runV3Doctor } from "./doctor";
 
 type IssueLevel = "error" | "warning";
 
@@ -40,6 +50,8 @@ type RestorePlan = {
 type ParsedArgs = {
   archivePath: string;
   apply: boolean;
+  format: "legacy" | "owner";
+  passphraseFile?: string;
 };
 
 type RunV3RestoreInput = {
@@ -48,6 +60,38 @@ type RunV3RestoreInput = {
   apply?: boolean;
   now?: Date;
 };
+
+type RunV3OwnerRestorePreviewInput = {
+  cwd?: string;
+  archivePath?: string;
+  apply?: boolean;
+  now?: Date;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  userId?: string;
+  secret: Uint8Array;
+};
+
+export type V3OwnerRestorePreviewSummary = PlanningOwnerArchivePreview & Readonly<{
+  mode: "preview";
+  archivePath: string;
+  checkedAt: string;
+}>;
+
+export const V3_RESTORE_APPLY_DISABLED_CODE = "V3_RESTORE_APPLY_DISABLED";
+
+export class V3RestoreApplyDisabledError extends Error {
+  readonly code = V3_RESTORE_APPLY_DISABLED_CODE;
+
+  constructor() {
+    super("owner-aware staged restore가 준비될 때까지 --apply는 비활성 상태입니다.");
+    this.name = "V3RestoreApplyDisabledError";
+  }
+}
+
+function assertV3RestoreApplyDisabled(apply: boolean | undefined): void {
+  if (apply) throw new V3RestoreApplyDisabledError();
+}
 
 export type V3RestoreSummary = {
   mode: "preview" | "apply";
@@ -291,50 +335,32 @@ async function buildRestorePlan(input: {
   };
 }
 
-function makeBackupPath(rootDir: string, now: Date): string {
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(now.getUTCDate()).padStart(2, "0");
-  const hh = String(now.getUTCHours()).padStart(2, "0");
-  const mi = String(now.getUTCMinutes()).padStart(2, "0");
-  const ss = String(now.getUTCSeconds()).padStart(2, "0");
-  const base = path.join(rootDir, `.data.bak-${yyyy}${mm}${dd}${hh}${mi}${ss}`);
-
-  if (!fs.existsSync(base)) return base;
-  for (let i = 1; i < 1000; i += 1) {
-    const candidate = `${base}-${i}`;
-    if (!fs.existsSync(candidate)) return candidate;
-  }
-  throw new Error("BACKUP_PATH_EXHAUSTED");
-}
-
-function restoreEntries(rootDir: string, entries: RestoreEntry[]): { restoredFiles: number; restoredBytes: number } {
-  let restoredFiles = 0;
-  let restoredBytes = 0;
-
-  for (const entry of entries.sort((a, b) => a.path.localeCompare(b.path))) {
-    const targetPath = path.resolve(rootDir, entry.path);
-    if (!toPosix(targetPath).startsWith(toPosix(path.resolve(rootDir)) + "/")) {
-      throw new Error(`RESTORE_PATH_ESCAPE:${entry.path}`);
-    }
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.writeFileSync(targetPath, entry.bytes);
-    restoredFiles += 1;
-    restoredBytes += entry.bytes.length;
-  }
-
-  return { restoredFiles, restoredBytes };
-}
-
 function parseArgs(argv: string[]): ParsedArgs {
   let archivePath = "";
   let apply = false;
+  let format: ParsedArgs["format"] = "legacy";
+  let passphraseFile = "";
 
   for (const token of argv) {
     const normalized = asString(token);
     if (!normalized.startsWith("--")) continue;
     if (normalized === "--apply") {
       apply = true;
+      continue;
+    }
+    if (normalized.startsWith("--passphrase=")) {
+      throw new Error("ARG_FORBIDDEN:--passphrase=<literal>");
+    }
+    if (normalized.startsWith("--format=")) {
+      const requested = normalized.slice("--format=".length);
+      if (requested !== "legacy" && requested !== "owner") {
+        throw new Error("ARG_INVALID:--format=<legacy|owner>");
+      }
+      format = requested;
+      continue;
+    }
+    if (normalized.startsWith("--passphrase-file=")) {
+      passphraseFile = normalized.slice("--passphrase-file=".length);
       continue;
     }
     if (normalized.startsWith("--in=")) {
@@ -349,10 +375,14 @@ function parseArgs(argv: string[]): ParsedArgs {
   return {
     archivePath,
     apply,
+    format,
+    ...(passphraseFile ? { passphraseFile } : {}),
   };
 }
 
 export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3RestoreSummary> {
+  assertV3RestoreApplyDisabled(input.apply);
+
   const rootDir = path.resolve(asString(input.cwd) || process.cwd());
   const now = input.now instanceof Date ? input.now : new Date();
   const archivePath = asString(input.archivePath);
@@ -367,9 +397,8 @@ export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3Res
     now,
   });
 
-  const mode: V3RestoreSummary["mode"] = input.apply ? "apply" : "preview";
-  const baseSummary: V3RestoreSummary = {
-    mode,
+  return {
+    mode: "preview",
     archivePath: plan.archivePath,
     checkedAt: plan.checkedAt,
     totals: {
@@ -381,53 +410,51 @@ export async function runV3Restore(input: RunV3RestoreInput = {}): Promise<V3Res
     },
     issues: plan.issues,
   };
+}
 
-  if (!input.apply) {
-    return baseSummary;
+export async function runV3OwnerRestorePreview(
+  input: RunV3OwnerRestorePreviewInput,
+): Promise<V3OwnerRestorePreviewSummary> {
+  assertV3RestoreApplyDisabled(input.apply);
+  const rootDir = path.resolve(asString(input.cwd) || process.cwd());
+  const archivePathRaw = asString(input.archivePath);
+  if (!archivePathRaw) {
+    throw new Error("ARG_REQUIRED:archivePath");
   }
-
-  if (plan.totals.errors > 0) {
-    throw new Error("RESTORE_BLOCKED:VALIDATION_FAILED");
-  }
-
-  const dataDir = path.join(rootDir, ".data");
-  const backupPath = makeBackupPath(rootDir, now);
-  let backupCreated = false;
-
+  const archivePath = path.isAbsolute(archivePathRaw)
+    ? path.resolve(archivePathRaw)
+    : path.resolve(rootDir, archivePathRaw);
+  const context = createPlanningArchiveContext({
+    cwd: rootDir,
+    env: input.env,
+    platform: input.platform,
+    userId: input.userId,
+  });
+  const owners = resolvePlanningDataOwners(context);
+  await assertPlanningOwnerAuxiliaryPathOutsideOwners({
+    owners,
+    candidatePath: archivePath,
+    platform: context.platform,
+    purpose: "archive",
+  });
+  const encryptedBytes = await readPlanningOwnerArchiveFile({
+    archivePath,
+    platform: context.platform,
+  });
   try {
-    if (fs.existsSync(dataDir)) {
-      fs.renameSync(dataDir, backupPath);
-      backupCreated = true;
-    }
-    fs.mkdirSync(dataDir, { recursive: true });
-    const restored = restoreEntries(rootDir, plan.entries);
-
-    const doctor = runV3Doctor({ cwd: rootDir });
-    return {
-      ...baseSummary,
-      backupPath: backupCreated ? backupPath : undefined,
-      totals: {
-        ...baseSummary.totals,
-        restoredFiles: restored.restoredFiles,
-        restoredBytes: restored.restoredBytes,
-      },
-      doctor: {
-        ok: doctor.ok,
-        errors: doctor.counts.errors,
-        warnings: doctor.counts.warnings,
-      },
-    };
-  } catch (error) {
-    if (backupCreated && fs.existsSync(backupPath)) {
-      try {
-        fs.rmSync(dataDir, { recursive: true, force: true });
-        fs.renameSync(backupPath, dataDir);
-      } catch {
-        // ignore rollback failure; keep primary error.
-      }
-    }
-    const message = error instanceof Error ? error.message : "restore_failed";
-    throw new Error(`RESTORE_FAILED:${message}`);
+    const preview = await previewPlanningOwnerArchive({
+      encryptedBytes,
+      secret: input.secret,
+      owners,
+    });
+    return Object.freeze({
+      ...preview,
+      mode: "preview",
+      archivePath,
+      checkedAt: (input.now instanceof Date ? input.now : new Date()).toISOString(),
+    });
+  } finally {
+    encryptedBytes.fill(0);
   }
 }
 
@@ -449,15 +476,52 @@ function printSummary(summary: V3RestoreSummary): void {
   }
 }
 
+function printOwnerPreviewSummary(summary: V3OwnerRestorePreviewSummary): void {
+  console.log(`[v3:restore] mode=${summary.mode} format=${summary.archiveFormat} checkedAt=${summary.checkedAt}`);
+  console.log(`[v3:restore] archive=${summary.archivePath}`);
+  console.log(`[v3:restore] totals owners=${summary.totals.owners} files=${summary.totals.files} emptyOwners=${summary.totals.emptyOwners} bytes=${summary.totals.bytes}`);
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  assertV3RestoreApplyDisabled(args.apply);
+  if (args.format === "owner") {
+    if (!args.passphraseFile) {
+      throw new Error("ARG_REQUIRED:--passphrase-file=<path>");
+    }
+    const rootDir = process.cwd();
+    const context = createPlanningArchiveContext({ cwd: rootDir });
+    const owners = resolvePlanningDataOwners(context);
+    const secretPath = path.resolve(rootDir, args.passphraseFile);
+    await assertPlanningOwnerAuxiliaryPathOutsideOwners({
+      owners,
+      candidatePath: secretPath,
+      platform: context.platform,
+      purpose: "secret",
+    });
+    const secret = await readPlanningOwnerSecretFile({
+      secretPath,
+      platform: context.platform,
+    });
+    try {
+      const summary = await runV3OwnerRestorePreview({
+        archivePath: args.archivePath,
+        secret,
+      });
+      printOwnerPreviewSummary(summary);
+      console.log("[v3:restore] owner archive preview completed. --apply remains disabled.");
+    } finally {
+      secret.fill(0);
+    }
+    return;
+  }
   const summary = await runV3Restore({
     archivePath: args.archivePath,
     apply: args.apply,
   });
   printSummary(summary);
   if (!args.apply) {
-    console.log("[v3:restore] dry-run completed. Re-run with --apply to restore.");
+    console.log("[v3:restore] dry-run completed. --apply is disabled until owner-aware staged restore is available.");
   }
 }
 
@@ -469,6 +533,11 @@ const isMain = (() => {
 
 if (isMain) {
   main().catch((error: unknown) => {
+    if (error instanceof V3RestoreApplyDisabledError) {
+      console.error(`[v3:restore] code=${error.code} ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
     const message = error instanceof Error ? error.message : "restore_failed";
     console.error(`[v3:restore] ${message}`);
     process.exitCode = 1;

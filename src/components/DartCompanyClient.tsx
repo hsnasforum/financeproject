@@ -227,7 +227,7 @@ export function DartCompanyClient() {
   }, [items, sortKey]);
 
   return (
-    <main className="py-8">
+    <div className="py-8">
       <Container>
         <SectionHeader 
           title="OpenDART 기업개황 조회" 
@@ -346,6 +346,6 @@ export function DartCompanyClient() {
           </Card>
         </div>
       </Container>
-    </main>
+    </div>
   );
 }

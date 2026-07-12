@@ -112,9 +112,9 @@ export async function getBatchSummary(batchIdInput: string): Promise<BatchSummar
   const publicMeta = toStoredFirstPublicMeta(loaded);
   const [rules, overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
     listRules(),
-    getBatchTxnOverrides(batchId).catch(() => ({})),
-    getAccountMappingOverrides(batchId).catch(() => ({})),
-    getTransferOverrides(batchId).catch(() => ({})),
+    getBatchTxnOverrides(batchId),
+    getAccountMappingOverrides(batchId),
+    getTransferOverrides(batchId),
   ]);
   // Summary shares the same reader-visible stored-first binding boundary as detail/cashflow.
   const projectedTransactions = getStoredFirstBatchSummaryProjectionRows(loaded);

@@ -69,3 +69,4 @@ find .data/planning/profiles .data/planning/runs -type f 2>/dev/null | wc -l
 
 - 일일 갱신: `pnpm daily:refresh`
 - 스케줄러 또는 GitHub Actions에서 실행하고 `docs/**`, `tmp/**` 산출물을 점검하세요.
+- 뉴스·경제지표 설정과 runner의 canonical owner 및 compatibility 우선순위는 `docs/planning-v3-refresh-owners.md`를 따릅니다.

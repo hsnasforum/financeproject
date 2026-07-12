@@ -177,3 +177,113 @@ test("production hides dev and debug surfaces", async ({ request }) => {
     expect(response.status(), routePath).toBe(404);
   }
 });
+
+test("main landmark stays singular across representative route shells", async ({ page }) => {
+  for (const pathname of [
+    "/",
+    "/planning",
+    "/products/compare",
+    "/recommend/history",
+    "/settings",
+    "/ops",
+    "/dev/data",
+  ]) {
+    await page.goto(pathname);
+    await expect(page.getByRole("main")).toHaveCount(1);
+    await expect(page.locator("#main-content")).toHaveCount(1);
+  }
+});
+
+test("skip link is the first keyboard stop and moves focus to main content", async ({ page }) => {
+  await page.goto("/planning");
+  const skipLink = page.getByRole("link", { name: "본문으로 건너뛰기" });
+  const main = page.locator("#main-content");
+
+  await page.keyboard.press("Tab");
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeVisible();
+  await skipLink.press("Enter");
+  await expect(page).toHaveURL(/#main-content$/);
+  await expect(main).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => {
+    const mainElement = document.querySelector("#main-content");
+    return Boolean(mainElement && document.activeElement && mainElement.contains(document.activeElement));
+  })).toBe(true);
+});
+
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 390, height: 844 },
+]) {
+  test(`mobile primary navigation owns ${viewport.width}x${viewport.height} without covering main content`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/planning");
+    await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
+
+    const nav = page.getByRole("navigation", { name: "모바일 주 메뉴" });
+    await expect(nav).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "태블릿 주 메뉴" })).toBeHidden();
+    await expect(page.getByRole("navigation", { name: "데스크톱 주 메뉴" })).toBeHidden();
+    await expect(page.getByTestId("mobile-header-actions")).toBeHidden();
+    await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
+    await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute("href", "/planning");
+
+    const touchTargets = await nav.locator("a").evaluateAll((links) => links.map((link) => {
+      const box = link.getBoundingClientRect();
+      return { width: box.width, height: box.height };
+    }));
+    for (const target of touchTargets) {
+      expect(target.width).toBeGreaterThanOrEqual(44);
+      expect(target.height).toBeGreaterThanOrEqual(44);
+    }
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const mainBox = await page.locator("body > main").boundingBox();
+    const navBox = await nav.boundingBox();
+    expect(mainBox).not.toBeNull();
+    expect(navBox).not.toBeNull();
+    expect((mainBox?.y ?? 0) + (mainBox?.height ?? 0)).toBeLessThanOrEqual((navBox?.y ?? 0) + 1);
+  });
+}
+
+test("tablet width hands primary navigation to the header strip", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto("/planning");
+
+  await expect(page.getByTestId("mobile-bottom-nav-root")).toBeHidden();
+  const tabletNav = page.getByRole("navigation", { name: "태블릿 주 메뉴" });
+  await expect(tabletNav).toBeVisible();
+  await expect(page.getByTestId("mobile-header-actions")).toBeVisible();
+  await expect(tabletNav.locator('a[aria-current="page"]')).toHaveCount(1);
+  await expect(tabletNav.locator('a[aria-current="page"]')).toHaveAttribute("href", "/planning");
+});
+
+test("mobile active destination follows public route groups", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const item of [
+    { pathname: "/planning", href: "/planning" },
+    { pathname: "/public/dart", href: "/products" },
+    { pathname: "/settings/backup", href: "/settings" },
+  ]) {
+    await page.goto(item.pathname);
+    const nav = page.getByRole("navigation", { name: "모바일 주 메뉴" });
+    await expect(nav).toBeVisible();
+    await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
+    await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute("href", item.href);
+  }
+});
+
+test("ops and dev routes omit the mobile nav and its spacer", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const pathname of ["/ops", "/dev/data", "/dashboard/artifacts"]) {
+    await page.goto(pathname);
+    await expect(page.getByTestId("mobile-bottom-nav-root")).toHaveCount(0);
+    await expect(page.getByTestId("mobile-bottom-nav-spacer")).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "데스크톱 주 메뉴" }).locator('[aria-current="page"]')).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "태블릿 주 메뉴" }).locator('[aria-current="page"]')).toHaveCount(0);
+  }
+});

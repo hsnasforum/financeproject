@@ -30,7 +30,7 @@
       "rscPlan": "장기적으로 alert profile/rules API 초기 데이터로 옮기고 legacy bootstrap은 deprecation 후 제거합니다."
     },
     {
-      "file": "src/components/AutoMergeClient.tsx",
+      "file": "src/app/ops/auto-merge/_components/AutoMergeClient.tsx",
       "storage": ["sessionStorage"],
       "categories": ["dev-ops-unlock", "temporary-draft"],
       "purpose": "auto-merge 실행 전 armed 상태를 탭 세션에 보존합니다.",

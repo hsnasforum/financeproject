@@ -13,6 +13,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type PatchBody = {
   batchId?: unknown;
@@ -77,6 +78,8 @@ export async function PATCH(request: Request) {
       });
       return NextResponse.json({ ok: true, override, meta: userMeta });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof TxnTransferOverridesStoreInputError) {
         return NextResponse.json(
           {

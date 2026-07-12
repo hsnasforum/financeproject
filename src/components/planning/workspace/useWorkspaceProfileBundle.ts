@@ -14,8 +14,8 @@ import {
   type ProfileFormGoal,
   type ProfileJsonEditorState,
   type ProfileFormModel,
-} from "@/app/planning/_lib/profileFormModel";
-import { buildWorkspaceLiveSummary } from "@/app/planning/_lib/workspaceQuickStart";
+} from "@/lib/planning/ui/profileFormModel";
+import { buildWorkspaceLiveSummary } from "@/lib/planning/ui/workspaceQuickStart";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { isApiBaseResponse } from "@/lib/http/apiContract";
@@ -186,12 +186,12 @@ export function resolveProfileSaveFeedback(mode: ProfileSaveMode, beginnerMode: 
       : "프로필 수정 중 오류가 발생했습니다.";
   const successMessage = mode === "create"
     ? beginnerMode
-      ? "프로필 저장 완료. 다음 단계는 첫 실행이며, 결과 저장 뒤 리포트를 확인할 수 있습니다."
+      ? "프로필 저장 완료. 다음 단계는 첫 실행·기록 저장이며, 완료 뒤 리포트를 확인할 수 있습니다."
       : "프로필을 저장했습니다."
     : mode === "duplicate"
       ? "프로필을 복제했습니다."
       : beginnerMode
-        ? "프로필 저장 완료. 다음 단계는 첫 실행이며, 결과 저장 뒤 리포트를 확인할 수 있습니다."
+        ? "프로필 저장 완료. 다음 단계는 첫 실행·기록 저장이며, 완료 뒤 리포트를 확인할 수 있습니다."
         : "프로필을 수정했습니다.";
 
   return {

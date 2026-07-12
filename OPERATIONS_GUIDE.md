@@ -87,8 +87,13 @@ Also avoid:
 ```bash
 pnpm v3:doctor
 ```
-- Validates local `.data` files against schemas.
-- Reports counts, warnings, and errors.
+- Resolves the same 17-owner registry used by owner archive/restore, including `PLANNING_DATA_DIR`, packaged vault, namespace, and runtime-shared paths.
+- Reports one deterministic summary per owner and fails closed on contract drift, symlink/special files, hard-link aliases, unknown schema paths, malformed JSON/NDJSON, semantic schema mismatch, and size limits without creating or rewriting data.
+- Directory enumeration stops at the entry budget and file reads are bounded to the pre-open size plus a one-byte growth probe.
+- A live owner with no files is valid when `emptyAllowed=true`; archive manifest completeness remains a separate strict check.
+- Runtime-key encrypted stable payloads cannot be authenticated by the standalone CLI, so they are reported as `OWNER_DOCTOR_ENCRYPTED_PAYLOAD_UNVERIFIED`, not as corruption or success.
+- Namespace mode requires an explicit user identity. Run the command separately for each user namespace; only runtime-shared owners are common.
+- The top-level report fields remain stable, but summaries now use the 17 owner IDs rather than the previous partial check names. Support bundles and post-migration doctor output therefore have new diagnostic semantics without changing stored data.
 
 ## 5.2 Trim (manual retention)
 Preview only:
@@ -114,16 +119,34 @@ Custom archive path:
 pnpm v3:export -- --out=.data/exports/v3-backup.zip
 ```
 
-## 5.4 Restore (dry-run first)
+Experimental owner-aware encrypted export is available only for disposable fixtures or an explicitly offline copy:
+```bash
+chmod 700 /secure
+chmod 600 /secure/finance-owner-passphrase
+pnpm v3:export -- --format=owner --passphrase-file=/secure/finance-owner-passphrase --ack-quiesced --out=/secure/v3-owner-backup.owner.enc.json
+```
+- The passphrase and output paths must be outside every registered Planning owner.
+- The output directory chain must be owned by the current POSIX user or root; a group/other-writable non-sticky directory fails with `OWNER_ARCHIVE_OUTPUT_DIRECTORY_UNTRUSTED`.
+- `--ack-quiesced` records an operator assertion; it does not stop application writers or acquire a global lock.
+- Runtime-key encrypted stable profile/run payloads are not yet portable and make export fail closed.
+
+## 5.4 Restore validation (preview only)
 Dry-run validation:
 ```bash
 pnpm v3:restore -- --in=.data/exports/v3-backup.zip
 ```
-Apply restore:
+- `--apply` is disabled and exits with `V3_RESTORE_APPLY_DISABLED` until owner-aware staged restore is verified.
+- Do not manually rename or copy `.data` or `PLANNING_DATA_DIR` to bypass the guard.
+
+Experimental strict owner archive preview:
 ```bash
-pnpm v3:restore -- --in=.data/exports/v3-backup.zip --apply
+pnpm v3:restore -- --format=owner --passphrase-file=/secure/finance-owner-passphrase --in=/secure/v3-owner-backup.owner.enc.json
 ```
-- On apply, current `.data` is backed up to `.data.bak-<timestamp>`.
+- This command decrypts and validates the manifest, exact ZIP entry set, checksums, namespace, and limits without writing restored data.
+- Linux fixtures are covered. Native Windows owner export/passphrase-file input fails closed with `OWNER_ARCHIVE_WINDOWS_ACL_UNVERIFIED` until junction/reparse-point, ACL, rename, and open-handle behavior are verified.
+- A same-volume staged transaction and durable rollback journal now exist only as an internal `os.tmpdir()` fixture engine. There is no operator command or HTTP API for it, and it must not be invoked against copied or live user data.
+- The legacy whole-`.data` rename/write apply implementation has been removed. Both legacy and owner `--apply` remain blocked before archive or passphrase reads.
+- Registry-wide read-only doctor coverage does not activate restore. Apply remains blocked until semantic validation is wired into the restore plan, offline single-writer enforcement and orphan-lock policy exist, runtime-shared scope is approved, and native Windows rename/locking tests are complete.
 
 ## 5.5 Migrate (manual only)
 Preview migration:
@@ -147,11 +170,8 @@ pnpm v3:doctor
 ```bash
 pnpm v3:restore -- --in=<archive.zip>
 ```
-4. Apply restore only after dry-run is clean:
-```bash
-pnpm v3:restore -- --in=<archive.zip> --apply
-```
-5. Re-check integrity:
+4. Preserve the current data roots and archive separately. Do not attempt restore apply or manual file replacement.
+5. Re-check current integrity:
 ```bash
 pnpm v3:doctor
 ```

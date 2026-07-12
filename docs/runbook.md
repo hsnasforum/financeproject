@@ -65,15 +65,15 @@
 원인: 잘못된 번들이 적용됐다.
 해결 명령: `curl -X POST http://localhost:3000/api/dev/backup/restore-point/rollback`
 
-## v3 restore 경고 / archive placement
-증상: `pnpm v3:restore` preview/apply에서 `errors=0`, `warnings>0`가 나오거나, `--apply` 뒤 `.data/exports` 안의 archive가 사라진 것처럼 보인다.
+## v3 restore preview / apply 비활성
+증상: `pnpm v3:restore -- --in=<archive.zip> --apply`가 `V3_RESTORE_APPLY_DISABLED`로 종료된다.
 원인:
-- `planning/v3/ops/restore.ts`는 허용 경로(`.data/news`, `.data/indicators`, `.data/alerts`, `.data/journal`, `.data/exposure`, `.data/planning_v3_drafts`) 밖이면 `error`로 막지만, 허용 경로 안의 sidecar/derived artifact는 `UNKNOWN_ALLOWED_PATH` warning-only inventory notice로 남긴다.
-- `--apply`는 현재 `.data` 전체를 먼저 `.data.bak-*`로 rename한 뒤 archive 내용을 새 `.data`에 복원한다. archive를 `.data/exports/*.zip`에 두면 그 zip도 backup 쪽으로 함께 이동하고, restore payload에 `exports/`가 없으면 새 `.data/exports`는 자동 재생성되지 않는다.
+- 기존 apply는 제한된 archive owner만 검증한 뒤 `.data` 전체를 교체해 stable Planning과 canonical Planning v3 데이터를 활성 경로에서 제거할 수 있다.
+- owner-aware manifest, staging, checksum, rollback 검증이 완료될 때까지 apply를 fail-closed로 차단한다.
 운영 규칙:
-- `errors=0`이고 apply 뒤 doctor 결과가 `ok=true`면 warning-only inventory는 현재 기준 restore blocker가 아니다.
-- archive는 current `.data` 밖 절대 경로에 둔다. 예: `pnpm v3:export -- --out=/tmp/v3-data-backup-YYYYMMDDHHMMSS.zip` 후 `pnpm v3:restore -- --in=/tmp/v3-data-backup-YYYYMMDDHHMMSS.zip --apply`
-- repo 안에 보관하더라도 `.data/exports`가 아니라 current `.data` 밖 별도 경로를 사용한다.
+- `pnpm v3:restore -- --in=<archive.zip>` preview와 schema 검증만 사용한다.
+- `--apply`를 우회하려고 `.data` 또는 `PLANNING_DATA_DIR`를 수동 rename/copy하지 않는다.
+- 현재 데이터와 archive를 각각 보존하고, owner-aware staged restore가 검증된 뒤에만 apply 재활성화를 검토한다.
 
 ## planning fallback 관찰 (P4)
 목적: legacy top-level 필드 제거(PR-A/PR-B) 진행 가능 여부를 운영 지표로 판단한다.

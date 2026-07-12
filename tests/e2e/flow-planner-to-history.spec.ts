@@ -2,7 +2,7 @@ import { expect, test } from "./helpers/e2eTest";
 
 test("planning workspace links to runs page", async ({ page }) => {
   await page.goto("/planning");
-  const workspace = page.locator("main").last();
+  const workspace = page.getByRole("main");
   const runsLink = workspace.getByTestId("planning-runs-link");
 
   await expect(runsLink).toHaveAttribute("data-ready", "true", { timeout: 30_000 });

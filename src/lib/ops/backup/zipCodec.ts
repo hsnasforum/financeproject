@@ -3,8 +3,14 @@ import { createRequire } from "node:module";
 const requireModule = createRequire(import.meta.url);
 
 type YauzlEntry = {
+  compressedSize: number;
+  extraFields?: Array<{ id: number; data: Buffer }>;
+  externalFileAttributes: number;
   fileName?: string;
+  fileNameRaw?: Buffer;
+  generalPurposeBitFlag: number;
   uncompressedSize: number;
+  versionMadeBy: number;
 };
 
 type YauzlReadStream = NodeJS.ReadableStream & {
@@ -17,6 +23,7 @@ type YauzlReadStream = NodeJS.ReadableStream & {
 };
 
 type YauzlZipFile = {
+  entryCount: number;
   readEntry: () => void;
   close: () => void;
   on: {
@@ -33,7 +40,12 @@ type YauzlZipFile = {
 type YauzlModule = {
   fromBuffer: (
     input: Buffer,
-    options: { lazyEntries: boolean; decodeStrings: boolean },
+    options: {
+      lazyEntries: boolean;
+      decodeStrings: boolean;
+      strictFileNames?: boolean;
+      validateEntrySizes?: boolean;
+    },
     callback: (error: unknown, zipfile: YauzlZipFile | null | undefined) => void,
   ) => void;
 };
@@ -43,6 +55,15 @@ const yauzl = requireModule("yauzl") as YauzlModule;
 export type ZipFileEntry = {
   path: string;
   bytes: Uint8Array;
+};
+
+export type StrictZipDecodeOptions = {
+  maxArchiveBytes: number;
+  maxCompressedEntryBytes: number;
+  maxTotalCompressedBytes: number;
+  rejectDirectoryEntries?: boolean;
+  rejectEncryptedEntries?: boolean;
+  rejectNonRegularEntries?: boolean;
 };
 
 const ZIP_SIG_LOCAL = 0x04034b50;
@@ -68,6 +89,59 @@ function assertSafePath(pathValue: string): void {
   const tokens = pathValue.split("/").map((item) => item.trim());
   if (tokens.some((token) => !token || token === "." || token === "..")) {
     throw new Error(`INVALID_PATH:${pathValue}`);
+  }
+}
+
+const WINDOWS_RESERVED_RE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
+
+function assertStrictPortablePath(pathValue: string): void {
+  if (
+    !pathValue
+    || pathValue !== pathValue.trim()
+    || pathValue !== pathValue.normalize("NFC")
+    || pathValue.startsWith("/")
+    || pathValue.includes("\\")
+    || /[\u0000-\u001F\u007F<>:"|?*]/u.test(pathValue)
+  ) {
+    throw new Error(`INVALID_PATH:${pathValue}`);
+  }
+  const tokens = pathValue.split("/");
+  if (tokens.some((token) => (
+    !token
+    || token === "."
+    || token === ".."
+    || /[. ]$/u.test(token)
+    || WINDOWS_RESERVED_RE.test(token)
+  ))) {
+    throw new Error(`INVALID_PATH:${pathValue}`);
+  }
+}
+
+function asSafeLimit(value: number, fallback: number): number {
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function isNonRegularZipEntry(entry: YauzlEntry): boolean {
+  if ((entry.externalFileAttributes & 0x10) !== 0) return true;
+  const platform = (entry.versionMadeBy >>> 8) & 0xff;
+  if (platform !== 3) return false;
+  const mode = (entry.externalFileAttributes >>> 16) & 0xffff;
+  const fileType = mode & 0o170000;
+  return fileType !== 0 && fileType !== 0o100000;
+}
+
+function assertStrictFileNameEncoding(entry: YauzlEntry, fileName: string): void {
+  if ((entry.generalPurposeBitFlag & 0x0800) === 0) {
+    throw new Error("ZIP_UTF8_FLAG_REQUIRED");
+  }
+  if (
+    !Buffer.isBuffer(entry.fileNameRaw)
+    || !entry.fileNameRaw.equals(Buffer.from(fileName, "utf-8"))
+  ) {
+    throw new Error("ZIP_FILENAME_ENCODING_INVALID");
+  }
+  if (entry.extraFields?.some((field) => field.id === 0x7075)) {
+    throw new Error("ZIP_UNICODE_PATH_EXTRA_NOT_ALLOWED");
   }
 }
 
@@ -104,13 +178,16 @@ function u32(value: number): Buffer {
 }
 
 export function encodeZip(entriesInput: ZipFileEntry[]): Buffer {
+  if (entriesInput.length > 0xffff) {
+    throw new Error("ZIP32_ENTRY_LIMIT_EXCEEDED");
+  }
   const entries = entriesInput
     .map((entry) => {
       const pathValue = String(entry.path ?? "").trim().replaceAll("\\", "/");
       assertSafePath(pathValue);
       return {
         path: pathValue,
-        bytes: Buffer.from(entry.bytes),
+        bytes: Buffer.isBuffer(entry.bytes) ? entry.bytes : Buffer.from(entry.bytes),
       };
     })
     .sort((a, b) => a.path.localeCompare(b.path));
@@ -130,12 +207,18 @@ export function encodeZip(entriesInput: ZipFileEntry[]): Buffer {
   for (const entry of entries) {
     const nameBytes = Buffer.from(entry.path, "utf-8");
     const data = entry.bytes;
+    if (nameBytes.length > 0xffff) {
+      throw new Error(`ZIP32_PATH_LIMIT_EXCEEDED:${entry.path}`);
+    }
+    if (data.length > 0xffffffff || offset > 0xffffffff) {
+      throw new Error("ZIP32_SIZE_LIMIT_EXCEEDED");
+    }
     const checksum = crc32(data);
 
     const localHeader = Buffer.concat([
       u32(ZIP_SIG_LOCAL),
       u16(20), // version needed
-      u16(0), // flags
+      u16(0x0800), // flags: UTF-8 file name
       u16(0), // method: store
       u16(now.time),
       u16(now.date),
@@ -153,7 +236,7 @@ export function encodeZip(entriesInput: ZipFileEntry[]): Buffer {
       u32(ZIP_SIG_CENTRAL),
       u16(20), // version made by
       u16(20), // version needed
-      u16(0), // flags
+      u16(0x0800), // flags: UTF-8 file name
       u16(0), // method: store
       u16(now.time),
       u16(now.date),
@@ -171,10 +254,21 @@ export function encodeZip(entriesInput: ZipFileEntry[]): Buffer {
     ]);
     centralParts.push(centralHeader);
     offset += localHeader.length + data.length;
+    if (offset > 0xffffffff) {
+      throw new Error("ZIP32_SIZE_LIMIT_EXCEEDED");
+    }
   }
 
   const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
   const centralOffset = offset;
+  if (
+    !Number.isSafeInteger(centralSize)
+    || centralSize > 0xffffffff
+    || centralOffset > 0xffffffff
+    || centralOffset + centralSize > 0xffffffff
+  ) {
+    throw new Error("ZIP32_SIZE_LIMIT_EXCEEDED");
+  }
   const eocd = Buffer.concat([
     u32(ZIP_SIG_EOCD),
     u16(0), // disk number
@@ -189,34 +283,89 @@ export function encodeZip(entriesInput: ZipFileEntry[]): Buffer {
   return Buffer.concat([...localParts, ...centralParts, eocd]);
 }
 
+function byteRangesOverlap(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.buffer !== right.buffer) return false;
+  const leftStart = left.byteOffset;
+  const leftEnd = leftStart + left.byteLength;
+  const rightStart = right.byteOffset;
+  const rightEnd = rightStart + right.byteLength;
+  return leftStart < rightEnd && rightStart < leftEnd;
+}
+
 export async function decodeZip(
   input: Uint8Array | Buffer,
   options: {
     maxEntries: number;
     maxTotalBytes: number;
     maxEntryBytes?: number;
+    strict?: StrictZipDecodeOptions;
   },
 ): Promise<Map<string, Buffer>> {
   const maxEntries = Math.max(1, Math.trunc(options.maxEntries));
   const maxTotalBytes = Math.max(1, Math.trunc(options.maxTotalBytes));
   const maxEntryBytes = Math.max(1, Math.trunc(options.maxEntryBytes ?? maxTotalBytes));
+  const ownsSource = !Buffer.isBuffer(input);
   const source = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  const strict = options.strict;
+  const maxArchiveBytes = strict
+    ? asSafeLimit(strict.maxArchiveBytes, maxTotalBytes)
+    : Number.MAX_SAFE_INTEGER;
+  const maxCompressedEntryBytes = strict
+    ? asSafeLimit(strict.maxCompressedEntryBytes, maxEntryBytes)
+    : Number.MAX_SAFE_INTEGER;
+  const maxTotalCompressedBytes = strict
+    ? asSafeLimit(strict.maxTotalCompressedBytes, maxTotalBytes)
+    : Number.MAX_SAFE_INTEGER;
 
-  return new Promise<Map<string, Buffer>>((resolve, reject) => {
-    yauzl.fromBuffer(source, { lazyEntries: true, decodeStrings: true }, (openErr, zipfile) => {
-      if (openErr || !zipfile) {
-        const message = openErr instanceof Error ? openErr.message : "open failed";
-        reject(new Error(`INVALID_ZIP:${message}`));
-        return;
-      }
+  try {
+    if (source.length > maxArchiveBytes) {
+      throw new Error("ZIP_ARCHIVE_LIMIT_EXCEEDED");
+    }
+
+    return await new Promise<Map<string, Buffer>>((resolve, reject) => {
+      yauzl.fromBuffer(source, {
+        lazyEntries: true,
+        decodeStrings: true,
+        strictFileNames: Boolean(strict),
+        validateEntrySizes: true,
+      }, (openErr, zipfile) => {
+        if (openErr || !zipfile) {
+          const message = openErr instanceof Error ? openErr.message : "open failed";
+          reject(new Error(`INVALID_ZIP:${message}`));
+          return;
+        }
 
       const out = new Map<string, Buffer>();
       let totalBytes = 0;
+      let totalCompressedBytes = 0;
+      let seenCentralEntries = 0;
       let finished = false;
+      let activeChunks: Buffer[] | undefined;
+
+      const zeroBuffers = (buffers: Iterable<Buffer>): void => {
+        for (const bytes of buffers) bytes.fill(0);
+      };
+
+      const discardPartialOutput = (): void => {
+        if (activeChunks) {
+          zeroBuffers(activeChunks);
+          activeChunks.length = 0;
+          activeChunks = undefined;
+        }
+        zeroBuffers(out.values());
+        out.clear();
+      };
+
+      if (!Number.isSafeInteger(zipfile.entryCount) || zipfile.entryCount > maxEntries) {
+        zipfile.close();
+        reject(new Error("ZIP_ENTRY_LIMIT_EXCEEDED"));
+        return;
+      }
 
       const fail = (error: Error) => {
         if (finished) return;
         finished = true;
+        discardPartialOutput();
         zipfile.close();
         reject(error);
       };
@@ -229,25 +378,76 @@ export async function decodeZip(
       zipfile.on("entry", (entry) => {
         if (finished) return;
 
-        const fileName = String(entry.fileName ?? "").trim().replaceAll("\\", "/");
+        seenCentralEntries += 1;
+        if (seenCentralEntries > maxEntries) {
+          fail(new Error("ZIP_ENTRY_LIMIT_EXCEEDED"));
+          return;
+        }
+
+        const rawFileName = String(entry.fileName ?? "");
+        if (strict) {
+          try {
+            assertStrictFileNameEncoding(entry, rawFileName);
+          } catch {
+            fail(new Error(`INVALID_ZIP_ENTRY:${rawFileName}`));
+            return;
+          }
+        }
+        if (strict && rawFileName.endsWith("/")) {
+          if (strict.rejectDirectoryEntries ?? true) {
+            fail(new Error(`ZIP_DIRECTORY_ENTRY_NOT_ALLOWED:${rawFileName}`));
+            return;
+          }
+          zipfile.readEntry();
+          return;
+        }
+        const fileName = strict
+          ? rawFileName
+          : rawFileName.trim().replaceAll("\\", "/");
         if (!fileName || fileName.endsWith("/")) {
           zipfile.readEntry();
           return;
         }
 
         try {
-          assertSafePath(fileName);
+          if (strict) {
+            assertStrictPortablePath(fileName);
+          } else {
+            assertSafePath(fileName);
+          }
         } catch {
           fail(new Error(`INVALID_ZIP_ENTRY:${fileName}`));
           return;
         }
 
-        if (out.has(fileName)) {
-          fail(new Error(`DUPLICATE_ZIP_ENTRY:${fileName}`));
+        if (strict && (strict.rejectEncryptedEntries ?? true) && (entry.generalPurposeBitFlag & 0x1) !== 0) {
+          fail(new Error(`ZIP_ENCRYPTED_ENTRY_NOT_ALLOWED:${fileName}`));
           return;
         }
-        if (out.size >= maxEntries) {
-          fail(new Error("ZIP_ENTRY_LIMIT_EXCEEDED"));
+        if (strict && (strict.rejectNonRegularEntries ?? true) && isNonRegularZipEntry(entry)) {
+          fail(new Error(`ZIP_NON_REGULAR_ENTRY_NOT_ALLOWED:${fileName}`));
+          return;
+        }
+        if (
+          !Number.isSafeInteger(entry.compressedSize)
+          || !Number.isSafeInteger(entry.uncompressedSize)
+          || entry.compressedSize < 0
+          || entry.uncompressedSize < 0
+        ) {
+          fail(new Error(`ZIP_ENTRY_SIZE_INVALID:${fileName}`));
+          return;
+        }
+        totalCompressedBytes += entry.compressedSize;
+        if (
+          entry.compressedSize > maxCompressedEntryBytes
+          || totalCompressedBytes > maxTotalCompressedBytes
+        ) {
+          fail(new Error("ZIP_COMPRESSED_SIZE_LIMIT_EXCEEDED"));
+          return;
+        }
+
+        if (out.has(fileName)) {
+          fail(new Error(`DUPLICATE_ZIP_ENTRY:${fileName}`));
           return;
         }
         if (entry.uncompressedSize > maxEntryBytes) {
@@ -261,16 +461,24 @@ export async function decodeZip(
             return;
           }
           const chunks: Buffer[] = [];
+          activeChunks = chunks;
           let entryBytes = 0;
 
           stream.on("data", (chunk: Buffer | Uint8Array | string) => {
-            if (finished) return;
-            const bytes = Buffer.isBuffer(chunk)
-              ? chunk
-              : (typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+            const bytes = typeof chunk === "string"
+              ? Buffer.from(chunk)
+              : Buffer.from(chunk);
+            if (typeof chunk !== "string" && !byteRangesOverlap(chunk, source)) {
+              chunk.fill(0);
+            }
+            if (finished) {
+              bytes.fill(0);
+              return;
+            }
             entryBytes += bytes.length;
             totalBytes += bytes.length;
             if (entryBytes > maxEntryBytes || totalBytes > maxTotalBytes) {
+              bytes.fill(0);
               fail(new Error("ZIP_SIZE_LIMIT_EXCEEDED"));
               stream.destroy(new Error("ZIP_SIZE_LIMIT_EXCEEDED"));
               return;
@@ -283,8 +491,34 @@ export async function decodeZip(
           });
           stream.on("end", () => {
             if (finished) return;
-            out.set(fileName, Buffer.concat(chunks));
-            zipfile.readEntry();
+            let decodedBytes: Buffer | undefined;
+            let returned = false;
+            try {
+              decodedBytes = Buffer.allocUnsafe(entryBytes);
+              let offset = 0;
+              for (const chunk of chunks) {
+                offset += chunk.copy(decodedBytes, offset);
+              }
+              if (offset !== entryBytes) {
+                throw new Error("ZIP_ENTRY_SIZE_CHANGED");
+              }
+              out.set(fileName, decodedBytes);
+              returned = true;
+              activeChunks = undefined;
+              zeroBuffers(chunks);
+              chunks.length = 0;
+              zipfile.readEntry();
+            } catch (error) {
+              if (!returned) decodedBytes?.fill(0);
+              const message = error instanceof Error ? error.message : "read_entry_failed";
+              fail(new Error(`INVALID_ZIP_ENTRY:${message}`));
+            } finally {
+              if (activeChunks === chunks) {
+                zeroBuffers(chunks);
+                chunks.length = 0;
+                activeChunks = undefined;
+              }
+            }
           });
         });
       });
@@ -295,7 +529,10 @@ export async function decodeZip(
         resolve(out);
       });
 
-      zipfile.readEntry();
+        zipfile.readEntry();
+      });
     });
-  });
+  } finally {
+    if (ownsSource) source.fill(0);
+  }
 }

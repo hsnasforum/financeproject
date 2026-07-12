@@ -1,9 +1,15 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { encodeZip } from "../../../src/lib/ops/backup/zipCodec";
-import { runV3Restore } from "./restore";
+import {
+  runV3Restore,
+  V3_RESTORE_APPLY_DISABLED_CODE,
+} from "./restore";
 
 function writeText(filePath: string, content: string): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -17,6 +23,10 @@ function makeArchive(filePath: string, entries: Array<{ path: string; text: stri
   })));
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, bytes);
+}
+
+function sha256(filePath: string): string {
+  return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
 describe("planning v3 restore cli", () => {
@@ -99,80 +109,123 @@ describe("planning v3 restore cli", () => {
       archivePath,
       apply: true,
       now: new Date("2026-03-04T00:00:00.000Z"),
-    })).rejects.toThrow("RESTORE_BLOCKED:VALIDATION_FAILED");
+    })).rejects.toMatchObject({
+      name: "V3RestoreApplyDisabledError",
+      code: V3_RESTORE_APPLY_DISABLED_CODE,
+    });
   });
 
-  it("backs up existing .data then restores and runs doctor in apply mode", async () => {
+  it("blocks apply before archive reads or data-root mutation", async () => {
     const root = createRoot();
-    writeText(path.join(root, ".data/news/items/old.json"), JSON.stringify({
+    const existingDataPath = path.join(root, ".data/news/items/old.json");
+    const canonicalV3Path = path.join(root, ".data/planning-v3/accounts.json");
+    const planningDataDir = path.join(root, "runtime-planning-data");
+    const stablePlanningPath = path.join(planningDataDir, "users/user-a/runs/run-1.json");
+    const archivePath = path.join(root, "tmp", "blocked-apply.zip");
+
+    writeText(existingDataPath, JSON.stringify({
       id: "old",
       sourceId: "source-old",
       title: "old",
       url: "https://example.com/old",
       fetchedAt: "2026-01-01T00:00:00.000Z",
     }));
+    writeText(canonicalV3Path, JSON.stringify({ accounts: [{ id: "account-1" }] }));
+    writeText(stablePlanningPath, JSON.stringify({ id: "run-1", userId: "user-a" }));
+    writeText(archivePath, "not-a-zip");
 
-    const archivePath = path.join(root, "tmp", "good.zip");
-    makeArchive(archivePath, [
-      {
-        path: ".data/news/items/new.json",
-        text: JSON.stringify({
-          id: "new",
-          sourceId: "source-a",
-          title: "new",
-          url: "https://example.com/new",
-          fetchedAt: "2026-03-04T00:10:00.000Z",
-        }),
-      },
-      {
-        path: ".data/news/state.json",
-        text: JSON.stringify({
-          lastRunAt: "2026-03-04T00:10:00.000Z",
-          sources: {},
-        }),
-      },
-      {
-        path: ".data/exposure/profile.json",
-        text: JSON.stringify({
-          debt: {
-            hasDebt: "unknown",
-            rateType: "unknown",
-            repricingHorizon: "unknown",
-          },
-          inflation: {
-            essentialExpenseShare: "unknown",
-            rentOrMortgageShare: "unknown",
-            energyShare: "unknown",
-          },
-          fx: {
-            foreignConsumption: "unknown",
-            foreignIncome: "unknown",
-          },
-          income: {
-            incomeStability: "unknown",
-          },
-          liquidity: {
-            monthsOfCashBuffer: "unknown",
-          },
-        }),
-      },
+    const checksums = new Map([
+      [existingDataPath, sha256(existingDataPath)],
+      [canonicalV3Path, sha256(canonicalV3Path)],
+      [stablePlanningPath, sha256(stablePlanningPath)],
+      [archivePath, sha256(archivePath)],
+    ]);
+    const previousPlanningDataDir = process.env.PLANNING_DATA_DIR;
+    process.env.PLANNING_DATA_DIR = planningDataDir;
+
+    try {
+      await expect(runV3Restore({
+        cwd: root,
+        archivePath,
+        apply: true,
+        now: new Date("2026-03-04T00:00:00.000Z"),
+      })).rejects.toMatchObject({
+        name: "V3RestoreApplyDisabledError",
+        code: V3_RESTORE_APPLY_DISABLED_CODE,
+        message: "owner-aware staged restore가 준비될 때까지 --apply는 비활성 상태입니다.",
+      });
+
+      for (const [filePath, checksum] of checksums) {
+        expect(sha256(filePath)).toBe(checksum);
+      }
+
+      expect(fs.readdirSync(root).some((name) => name.startsWith(".data.bak-"))).toBe(false);
+      expect(fs.existsSync(path.join(root, ".data/news/items/new.json"))).toBe(false);
+    } finally {
+      if (previousPlanningDataDir === undefined) {
+        delete process.env.PLANNING_DATA_DIR;
+      } else {
+        process.env.PLANNING_DATA_DIR = previousPlanningDataDir;
+      }
+    }
+  });
+
+  it("does not retain a legacy whole-data-root apply implementation behind the guard", () => {
+    const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
+    const source = fs.readFileSync(
+      path.join(repositoryRoot, "src/lib/planning/v3/ops/restore.ts"),
+      "utf-8",
+    );
+
+    expect(source).not.toContain("fs.renameSync(dataDir");
+    expect(source).not.toContain("RESTORE_FAILED:");
+    expect(source).not.toContain(".data.bak-");
+  });
+
+  it("returns a stable non-zero CLI error without mutating the temporary data roots", () => {
+    const root = createRoot();
+    const existingDataPath = path.join(root, ".data/news/items/old.json");
+    const planningDataDir = path.join(root, "runtime-planning-data");
+    const stablePlanningPath = path.join(planningDataDir, "users/user-a/runs/run-1.json");
+    const archivePath = path.join(root, "tmp", "blocked-cli-apply.zip");
+    const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
+    const restoreEntrypoint = path.join(repositoryRoot, "src/lib/planning/v3/ops/restore.ts");
+    const tsxCli = fileURLToPath(import.meta.resolve("tsx/cli"));
+
+    writeText(existingDataPath, JSON.stringify({ id: "old" }));
+    writeText(stablePlanningPath, JSON.stringify({ id: "run-1", userId: "user-a" }));
+    writeText(archivePath, "not-a-zip");
+
+    const checksums = new Map([
+      [existingDataPath, sha256(existingDataPath)],
+      [stablePlanningPath, sha256(stablePlanningPath)],
+      [archivePath, sha256(archivePath)],
     ]);
 
-    const summary = await runV3Restore({
+    const result = spawnSync(process.execPath, [
+      tsxCli,
+      "--tsconfig",
+      path.join(repositoryRoot, "tsconfig.json"),
+      restoreEntrypoint,
+      `--in=${archivePath}`,
+      "--apply",
+    ], {
       cwd: root,
-      archivePath,
-      apply: true,
-      now: new Date("2026-03-04T00:00:00.000Z"),
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        PLANNING_DATA_DIR: planningDataDir,
+      },
     });
 
-    expect(summary.mode).toBe("apply");
-    expect(summary.totals.errors).toBe(0);
-    expect(summary.totals.restoredFiles).toBe(3);
-    expect(summary.backupPath).toBeTruthy();
-    expect(summary.doctor).toBeDefined();
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`[v3:restore] code=${V3_RESTORE_APPLY_DISABLED_CODE}`);
+    expect(result.stdout).toBe("");
 
-    expect(fs.existsSync(path.join(root, ".data/news/items/new.json"))).toBe(true);
-    expect(fs.existsSync(path.join(root, ".data/news/items/old.json"))).toBe(false);
-    expect(fs.existsSync(path.join(summary.backupPath!, "news/items/old.json"))).toBe(true);
+    for (const [filePath, checksum] of checksums) {
+      expect(sha256(filePath)).toBe(checksum);
+    }
+    expect(fs.readdirSync(root).some((name) => name.startsWith(".data.bak-"))).toBe(false);
   });
 });

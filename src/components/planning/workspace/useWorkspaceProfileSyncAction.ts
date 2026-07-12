@@ -17,7 +17,7 @@ import {
   toProfileJson,
   type FormDraft,
   type ProfileFormModel,
-} from "@/app/planning/_lib/profileFormModel";
+} from "@/lib/planning/ui/profileFormModel";
 import { type ProfileSaveMode } from "@/components/planning/workspace/useWorkspaceProfileBundle";
 
 type ApiError = {

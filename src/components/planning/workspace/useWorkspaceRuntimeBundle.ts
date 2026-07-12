@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
-import { assumptionsFormToRecord, type AssumptionsFormModel } from "@/app/planning/_lib/workspaceAssumptionsEditor";
-import { debtOfferRowsToPayload, type DebtOfferFormRow } from "@/app/planning/_lib/workspaceDebtOffersEditor";
+import { assumptionsFormToRecord, type AssumptionsFormModel } from "@/lib/planning/ui/workspaceAssumptionsEditor";
+import { debtOfferRowsToPayload, type DebtOfferFormRow } from "@/lib/planning/ui/workspaceDebtOffersEditor";
 import {
   buildStepStatusesFromRunStages,
-} from "@/app/planning/_lib/workspaceRunResult";
-import { type SnapshotSelection } from "@/app/planning/_lib/snapshotSelection";
+} from "@/lib/planning/ui/workspaceRunResult";
+import { type SnapshotSelection } from "@/lib/planning/ui/snapshotSelection";
 import { type Locale } from "@/lib/planning/i18n";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import { applyProfilePatch } from "@/lib/planning/v2/profilePatch";
@@ -24,7 +24,7 @@ import {
   validateDebtOfferLiabilityIds,
   type FormDraft,
   type ProfileFormModel,
-} from "@/app/planning/_lib/profileFormModel";
+} from "@/lib/planning/ui/profileFormModel";
 import { type ProfileSaveMode } from "@/components/planning/workspace/useWorkspaceProfileBundle";
 import {
   SCENARIO_TEMPLATE_LABELS,
@@ -141,7 +141,6 @@ type RuntimeGuardBundleInput = {
   preflightHasBlockers: boolean;
   preflightBlockIssues: PreflightIssue[];
   preflightWarnIssues: PreflightIssue[];
-  saveBlockedByHealth: boolean;
   healthSummary: {
     criticalCount?: number;
     warningCodes?: string[];
@@ -250,7 +249,6 @@ export function useWorkspaceRuntimeActionsBundle({
     preflightHasBlockers,
     preflightBlockIssues,
     preflightWarnIssues,
-    saveBlockedByHealth,
     healthSummary,
   } = guard;
   const {
@@ -590,10 +588,8 @@ export function useWorkspaceRuntimeActionsBundle({
   });
 
   const {
-    persistRunAction,
     runPlanAction,
     runScenarioAction,
-    saveRunAction,
   } = useWorkspaceRunExecutionActions({
     locale,
     beginnerMode,
@@ -606,7 +602,6 @@ export function useWorkspaceRuntimeActionsBundle({
     preflightHasBlockers,
     preflightBlockIssues,
     preflightWarnIssues,
-    saveBlockedByHealth,
     parseRunInputs,
     buildRunInputScenarioFromSelection,
     syncProfileIfNeeded,
@@ -650,10 +645,8 @@ export function useWorkspaceRuntimeActionsBundle({
     runOptimizeAction,
     pollRunUntilTerminal,
     syncProfileIfNeeded,
-    persistRunAction,
     runPlanAction,
     runScenarioAction,
-    saveRunAction,
     submitPlanningFeedbackAction,
   };
 }

@@ -2,7 +2,7 @@ import { formatKrw, formatMonths } from "@/lib/planning/i18n/format";
 import { type Stage } from "@/lib/planning/engine";
 import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
 import { PLANNER_ACTION_LINKS } from "@/lib/planning/catalog/plannerActionLinks";
-import { type ReportVM } from "../../_lib/reportViewModel";
+import { type ReportVM } from "@/lib/planning/reports/reportViewModel";
 
 export type ReportSummaryTone = {
   label: string;

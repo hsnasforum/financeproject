@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateWarningsByUniqueMonth } from "../../src/app/planning/reports/_lib/warningAggregation";
+import { aggregateWarningsByUniqueMonth } from "../../src/lib/planning/reports/warningAggregation";
 
 describe("aggregateWarningsByUniqueMonth", () => {
   it("dedupes repeated warnings in the same month", () => {

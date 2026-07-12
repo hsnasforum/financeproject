@@ -6,14 +6,14 @@ import {
   parseAssumptionsEditorJson,
   splitAssumptionsRecord,
   type AssumptionsFormModel,
-} from "@/app/planning/_lib/workspaceAssumptionsEditor";
+} from "@/lib/planning/ui/workspaceAssumptionsEditor";
 import {
   debtOfferRowsToPayload,
   parseDebtOffersEditorJson,
   parseDebtOffersFormRows,
   type DebtOfferFormRow,
-} from "@/app/planning/_lib/workspaceDebtOffersEditor";
-import { defaults as planningExecutionDefaults } from "@/app/planning/_lib/workspaceUiState";
+} from "@/lib/planning/ui/workspaceDebtOffersEditor";
+import { defaults as planningExecutionDefaults } from "@/lib/planning/ui/workspaceUiState";
 import { type PlanningFeatureFlags } from "@/lib/planning/config";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import {
@@ -51,7 +51,7 @@ export const PLANNING_BEGINNER_MODE_KEY = "planning:v2:beginnerMode";
 
 type WorkspaceExecutionOptionsBundleInput = {
   featureFlags: PlanningFeatureFlags;
-  saveBlockedByHealth: boolean;
+  advancedActionsBlockedByHealth: boolean;
 };
 
 type StorageReader = Pick<Storage, "getItem">;
@@ -76,14 +76,14 @@ export function persistWorkspaceBeginnerMode(
 
 export function applyWorkspaceExecutionDisableState(input: {
   current: WorkspaceAdvancedExecutionOptions;
-  saveBlockedByHealth: boolean;
+  advancedActionsBlockedByHealth: boolean;
   monteCarloServerDisabled: boolean;
   includeProductsServerDisabled: boolean;
   optimizerServerDisabled: boolean;
 }): WorkspaceAdvancedExecutionOptions {
   let next = input.current;
 
-  if (input.saveBlockedByHealth) {
+  if (input.advancedActionsBlockedByHealth) {
     next = {
       ...next,
       runMonteCarloEnabled: false,
@@ -173,7 +173,7 @@ export function parseWorkspaceDebtOffersJson(nextJson: string): {
 
 export function useWorkspaceExecutionOptionsBundle({
   featureFlags,
-  saveBlockedByHealth,
+  advancedActionsBlockedByHealth,
 }: WorkspaceExecutionOptionsBundleInput) {
   const safeDefaults = useMemo(() => planningExecutionDefaults(true), []);
   const initialAssumptionsSplit = useMemo(() => {
@@ -224,8 +224,8 @@ export function useWorkspaceExecutionOptionsBundle({
   const effectiveRunScenariosEnabled = beginnerMode ? true : runScenariosEnabled;
   const effectiveRunMonteCarloEnabled = beginnerMode
     ? false
-    : (runMonteCarloEnabled && !saveBlockedByHealth && !monteCarloServerDisabled);
-  const effectiveRunActionsEnabled = (beginnerMode ? true : runActionsEnabled) && !saveBlockedByHealth;
+    : (runMonteCarloEnabled && !advancedActionsBlockedByHealth && !monteCarloServerDisabled);
+  const effectiveRunActionsEnabled = (beginnerMode ? true : runActionsEnabled) && !advancedActionsBlockedByHealth;
   const effectiveRunDebtEnabled = beginnerMode ? true : runDebtEnabled;
   const effectiveIncludeProducts = beginnerMode ? false : includeProducts;
 
@@ -239,7 +239,7 @@ export function useWorkspaceExecutionOptionsBundle({
         runOptimizeEnabled,
         includeProducts,
       },
-      saveBlockedByHealth,
+      advancedActionsBlockedByHealth,
       monteCarloServerDisabled,
       includeProductsServerDisabled,
       optimizerServerDisabled,
@@ -276,7 +276,7 @@ export function useWorkspaceExecutionOptionsBundle({
     runMonteCarloEnabled,
     runOptimizeEnabled,
     runScenariosEnabled,
-    saveBlockedByHealth,
+    advancedActionsBlockedByHealth,
   ]);
 
   useEffect(() => {

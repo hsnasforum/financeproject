@@ -1,6 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import {
+  isStorageNotFoundError,
+  readJsonFile,
+  storageSchemaCorrupted,
+  toStorageReadError,
+  toStorageWriteError,
+} from "../../storage/serverFileRead";
+import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type CategoryId, type TxnOverride } from "../domain/types";
@@ -10,6 +18,7 @@ import { resolvePlanningV3DataDir, resolvePlanningV3LegacyDataDir } from "./data
 type OverridesState = {
   version: 1;
   items: Record<string, TxnOverride>;
+  hadInvalidItems?: boolean;
 };
 
 const LEGACY_BATCH_ID = "legacy";
@@ -198,61 +207,78 @@ function normalizeOverride(value: unknown, fallbackBatchId: string): TxnOverride
   }
 }
 
-async function readBatchState(batchId: string): Promise<OverridesState> {
+function parseState(
+  parsed: unknown,
+  filePath: string,
+  fallbackBatchId: string,
+  forceBatchId?: string,
+): OverridesState {
+  if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.items)) {
+    throw storageSchemaCorrupted(filePath, "transaction overrides storage schema is invalid");
+  }
+
+  const normalized: Record<string, TxnOverride> = {};
+  let hadInvalidItems = false;
+  for (const [txnId, row] of Object.entries(parsed.items)) {
+    const candidate = normalizeOverride(
+      isRecord(row)
+        ? { ...row, txnId, ...(forceBatchId ? { batchId: forceBatchId } : {}) }
+        : null,
+      fallbackBatchId,
+    );
+    if (!candidate) {
+      hadInvalidItems = true;
+      continue;
+    }
+    normalized[candidate.txnId] = candidate;
+  }
+  return {
+    version: 1,
+    items: sortedObject(normalized),
+    ...(hadInvalidItems ? { hadInvalidItems: true } : {}),
+  };
+}
+
+async function readBatchState(
+  batchId: string,
+  filePath = resolveBatchOverridesPath(batchId),
+): Promise<OverridesState> {
   const safeBatchId = normalizeBatchId(batchId);
+  const loaded = await readJsonFile(filePath);
+  if (loaded.kind === "not-found") return { version: 1, items: {} };
+  return parseState(loaded.value, filePath, safeBatchId, safeBatchId);
+}
+
+async function writeBatchState(filePath: string, state: OverridesState): Promise<void> {
   try {
-    const raw = await fs.readFile(resolveBatchOverridesPath(safeBatchId), "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.items)) {
-      return { version: 1, items: {} };
-    }
-    const normalized: Record<string, TxnOverride> = {};
-    for (const [txnId, row] of Object.entries(parsed.items)) {
-      const candidate = normalizeOverride(isRecord(row) ? { ...row, txnId, batchId: safeBatchId } : null, safeBatchId);
-      if (!candidate) continue;
-      normalized[candidate.txnId] = candidate;
-    }
-    return {
+    await atomicWriteJson(filePath, {
       version: 1,
-      items: sortedObject(normalized),
-    };
-  } catch {
-    return { version: 1, items: {} };
+      items: sortedObject(state.items),
+    });
+  } catch (error) {
+    throw toStorageWriteError(error, filePath);
   }
 }
 
-async function writeBatchState(batchId: string, state: OverridesState): Promise<void> {
-  const safeBatchId = normalizeBatchId(batchId);
-  await atomicWriteJson(resolveBatchOverridesPath(safeBatchId), {
-    version: 1,
-    items: sortedObject(state.items),
-  });
+async function readLegacyState(filePath = resolveLegacyOverridesPath()): Promise<OverridesState> {
+  const loaded = await readJsonFile(filePath);
+  if (loaded.kind === "not-found") return { version: 1, items: {} };
+  return parseState(loaded.value, filePath, LEGACY_BATCH_ID);
 }
 
-async function readLegacyState(): Promise<OverridesState> {
+async function writeLegacyState(filePath: string, state: OverridesState): Promise<void> {
   try {
-    const raw = await fs.readFile(resolveLegacyOverridesPath(), "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.items)) {
-      return { version: 1, items: {} };
-    }
-    const normalized: Record<string, TxnOverride> = {};
-    for (const [txnId, row] of Object.entries(parsed.items)) {
-      const candidate = normalizeOverride(isRecord(row) ? { ...row, txnId } : null, LEGACY_BATCH_ID);
-      if (!candidate) continue;
-      normalized[candidate.txnId] = candidate;
-    }
-    return { version: 1, items: sortedObject(normalized) };
-  } catch {
-    return { version: 1, items: {} };
+    await atomicWriteJson(filePath, {
+      version: 1,
+      items: sortedObject(state.items),
+    });
+  } catch (error) {
+    throw toStorageWriteError(error, filePath);
   }
 }
 
-async function writeLegacyState(state: OverridesState): Promise<void> {
-  await atomicWriteJson(resolveLegacyOverridesPath(), {
-    version: 1,
-    items: sortedObject(state.items),
-  });
+function withTxnOverridesWriteLock<T>(filePath: string, callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning-v3:txn-overrides:${filePath}`, callback);
 }
 
 // Batch-scoped override owner. User-facing reads/writes should stay on this surface.
@@ -271,14 +297,16 @@ export async function listLegacyUnscopedTxnOverrides(): Promise<Record<string, T
 }
 
 async function listAllBatchOverrideFiles(): Promise<string[]> {
+  const overridesDir = resolveOverridesDir();
   try {
-    const names = await fs.readdir(resolveOverridesDir());
+    const names = await fs.readdir(overridesDir);
     return names
       .filter((name) => name.endsWith(".json"))
-      .map((name) => path.join(resolveOverridesDir(), name))
+      .map((name) => path.join(overridesDir, name))
       .sort((left, right) => left.localeCompare(right));
-  } catch {
-    return [];
+  } catch (error) {
+    if (isStorageNotFoundError(error)) return [];
+    throw toStorageReadError(error, overridesDir);
   }
 }
 
@@ -334,24 +362,30 @@ export async function upsertOverride(
       ]);
     }
 
-    const state = await readBatchState(batchId);
-    const current = state.items[txnId];
-    const note = asString(arg1.note);
-    const next: TxnOverride = {
-      batchId,
-      txnId,
-      ...(kind ? { kind } : (current?.kind ? { kind: current.kind } : {})),
-      ...(categoryId ? { categoryId } : (current?.categoryId ? { categoryId: current.categoryId } : {})),
-      ...(categoryId
-        ? { category: categoryId }
-        : (current?.category ? { category: current.category } : {})),
-      updatedAt: new Date().toISOString(),
-      ...(note ? { note: note.slice(0, 120) } : (current?.note ? { note: current.note } : {})),
-    };
+    const filePath = resolveBatchOverridesPath(batchId);
+    return withTxnOverridesWriteLock(filePath, async () => {
+      const state = await readBatchState(batchId, filePath);
+      if (state.hadInvalidItems) {
+        throw storageSchemaCorrupted(filePath, "transaction overrides storage contains invalid items");
+      }
+      const current = state.items[txnId];
+      const note = asString(arg1.note);
+      const next: TxnOverride = {
+        batchId,
+        txnId,
+        ...(kind ? { kind } : (current?.kind ? { kind: current.kind } : {})),
+        ...(categoryId ? { categoryId } : (current?.categoryId ? { categoryId: current.categoryId } : {})),
+        ...(categoryId
+          ? { category: categoryId }
+          : (current?.category ? { category: current.category } : {})),
+        updatedAt: new Date().toISOString(),
+        ...(note ? { note: note.slice(0, 120) } : (current?.note ? { note: current.note } : {})),
+      };
 
-    state.items[txnId] = next;
-    await writeBatchState(batchId, state);
-    return next;
+      state.items[txnId] = next;
+      await writeBatchState(filePath, state);
+      return next;
+    });
   }
 
   const txnId = normalizeTxnId(arg1);
@@ -368,20 +402,26 @@ export async function upsertOverride(
     ]);
   }
 
-  const state = await readLegacyState();
-  const current = state.items[txnId];
-  const next: TxnOverride = {
-    batchId: LEGACY_BATCH_ID,
-    txnId,
-    ...(kind ? { kind } : (current?.kind ? { kind: current.kind } : {})),
-    ...(category ? { category } : (current?.category ? { category: current.category } : {})),
-    ...(categoryId ? { categoryId } : (current?.categoryId ? { categoryId: current.categoryId } : {})),
-    updatedAt: new Date().toISOString(),
-    ...(note ? { note: note.slice(0, 120) } : (current?.note ? { note: current.note } : {})),
-  };
-  state.items[txnId] = next;
-  await writeLegacyState(state);
-  return next;
+  const filePath = resolveLegacyOverridesPath();
+  return withTxnOverridesWriteLock(filePath, async () => {
+    const state = await readLegacyState(filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "transaction overrides storage contains invalid items");
+    }
+    const current = state.items[txnId];
+    const next: TxnOverride = {
+      batchId: LEGACY_BATCH_ID,
+      txnId,
+      ...(kind ? { kind } : (current?.kind ? { kind: current.kind } : {})),
+      ...(category ? { category } : (current?.category ? { category: current.category } : {})),
+      ...(categoryId ? { categoryId } : (current?.categoryId ? { categoryId: current.categoryId } : {})),
+      updatedAt: new Date().toISOString(),
+      ...(note ? { note: note.slice(0, 120) } : (current?.note ? { note: current.note } : {})),
+    };
+    state.items[txnId] = next;
+    await writeLegacyState(filePath, state);
+    return next;
+  });
 }
 
 export async function deleteOverride(input: { batchId: unknown; txnId: unknown }): Promise<void>;
@@ -392,19 +432,31 @@ export async function deleteOverride(arg1: { batchId: unknown; txnId: unknown } 
   if (isRecord(arg1) && arg1.batchId !== undefined) {
     const batchId = normalizeBatchId(arg1.batchId);
     const txnId = normalizeTxnId(arg1.txnId);
-    const state = await readBatchState(batchId);
-    if (!(txnId in state.items)) return;
-    delete state.items[txnId];
-    await writeBatchState(batchId, state);
+    const filePath = resolveBatchOverridesPath(batchId);
+    await withTxnOverridesWriteLock(filePath, async () => {
+      const state = await readBatchState(batchId, filePath);
+      if (state.hadInvalidItems) {
+        throw storageSchemaCorrupted(filePath, "transaction overrides storage contains invalid items");
+      }
+      if (!(txnId in state.items)) return;
+      delete state.items[txnId];
+      await writeBatchState(filePath, state);
+    });
     return;
   }
 
   const txnId = normalizeTxnId(arg1);
-  const legacy = await readLegacyState();
-  if (txnId in legacy.items) {
-    delete legacy.items[txnId];
-    await writeLegacyState(legacy);
-  }
+  const filePath = resolveLegacyOverridesPath();
+  await withTxnOverridesWriteLock(filePath, async () => {
+    const legacy = await readLegacyState(filePath);
+    if (legacy.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "transaction overrides storage contains invalid items");
+    }
+    if (txnId in legacy.items) {
+      delete legacy.items[txnId];
+      await writeLegacyState(filePath, legacy);
+    }
+  });
 }
 
 export async function upsertBatchTxnOverride(input: UpsertBatchInput): Promise<TxnOverride> {

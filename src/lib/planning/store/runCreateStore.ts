@@ -23,6 +23,7 @@ import {
 } from "./runMetaRecord";
 import { writeRunMetaRecord } from "./runMetaWriter";
 import { type PlanningRunRecord } from "./types";
+import { hasRunIdReservation } from "./runIdReservationStore";
 
 export type RunCreateStoreOptions = {
   enforceRetention?: boolean;
@@ -54,7 +55,28 @@ function normalizeRelativePath(absPath: string, baseDir = process.cwd()): string
 
 const defaultRunBlobWriteStore = createRunBlobWriteStore();
 
+export class RunCreateTargetExistsError extends Error {
+  constructor() {
+    super("동일한 실행 기록 대상이 이미 존재합니다.");
+    this.name = "RunCreateTargetExistsError";
+  }
+}
+
+async function assertRunCreateTargetMissing(profileId: string, runId: string): Promise<void> {
+  if (runId.startsWith("planning_idem_") && await hasRunIdReservation(runId)) {
+    throw new RunCreateTargetExistsError();
+  }
+  try {
+    await fs.lstat(resolveProfileRunDir(profileId, runId));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return;
+    throw error;
+  }
+  throw new RunCreateTargetExistsError();
+}
+
 export async function createRunInFileStore(input: CreateRunInFileStoreInput): Promise<PlanningRunRecord> {
+  await assertRunCreateTargetMissing(input.profileId, input.runId);
   const tx = await beginStorageTransaction("RUN_CREATE", {
     runId: input.runId,
     profileId: input.profileId,

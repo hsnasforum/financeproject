@@ -1,6 +1,7 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { readJsonFile, storageSchemaCorrupted, toStorageWriteError } from "../../storage/serverFileRead";
+import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type AccountMappingOverride } from "../domain/types";
@@ -10,6 +11,7 @@ import { resolvePlanningV3DataDir } from "./dataDir";
 type AccountMappingOverridesState = {
   version: 1;
   items: Record<string, AccountMappingOverride>;
+  hadInvalidItems?: boolean;
 };
 
 export class AccountMappingOverridesStoreInputError extends Error {
@@ -122,34 +124,48 @@ function normalizeRow(value: unknown, batchId: string): AccountMappingOverride |
   }
 }
 
-async function readState(batchId: string): Promise<AccountMappingOverridesState> {
+function parseState(parsed: unknown, batchId: string, filePath: string): AccountMappingOverridesState {
+  if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.items)) {
+    throw storageSchemaCorrupted(filePath, "account mapping overrides storage schema is invalid");
+  }
+
+  const normalized: Record<string, AccountMappingOverride> = {};
+  let hadInvalidItems = false;
+  for (const [txnId, row] of Object.entries(parsed.items)) {
+    const candidate = normalizeRow(isRecord(row) ? { ...row, txnId } : null, batchId);
+    if (!candidate) {
+      hadInvalidItems = true;
+      continue;
+    }
+    normalized[candidate.txnId] = candidate;
+  }
+  return {
+    version: 1,
+    items: sortedObject(normalized),
+    ...(hadInvalidItems ? { hadInvalidItems: true } : {}),
+  };
+}
+
+async function readState(batchId: string, filePath = resolveOverridesPath(batchId)): Promise<AccountMappingOverridesState> {
   const safeBatchId = normalizeBatchId(batchId);
+  const loaded = await readJsonFile(filePath);
+  if (loaded.kind === "not-found") return { version: 1, items: {} };
+  return parseState(loaded.value, safeBatchId, filePath);
+}
+
+async function writeState(filePath: string, state: AccountMappingOverridesState): Promise<void> {
   try {
-    const parsed = JSON.parse(await fs.readFile(resolveOverridesPath(safeBatchId), "utf-8")) as unknown;
-    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.items)) {
-      return { version: 1, items: {} };
-    }
-    const normalized: Record<string, AccountMappingOverride> = {};
-    for (const [txnId, row] of Object.entries(parsed.items)) {
-      const candidate = normalizeRow(isRecord(row) ? { ...row, txnId } : null, safeBatchId);
-      if (!candidate) continue;
-      normalized[candidate.txnId] = candidate;
-    }
-    return {
+    await atomicWriteJson(filePath, {
       version: 1,
-      items: sortedObject(normalized),
-    };
-  } catch {
-    return { version: 1, items: {} };
+      items: sortedObject(state.items),
+    });
+  } catch (error) {
+    throw toStorageWriteError(error, filePath);
   }
 }
 
-async function writeState(batchId: string, state: AccountMappingOverridesState): Promise<void> {
-  const safeBatchId = normalizeBatchId(batchId);
-  await atomicWriteJson(resolveOverridesPath(safeBatchId), {
-    version: 1,
-    items: sortedObject(state.items),
-  });
+function withAccountMappingWriteLock<T>(filePath: string, callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning-v3:account-mapping-overrides:${filePath}`, callback);
 }
 
 export async function getAccountMappingOverrides(batchId: unknown): Promise<Record<string, AccountMappingOverride>> {
@@ -170,14 +186,20 @@ export async function upsertAccountMappingOverride(input: {
   const txnId = normalizeTxnId(input.txnId);
   const accountId = normalizeAccountId(input.accountId);
 
-  const state = await readState(batchId);
-  const next: AccountMappingOverride = {
-    batchId,
-    txnId,
-    accountId,
-    updatedAt: new Date().toISOString(),
-  };
-  state.items[txnId] = next;
-  await writeState(batchId, state);
-  return next;
+  const filePath = resolveOverridesPath(batchId);
+  return withAccountMappingWriteLock(filePath, async () => {
+    const state = await readState(batchId, filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "account mapping overrides storage contains invalid items");
+    }
+    const next: AccountMappingOverride = {
+      batchId,
+      txnId,
+      accountId,
+      updatedAt: new Date().toISOString(),
+    };
+    state.items[txnId] = next;
+    await writeState(filePath, state);
+    return next;
+  });
 }

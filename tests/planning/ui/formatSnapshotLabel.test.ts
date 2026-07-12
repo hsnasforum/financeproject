@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSnapshotLabel, getSnapshotFreshness } from "../../../src/app/planning/_lib/formatSnapshotLabel";
+import { formatSnapshotLabel, getSnapshotFreshness } from "../../../src/lib/planning/ui/formatSnapshotLabel";
 
 describe("formatSnapshotLabel", () => {
   it("includes policy rate and cpi when values exist", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { toInterpretationInputFromReportVM } from "../../src/app/planning/reports/_lib/reportInterpretationAdapter";
-import { type ReportVM } from "../../src/app/planning/reports/_lib/reportViewModel";
+import { toInterpretationInputFromReportVM } from "../../src/lib/planning/reports/reportInterpretationAdapter";
+import { type ReportVM } from "../../src/lib/planning/reports/reportViewModel";
 
 function fixtureVm(): ReportVM {
   return {

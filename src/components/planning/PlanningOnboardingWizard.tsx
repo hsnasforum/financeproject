@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { deriveSummary } from "@/app/planning/_lib/profileFormModel";
+import { deriveSummary } from "@/lib/planning/ui/profileFormModel";
 import {
   buildPlanningWizardOutput,
   type PlanningWizardDraft,
   type PlanningWizardOutput,
-} from "@/app/planning/_lib/planningOnboardingWizard";
-import { PLANNING_DEFAULTS } from "@/app/planning/_lib/planningDefaults";
+} from "@/lib/planning/ui/planningOnboardingWizard";
+import { PLANNING_DEFAULTS } from "@/lib/planning/ui/planningDefaults";
 
 type PlanningOnboardingWizardProps = {
   disabled?: boolean;

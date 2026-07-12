@@ -1,6 +1,7 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { readJsonFile, storageSchemaCorrupted, toStorageWriteError } from "../../storage/serverFileRead";
+import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type TxnTransferOverride } from "../domain/types";
@@ -10,6 +11,7 @@ import { resolvePlanningV3DataDir } from "./dataDir";
 type TxnTransferOverridesState = {
   version: 1;
   items: Record<string, TxnTransferOverride>;
+  hadInvalidItems?: boolean;
 };
 
 export class TxnTransferOverridesStoreInputError extends Error {
@@ -115,34 +117,48 @@ function normalizeRow(value: unknown, batchId: string): TxnTransferOverride | nu
   }
 }
 
-async function readState(batchId: string): Promise<TxnTransferOverridesState> {
+function parseState(parsed: unknown, batchId: string, filePath: string): TxnTransferOverridesState {
+  if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.items)) {
+    throw storageSchemaCorrupted(filePath, "transfer overrides storage schema is invalid");
+  }
+
+  const normalized: Record<string, TxnTransferOverride> = {};
+  let hadInvalidItems = false;
+  for (const [txnId, row] of Object.entries(parsed.items)) {
+    const candidate = normalizeRow(isRecord(row) ? { ...row, txnId } : null, batchId);
+    if (!candidate) {
+      hadInvalidItems = true;
+      continue;
+    }
+    normalized[candidate.txnId] = candidate;
+  }
+  return {
+    version: 1,
+    items: sortedObject(normalized),
+    ...(hadInvalidItems ? { hadInvalidItems: true } : {}),
+  };
+}
+
+async function readState(batchId: string, filePath = resolveOverridesPath(batchId)): Promise<TxnTransferOverridesState> {
   const safeBatchId = normalizeBatchId(batchId);
+  const loaded = await readJsonFile(filePath);
+  if (loaded.kind === "not-found") return { version: 1, items: {} };
+  return parseState(loaded.value, safeBatchId, filePath);
+}
+
+async function writeState(filePath: string, state: TxnTransferOverridesState): Promise<void> {
   try {
-    const parsed = JSON.parse(await fs.readFile(resolveOverridesPath(safeBatchId), "utf-8")) as unknown;
-    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.items)) {
-      return { version: 1, items: {} };
-    }
-    const normalized: Record<string, TxnTransferOverride> = {};
-    for (const [txnId, row] of Object.entries(parsed.items)) {
-      const candidate = normalizeRow(isRecord(row) ? { ...row, txnId } : null, safeBatchId);
-      if (!candidate) continue;
-      normalized[candidate.txnId] = candidate;
-    }
-    return {
+    await atomicWriteJson(filePath, {
       version: 1,
-      items: sortedObject(normalized),
-    };
-  } catch {
-    return { version: 1, items: {} };
+      items: sortedObject(state.items),
+    });
+  } catch (error) {
+    throw toStorageWriteError(error, filePath);
   }
 }
 
-async function writeState(batchId: string, state: TxnTransferOverridesState): Promise<void> {
-  const safeBatchId = normalizeBatchId(batchId);
-  await atomicWriteJson(resolveOverridesPath(safeBatchId), {
-    version: 1,
-    items: sortedObject(state.items),
-  });
+function withTransferOverridesWriteLock<T>(filePath: string, callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning-v3:transfer-overrides:${filePath}`, callback);
 }
 
 export async function getTransferOverrides(batchId: unknown): Promise<Record<string, TxnTransferOverride>> {
@@ -176,17 +192,23 @@ export async function upsertTransferOverride(input: {
     ]);
   }
 
-  const state = await readState(batchId);
-  const note = asString(input.note);
-  const next: TxnTransferOverride = {
-    batchId,
-    txnId,
-    ...(forceTransfer ? { forceTransfer: true } : {}),
-    ...(forceNonTransfer ? { forceNonTransfer: true } : {}),
-    updatedAt: new Date().toISOString(),
-    ...(note ? { note: note.slice(0, 120) } : {}),
-  };
-  state.items[txnId] = next;
-  await writeState(batchId, state);
-  return next;
+  const filePath = resolveOverridesPath(batchId);
+  return withTransferOverridesWriteLock(filePath, async () => {
+    const state = await readState(batchId, filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "transfer overrides storage contains invalid items");
+    }
+    const note = asString(input.note);
+    const next: TxnTransferOverride = {
+      batchId,
+      txnId,
+      ...(forceTransfer ? { forceTransfer: true } : {}),
+      ...(forceNonTransfer ? { forceNonTransfer: true } : {}),
+      updatedAt: new Date().toISOString(),
+      ...(note ? { note: note.slice(0, 120) } : {}),
+    };
+    state.items[txnId] = next;
+    await writeState(filePath, state);
+    return next;
+  });
 }

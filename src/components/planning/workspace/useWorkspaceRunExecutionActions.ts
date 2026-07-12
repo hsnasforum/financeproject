@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback } from "react";
-import { createInitialStepStatuses } from "@/app/planning/_lib/runPipeline";
-import { buildWorkspaceCompletedRunState } from "@/app/planning/_lib/workspaceRunResult";
+import { useCallback, useRef } from "react";
+import { createInitialStepStatuses } from "@/lib/planning/ui/runPipeline";
+import { buildWorkspaceCompletedRunState } from "@/lib/planning/ui/workspaceRunResult";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { isApiBaseResponse } from "@/lib/http/apiContract";
 import { t, type Locale } from "@/lib/planning/i18n";
@@ -36,6 +36,36 @@ type ApiResponse<T> = {
   error?: ApiError;
 };
 
+export type PendingPlanningRunRequest = {
+  bodyText: string;
+  idempotencyKey: string;
+};
+
+export function resolvePlanningRunIdempotencyRequest(input: {
+  body: unknown;
+  pending: PendingPlanningRunRequest | null;
+  createKey: () => string;
+}): PendingPlanningRunRequest {
+  const bodyText = JSON.stringify(input.body) ?? "null";
+  if (input.pending?.bodyText === bodyText) return input.pending;
+  return {
+    bodyText,
+    idempotencyKey: input.createKey(),
+  };
+}
+
+export function shouldReleasePendingPlanningRunRequest(
+  response: Pick<Response, "ok" | "status">,
+  payload: unknown,
+): boolean {
+  if (!isApiBaseResponse(payload)) return false;
+  if (response.ok) return false;
+  return response.status >= 400
+    && response.status < 500
+    && response.status !== 408
+    && response.status !== 429;
+}
+
 type RunExecutionActionsInput = {
   locale: Locale;
   beginnerMode: boolean;
@@ -48,7 +78,6 @@ type RunExecutionActionsInput = {
   preflightHasBlockers: boolean;
   preflightBlockIssues: PreflightIssue[];
   preflightWarnIssues: PreflightIssue[];
-  saveBlockedByHealth: boolean;
   parseRunInputs: () => ParsedRunInputs | null;
   buildRunInputScenarioFromSelection: () => RunInputScenario | undefined;
   syncProfileIfNeeded: () => Promise<boolean>;
@@ -99,6 +128,24 @@ function parseApiPayload<T>(
   return { ok: true, errorMessage: "" };
 }
 
+export async function postPlanningRun(body: unknown, idempotencyKey: string): Promise<Response> {
+  const request = () => fetch("/api/planning/v2/runs", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": idempotencyKey,
+    },
+    body: JSON.stringify(body),
+  });
+
+  try {
+    return await request();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    return request();
+  }
+}
+
 export function useWorkspaceRunExecutionActions({
   locale,
   beginnerMode,
@@ -111,7 +158,6 @@ export function useWorkspaceRunExecutionActions({
   preflightHasBlockers,
   preflightBlockIssues,
   preflightWarnIssues,
-  saveBlockedByHealth,
   parseRunInputs,
   buildRunInputScenarioFromSelection,
   syncProfileIfNeeded,
@@ -124,116 +170,30 @@ export function useWorkspaceRunExecutionActions({
   isMountedRef,
   state,
 }: RunExecutionActionsInput): {
-  persistRunAction: (
-    parsed: ParsedRunInputs,
-    options?: { silent?: boolean; bypassWarningConfirmation?: boolean; scenario?: RunInputScenario },
-  ) => Promise<PlanningRunRecord | null>;
   runPlanAction: (options?: { scenario?: RunInputScenario }) => Promise<void>;
   runScenarioAction: () => Promise<void>;
-  saveRunAction: () => Promise<void>;
 } {
   const {
-    runResult,
-    saveWarningConfirmed,
+    runWarningConfirmed,
     setActiveTab,
     setPipelineStatuses,
     setRunResult,
     setRunning,
     setSavedRun,
-    setSavingRun,
     setShowAllActions,
   } = state;
 
-  const persistRunAction = useCallback(async (
-    parsed: ParsedRunInputs,
-    options?: { silent?: boolean; bypassWarningConfirmation?: boolean; scenario?: RunInputScenario },
-  ): Promise<PlanningRunRecord | null> => {
-    if (!selectedProfileId) {
-      if (!options?.silent) pushWorkspaceError("저장할 프로필을 먼저 선택하세요.");
-      return null;
-    }
-    if (preflightHasBlockers) {
-      if (!options?.silent) {
-        const details = preflightBlockIssues.map((issue) => `- [${issue.code}] ${formatPreflightIssue(issue)}`).join("\n");
-        pushWorkspaceError(`사전 점검 오류로 저장할 수 없습니다.\n${details}`);
-      }
-      return null;
-    }
-    if (preflightWarnIssues.length > 0 && !options?.bypassWarningConfirmation) {
-      if (!options?.silent) {
-        pushWorkspaceError("사전 점검 경고를 확인한 뒤 '이대로 저장' 체크를 켜주세요.");
-      }
-      return null;
-    }
+  const runActionPromiseRef = useRef<Promise<void> | null>(null);
+  const pendingRequestRef = useRef<PendingPlanningRunRequest | null>(null);
 
-    setSavingRun(true);
-    try {
-      const synced = await syncProfileIfNeeded();
-      if (!synced) return null;
-
-      const res = await fetch("/api/planning/v2/runs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(withDevCsrf({
-          profileId: selectedProfileId,
-          title: options?.scenario?.title ? `${runTitle} [What-if: ${options.scenario.title}]` : runTitle,
-          input: buildPlanningRunInput({
-            parsed,
-            effectiveRunScenariosEnabled,
-            effectiveRunActionsEnabled,
-            effectiveRunDebtEnabled,
-            effectiveRunMonteCarloEnabled,
-            ...(options?.scenario ? { scenario: options.scenario } : {}),
-          }),
-        })),
-      });
-      const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
-      if (handleSnapshotNotFound(payload)) return null;
-      const parsedPayload = parseApiPayload(locale, res, payload, "실행 기록 저장에 실패했습니다.");
-      if (!parsedPayload.ok) {
-        pushWorkspaceError(parsedPayload.errorMessage);
-        return null;
-      }
-      const saved = (payload as ApiResponse<PlanningRunRecord>).data ?? null;
-      setSavedRun(saved);
-      if (!options?.silent) {
-        pushWorkspaceNotice(
-          beginnerMode
-            ? "결과 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다."
-            : "실행 기록 저장을 완료했습니다. /planning/runs에서 비교할 수 있습니다.",
-        );
-      }
-      return saved;
-    } catch (error) {
-      pushWorkspaceError(error instanceof Error ? error.message : "실행 기록 저장 중 오류가 발생했습니다.");
-      return null;
-    } finally {
-      setSavingRun(false);
-    }
-  }, [
-    beginnerMode,
-    effectiveRunActionsEnabled,
-    effectiveRunDebtEnabled,
-    effectiveRunMonteCarloEnabled,
-    effectiveRunScenariosEnabled,
-    handleSnapshotNotFound,
-    locale,
-    preflightBlockIssues,
-    preflightHasBlockers,
-    preflightWarnIssues.length,
-    pushWorkspaceError,
-    pushWorkspaceNotice,
-    runTitle,
-    selectedProfileId,
-    setSavedRun,
-    setSavingRun,
-    syncProfileIfNeeded,
-  ]);
-
-  const runPlanAction = useCallback(async (options?: { scenario?: RunInputScenario }): Promise<void> => {
+  const executePlanningRun = useCallback(async (options?: { scenario?: RunInputScenario }): Promise<void> => {
     if (preflightHasBlockers) {
       const details = preflightBlockIssues.map((issue) => `- [${issue.code}] ${formatPreflightIssue(issue)}`).join("\n");
       pushWorkspaceError(`사전 점검 오류를 먼저 해결하세요.\n${details}`);
+      return;
+    }
+    if (preflightWarnIssues.length > 0 && !runWarningConfirmed) {
+      pushWorkspaceError("사전 점검 경고를 확인한 뒤 실행·기록 저장 동의 체크를 켜주세요.");
       return;
     }
     if (!selectedProfileId) {
@@ -246,30 +206,38 @@ export function useWorkspaceRunExecutionActions({
 
     setRunning(true);
     setPipelineStatuses(createInitialStepStatuses());
-    setSavedRun(null);
 
     try {
       const synced = await syncProfileIfNeeded();
       if (!isMountedRef.current) return;
       if (!synced) return;
 
-      const response = await fetch("/api/planning/run", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(withDevCsrf({
-          profileId: selectedProfileId,
-          title: options?.scenario?.title ? `${runTitle} · ${options.scenario.title}` : runTitle,
-          input: buildPlanningRunInput({
-            parsed,
-            effectiveRunScenariosEnabled,
-            effectiveRunActionsEnabled,
-            effectiveRunDebtEnabled,
-            effectiveRunMonteCarloEnabled,
-            ...(options?.scenario ? { scenario: options.scenario } : {}),
-          }),
-        })),
+      const requestBody = withDevCsrf({
+        profileId: selectedProfileId,
+        title: options?.scenario?.title ? `${runTitle} · ${options.scenario.title}` : runTitle,
+        input: buildPlanningRunInput({
+          parsed,
+          effectiveRunScenariosEnabled,
+          effectiveRunActionsEnabled,
+          effectiveRunDebtEnabled,
+          effectiveRunMonteCarloEnabled,
+          ...(options?.scenario ? { scenario: options.scenario } : {}),
+        }),
       });
+      const idempotencyRequest = resolvePlanningRunIdempotencyRequest({
+        body: requestBody,
+        pending: pendingRequestRef.current,
+        createKey: () => crypto.randomUUID(),
+      });
+      pendingRequestRef.current = idempotencyRequest;
+      const response = await postPlanningRun(requestBody, idempotencyRequest.idempotencyKey);
       const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
+      if (
+        pendingRequestRef.current === idempotencyRequest
+        && shouldReleasePendingPlanningRunRequest(response, payload)
+      ) {
+        pendingRequestRef.current = null;
+      }
       if (!isMountedRef.current) return;
       if (handleSnapshotNotFound(payload)) return;
       const parsedPayload = parseApiPayload(locale, response, payload, "실행 요청에 실패했습니다.");
@@ -293,6 +261,9 @@ export function useWorkspaceRunExecutionActions({
         pushWorkspaceError("실행 상태를 확인하지 못했습니다.");
         return;
       }
+      if (pendingRequestRef.current === idempotencyRequest) {
+        pendingRequestRef.current = null;
+      }
 
       const completedRunState = buildWorkspaceCompletedRunState(finalRun);
       setRunResult(completedRunState.runResult);
@@ -305,8 +276,8 @@ export function useWorkspaceRunExecutionActions({
       setShowAllActions(false);
 
       const runCompletedNotice = beginnerMode
-        ? "첫 실행과 결과 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다."
-        : "실행을 완료했습니다.";
+        ? "첫 실행과 기록 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다."
+        : "실행과 기록 저장을 완료했습니다.";
       if (completedRunState.notices.length > 0) {
         pushWorkspaceNotice([runCompletedNotice, ...completedRunState.notices.map((notice) => `- ${notice}`)].join("\n"));
       } else {
@@ -332,9 +303,11 @@ export function useWorkspaceRunExecutionActions({
     pollRunUntilTerminal,
     preflightBlockIssues,
     preflightHasBlockers,
+    preflightWarnIssues.length,
     pushWorkspaceError,
     pushWorkspaceNotice,
     runTitle,
+    runWarningConfirmed,
     selectedProfileId,
     setActiveTab,
     setLastNormalizationDisclosure,
@@ -346,6 +319,19 @@ export function useWorkspaceRunExecutionActions({
     syncProfileIfNeeded,
   ]);
 
+  const runPlanAction = useCallback((options?: { scenario?: RunInputScenario }): Promise<void> => {
+    const current = runActionPromiseRef.current;
+    if (current) return current;
+
+    const pending = executePlanningRun(options).finally(() => {
+      if (runActionPromiseRef.current === pending) {
+        runActionPromiseRef.current = null;
+      }
+    });
+    runActionPromiseRef.current = pending;
+    return pending;
+  }, [executePlanningRun]);
+
   const runScenarioAction = useCallback(async (): Promise<void> => {
     const scenario = buildRunInputScenarioFromSelection();
     if (!scenario) {
@@ -355,49 +341,8 @@ export function useWorkspaceRunExecutionActions({
     await runPlanAction({ scenario });
   }, [buildRunInputScenarioFromSelection, pushWorkspaceError, runPlanAction]);
 
-  const saveRunAction = useCallback(async (): Promise<void> => {
-    if (!runResult?.hasSimulateResult) {
-      pushWorkspaceError("먼저 실행을 진행하세요.");
-      return;
-    }
-    if (saveBlockedByHealth) {
-      pushWorkspaceError("치명 경고 확인 체크 후 저장할 수 있습니다.");
-      return;
-    }
-    if (preflightHasBlockers) {
-      const details = preflightBlockIssues.map((issue) => `- [${issue.code}] ${formatPreflightIssue(issue)}`).join("\n");
-      pushWorkspaceError(`사전 점검 오류로 저장할 수 없습니다.\n${details}`);
-      return;
-    }
-    if (preflightWarnIssues.length > 0 && !saveWarningConfirmed) {
-      pushWorkspaceError("사전 점검 경고를 확인한 뒤 '이대로 저장' 체크를 켜주세요.");
-      return;
-    }
-
-    const parsed = parseRunInputs();
-    if (!parsed) return;
-    const selectedScenario = buildRunInputScenarioFromSelection();
-    await persistRunAction(parsed, {
-      bypassWarningConfirmation: true,
-      ...(selectedScenario ? { scenario: selectedScenario } : {}),
-    });
-  }, [
-    buildRunInputScenarioFromSelection,
-    parseRunInputs,
-    persistRunAction,
-    preflightBlockIssues,
-    preflightHasBlockers,
-    preflightWarnIssues.length,
-    pushWorkspaceError,
-    runResult,
-    saveBlockedByHealth,
-    saveWarningConfirmed,
-  ]);
-
   return {
-    persistRunAction,
     runPlanAction,
     runScenarioAction,
-    saveRunAction,
   };
 }

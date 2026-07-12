@@ -161,7 +161,7 @@ export default function ProductsComparePage() {
   const hasEnoughItems = ids.length >= 2;
 
   return (
-    <main className="min-h-screen bg-surface-muted py-8 md:py-12">
+    <div className="min-h-screen bg-surface-muted py-8 md:py-12">
       <Container>
         <PageHeader
           title="상품 비교"
@@ -426,6 +426,6 @@ export default function ProductsComparePage() {
           </>
         )}
       </Container>
-    </main>
+    </div>
   );
 }

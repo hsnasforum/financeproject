@@ -9,10 +9,10 @@ type PageShellProps = {
 
 export function PageShell({ children, className }: PageShellProps) {
   return (
-    <main className={cn("min-h-screen pb-24", className)}>
+    <div className={cn("min-h-screen pb-24", className)}>
       <Container className="pt-8 md:pt-12">
         {children}
       </Container>
-    </main>
+    </div>
   );
 }

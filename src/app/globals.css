@@ -13,7 +13,10 @@
   /* Primary — Stability (Trust Blue family) */
   --primary: #1e3a8a;         /* Trust Blue */
   --primary-foreground: #ffffff;
-  --primary-hover: #3b82f6;   /* Sky Accent */
+  --primary-hover: #1d4ed8;   /* Accessible Action Blue */
+  --primary-disabled: #cbd5e1;
+  --primary-disabled-foreground: #334155;
+  --focus-ring: #2563eb;
   --navy: #0a1f44;            /* Deep Navy */
 
   /* Secondary — Innovation accents */
@@ -52,6 +55,9 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-hover: var(--primary-hover);
+  --color-primary-disabled: var(--primary-disabled);
+  --color-primary-disabled-foreground: var(--primary-disabled-foreground);
+  --color-focus-ring: var(--focus-ring);
   --color-navy: var(--navy);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -181,6 +187,13 @@ body.app-scroll-lock {
 @layer base {
   * {
     @apply border-border;
+  }
+}
+
+@media (forced-colors: active) {
+  .button-focus-accessible:focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
   }
 }
 

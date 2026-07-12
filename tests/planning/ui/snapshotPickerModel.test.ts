@@ -4,7 +4,7 @@ import {
   getSnapshotDetailsToggleLabel,
   parseSnapshotPickerSelectValue,
   resolveSnapshotPickerSelectedItem,
-} from "../../../src/app/planning/_lib/snapshotPickerModel";
+} from "../../../src/lib/planning/ui/snapshotPickerModel";
 
 describe("snapshotPickerModel", () => {
   it("builds and parses latest and history select values", () => {

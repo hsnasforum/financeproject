@@ -46,7 +46,7 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
         <PageHeader
           title="재무설계 리포트"
           description="저장된 상담 결과를 다시 읽는 도착 화면이지만, 아직 저장된 상담 기록이 없어 열 수 있는 리포트가 없습니다."
-          action={<Link className="font-semibold text-navy" href={planningHref}>상담 계산으로 돌아가 결과 저장하기</Link>}
+          action={<Link className="font-semibold text-navy" href={planningHref}>플래닝으로 돌아가 실행·기록 저장하기</Link>}
         />
         <EmptyState
           title="아직 저장된 상담 기록이 없습니다"

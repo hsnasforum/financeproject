@@ -106,7 +106,7 @@ export function FinlifeSchemaReportClient() {
   }, [payload, kind]);
 
   return (
-    <main className="min-h-screen bg-surface-muted px-4 py-6 md:px-8 md:py-10">
+    <div className="min-h-screen bg-surface-muted px-4 py-6 md:px-8 md:py-10">
       <div className="mx-auto max-w-6xl space-y-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <h1 className="text-lg font-semibold text-navy">FINLIFE Fixture Schema Report</h1>
@@ -167,6 +167,6 @@ export function FinlifeSchemaReportClient() {
           </div>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }

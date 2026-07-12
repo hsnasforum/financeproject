@@ -19,6 +19,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type ApplyMode = "preview" | "apply";
 
@@ -242,6 +243,8 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof Error && error.message.includes("split")) {
         return NextResponse.json(
           { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." }, meta: userMeta },

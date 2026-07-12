@@ -6,18 +6,18 @@ import {
   normalizeDraftWithDisclosure,
   toProfileJson,
   type FormDraft,
-} from "@/app/planning/_lib/profileFormModel";
+} from "@/lib/planning/ui/profileFormModel";
 import {
   resolveWorkspaceSelectedProfileSyncState,
   stableStringifyWorkspaceValue,
-} from "@/app/planning/_lib/workspaceQuickStart";
+} from "@/lib/planning/ui/workspaceQuickStart";
 import {
   buildWorkspaceHealthGuardState,
   buildWorkspaceSnapshotState,
-} from "@/app/planning/_lib/workspaceRunResult";
-import { type SnapshotListItem } from "@/app/planning/_lib/snapshotList";
-import { normalizeWorkspaceSnapshotItemsState } from "@/app/planning/_lib/workspaceSnapshotSelection";
-import { buildMetricEvidence } from "@/app/planning/_lib/metricEvidence";
+} from "@/lib/planning/ui/workspaceRunResult";
+import { type SnapshotListItem } from "@/lib/planning/ui/snapshotListTypes";
+import { normalizeWorkspaceSnapshotItemsState } from "@/lib/planning/ui/workspaceSnapshotSelection";
+import { buildMetricEvidence } from "@/lib/planning/ui/metricEvidence";
 import { writeDevCsrfToken } from "@/lib/dev/clientCsrf";
 import { type PlanningFeatureFlags } from "@/lib/planning/config";
 import { type Locale } from "@/lib/planning/i18n";
@@ -33,7 +33,7 @@ import {
   type NormalizationReport,
 } from "@/lib/planning/v2/normalizationReport";
 import {
-  buildPlanningWorkspaceSaveButtonDescribedBy,
+  buildPlanningWorkspaceRunButtonDescribedBy,
 } from "@/components/planning/workspace/controllerUtils";
 import { useWorkspaceArrivalHandoff } from "@/components/planning/workspace/useWorkspaceArrivalHandoff";
 import { useWorkspaceExecutionOptionsBundle } from "@/components/planning/workspace/useWorkspaceExecutionOptionsBundle";
@@ -85,7 +85,7 @@ export function usePlanningWorkspaceController({
 
   const feedback = useWorkspaceFeedbackUiBundle({ isMountedRef });
   const runtimeState = useWorkspaceRuntimeStateBundle({ isMountedRef });
-  const { setHealthAck, setSaveWarningConfirmed, activeTab, setActiveTab } = runtimeState;
+  const { setHealthAck, setRunWarningConfirmed, activeTab, setActiveTab } = runtimeState;
   const runtimeGeneratedAt = runtimeState.runResult?.meta?.generatedAt;
 
   const healthGuard = useMemo(
@@ -98,11 +98,11 @@ export function usePlanningWorkspaceController({
   const healthSummary = healthGuard.summary;
   const healthWarnings = healthGuard.warnings;
   const hasCriticalHealth = healthGuard.hasCriticalHealth;
-  const saveBlockedByHealth = healthGuard.saveBlockedByHealth;
+  const advancedActionsBlockedByHealth = healthGuard.advancedActionsBlockedByHealth;
 
   const execution = useWorkspaceExecutionOptionsBundle({
     featureFlags,
-    saveBlockedByHealth,
+    advancedActionsBlockedByHealth,
   });
   const profileBundle = useWorkspaceProfileBundle({
     locale,
@@ -131,6 +131,15 @@ export function usePlanningWorkspaceController({
   const runsPageHref = useMemo(
     () => appendProfileIdQuery("/planning/runs", profileBundle.selectedProfileId),
     [profileBundle.selectedProfileId],
+  );
+  const savedRunHistoryHref = useMemo(
+    () => runtimeState.savedRun?.id
+      ? appendProfileIdQuery(
+        `/planning/runs?selected=${encodeURIComponent(runtimeState.savedRun.id)}`,
+        runtimeState.savedRun.profileId,
+      )
+      : runsPageHref,
+    [runsPageHref, runtimeState.savedRun],
   );
   const reportsPageHref = useMemo(
     () => appendProfileIdQuery("/planning/reports", profileBundle.selectedProfileId),
@@ -293,7 +302,6 @@ export function usePlanningWorkspaceController({
       preflightHasBlockers,
       preflightBlockIssues,
       preflightWarnIssues,
-      saveBlockedByHealth,
       healthSummary,
     },
     feedback: {
@@ -316,7 +324,7 @@ export function usePlanningWorkspaceController({
       state: runtimeState,
     },
   });
-  const saveNeedsWarningConfirmation = preflightWarnIssues.length > 0 && !runtimeState.saveWarningConfirmed;
+  const runNeedsWarningConfirmation = preflightWarnIssues.length > 0 && !runtimeState.runWarningConfirmed;
   const quickStartHandoff = useWorkspaceQuickStartHandoff({
     profileName: profileBundle.profileName,
     selectedProfileId: profileBundle.selectedProfileId,
@@ -332,8 +340,8 @@ export function usePlanningWorkspaceController({
   }, [hasCriticalHealth, setHealthAck]);
 
   useEffect(() => {
-    setSaveWarningConfirmed(false);
-  }, [preflightWarnSignature, runtimeGeneratedAt, setSaveWarningConfirmed]);
+    setRunWarningConfirmed(false);
+  }, [preflightWarnSignature, runtimeGeneratedAt, setRunWarningConfirmed]);
 
   const resultDto = runtimeState.runResult?.resultDto ?? null;
   const currentStepStatuses = runtimeState.running
@@ -401,9 +409,8 @@ export function usePlanningWorkspaceController({
   const optimizeCandidates = runtimeState.optimizeResult?.candidates ?? [];
 
   const healthDisabledReason = healthGuard.disabledReason;
-  const saveButtonDescribedBy = buildPlanningWorkspaceSaveButtonDescribedBy({
+  const runButtonDescribedBy = buildPlanningWorkspaceRunButtonDescribedBy({
     preflightHasBlockers,
-    saveBlockedByHealth,
     hasPreflightWarnings: preflightWarnIssues.length > 0,
   });
 
@@ -445,11 +452,14 @@ export function usePlanningWorkspaceController({
     runHasSimulateResult: Boolean(runtimeState.runResult?.hasSimulateResult),
     runMatchesCurrentProfile,
     runStatusReviewRequired,
+    runNeedsWarningConfirmation,
     savedRun: runtimeState.savedRun,
     reportsPageHref,
     selectedProfileReportHref: (runId) => appendProfileIdQuery(
       `/planning/reports?runId=${encodeURIComponent(runId)}`,
-      profileBundle.selectedProfileId,
+      runtimeState.savedRun?.id === runId
+        ? runtimeState.savedRun.profileId
+        : profileBundle.selectedProfileId,
     ),
   }), [
     profileBundle.profileForm,
@@ -458,6 +468,7 @@ export function usePlanningWorkspaceController({
     profileSyncState,
     reportsPageHref,
     runMatchesCurrentProfile,
+    runNeedsWarningConfirmation,
     runStatusReviewRequired,
     runtimeState.runResult?.hasSimulateResult,
     runtimeState.savedRun,
@@ -483,7 +494,6 @@ export function usePlanningWorkspaceController({
     beginnerMode: execution.beginnerMode,
     savingProfile: profileBundle.savingProfile,
     running: runtimeState.running,
-    savingRun: runtimeState.savingRun,
     quickStartNextStep,
     profileSyncState,
     quickStartVm,
@@ -494,10 +504,9 @@ export function usePlanningWorkspaceController({
     preflightHasBlockers,
     preflightBlockIssues,
     preflightWarnIssues,
-    saveButtonDescribedBy,
-    saveBlockedByHealth,
-    saveNeedsWarningConfirmation,
-    runsPageHref,
+    runButtonDescribedBy,
+    runNeedsWarningConfirmation,
+    runsPageHref: savedRunHistoryHref,
     reportsPageHref,
     liveSummary: profileBundle.liveSummary,
     beginnerEmergencyMonths: profileBundle.beginnerEmergencyMonths,
@@ -522,6 +531,7 @@ export function usePlanningWorkspaceController({
     pendingSuggestions: profileBundle.pendingSuggestions,
     acceptedSuggestionCodes: profileBundle.acceptedSuggestionCodes,
     savingProfile: profileBundle.savingProfile,
+    running: runtimeState.running,
     profileValidation: profileBundle.profileValidation,
     beginnerGoals: profileBundle.beginnerGoals,
     beginnerEmergencyMonths: profileBundle.beginnerEmergencyMonths,
@@ -568,7 +578,7 @@ export function usePlanningWorkspaceController({
     scenarioPatchesPreview: runtimeActions.scenarioPatchesPreview,
     healthWarnings,
     hasCriticalHealth,
-    saveBlockedByHealth,
+    advancedActionsBlockedByHealth,
     monteCarloServerDisabled: execution.monteCarloServerDisabled,
     includeProductsServerDisabled: execution.includeProductsServerDisabled,
     optimizerServerDisabled: execution.optimizerServerDisabled,
@@ -577,17 +587,15 @@ export function usePlanningWorkspaceController({
     preflightWarnIssues,
     preflightHasBlockers,
     preflightWarnSummary,
-    saveNeedsWarningConfirmation,
-    saveButtonDescribedBy,
+    runNeedsWarningConfirmation,
+    runButtonDescribedBy,
     currentStepStatuses,
     monteCarloBudgetSkipped,
     healthAck: runtimeState.healthAck,
     healthDisabledReason,
-    saveWarningConfirmed: runtimeState.saveWarningConfirmed,
-    autoSaveRunAfterSuccess: runtimeState.autoSaveRunAfterSuccess,
+    runWarningConfirmed: runtimeState.runWarningConfirmed,
     running: runtimeState.running,
     runResult: runtimeState.runResult,
-    savingRun: runtimeState.savingRun,
     runningOptimize: runtimeState.runningOptimize,
   };
 
@@ -624,8 +632,7 @@ export function usePlanningWorkspaceController({
     keyFindings,
     warningsSummaryTop5,
     currentStepStatuses,
-    runsPageHref,
-    selectedProfileId: profileBundle.selectedProfileId,
+    runsPageHref: savedRunHistoryHref,
     chartMode,
     chartPoints,
     aggregatedWarnings,
@@ -677,7 +684,6 @@ export function usePlanningWorkspaceController({
     applyQuickStartAction: quickStartHandoff.applyQuickStartAction,
     loadSampleProfileAction: profileBundle.loadSampleProfileAction,
     runPlanAction: runtimeActions.runPlanAction,
-    saveRunAction: runtimeActions.saveRunAction,
     setBeginnerMode: execution.setBeginnerMode,
     applyWizardOutputAction: quickStartHandoff.applyWizardOutputAction,
     loadProfiles: profileBundle.loadProfiles,
@@ -725,8 +731,7 @@ export function usePlanningWorkspaceController({
     replaceAssumptionsFromJsonText: execution.replaceAssumptionsFromJsonText,
     replaceDebtOffersFromJsonText: execution.replaceDebtOffersFromJsonText,
     setHealthAck: runtimeState.setHealthAck,
-    setSaveWarningConfirmed: runtimeState.setSaveWarningConfirmed,
-    setAutoSaveRunAfterSuccess: runtimeState.setAutoSaveRunAfterSuccess,
+    setRunWarningConfirmed: runtimeState.setRunWarningConfirmed,
     setBaselineRunId: runtimeState.setBaselineRunId,
     setScenarioTemplateId: runtimeState.setScenarioTemplateId,
     runScenarioAction: runtimeActions.runScenarioAction,

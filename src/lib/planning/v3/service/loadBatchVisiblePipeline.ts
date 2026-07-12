@@ -41,9 +41,9 @@ export async function loadBatchVisiblePipeline(
     : listRules();
   const [rules, overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
     rulesPromise,
-    getBatchTxnOverrides(batchId).catch(() => ({})),
-    getAccountMappingOverrides(batchId).catch(() => ({})),
-    getTransferOverrides(batchId).catch(() => ({})),
+    getBatchTxnOverrides(batchId),
+    getAccountMappingOverrides(batchId),
+    getTransferOverrides(batchId),
   ]);
 
   return {

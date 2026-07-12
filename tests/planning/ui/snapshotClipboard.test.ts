@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { copySnapshotIdToClipboard } from "../../../src/app/planning/_lib/snapshotClipboard";
+import { copySnapshotIdToClipboard } from "../../../src/lib/planning/ui/snapshotClipboard";
 
 describe("snapshotClipboard", () => {
   it("skips clipboard work for latest selection", async () => {

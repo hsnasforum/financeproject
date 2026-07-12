@@ -10,11 +10,11 @@ import {
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-24">
       <HomeHero slides={landingHeroSlides} />
       <QuickTiles />
       <LandingReportPreview preview={landingReportPreview} trustNotes={landingTrustNotes} />
       <TodayQueue />
-    </main>
+    </div>
   );
 }

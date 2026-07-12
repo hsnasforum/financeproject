@@ -1,6 +1,6 @@
-import { assumptionsFormToRecord, type AssumptionsFormModel } from "@/app/planning/_lib/workspaceAssumptionsEditor";
-import { debtOfferRowsToPayload, type DebtOfferFormRow } from "@/app/planning/_lib/workspaceDebtOffersEditor";
-import { type ProfileFormModel } from "@/app/planning/_lib/profileFormModel";
+import { assumptionsFormToRecord, type AssumptionsFormModel } from "@/lib/planning/ui/workspaceAssumptionsEditor";
+import { debtOfferRowsToPayload, type DebtOfferFormRow } from "@/lib/planning/ui/workspaceDebtOffersEditor";
+import { type ProfileFormModel } from "@/lib/planning/ui/profileFormModel";
 import {
   buildWorkspaceActionsDebugSections,
   buildWorkspaceActionsVm,
@@ -12,16 +12,16 @@ import {
   buildWorkspaceWarningsGoalsDebugSections,
   buildWorkspaceResultSummaryVm,
   buildWorkspaceScenarioVm,
-} from "@/app/planning/_lib/workspaceResultInsights";
+} from "@/lib/planning/ui/workspaceResultInsights";
 import {
   buildWorkspaceQuickStartVm,
   isWorkspaceQuickStartProfileDone,
   type WorkspaceQuickStartVm,
   type WorkspaceSelectedProfileSyncState,
-} from "@/app/planning/_lib/workspaceQuickStart";
-import { getVisibleSections, type PlanningTabId } from "@/app/planning/_lib/workspaceUiState";
-import { type SnapshotSelection } from "@/app/planning/_lib/snapshotSelection";
-import { type StepStatus } from "@/app/planning/_lib/runPipeline";
+} from "@/lib/planning/ui/workspaceQuickStart";
+import { getVisibleSections, type PlanningTabId } from "@/lib/planning/ui/workspaceUiState";
+import { type SnapshotSelection } from "@/lib/planning/ui/snapshotSelection";
+import { type StepStatus } from "@/lib/planning/ui/runPipeline";
 import { LIMITS } from "@/lib/planning/v2/limits";
 import { type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
 import { preflightRun } from "@/lib/planning/v2/preflight";
@@ -99,12 +99,13 @@ export function buildWorkspaceExecutionGuardPresenter(input: {
 export function buildWorkspaceQuickStartNextStep(input: {
   profileSyncState: WorkspaceSelectedProfileSyncState;
   quickStartVm: WorkspaceQuickStartVm;
+  runNeedsWarningConfirmation: boolean;
 }): WorkspaceQuickStartNextStep {
   const { profileSyncState, quickStartVm } = input;
   if (profileSyncState === "missing") {
     return {
       label: "먼저 프로필 저장",
-      description: "아래 프로필 영역에서 새로 만들기를 누르면 저장 뒤 첫 실행으로 넘어가고, 결과 저장 뒤 리포트를 확인할 수 있습니다.",
+      description: "아래 프로필 영역에서 새로 만들기를 누르면 저장 뒤 첫 실행·기록 저장으로 넘어가고 리포트를 확인할 수 있습니다.",
       targetId: "planning-profile-create-button",
     };
   }
@@ -118,7 +119,7 @@ export function buildWorkspaceQuickStartNextStep(input: {
   if (profileSyncState === "dirty") {
     return {
       label: "먼저 프로필 저장",
-      description: "선택된 프로필과 현재 편집값이 달라 먼저 저장하거나 변경 상태를 정리한 뒤 첫 실행으로 이어가세요.",
+      description: "선택된 프로필과 현재 편집값이 달라 먼저 저장하거나 변경 상태를 정리한 뒤 첫 실행·기록 저장으로 이어가세요.",
       targetId: "planning-profile-update-button",
     };
   }
@@ -129,23 +130,23 @@ export function buildWorkspaceQuickStartNextStep(input: {
       targetId: "planning-quickstart-runs-link",
     };
   }
-  if (!quickStartVm.beginnerStepRunDone) {
+  if (!quickStartVm.beginnerStepRunDone && input.runNeedsWarningConfirmation) {
     return {
-      label: "이제 첫 실행 시작",
-      description: "아래 간단 진행 카드의 첫 실행 시작을 누르면 요약, 액션, 경고를 한 번에 계산하고, 결과 저장 뒤 저장된 리포트 확인으로 이어집니다.",
-      targetId: "planning-quickstart-run-cta",
+      label: "먼저 실행 경고 확인",
+      description: "아래 실행 경고 확인 체크를 켠 뒤 첫 실행·기록 저장으로 이어가세요.",
+      targetId: "planning-run-warning-confirm-checkbox",
     };
   }
-  if (!quickStartVm.beginnerStepSaveDone) {
+  if (!quickStartVm.beginnerStepRunDone) {
     return {
-      label: "이제 결과 저장",
-      description: "첫 실행이 끝났습니다. 아래 결과 저장 버튼으로 현재 상태를 보관하면 저장된 리포트와 실행 내역 비교로 이어집니다.",
-      targetId: "planning-quickstart-save-run-button",
+      label: "이제 첫 실행·기록 저장",
+      description: "아래 간단 진행 카드의 첫 실행·기록 저장을 누르면 요약, 액션, 경고를 계산하고 저장된 리포트 확인으로 이어집니다.",
+      targetId: "planning-quickstart-run-cta",
     };
   }
   return {
     label: "저장된 리포트 확인",
-    description: "저장까지 끝났습니다. 아래 리포트 버튼으로 저장된 결과를 다시 보고, 실행 내역에서는 비교를 이어갈 수 있습니다.",
+    description: "실행 기록 저장까지 끝났습니다. 아래 리포트 버튼으로 결과를 다시 보고, 실행 내역에서는 비교를 이어갈 수 있습니다.",
     targetId: "planning-quickstart-report-button",
   };
 }
@@ -158,6 +159,7 @@ export function buildWorkspaceQuickStartPresenter(input: {
   runHasSimulateResult: boolean;
   runMatchesCurrentProfile: boolean;
   runStatusReviewRequired: boolean;
+  runNeedsWarningConfirmation: boolean;
   savedRun?: PlanningRunRecord | null;
   reportsPageHref: string;
   selectedProfileReportHref: (runId: string) => string;
@@ -166,14 +168,14 @@ export function buildWorkspaceQuickStartPresenter(input: {
     input.profileForm,
     input.profileValidationErrorCount,
   );
-  const beginnerStepRunDone = input.runHasSimulateResult && input.runMatchesCurrentProfile;
-  const beginnerStepSaveDone = Boolean(input.savedRun?.id) && input.runMatchesCurrentProfile;
+  const beginnerStepRunDone = input.runHasSimulateResult
+    && Boolean(input.savedRun?.id)
+    && input.runMatchesCurrentProfile;
   const quickStartVm = buildWorkspaceQuickStartVm({
     selectedProfileId: input.selectedProfileId,
     profileSyncState: input.profileSyncState,
     beginnerStepProfileDone,
     beginnerStepRunDone,
-    beginnerStepSaveDone,
     runStatusReviewRequired: input.runStatusReviewRequired,
     savedRunId: input.savedRun?.id,
     savedRunOverallStatus: input.savedRun?.overallStatus,
@@ -185,11 +187,11 @@ export function buildWorkspaceQuickStartPresenter(input: {
   return {
     beginnerStepProfileDone,
     beginnerStepRunDone,
-    beginnerStepSaveDone,
     quickStartVm,
     quickStartNextStep: buildWorkspaceQuickStartNextStep({
       profileSyncState: input.profileSyncState,
       quickStartVm,
+      runNeedsWarningConfirmation: input.runNeedsWarningConfirmation,
     }),
   };
 }

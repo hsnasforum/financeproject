@@ -31,7 +31,12 @@ function profileFixture() {
   };
 }
 
-function buildJsonRequest(method: string, urlPath: string, body: unknown): Request {
+function buildJsonRequest(
+  method: string,
+  urlPath: string,
+  body: unknown,
+  extraHeaders?: Record<string, string>,
+): Request {
   return new Request(`${LOCAL_ORIGIN}${urlPath}`, {
     method,
     headers: {
@@ -39,6 +44,7 @@ function buildJsonRequest(method: string, urlPath: string, body: unknown): Reque
       origin: LOCAL_ORIGIN,
       referer: `${LOCAL_ORIGIN}/planning`,
       "content-type": "application/json",
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -184,12 +190,14 @@ describe("run blob endpoint", () => {
         getActions: true,
         analyzeDebt: true,
       },
+    }, {
+      "idempotency-key": "planning-run-blob-preview-0001",
     }));
     const runPayload = await runRes.json() as { data?: { id?: string } };
     const runId = String(runPayload.data?.id ?? "");
     expect(runId).toBeTruthy();
 
-    const previewRes = await runBlobGET(buildGetRequest(`/api/planning/runs/${runId}/blob/raw?view=preview&chunkChars=120`), {
+    const previewRes = await runBlobGET(buildGetRequest(`/api/planning/runs/${runId}/blob/raw?view=preview&chunkChars=120000`), {
       params: Promise.resolve({ id: runId, name: "raw" }),
     });
     const previewPayload = await previewRes.json() as {
@@ -203,9 +211,12 @@ describe("run blob endpoint", () => {
     };
     expect(previewRes.status).toBe(200);
     expect(previewPayload.ok).toBe(true);
-    expect((previewPayload.data?.text ?? "").length).toBeLessThanOrEqual(120);
+    expect((previewPayload.data?.text ?? "").length).toBeLessThanOrEqual(120_000);
     expect(previewPayload.data?.totalChars).toBeGreaterThanOrEqual((previewPayload.data?.text ?? "").length);
-    expect(previewPayload.data?.hasMore).toBe(true);
+    expect(previewPayload.data?.hasMore).toBe(false);
+    expect(previewPayload.data?.text).not.toContain("idempotency");
+    expect(previewPayload.data?.text).not.toContain("keyHash");
+    expect(previewPayload.data?.text).not.toContain("requestFingerprint");
 
     const gzipRes = await runBlobGET(new Request(`${LOCAL_ORIGIN}/api/planning/runs/${runId}/blob/raw?gzip=1`, {
       method: "GET",
@@ -225,6 +236,7 @@ describe("run blob endpoint", () => {
       ok?: boolean;
       data?: {
         run?: {
+          meta?: { idempotency?: unknown };
           stages?: Array<{ outputRef?: { ref?: { path?: string } } }>;
         };
         outputs?: {
@@ -234,6 +246,7 @@ describe("run blob endpoint", () => {
     };
     expect(decoded.ok).toBe(true);
     expect(decoded.data).toBeDefined();
+    expect(decoded.data?.run?.meta?.idempotency).toBeUndefined();
     expect((decoded.data?.outputs?.simulate?.ref?.path ?? undefined)).toBeUndefined();
     expect(
       (decoded.data?.run?.stages ?? []).every((stage) => stage.outputRef?.ref?.path === undefined),

@@ -8,6 +8,7 @@ import {
   GET as profileByIdGET,
   PATCH as profilePATCH,
 } from "../../src/app/api/planning/v2/profiles/[id]/route";
+import { POST as legacyRunPOST } from "../../src/app/api/planning/run/route";
 import { GET as runsGET, POST as runsPOST } from "../../src/app/api/planning/v2/runs/route";
 import {
   DELETE as runDELETE,
@@ -18,6 +19,12 @@ import {
   createPlanningRun,
   parseCreatePlanningRunCommand,
 } from "../../src/lib/planning/server/runs/createRunService";
+import { resolvePlanningRunIdempotency } from "../../src/lib/planning/server/runs/createRunIdempotency";
+import { getRun } from "../../src/lib/planning/store/runStore";
+import {
+  resolveProfileRunDir,
+  resolveProfileRunMetaPath,
+} from "../../src/lib/planning/store/paths";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
@@ -27,6 +34,7 @@ const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const originalAssumptionsPath = process.env.PLANNING_ASSUMPTIONS_PATH;
 const originalAssumptionsHistoryDir = process.env.PLANNING_ASSUMPTIONS_HISTORY_DIR;
 const originalAuditPath = process.env.AUDIT_LOG_PATH;
+const originalTrashDir = process.env.PLANNING_TRASH_DIR;
 
 const LOCAL_HOST = "localhost:3000";
 const REMOTE_HOST = "example.com";
@@ -60,7 +68,13 @@ function buildGetRequest(urlPath: string, host = LOCAL_HOST): Request {
   });
 }
 
-function buildJsonRequest(method: string, urlPath: string, body: unknown, host = LOCAL_HOST): Request {
+function buildJsonRequest(
+  method: string,
+  urlPath: string,
+  body: unknown,
+  host = LOCAL_HOST,
+  extraHeaders: Record<string, string> = {},
+): Request {
   const origin = `http://${host}`;
   return new Request(`${origin}${urlPath}`, {
     method,
@@ -69,6 +83,7 @@ function buildJsonRequest(method: string, urlPath: string, body: unknown, host =
       origin,
       referer: `${origin}/planning`,
       "content-type": "application/json",
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -105,6 +120,7 @@ describe("planning v2 persistence routes", () => {
     env.PLANNING_ASSUMPTIONS_PATH = path.join(root, "assumptions.latest.json");
     env.PLANNING_ASSUMPTIONS_HISTORY_DIR = path.join(root, "assumptions-history");
     env.AUDIT_LOG_PATH = path.join(root, "audit.json");
+    env.PLANNING_TRASH_DIR = path.join(root, "trash");
   });
 
   afterEach(() => {
@@ -125,6 +141,9 @@ describe("planning v2 persistence routes", () => {
 
     if (typeof originalAuditPath === "string") env.AUDIT_LOG_PATH = originalAuditPath;
     else delete env.AUDIT_LOG_PATH;
+
+    if (typeof originalTrashDir === "string") env.PLANNING_TRASH_DIR = originalTrashDir;
+    else delete env.PLANNING_TRASH_DIR;
 
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -158,6 +177,14 @@ describe("planning v2 persistence routes", () => {
       path.join(process.cwd(), "src/app/api/planning/v2/run/route.ts"),
       "utf-8",
     );
+    const planningRscLoadersSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/pages/planningRscLoaders.ts"),
+      "utf-8",
+    );
+    const reportRunScopeLoaderSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/reports/reportRunScopeLoader.ts"),
+      "utf-8",
+    );
 
     expect(runsRouteSource).not.toContain("auditLogStore");
     expect(runsRouteSource).not.toContain("ops/metrics/metricsStore");
@@ -184,6 +211,8 @@ describe("planning v2 persistence routes", () => {
     expect(legacyV2RunRouteSource).not.toContain("runsPost");
     expect(legacyRunRouteSource).toContain("handleCreatePlanningRunPost");
     expect(legacyV2RunRouteSource).toContain("handleCreatePlanningRunPost");
+    expect(planningRscLoadersSource).toContain("sanitizeRunRecordForResponse");
+    expect(reportRunScopeLoaderSource).toContain("sanitizeRunRecordForResponse");
   });
 
   it("supports profiles CRUD through routes", async () => {
@@ -766,6 +795,291 @@ describe("planning v2 persistence routes", () => {
     expect(deleteResponse.status).toBe(400);
     expect(deletePayload.ok).toBe(false);
     expect(deletePayload.error?.code).toBe("CONFIRM_MISMATCH");
+  });
+
+  it("persists exactly one run for concurrent, replayed, and deprecated-route requests with the same idempotency key", async () => {
+    const profileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Idempotent run profile",
+      profile: sampleProfile(),
+    }));
+    const profilePayload = await profileResponse.json() as { data?: { id?: string } };
+    const profileId = String(profilePayload.data?.id ?? "");
+    expect(profileId).toBeTruthy();
+
+    const runBody = {
+      profileId,
+      title: "Exactly one run",
+      input: {
+        horizonMonths: 36,
+        policyId: "balanced",
+      },
+    };
+    const headers = { "idempotency-key": "planning-run-request-0001" };
+    const canonicalRequest = () => buildJsonRequest(
+      "POST",
+      "/api/planning/v2/runs",
+      runBody,
+      LOCAL_HOST,
+      headers,
+    );
+
+    const [firstResponse, concurrentResponse] = await Promise.all([
+      runsPOST(canonicalRequest()),
+      runsPOST(canonicalRequest()),
+    ]);
+    const firstPayload = await firstResponse.json() as {
+      ok?: boolean;
+      data?: { id?: string; meta?: { idempotency?: unknown } };
+    };
+    const concurrentPayload = await concurrentResponse.json() as {
+      ok?: boolean;
+      data?: { id?: string; meta?: { idempotency?: unknown } };
+    };
+
+    expect(firstResponse.status).toBe(201);
+    expect(concurrentResponse.status).toBe(201);
+    expect(firstPayload.ok).toBe(true);
+    expect(concurrentPayload.ok).toBe(true);
+    expect(firstPayload.data?.id).toMatch(/^planning_idem_/);
+    expect(concurrentPayload.data?.id).toBe(firstPayload.data?.id);
+    expect(firstPayload.data?.meta?.idempotency).toBeUndefined();
+    expect(concurrentPayload.data?.meta?.idempotency).toBeUndefined();
+
+    const replayResponse = await runsPOST(canonicalRequest());
+    const replayPayload = await replayResponse.json() as {
+      data?: { id?: string; meta?: { idempotency?: unknown } };
+    };
+    expect(replayResponse.status).toBe(201);
+    expect(replayPayload.data?.id).toBe(firstPayload.data?.id);
+    expect(replayPayload.data?.meta?.idempotency).toBeUndefined();
+
+    const stored = await getRun(String(firstPayload.data?.id));
+    expect(stored?.meta.idempotency).toMatchObject({
+      version: 1,
+      keyHash: expect.any(String),
+      requestFingerprint: expect.any(String),
+      responseMeta: expect.any(Object),
+    });
+
+    const detailResponse = await runByIdGET(
+      buildGetRequest(`/api/planning/v2/runs/${encodeURIComponent(String(firstPayload.data?.id))}`),
+      { params: Promise.resolve({ id: String(firstPayload.data?.id) }) },
+    );
+    const detailPayload = await detailResponse.json();
+    const internalMetaPattern = /idempotency|keyHash|requestFingerprint|responseMeta/;
+    expect(JSON.stringify(firstPayload)).not.toMatch(internalMetaPattern);
+    expect(JSON.stringify(replayPayload)).not.toMatch(internalMetaPattern);
+    expect(JSON.stringify(detailPayload)).not.toMatch(internalMetaPattern);
+
+    const deprecatedResponse = await legacyRunPOST(buildJsonRequest(
+      "POST",
+      "/api/planning/run",
+      runBody,
+      LOCAL_HOST,
+      headers,
+    ));
+    const deprecatedPayload = await deprecatedResponse.json() as { data?: { id?: string } };
+    expect(deprecatedResponse.status).toBe(201);
+    expect(deprecatedPayload.data?.id).toBe(firstPayload.data?.id);
+
+    const conflictResponse = await runsPOST(buildJsonRequest(
+      "POST",
+      "/api/planning/v2/runs",
+      { ...runBody, title: "Different request" },
+      LOCAL_HOST,
+      headers,
+    ));
+    const conflictPayload = await conflictResponse.json() as {
+      ok?: boolean;
+      error?: { code?: string };
+    };
+    expect(conflictResponse.status).toBe(409);
+    expect(conflictPayload.ok).toBe(false);
+    expect(conflictPayload.error?.code).toBe("IDEMPOTENCY_CONFLICT");
+
+    const listResponse = await runsGET(buildGetRequest(
+      `/api/planning/v2/runs?profileId=${encodeURIComponent(profileId)}&limit=20`,
+    ));
+    const listPayload = await listResponse.json() as {
+      data?: Array<{ id?: string; meta?: { idempotency?: unknown } }>;
+    };
+    expect(listPayload.data).toHaveLength(1);
+    expect(listPayload.data?.[0]?.id).toBe(firstPayload.data?.id);
+    expect(listPayload.data?.[0]?.meta?.idempotency).toBeUndefined();
+    expect(JSON.stringify(listPayload)).not.toMatch(internalMetaPattern);
+
+    const conflictingHeaders = { "idempotency-key": "planning-run-request-0002" };
+    const [conflictingFirst, conflictingSecond] = await Promise.all([
+      runsPOST(buildJsonRequest(
+        "POST",
+        "/api/planning/v2/runs",
+        { ...runBody, title: "Concurrent request A" },
+        LOCAL_HOST,
+        conflictingHeaders,
+      )),
+      runsPOST(buildJsonRequest(
+        "POST",
+        "/api/planning/v2/runs",
+        { ...runBody, title: "Concurrent request B" },
+        LOCAL_HOST,
+        conflictingHeaders,
+      )),
+    ]);
+    expect([conflictingFirst.status, conflictingSecond.status].sort()).toEqual([201, 409]);
+
+    const finalListResponse = await runsGET(buildGetRequest(
+      `/api/planning/v2/runs?profileId=${encodeURIComponent(profileId)}&limit=20`,
+    ));
+    const finalListPayload = await finalListResponse.json() as { data?: Array<{ id?: string }> };
+    expect(finalListPayload.data).toHaveLength(2);
+  });
+
+  it("fails closed and preserves an unreadable deterministic run on idempotent retry", async () => {
+    const profileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Unreadable replay profile",
+      profile: sampleProfile(),
+    }));
+    const profilePayload = await profileResponse.json() as { data?: { id?: string } };
+    const profileId = String(profilePayload.data?.id ?? "");
+    const runBody = {
+      profileId,
+      title: "Unreadable replay",
+      input: { horizonMonths: 24 },
+    };
+    const headers = { "idempotency-key": "planning-run-unreadable-0001" };
+
+    const createResponse = await runsPOST(buildJsonRequest(
+      "POST",
+      "/api/planning/v2/runs",
+      runBody,
+      LOCAL_HOST,
+      headers,
+    ));
+    const createPayload = await createResponse.json() as { data?: { id?: string } };
+    const runId = String(createPayload.data?.id ?? "");
+    expect(createResponse.status).toBe(201);
+    expect(runId).toMatch(/^planning_idem_/);
+
+    const metaPath = resolveProfileRunMetaPath(profileId, runId);
+    const unreadableBytes = Buffer.from("{\"broken\":", "utf-8");
+    await fs.promises.writeFile(metaPath, unreadableBytes);
+
+    const retryResponse = await runsPOST(buildJsonRequest(
+      "POST",
+      "/api/planning/v2/runs",
+      runBody,
+      LOCAL_HOST,
+      headers,
+    ));
+    const retryPayload = await retryResponse.json() as { ok?: boolean; error?: { code?: string } };
+
+    expect(retryResponse.status).toBe(409);
+    expect(retryPayload.ok).toBe(false);
+    expect(retryPayload.error?.code).toBe("IDEMPOTENCY_CONFLICT");
+    expect(await fs.promises.readFile(metaPath)).toEqual(unreadableBytes);
+  });
+
+  it("keeps a soft-deleted idempotent run reserved without overwriting its trash record", async () => {
+    const profileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Deleted idempotent run profile",
+      profile: sampleProfile(),
+    }));
+    const profilePayload = await profileResponse.json() as { data?: { id?: string } };
+    const profileId = String(profilePayload.data?.id ?? "");
+    const runBody = {
+      profileId,
+      title: "Deleted idempotent run",
+      input: { horizonMonths: 24 },
+    };
+    const headers = { "idempotency-key": "planning-run-deleted-0001" };
+
+    const createResponse = await runsPOST(buildJsonRequest(
+      "POST",
+      "/api/planning/v2/runs",
+      runBody,
+      LOCAL_HOST,
+      headers,
+    ));
+    const createPayload = await createResponse.json() as { data?: { id?: string } };
+    const runId = String(createPayload.data?.id ?? "");
+    expect(createResponse.status).toBe(201);
+
+    const deleteResponse = await runDELETE(
+      buildJsonRequest("DELETE", `/api/planning/v2/runs/${runId}`, {
+        confirmText: buildConfirmString("DELETE run", runId),
+      }),
+      { params: Promise.resolve({ id: runId }) },
+    );
+    expect(deleteResponse.status).toBe(200);
+    const trashPath = path.join(root, "trash", "runs", `${runId}.json`);
+    const trashedBytes = await fs.promises.readFile(trashPath);
+
+    const retryResponse = await runsPOST(buildJsonRequest(
+      "POST",
+      "/api/planning/v2/runs",
+      runBody,
+      LOCAL_HOST,
+      headers,
+    ));
+    const retryPayload = await retryResponse.json() as { ok?: boolean; error?: { code?: string } };
+
+    expect(retryResponse.status).toBe(409);
+    expect(retryPayload.ok).toBe(false);
+    expect(retryPayload.error?.code).toBe("IDEMPOTENCY_CONFLICT");
+    expect(await fs.promises.readFile(trashPath)).toEqual(trashedBytes);
+    expect(await getRun(runId)).toBeNull();
+  });
+
+  it("reserves an unreadable deterministic target in another profile partition", async () => {
+    const profileIds: string[] = [];
+    for (const name of ["Reservation owner", "Reservation requester"]) {
+      const response = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+        name,
+        profile: sampleProfile(),
+      }));
+      const payload = await response.json() as { data?: { id?: string } };
+      profileIds.push(String(payload.data?.id ?? ""));
+    }
+    const [ownerProfileId, requesterProfileId] = profileIds;
+    expect(ownerProfileId).toBeTruthy();
+    expect(requesterProfileId).toBeTruthy();
+    const ownerId = String(ownerProfileId);
+    const requesterId = String(requesterProfileId);
+
+    const runBody = {
+      profileId: requesterId,
+      title: "Cross-profile reserved target",
+      input: { horizonMonths: 24 },
+    };
+    const key = "planning-run-cross-profile-0001";
+    const resolution = resolvePlanningRunIdempotency({
+      body: runBody,
+      key,
+      userId: "default",
+    });
+    expect(resolution.ok).toBe(true);
+    if (!resolution.ok || !resolution.context) throw new Error("idempotency context expected");
+
+    const ownerRunDir = resolveProfileRunDir(ownerId, resolution.context.runId);
+    const sentinelPath = path.join(ownerRunDir, "sentinel.bin");
+    const sentinelBytes = Buffer.from([7, 1, 1, 2]);
+    await fs.promises.mkdir(ownerRunDir, { recursive: true });
+    await fs.promises.writeFile(sentinelPath, sentinelBytes);
+
+    const response = await runsPOST(buildJsonRequest(
+      "POST",
+      "/api/planning/v2/runs",
+      runBody,
+      LOCAL_HOST,
+      { "idempotency-key": key },
+    ));
+    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
+
+    expect(response.status).toBe(409);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("IDEMPOTENCY_CONFLICT");
+    expect(await fs.promises.readFile(sentinelPath)).toEqual(sentinelBytes);
+    expect(fs.existsSync(resolveProfileRunDir(requesterId, resolution.context.runId))).toBe(false);
   });
 
   it("allows same-origin reads and blocks cross-origin writes", async () => {

@@ -132,9 +132,9 @@ async function loadPipeline(batchId: string): Promise<LoadedPipeline> {
 
   const [rules, overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
     listRules(),
-    getBatchTxnOverrides(batchId).catch(() => ({})),
-    getAccountMappingOverrides(batchId).catch(() => ({})),
-    getTransferOverrides(batchId).catch(() => ({})),
+    getBatchTxnOverrides(batchId),
+    getAccountMappingOverrides(batchId),
+    getTransferOverrides(batchId),
   ]);
 
   return {

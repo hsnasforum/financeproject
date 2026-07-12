@@ -48,6 +48,11 @@ export function toStorageReadError(error: unknown, filePath: string): StorageCor
   return new StorageUnavailableError("storage file is unavailable", { filePath, cause: error });
 }
 
+export function toStorageWriteError(error: unknown, filePath: string): StorageUnavailableError {
+  if (error instanceof StorageUnavailableError) return error;
+  return new StorageUnavailableError("storage file is unavailable", { filePath, cause: error });
+}
+
 export function storageSchemaCorrupted(filePath: string, message = "storage schema is invalid"): StorageCorruptedError {
   return new StorageCorruptedError(message, { filePath });
 }

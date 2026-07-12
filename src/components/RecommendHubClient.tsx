@@ -106,7 +106,7 @@ export function RecommendHubClient() {
   }, [activeTab, filteredByTab, selectedProviderId, loanPurpose, loanTerms, savingTerms, savingLiquidity, savingRate]);
 
   return (
-    <main className="min-h-screen bg-surface-muted py-8 md:py-12">
+    <div className="min-h-screen bg-surface-muted py-8 md:py-12">
       <Container>
         <PageHeader
           title="추천 허브"
@@ -272,6 +272,6 @@ export function RecommendHubClient() {
           )}
         </div>
       </Container>
-    </main>
+    </div>
   );
 }

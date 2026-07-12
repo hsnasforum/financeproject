@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { type SnapshotSelection } from "@/app/planning/_lib/snapshotSelection";
+import { type SnapshotSelection } from "@/lib/planning/ui/snapshotSelection";
 import {
   buildWorkspaceSnapshotItemsStateFromApi,
   isSameWorkspaceSnapshotSelection,
@@ -9,7 +9,7 @@ import {
   resolveInitialWorkspaceSnapshotSelection,
   resolveWorkspaceSelectedSnapshotItem,
   type SnapshotItemsState,
-} from "@/app/planning/_lib/workspaceSnapshotSelection";
+} from "@/lib/planning/ui/workspaceSnapshotSelection";
 
 type WorkspaceSnapshotSelectionBundleInput = {
   initialSnapshotItems: SnapshotItemsState;

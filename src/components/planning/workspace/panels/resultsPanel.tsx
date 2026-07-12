@@ -1,4 +1,4 @@
-import PlanningMiniCharts from "@/app/planning/_components/PlanningMiniCharts";
+import PlanningMiniCharts from "@/components/planning/workspace/PlanningMiniCharts";
 import {
   AdvancedJsonPanel,
   GoalsTable,
@@ -103,7 +103,6 @@ export function PlanningWorkspaceResultsPanel({
     warningsSummaryTop5,
     currentStepStatuses,
     runsPageHref,
-    selectedProfileId,
     chartMode,
     chartPoints,
     aggregatedWarnings,
@@ -426,7 +425,7 @@ export function PlanningWorkspaceResultsPanel({
                     {" · "}
                     <BodyActionLink href={runsPageHref}>/planning/runs로 이동</BodyActionLink>
                     {" · "}
-                    <BodyActionLink href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(savedRun.id)}`, selectedProfileId)}>
+                    <BodyActionLink href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(savedRun.id)}`, savedRun.profileId)}>
                       리포트 보기
                     </BodyActionLink>
                   </BodyStatusInset>

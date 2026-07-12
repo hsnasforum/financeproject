@@ -8,7 +8,7 @@ import {
 import { formatPct } from "@/lib/planning/i18n/format";
 import { cn } from "@/lib/utils";
 import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
-import { type ReportVM } from "../../_lib/reportViewModel";
+import { type ReportVM } from "@/lib/planning/reports/reportViewModel";
 import { CoreMetricEvidenceDock } from "./CoreMetricEvidenceDock";
 import {
   PLANNER_ACTION_LINKS,

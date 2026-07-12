@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Button } from "../../../src/components/ui/Button";
-import { type SnapshotListItem } from "../../../src/app/planning/_lib/snapshotList";
+import { type SnapshotListItem } from "../../../src/lib/planning/ui/snapshotListTypes";
 
 const hookHarness = vi.hoisted(() => {
   const stateSlots: unknown[] = [];
@@ -47,7 +47,7 @@ vi.mock("react", async () => {
   };
 });
 
-import SnapshotPicker from "../../../src/app/planning/_components/SnapshotPicker";
+import SnapshotPicker from "../../../src/components/planning/workspace/SnapshotPicker";
 
 type SnapshotPickerProps = ComponentProps<typeof SnapshotPicker>;
 type TreeElement = ReactElement<{ children?: ReactNode; [key: string]: unknown }>;

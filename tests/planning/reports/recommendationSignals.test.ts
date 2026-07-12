@@ -4,8 +4,8 @@ import {
   buildPlanningRecommendationSignals,
   rankPlanningProductRecommendations,
   type CandidateRecommendationsPayload,
-} from "../../../src/app/planning/reports/_lib/recommendationSignals";
-import { type ReportVM } from "../../../src/app/planning/reports/_lib/reportViewModel";
+} from "../../../src/lib/planning/reports/recommendationSignals";
+import { type ReportVM } from "../../../src/lib/planning/reports/reportViewModel";
 
 function buildVm(input?: {
   monthlySurplusKrw?: number;
