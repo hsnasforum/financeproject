@@ -19,6 +19,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type DraftProfileBody = {
   source?: unknown;
@@ -141,6 +142,8 @@ export async function POST(request: Request) {
         evidence: built.evidence,
       });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof ProfileDraftFromCashflowInputError) {
         if (error.code === "INSUFFICIENT_DATA") {
           return NextResponse.json(

@@ -14,6 +14,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -91,6 +92,8 @@ export async function GET(request: Request, context: RouteContext) {
         meta: userMeta,
       });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (isInvalidIdError(error)) {
         return NextResponse.json(
           { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },

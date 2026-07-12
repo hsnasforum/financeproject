@@ -209,7 +209,10 @@ function buildStoredImportMetadataHandoff(input: {
   };
 }
 
-export async function importCsvToBatch(input: ImportCsvToBatchInput): Promise<ImportCsvToBatchResult> {
+export async function importCsvToBatch(
+  input: ImportCsvToBatchInput,
+  options: { beforeCommit?: (batchId: string) => Promise<void> } = {},
+): Promise<ImportCsvToBatchResult> {
   const csvText = asString(input.csvText);
   if (!csvText) {
     throw new ImportCsvToBatchInputError("csvText is required", [
@@ -308,6 +311,7 @@ export async function importCsvToBatch(input: ImportCsvToBatchInput): Promise<Im
     ...(accountList.length > 0 ? { accounts: accountList } : {}),
   };
 
+  await options.beforeCommit?.(batchId);
   await saveBatch({
     ...batchMeta,
     importMetadata: metadataHandoff,

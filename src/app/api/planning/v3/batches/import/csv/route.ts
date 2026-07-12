@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         csvText: payload.csvText,
         sanitizeTextFields: true,
         ...(payload.fileName ? { provenance: { fileName: payload.fileName } } : {}),
-      });
+      }, { preflightSummary: true });
       const summary = await getCurrentUserBatchImportSummary(imported.batchMeta.id);
 
       const responsePayload = {

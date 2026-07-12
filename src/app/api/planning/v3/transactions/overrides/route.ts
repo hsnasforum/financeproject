@@ -11,6 +11,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 import {
   TxnOverridesStoreInputError,
   deleteCurrentUserTransactionOverride,
@@ -101,7 +102,9 @@ export async function GET(request: Request) {
         scope: result.scope,
         meta: userMeta,
       });
-    } catch {
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       return NextResponse.json(
         { ok: false, error: { code: "INTERNAL", message: "거래 오버라이드 목록 조회에 실패했습니다." }, meta: userMeta },
         { status: 500 },
@@ -144,6 +147,8 @@ export async function PATCH(request: Request) {
       });
       return NextResponse.json({ ok: true, override: result.override, scope: result.scope, meta: userMeta });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof TxnOverridesStoreInputError) {
         return NextResponse.json(
           {
@@ -187,6 +192,8 @@ export async function DELETE(request: Request) {
       });
       return NextResponse.json({ ok: true, deleted: result.deleted, scope: result.scope, meta: userMeta });
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
       if (error instanceof TxnOverridesStoreInputError) {
         return NextResponse.json(
           {

@@ -27,6 +27,19 @@ import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPla
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+const originalPlanningNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalPlanningSingleUserMode = process.env.PLANNING_SINGLE_USER_MODE;
+const storePathEnvKeys = [
+  "PLANNING_V3_BATCHES_DIR",
+  "PLANNING_V3_CATEGORY_RULES_PATH",
+  "PLANNING_V3_TXN_OVERRIDES_DIR",
+  "PLANNING_V3_TXN_OVERRIDES_PATH",
+  "PLANNING_V3_TXN_ACCOUNT_OVERRIDES_DIR",
+  "PLANNING_V3_TXN_TRANSFER_OVERRIDES_DIR",
+] as const;
+const originalStorePathEnv = Object.fromEntries(
+  storePathEnvKeys.map((key) => [key, process.env[key]]),
+) as Record<(typeof storePathEnvKeys)[number], string | undefined>;
 
 const LOCAL_HOST = "localhost:5120";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -146,6 +159,9 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-batches-import-csv-api-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = root;
+    delete env.PLANNING_NAMESPACE_ENABLED;
+    delete env.PLANNING_SINGLE_USER_MODE;
+    for (const key of storePathEnvKeys) delete env[key];
     mockedBatchImportRepository.importCurrentUserCsvToBatch.mockClear();
     mockedBatchImportRepository.getCurrentUserBatchImportSummary.mockClear();
   });
@@ -155,6 +171,14 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     else delete env.NODE_ENV;
     if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
     else delete env.PLANNING_DATA_DIR;
+    if (typeof originalPlanningNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalPlanningNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+    if (typeof originalPlanningSingleUserMode === "string") env.PLANNING_SINGLE_USER_MODE = originalPlanningSingleUserMode;
+    else delete env.PLANNING_SINGLE_USER_MODE;
+    for (const key of storePathEnvKeys) {
+      if (typeof originalStorePathEnv[key] === "string") env[key] = originalStorePathEnv[key];
+      else delete env[key];
+    }
     fs.rmSync(root, { recursive: true, force: true });
   });
 
@@ -188,7 +212,7 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
       csvText,
       sanitizeTextFields: true,
       provenance: { fileName: "trusted-import.csv" },
-    }));
+    }), { preflightSummary: true });
 
     const payload = await response.json() as {
       ok?: boolean;
@@ -224,7 +248,7 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
       csvText,
       sanitizeTextFields: true,
       provenance: { fileName: "json-import.csv" },
-    }));
+    }), { preflightSummary: true });
 
     mockedBatchImportRepository.importCurrentUserCsvToBatch.mockClear();
 
@@ -233,7 +257,7 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     expect(mockedBatchImportRepository.importCurrentUserCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
       csvText,
       sanitizeTextFields: true,
-    }));
+    }), { preflightSummary: true });
     const lastCall = mockedBatchImportRepository.importCurrentUserCsvToBatch.mock.calls.at(-1)?.[0] as
       | { provenance?: { fileName?: string } }
       | undefined;
@@ -256,7 +280,7 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     expect(mockedBatchImportRepository.importCurrentUserCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
       csvText,
       sanitizeTextFields: true,
-    }));
+    }), { preflightSummary: true });
     const lastCall = mockedBatchImportRepository.importCurrentUserCsvToBatch.mock.calls.at(-1)?.[0] as
       | { provenance?: { fileName?: string } }
       | undefined;
