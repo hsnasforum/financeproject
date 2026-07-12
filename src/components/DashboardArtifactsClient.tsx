@@ -172,7 +172,7 @@ export default function DashboardArtifactsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
+    <div className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4">
         <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
@@ -262,6 +262,6 @@ export default function DashboardArtifactsPage() {
           )}
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

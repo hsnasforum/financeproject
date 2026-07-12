@@ -29,8 +29,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="ko" className={pretendard.variable}>
       <body className="bg-background text-foreground antialiased scroll-smooth">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-bold focus:text-primary focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+        >
+          본문으로 건너뛰기
+        </a>
         <SiteHeader />
-        <main className="min-h-[calc(100vh-64px)]">{children}</main>
+        <main id="main-content" tabIndex={-1} className="min-h-[calc(100vh-64px)]">{children}</main>
         <MobileBottomNav />
       </body>
     </html>

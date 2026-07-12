@@ -165,6 +165,7 @@
 - `/api/ops/actions/preview`와 `/api/ops/actions/run`처럼 planning 저장소 작업을 registry로 실행하는 ops action route도 local/dev unlock과 CSRF 외에 routeAuth current-user scope를 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다.
 
 ## 정합성 체크 규칙
+- runtime 문서의 `<main id="main-content">` owner는 root `src/app/layout.tsx` 하나다. `PageShell`과 page/client wrapper는 neutral element를 사용하고, 첫 keyboard focus는 `본문으로 건너뛰기` skip link로 main target에 이동한다.
 - 헤더/홈/문서의 내부 링크(`href`)는 반드시 위 실존 경로만 가리킨다.
 - Ops 계열 경로(`/ops/*`)는 public 기능 안내가 아니라 local-only 또는 packaged runtime 기준 운영 화면으로 취급한다.
 - Dev/Debug 경로는 운영 문서/사용자 안내에서 기본 노출하지 않는다.

@@ -110,7 +110,7 @@ export function DevDataDashboardClient() {
   }, [load]);
 
   return (
-    <main className="py-8">
+    <div className="py-8">
       <Container>
         <SectionHeader title="데이터 대시보드" subtitle="보조금24 · FINLIFE 수집/품질/커버리지 점검(dev)" />
         <div className="space-y-4">
@@ -167,6 +167,6 @@ export function DevDataDashboardClient() {
           </Card>
         </div>
       </Container>
-    </main>
+    </div>
   );
 }

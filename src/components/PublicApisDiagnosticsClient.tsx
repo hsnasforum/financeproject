@@ -154,7 +154,7 @@ export function PublicApisDiagnosticsClient() {
   }, []);
 
   return (
-    <main className="py-8">
+    <div className="py-8">
       <Container>
         <SectionHeader title="Public APIs 진단(Dev)" subtitle="키 설정 상태, 샘플 호출, 캐시 동작을 한 화면에서 확인합니다." />
         <Card>
@@ -276,6 +276,6 @@ export function PublicApisDiagnosticsClient() {
           })}
         </div>
       </Container>
-    </main>
+    </div>
   );
 }

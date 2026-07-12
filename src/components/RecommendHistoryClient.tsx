@@ -303,7 +303,7 @@ export function RecommendHistoryClient({
   }
 
   return (
-    <main className="min-h-screen bg-surface-muted py-8 md:py-12">
+    <div className="min-h-screen bg-surface-muted py-8 md:py-12">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4">
         <PageHeader
           title="추천 비교 기록"
@@ -696,6 +696,6 @@ export function RecommendHistoryClient({
           )}
         </Card>
       </div>
-    </main>
+    </div>
   );
 }
