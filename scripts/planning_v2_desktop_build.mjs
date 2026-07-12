@@ -9,7 +9,6 @@ import {
   lockfileSha256,
   readPackageVersion,
 } from "./planning_v2_desktop_provenance.mjs";
-import { STANDALONE_RUNTIME_LINKED_PACKAGES } from "./standalone_runtime_assets.mjs";
 
 const REQUIRED_V3_ARTIFACT_FILES = [
   "src/lib/planning/v3/ops/doctor.ts",
@@ -24,6 +23,13 @@ const SOURCE_ONLY_STANDALONE_ALIASES = [
   "tmp/txn-batch-detail-client-audit.tsx",
   "tmp/flow-v3-import-to-cashflow-audit.spec.ts",
 ];
+// These known links are omitted or replaced from canonical project assets after standalone copy.
+const REPLACED_STANDALONE_SYMLINKS = new Set([
+  ...SOURCE_ONLY_STANDALONE_ALIASES,
+  ".next/static",
+  "public",
+  "prisma",
+]);
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -77,16 +83,367 @@ async function copyIfExists(source, destination, options = {}) {
   return true;
 }
 
-async function removeCopiedSymlink(target) {
-  let stats;
+async function lstatOrNull(target) {
   try {
-    stats = await fs.lstat(target);
+    return await fs.lstat(target);
   } catch (error) {
-    if (error && typeof error === "object" && error.code === "ENOENT") return false;
+    if (error && typeof error === "object" && error.code === "ENOENT") return null;
     throw error;
   }
-  if (!stats.isSymbolicLink()) return false;
-  await fs.rm(target, { recursive: true, force: true });
+}
+
+function toPosixPath(value) {
+  return value.replace(/\\/g, "/");
+}
+
+function isPathWithin(rootPath, targetPath) {
+  const relativePath = path.relative(rootPath, targetPath);
+  return relativePath === "" || (
+    relativePath !== ".."
+    && !relativePath.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relativePath)
+  );
+}
+
+function pathsEqual(left, right) {
+  const leftResolved = path.resolve(left);
+  const rightResolved = path.resolve(right);
+  return process.platform === "win32"
+    ? leftResolved.toLowerCase() === rightResolved.toLowerCase()
+    : leftResolved === rightResolved;
+}
+
+async function canResolveActivePackageFrom(resolutionFrom, packageName, activeDestination) {
+  if (!resolutionFrom || !packageName) return false;
+  const packagePath = packageName.split("/");
+  let current = path.resolve(resolutionFrom);
+  while (true) {
+    if (path.basename(current) !== "node_modules") {
+      const candidate = path.join(current, "node_modules", ...packagePath);
+      if (pathsEqual(candidate, activeDestination)) return true;
+      if (await lstatOrNull(candidate)) return false;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
+async function canonicalPathForComparison(target) {
+  const unresolvedSegments = [];
+  let current = path.resolve(target);
+  while (true) {
+    try {
+      const currentReal = await fs.realpath(current);
+      return path.resolve(currentReal, ...unresolvedSegments.reverse());
+    } catch (error) {
+      if (!error || typeof error !== "object" || error.code !== "ENOENT") throw error;
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      unresolvedSegments.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+async function assertArtifactDoesNotOverlapStandalone(artifactDir, sourceStandaloneDir) {
+  const [artifactComparable, sourceComparable] = await Promise.all([
+    canonicalPathForComparison(artifactDir),
+    canonicalPathForComparison(sourceStandaloneDir),
+  ]);
+  if (
+    isPathWithin(sourceComparable, artifactComparable)
+    || isPathWithin(artifactComparable, sourceComparable)
+  ) {
+    throw new Error(`desktop artifact directory overlaps source standalone: ${artifactDir}`);
+  }
+}
+
+async function copyRegularFile(source, destination, stats) {
+  await fs.mkdir(path.dirname(destination), { recursive: true });
+  await fs.copyFile(source, destination);
+  await fs.chmod(destination, stats.mode & 0o777);
+}
+
+async function resolveVirtualStorePackageContext(directoryReal, sourceRootReal) {
+  const packageParent = path.dirname(directoryReal);
+  let nodeModulesDir;
+  let packageName;
+  if (path.basename(packageParent) === "node_modules") {
+    nodeModulesDir = packageParent;
+    packageName = path.basename(directoryReal);
+  } else {
+    const scopeName = path.basename(packageParent);
+    const scopeParent = path.dirname(packageParent);
+    if (!scopeName.startsWith("@") || path.basename(scopeParent) !== "node_modules") return null;
+    nodeModulesDir = scopeParent;
+    packageName = `${scopeName}/${path.basename(directoryReal)}`;
+  }
+
+  const contextRelativePath = toPosixPath(path.relative(sourceRootReal, nodeModulesDir));
+  if (
+    !isPathWithin(sourceRootReal, nodeModulesDir)
+    || !contextRelativePath.startsWith("node_modules/.pnpm/")
+    || !contextRelativePath.endsWith("/node_modules")
+  ) {
+    return null;
+  }
+
+  const packageJsonPath = path.join(directoryReal, "package.json");
+  const packageJsonStats = await lstatOrNull(packageJsonPath);
+  if (!packageJsonStats || packageJsonStats.isSymbolicLink() || !packageJsonStats.isFile()) return null;
+  let packageJson;
+  try {
+    packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!packageJson || typeof packageJson !== "object" || packageJson.name !== packageName) return null;
+  return { nodeModulesDir, packageName };
+}
+
+async function listPackageContextEntries(nodeModulesDir, relativePath) {
+  const out = [];
+  const entries = await fs.readdir(nodeModulesDir, { withFileTypes: true });
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+  for (const entry of entries) {
+    const entryPath = path.join(nodeModulesDir, entry.name);
+    if (entry.name === ".prisma") {
+      out.push({ packageName: entry.name, source: entryPath, allowRegularDirectory: true });
+      continue;
+    }
+    if (entry.name.startsWith(".")) continue;
+    if (!entry.name.startsWith("@")) {
+      out.push({ packageName: entry.name, source: entryPath, allowRegularDirectory: false });
+      continue;
+    }
+    const scopeStats = await fs.lstat(entryPath);
+    if (scopeStats.isSymbolicLink() || !scopeStats.isDirectory()) {
+      throw new Error(`desktop standalone package context has unsupported scope entry: ${relativePath}/node_modules/${entry.name}`);
+    }
+    const scopedEntries = await fs.readdir(entryPath, { withFileTypes: true });
+    scopedEntries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const scopedEntry of scopedEntries) {
+      if (scopedEntry.name.startsWith(".")) continue;
+      out.push({
+        packageName: `${entry.name}/${scopedEntry.name}`,
+        source: path.join(entryPath, scopedEntry.name),
+        allowRegularDirectory: false,
+      });
+    }
+  }
+  return out;
+}
+
+async function materializePackageResolutionContext({
+  packageContext,
+  destination,
+  sourceRootReal,
+  relativePath,
+  activeDirectories,
+  activePackages,
+}) {
+  const contextEntries = await listPackageContextEntries(packageContext.nodeModulesDir, relativePath);
+  for (const entry of contextEntries) {
+    if (entry.packageName === packageContext.packageName) continue;
+    const dependencyDestination = path.join(destination, "node_modules", ...entry.packageName.split("/"));
+    if (await lstatOrNull(dependencyDestination)) continue;
+    const entryStats = await fs.lstat(entry.source);
+    if (!entryStats.isSymbolicLink()) {
+      if (entry.allowRegularDirectory && entryStats.isDirectory()) {
+        await copyResolvedStandaloneEntry({
+          source: entry.source,
+          destination: dependencyDestination,
+          sourceRootReal,
+          relativePath: `${relativePath}/node_modules/${entry.packageName}`,
+          activeDirectories,
+          activePackages,
+          stats: entryStats,
+        });
+        continue;
+      }
+      throw new Error(
+        `desktop standalone package context dependency must be a symlink: ${relativePath}/node_modules/${entry.packageName}`,
+      );
+    }
+    await materializeStandaloneEntry({
+      source: entry.source,
+      destination: dependencyDestination,
+      sourceRootReal,
+      relativePath: `${relativePath}/node_modules/${entry.packageName}`,
+      activeDirectories,
+      activePackages,
+      resolutionFrom: destination,
+      requestedPackageName: entry.packageName,
+    });
+  }
+}
+
+async function copyResolvedStandaloneEntry({
+  source,
+  destination,
+  sourceRootReal,
+  relativePath,
+  activeDirectories,
+  activePackages,
+  stats,
+  packageContext = null,
+}) {
+  if (stats.isFile()) {
+    await copyRegularFile(source, destination, stats);
+    return;
+  }
+  if (!stats.isDirectory()) {
+    throw new Error(`desktop standalone contains unsupported filesystem entry: ${relativePath}`);
+  }
+
+  const directoryReal = await fs.realpath(source);
+  if (!isPathWithin(sourceRootReal, directoryReal)) {
+    throw new Error(`desktop standalone directory escapes source root: ${relativePath} -> ${directoryReal}`);
+  }
+  if (activeDirectories.has(directoryReal)) {
+    throw new Error(`desktop standalone symlink cycle detected: ${relativePath}`);
+  }
+
+  activeDirectories.add(directoryReal);
+  if (packageContext) {
+    activePackages.set(directoryReal, {
+      destination,
+      packageName: packageContext.packageName,
+    });
+  }
+  try {
+    await fs.mkdir(destination, { recursive: true });
+    const entries = await fs.readdir(directoryReal, { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const childRelativePath = relativePath
+        ? `${relativePath}/${entry.name}`
+        : entry.name;
+      await materializeStandaloneEntry({
+        source: path.join(directoryReal, entry.name),
+        destination: path.join(destination, entry.name),
+        sourceRootReal,
+        relativePath: childRelativePath,
+        activeDirectories,
+        activePackages,
+      });
+    }
+    if (packageContext) {
+      await materializePackageResolutionContext({
+        packageContext,
+        destination,
+        sourceRootReal,
+        relativePath,
+        activeDirectories,
+        activePackages,
+      });
+    }
+  } finally {
+    if (packageContext && pathsEqual(activePackages.get(directoryReal)?.destination || "", destination)) {
+      activePackages.delete(directoryReal);
+    }
+    activeDirectories.delete(directoryReal);
+  }
+}
+
+async function materializeStandaloneEntry({
+  source,
+  destination,
+  sourceRootReal,
+  relativePath,
+  activeDirectories,
+  activePackages,
+  resolutionFrom = "",
+  requestedPackageName = "",
+}) {
+  const stats = await fs.lstat(source);
+  if (!stats.isSymbolicLink()) {
+    await copyResolvedStandaloneEntry({
+      source,
+      destination,
+      sourceRootReal,
+      relativePath,
+      activeDirectories,
+      activePackages,
+      stats,
+    });
+    return;
+  }
+
+  const portableRelativePath = toPosixPath(relativePath);
+  if (REPLACED_STANDALONE_SYMLINKS.has(portableRelativePath)) return;
+
+  let targetReal;
+  try {
+    targetReal = await fs.realpath(source);
+  } catch (error) {
+    const code = error && typeof error === "object" ? error.code : "";
+    if (code === "ELOOP") {
+      throw new Error(`desktop standalone contains cyclic symlink: ${portableRelativePath}`);
+    }
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      throw new Error(`desktop standalone contains dangling symlink: ${portableRelativePath}`);
+    }
+    throw new Error(`desktop standalone symlink target could not be resolved: ${portableRelativePath} (${code || "unknown"})`);
+  }
+  if (!isPathWithin(sourceRootReal, targetReal)) {
+    throw new Error(`desktop standalone symlink escapes source root: ${portableRelativePath} -> ${targetReal}`);
+  }
+
+  const targetStats = await fs.lstat(targetReal);
+  if (targetStats.isFile()) {
+    throw new Error(`desktop standalone contains unsupported file symlink: ${portableRelativePath}`);
+  }
+  if (targetStats.isDirectory() && activeDirectories.has(targetReal)) {
+    const activePackage = activePackages.get(targetReal);
+    if (
+      activePackage
+      && requestedPackageName === activePackage.packageName
+      && await canResolveActivePackageFrom(
+        resolutionFrom,
+        requestedPackageName,
+        activePackage.destination,
+      )
+    ) {
+      return;
+    }
+    throw new Error(`desktop standalone symlink cycle detected: ${portableRelativePath}`);
+  }
+  const packageContext = targetStats.isDirectory()
+    ? await resolveVirtualStorePackageContext(targetReal, sourceRootReal)
+    : null;
+  if (!packageContext) {
+    throw new Error(`desktop standalone contains unsupported directory symlink: ${portableRelativePath}`);
+  }
+  await copyResolvedStandaloneEntry({
+    source: targetReal,
+    destination,
+    sourceRootReal,
+    relativePath: portableRelativePath,
+    activeDirectories,
+    activePackages,
+    stats: targetStats,
+    packageContext,
+  });
+}
+
+async function copyStandaloneIfExists(source, destination) {
+  const sourceStats = await lstatOrNull(source);
+  if (!sourceStats) return false;
+  if (sourceStats.isSymbolicLink() || !sourceStats.isDirectory()) {
+    throw new Error(`desktop standalone source must be a non-symlink directory: ${source}`);
+  }
+  const sourceRootReal = await fs.realpath(source);
+  await copyResolvedStandaloneEntry({
+    source: sourceRootReal,
+    destination,
+    sourceRootReal,
+    relativePath: "",
+    activeDirectories: new Set(),
+    activePackages: new Map(),
+    stats: sourceStats,
+  });
   return true;
 }
 
@@ -175,6 +532,8 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
   const artifactDir = path.resolve(cwd, args.artifactDir);
+  const sourceStandaloneDir = path.join(cwd, ".next", "standalone");
+  await assertArtifactDoesNotOverlapStandalone(artifactDir, sourceStandaloneDir);
 
   if (args.withNextBuild) {
     const result = await runPnpm(["build"], {
@@ -207,23 +566,8 @@ async function main() {
   await copyIfExists(path.join(cwd, "tsconfig.planning-v3.json"), path.join(artifactDir, "tsconfig.planning-v3.json"));
   await copyIfExists(path.join(cwd, "middleware.ts"), path.join(artifactDir, "middleware.ts"));
   await copyIfExists(path.join(cwd, ".env.local.example"), path.join(artifactDir, ".env.local.example"));
-  const sourceStandaloneDir = path.join(cwd, ".next", "standalone");
   const artifactStandaloneDir = path.join(artifactDir, ".next", "standalone");
-  await copyIfExists(sourceStandaloneDir, artifactStandaloneDir);
-  for (const packageName of STANDALONE_RUNTIME_LINKED_PACKAGES) {
-    const packagePath = packageName.split("/");
-    await copyIfExists(
-      path.join(sourceStandaloneDir, "node_modules", ...packagePath),
-      path.join(artifactStandaloneDir, "node_modules", ...packagePath),
-      { replaceDestination: true, dereferenceSource: true },
-    );
-  }
-  // Next tracing copies these repository audit aliases into standalone even though runtime does not use them.
-  for (const relativePath of SOURCE_ONLY_STANDALONE_ALIASES) {
-    await removeCopiedSymlink(path.join(artifactStandaloneDir, ...relativePath.split("/")));
-  }
-  await removeCopiedSymlink(path.join(artifactStandaloneDir, "public"));
-  await removeCopiedSymlink(path.join(artifactStandaloneDir, "prisma"));
+  await copyStandaloneIfExists(sourceStandaloneDir, artifactStandaloneDir);
   await copyIfExists(path.join(cwd, ".next", "static"), path.join(artifactDir, ".next", "static"));
   await copyIfExists(
     path.join(cwd, ".next", "static"),
