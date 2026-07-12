@@ -187,17 +187,29 @@ export function getAdminNavItems(): NavigationRouteEntry[] {
   return NAVIGATION_ROUTE_REGISTRY.filter((item) => item.admin === true);
 }
 
+function normalizeRoutePath(pathname: string): string {
+  const pathOnly = pathname.split(/[?#]/, 1)[0]?.trim() || "/";
+  const withLeadingSlash = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`;
+  return withLeadingSlash === "/" ? "/" : withLeadingSlash.replace(/\/+$/, "");
+}
+
+export function isSegmentAwarePrefixMatch(pathname: string, prefix: string): boolean {
+  const normalizedPathname = normalizeRoutePath(pathname);
+  const normalizedPrefix = normalizeRoutePath(prefix);
+  return normalizedPathname === normalizedPrefix || normalizedPathname.startsWith(`${normalizedPrefix}/`);
+}
+
 export function isNavigationItemActive(pathname: string, item: NavigationRouteEntry): boolean {
-  if (item.includePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
-    return true;
-  }
-  if (item.excludePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
+  if (item.excludePrefixes?.some((prefix) => isSegmentAwarePrefixMatch(pathname, prefix))) {
     return false;
   }
-  if (item.match === "exact") {
-    return pathname === item.href;
+  if (item.includePrefixes?.some((prefix) => isSegmentAwarePrefixMatch(pathname, prefix))) {
+    return true;
   }
-  return pathname === item.href || pathname.startsWith(item.href);
+  if (item.match === "exact") {
+    return normalizeRoutePath(pathname) === normalizeRoutePath(item.href);
+  }
+  return isSegmentAwarePrefixMatch(pathname, item.href);
 }
 
 export function resolveRouteVisibility(pathname: string): Pick<NavigationRouteEntry, "id" | "href" | "visibility" | "status"> {

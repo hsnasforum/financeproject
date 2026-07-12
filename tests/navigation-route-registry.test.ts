@@ -6,6 +6,7 @@ import {
   getPublicBottomNavItems,
   getPublicDesktopNavItems,
   isNavigationItemActive,
+  isSegmentAwarePrefixMatch,
   resolveRouteVisibility,
 } from "../src/lib/navigation/routeRegistry";
 
@@ -70,6 +71,21 @@ describe("navigation route registry", () => {
     for (const route of ["/benefits", "/public/dart", "/housing/subscription", "/tools/fx", "/invest/companies", "/compare", "/gov24"]) {
       expect(isNavigationItemActive(route, products)).toBe(true);
     }
+  });
+
+  it("matches navigation prefixes only at exact segment boundaries", () => {
+    const planning = getPublicDesktopNavItems().find((item) => item.id === "planning");
+    const products = getPublicDesktopNavItems().find((item) => item.id === "products");
+    expect(planning).toBeTruthy();
+    expect(products).toBeTruthy();
+    if (!planning || !products) return;
+
+    expect(isSegmentAwarePrefixMatch("/planning/runs", "/planning")).toBe(true);
+    expect(isSegmentAwarePrefixMatch("/planning-v3", "/planning")).toBe(false);
+    expect(isNavigationItemActive("/planning-v3", planning)).toBe(false);
+    expect(isNavigationItemActive("/products-old", products)).toBe(false);
+    expect(isNavigationItemActive("/benefits-plus", products)).toBe(false);
+    expect(isNavigationItemActive("/publicity", products)).toBe(false);
   });
 
   it("keeps nav consumers on the shared registry instead of local item arrays", () => {
