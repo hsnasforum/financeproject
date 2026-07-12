@@ -178,6 +178,41 @@ test("production hides dev and debug surfaces", async ({ request }) => {
   }
 });
 
+test("main landmark stays singular across representative route shells", async ({ page }) => {
+  for (const pathname of [
+    "/",
+    "/planning",
+    "/products/compare",
+    "/recommend/history",
+    "/settings",
+    "/ops",
+    "/dev/data",
+  ]) {
+    await page.goto(pathname);
+    await expect(page.getByRole("main")).toHaveCount(1);
+    await expect(page.locator("#main-content")).toHaveCount(1);
+  }
+});
+
+test("skip link is the first keyboard stop and moves focus to main content", async ({ page }) => {
+  await page.goto("/planning");
+  const skipLink = page.getByRole("link", { name: "본문으로 건너뛰기" });
+  const main = page.locator("#main-content");
+
+  await page.keyboard.press("Tab");
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeVisible();
+  await skipLink.press("Enter");
+  await expect(page).toHaveURL(/#main-content$/);
+  await expect(main).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => {
+    const mainElement = document.querySelector("#main-content");
+    return Boolean(mainElement && document.activeElement && mainElement.contains(document.activeElement));
+  })).toBe(true);
+});
+
 for (const viewport of [
   { width: 320, height: 568 },
   { width: 390, height: 844 },

@@ -68,7 +68,7 @@ export function DevGitAdminClient() {
   }, [result]);
 
   return (
-    <main className="py-8">
+    <div className="py-8">
       <Container>
         <SectionHeader title="Git 관리자 (Dev)" subtitle="브라우저에서 현재 레포의 pull/push/status를 실행합니다." />
         <div className="space-y-4">
@@ -111,6 +111,6 @@ export function DevGitAdminClient() {
           </Card>
         </div>
       </Container>
-    </main>
+    </div>
   );
 }

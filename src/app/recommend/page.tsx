@@ -608,7 +608,7 @@ function RecommendPageInner() {
 
 export default function RecommendPage() {
   return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-surface-muted"><LoadingState /></main>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-surface-muted"><LoadingState /></div>}>
       <RecommendPageInner />
     </Suspense>
   );
