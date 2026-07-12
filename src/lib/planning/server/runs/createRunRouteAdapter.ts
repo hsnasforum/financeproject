@@ -19,6 +19,7 @@ import {
   recordCreatePlanningRunParseFailure,
   type RunsCreateBody,
 } from "./createRunService";
+import { resolvePlanningRunIdempotency } from "./createRunIdempotency";
 
 type HandleCreatePlanningRunPostOptions = {
   deprecatedApi?: PlanningDeprecatedApiPolicy;
@@ -111,8 +112,24 @@ export async function handleCreatePlanningRunPost(
       );
     }
 
+    const idempotency = resolvePlanningRunIdempotency({
+      body,
+      key: request.headers.get("idempotency-key"),
+      userId: currentUser.id,
+    });
+    if (!idempotency.ok) {
+      return decorateDeprecatedResponse(
+        jsonError(idempotency.code, idempotency.message, {
+          status: 400,
+          meta: mergeRoutePolicyMeta(userMeta, deprecatedApi),
+        }),
+        deprecatedApi,
+      );
+    }
+
     const result = await createPlanningRun(command.command, {
       requestBaseUrl: new URL(request.url).origin,
+      ...(idempotency.context ? { idempotency: idempotency.context } : {}),
     });
 
     if (result.ok) {

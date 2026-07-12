@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import PlanningQuickStartGate from "../../../src/components/planning/PlanningQuickStartGate";
+import PlanningQuickStartGate, {
+  resolvePlanningQuickStartAppliedNextStepSummary,
+} from "../../../src/components/planning/PlanningQuickStartGate";
 
 describe("PlanningQuickStartGate", () => {
   it("renders preview-first CTA by default", () => {
@@ -26,6 +28,31 @@ describe("PlanningQuickStartGate", () => {
     expect(html).toContain("최근 실행 상태를 자동 확인하지 못했습니다. 진행 상태를 다시 확인해 주세요.");
     expect(html).toContain("프로필 저장 완료 · 실행 상태 확인 필요");
     expect(html).toContain("진행 상태 다시 확인");
-    expect(html).not.toContain("첫 실행 시작");
+    expect(html).not.toContain("첫 실행·기록 저장");
+  });
+
+  it("moves a completed run directly to the stored report step", () => {
+    const html = renderToStaticMarkup(
+      <PlanningQuickStartGate
+        nextStepLabel="저장된 리포트 확인"
+        onApply={() => undefined}
+        profileSyncState="saved"
+        runDone
+      />,
+    );
+
+    expect(html).toContain("첫 실행·기록 저장까지 확인됐습니다");
+    expect(html).toContain("저장된 리포트 확인");
+    expect(html).not.toContain("결과 저장");
+  });
+
+  it("uses the warning confirmation CTA as the applied next-step summary", () => {
+    expect(resolvePlanningQuickStartAppliedNextStepSummary({
+      nextStepLabel: "먼저 실행 경고 확인",
+      runDone: false,
+      runStatusReviewRequired: false,
+      profileSyncState: "saved",
+      profileSavedAfterApply: true,
+    })).toBe("먼저 실행 경고 확인");
   });
 });

@@ -50,6 +50,7 @@ export function PlanningWorkspaceProfilePanel({
     pendingSuggestions,
     acceptedSuggestionCodes,
     savingProfile,
+    running,
     profileValidation,
     beginnerGoals,
     beginnerEmergencyMonths,
@@ -86,6 +87,7 @@ export function PlanningWorkspaceProfilePanel({
 
   return (
     <ProfileV2Form modeLabel={beginnerMode ? "초보자 모드" : "고급 모드"}>
+      <fieldset className="contents" disabled={running}>
       {loadingProfiles && profiles.length < 1 ? (
         <LoadingState
           title="프로필 목록을 불러오는 중입니다"
@@ -118,6 +120,7 @@ export function PlanningWorkspaceProfilePanel({
           <select
             className="flex-1 cursor-pointer bg-transparent text-sm font-bold outline-none"
             aria-label="프로필 선택"
+            disabled={running}
             value={selectedProfileId}
             onChange={(event) => setSelectedProfileId(event.target.value)}
           >
@@ -711,6 +714,7 @@ export function PlanningWorkspaceProfilePanel({
         <Button data-testid="planning-profile-refresh-button" disabled={loadingProfiles} id="planning-profile-refresh-button" onClick={() => void loadProfiles(selectedProfileId)} variant="ghost" className="h-10 rounded-full px-4 font-bold">새로고침</Button>
         <Button disabled={savingProfile} onClick={loadSampleProfileAction} variant="ghost" className="h-10 rounded-full px-4 font-bold">샘플 프로필</Button>
       </div>
+      </fieldset>
     </ProfileV2Form>
   );
 }

@@ -10,6 +10,7 @@ import {
   type CurrentUserRunStageResult,
 } from "./routeService";
 import { type CreatePlanningRunCommand, type RunInputScenario } from "./createRunCommandParser";
+import { type StoredPlanningRunIdempotencyMeta } from "./createRunIdempotency";
 import { type ResolvedPlanningStageOutputs } from "./createRunStagePlan";
 
 type CreateRunRecordInput = Parameters<typeof createCurrentUserRunResponseData>[0];
@@ -32,6 +33,10 @@ export type AssemblePlanningRunRecordInput = {
   overallStatus: CurrentUserRunRecord["overallStatus"];
   stages: CurrentUserRunStageResult[];
   stageOutputs: ResolvedPlanningStageOutputs;
+  idempotency?: {
+    runId: string;
+    meta: StoredPlanningRunIdempotencyMeta;
+  };
 };
 
 export type AssemblePlanningRunRecordResult = {
@@ -78,6 +83,7 @@ export function assemblePlanningRunRecordInput(
 
   return {
     recordInput: {
+      ...(input.idempotency ? { id: input.idempotency.runId } : {}),
       profileId: input.profileId,
       ...(input.title ? { title: input.title } : {}),
       ...(input.scenarioMetaForRecord ? { scenario: input.scenarioMetaForRecord } : {}),
@@ -110,6 +116,7 @@ export function assemblePlanningRunRecordInput(
             ? { snapshotStaleDays: input.healthSummary.snapshotStaleDays }
             : {}),
         },
+        ...(input.idempotency ? { idempotency: input.idempotency.meta } : {}),
       },
       reproducibility,
       outputs: {

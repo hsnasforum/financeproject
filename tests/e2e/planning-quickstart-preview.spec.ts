@@ -28,6 +28,22 @@ async function readSelectedProfileId(page: import("@playwright/test").Page): Pro
   return profileId;
 }
 
+async function readProfileRunIds(
+  page: import("@playwright/test").Page,
+  profileId: string,
+): Promise<string[]> {
+  return page.evaluate(async (id) => {
+    const response = await fetch(`/api/planning/v2/runs?profileId=${encodeURIComponent(id)}&limit=200`, {
+      cache: "no-store",
+    });
+    const payload = await response.json() as { data?: Array<{ id?: string }> };
+    return (payload.data ?? [])
+      .map((run) => run.id ?? "")
+      .filter((runId) => runId.length > 0)
+      .sort();
+  }, profileId);
+}
+
 async function prepareBeginnerQuickStart(page: import("@playwright/test").Page): Promise<string> {
   await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
 
@@ -70,34 +86,96 @@ async function prepareBeginnerQuickStart(page: import("@playwright/test").Page):
   await resolvePendingSuggestions(page);
 
   const quickStartStatus = page.getByTestId("planning-workspace-quickstart-status");
-  await expect(page.getByText("프로필 저장 완료. 다음 단계는 첫 실행이며, 결과 저장 뒤 리포트를 확인할 수 있습니다.")).toBeVisible({ timeout: 30_000 });
-  await expect(appliedState).toContainText("프로필 저장 완료. 이제 첫 실행만 남았습니다.");
+  await expect(page.getByText("프로필 저장 완료. 다음 단계는 첫 실행·기록 저장이며, 완료 뒤 리포트를 확인할 수 있습니다.")).toBeVisible({ timeout: 30_000 });
+  await expect(appliedState).toContainText("프로필 저장 완료. 이제 첫 실행·기록 저장만 남았습니다.");
   await expect(page.getByTestId("planning-quickstart-followthrough-summary")).toContainText("초안 적용 완료 · 프로필 저장 완료");
-  await expect(page.getByTestId("planning-quickstart-next-step")).toHaveText("이제 첫 실행 시작");
+  await expect(page.getByTestId("planning-quickstart-next-step")).toHaveText("이제 첫 실행·기록 저장");
   await expect(quickStartStatus).toContainText("프로필 저장 완료");
-  await expect(quickStartStatus).toContainText("다음 단계 · 첫 실행 시작");
+  await expect(quickStartStatus).toContainText("다음 단계 · 첫 실행·기록 저장");
 
   return readSelectedProfileId(page);
 }
 
-async function completeFirstQuickStartRun(page: import("@playwright/test").Page): Promise<void> {
+async function completeFirstQuickStartRun(
+  page: import("@playwright/test").Page,
+  profileId: string,
+): Promise<void> {
   const appliedState = page.getByTestId("planning-quickstart-applied-state");
   const quickStartStatus = page.getByTestId("planning-workspace-quickstart-status");
   const firstRunButton = page.getByTestId("planning-quickstart-run-cta");
 
   await expect(firstRunButton).toBeVisible({ timeout: 30_000 });
   await expect(firstRunButton).toBeEnabled({ timeout: 30_000 });
-  await firstRunButton.click();
+  const beforeRunIds = await readProfileRunIds(page, profileId);
+  let releaseRunRequest: () => void = () => undefined;
+  const heldRunRequest = new Promise<void>((resolve) => {
+    releaseRunRequest = resolve;
+  });
+  const holdRunRoute = async (route: import("@playwright/test").Route) => {
+    await heldRunRequest;
+    await route.continue();
+  };
+  await page.route("**/api/planning/v2/runs", holdRunRoute);
+  const runCreateResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === "POST" && url.pathname === "/api/planning/v2/runs";
+  });
+  const runPostPaths: string[] = [];
+  const idempotencyKeys: string[] = [];
+  const recordRunPost = (request: import("@playwright/test").Request) => {
+    if (request.method() !== "POST") return;
+    const url = new URL(request.url());
+    if (!["/api/planning/v2/runs", "/api/planning/v2/run", "/api/planning/run"].includes(url.pathname)) return;
+    runPostPaths.push(url.pathname);
+    idempotencyKeys.push(request.headers()["idempotency-key"] ?? "");
+  };
+  page.on("request", recordRunPost);
+  await firstRunButton.evaluate((element) => {
+    (element as HTMLButtonElement).click();
+    (element as HTMLButtonElement).click();
+  });
+  try {
+    await expect(page.getByLabel("프로필 선택")).toBeDisabled();
+    await expect(page.getByTestId("planning-profile-create-button")).toBeDisabled();
+    await expect(page.getByTestId("planning-profile-update-button")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "삭제", exact: true })).toBeDisabled();
+  } finally {
+    releaseRunRequest();
+  }
+  const runCreateResponse = await runCreateResponsePromise;
+  const runCreatePayload = await runCreateResponse.json() as { data?: { id?: string } };
   await expect(page.getByTestId("run-stages-timeline")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("stage-simulate-status")).toBeVisible({ timeout: 30_000 });
 
-  await expect(page.getByText("첫 실행과 결과 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다.")).toBeVisible({ timeout: 30_000 });
-  await expect(appliedState).toContainText("첫 실행과 결과 저장까지 완료했습니다. 이제 저장된 리포트를 확인하면 됩니다.");
-  await expect(page.getByTestId("planning-quickstart-followthrough-summary")).toContainText("초안 적용 완료 · 프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료");
+  await expect(page.getByText("첫 실행과 기록 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다.")).toBeVisible({ timeout: 30_000 });
+  await expect(appliedState).toContainText("첫 실행과 기록 저장을 완료했습니다. 이제 저장된 리포트를 확인하면 됩니다.");
+  await expect(page.getByTestId("planning-quickstart-followthrough-summary")).toContainText("초안 적용 완료 · 프로필 저장 완료 · 첫 실행·기록 저장 완료");
   await expect(page.getByTestId("planning-quickstart-next-step")).toHaveText("저장된 리포트 확인");
-  await expect(quickStartStatus).toContainText("프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료");
+  await expect(quickStartStatus).toContainText("프로필 저장 완료 · 첫 실행·기록 저장 완료");
   await expect(quickStartStatus).toContainText("다음 단계 · 저장된 리포트 확인 또는 실행 내역 비교");
   await expect(page.getByTestId("planning-quickstart-report-button")).toBeVisible({ timeout: 30_000 });
+  page.off("request", recordRunPost);
+  await page.unroute("**/api/planning/v2/runs", holdRunRoute);
+
+  const afterRunIds = await readProfileRunIds(page, profileId);
+  const newRunIds = afterRunIds.filter((runId) => !beforeRunIds.includes(runId));
+  expect(runPostPaths).toEqual(["/api/planning/v2/runs"]);
+  expect(idempotencyKeys).toHaveLength(1);
+  expect(idempotencyKeys[0]).toMatch(/^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/);
+  expect(afterRunIds).toHaveLength(beforeRunIds.length + 1);
+  expect(newRunIds).toHaveLength(1);
+  expect(runCreatePayload.data?.id).toBe(newRunIds[0]);
+  await expect(page.getByTestId("planning-quickstart-report-button")).toHaveAttribute(
+    "href",
+    new RegExp(`runId=${encodeURIComponent(newRunIds[0] ?? "")}`),
+  );
+  await expect(page.getByTestId("planning-runs-link")).toHaveAttribute(
+    "href",
+    new RegExp(`selected=${encodeURIComponent(newRunIds[0] ?? "")}`),
+  );
+  await expect(page.getByTestId("planning-quickstart-save-run-button")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "결과 저장", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "실행 성공 시 실행 기록 자동 저장" })).toHaveCount(0);
 }
 
 async function enableQuickStartReviewFallback(page: import("@playwright/test").Page): Promise<void> {
@@ -138,8 +216,8 @@ test("planning quickstart previews before applying beginner draft", async ({ pag
   });
 
   await page.goto("/planning");
-  await prepareBeginnerQuickStart(page);
-  await completeFirstQuickStartRun(page);
+  const profileId = await prepareBeginnerQuickStart(page);
+  await completeFirstQuickStartRun(page, profileId);
 });
 
 test("planning arrival with profileId query focuses the next-step run target", async ({ page }) => {
@@ -158,9 +236,9 @@ test("planning arrival with profileId query focuses the next-step run target", a
   const firstRunButton = page.getByTestId("planning-quickstart-run-cta");
 
   await expect(restoredState).toContainText("현재 워크스페이스 상태 기준으로 프로필 저장이 확인됐습니다.");
-  await expect(restoredState).toContainText("첫 실행 시작");
+  await expect(restoredState).toContainText("첫 실행·기록 저장");
   await expect(quickStartStatus).toContainText("프로필 저장 완료");
-  await expect(quickStartStatus).toContainText("다음 단계 · 첫 실행 시작");
+  await expect(quickStartStatus).toContainText("다음 단계 · 첫 실행·기록 저장");
   await expect(firstRunButton).toBeVisible({ timeout: 30_000 });
   await expect(firstRunButton).toBeFocused();
 });
@@ -202,5 +280,9 @@ test("planning quickstart keeps review fallback focused on runs history when pro
   await page.getByTestId("planning-quickstart-next-step").click();
   await expect(runsLink).toBeFocused();
   await runsLink.click();
-  await expect(page).toHaveURL(/\/planning\/runs\?profileId=/);
+  await expect(page).toHaveURL((url) => (
+    url.pathname === "/planning/runs"
+    && Boolean(url.searchParams.get("profileId"))
+    && Boolean(url.searchParams.get("selected"))
+  ));
 });

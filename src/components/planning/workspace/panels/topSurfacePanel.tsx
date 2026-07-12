@@ -46,7 +46,6 @@ export function PlanningWorkspaceTopSurfacePanel({
     beginnerMode,
     savingProfile,
     running,
-    savingRun,
     quickStartNextStep,
     profileSyncState,
     quickStartVm,
@@ -57,9 +56,8 @@ export function PlanningWorkspaceTopSurfacePanel({
     preflightHasBlockers,
     preflightBlockIssues,
     preflightWarnIssues,
-    saveButtonDescribedBy,
-    saveBlockedByHealth,
-    saveNeedsWarningConfirmation,
+    runButtonDescribedBy,
+    runNeedsWarningConfirmation,
     runsPageHref,
     liveSummary,
     beginnerEmergencyMonths,
@@ -70,7 +68,6 @@ export function PlanningWorkspaceTopSurfacePanel({
     applyQuickStartAction,
     loadSampleProfileAction,
     runPlanAction,
-    saveRunAction,
     setBeginnerMode,
     applyWizardOutputAction,
   } = actions;
@@ -102,14 +99,13 @@ export function PlanningWorkspaceTopSurfacePanel({
 
       {beginnerMode ? (
         <PlanningQuickStartGate
-          disabled={savingProfile || running || savingRun}
+          disabled={savingProfile || running}
           nextStepDescription={quickStartNextStep.description}
           nextStepLabel={quickStartNextStep.label}
           nextStepTargetId={quickStartNextStep.targetId}
           profileSyncState={profileSyncState}
           runStatusReviewRequired={quickStartVm.runStatusReviewRequired}
           runDone={quickStartVm.beginnerStepRunDone}
-          saveDone={quickStartVm.beginnerStepSaveDone}
           onApply={applyQuickStartAction}
         />
       ) : null}
@@ -121,33 +117,21 @@ export function PlanningWorkspaceTopSurfacePanel({
           action={(
             <div className="flex flex-wrap gap-2">
               {profiles.length < 1 ? (
-                <Button disabled={savingProfile || running || savingRun} onClick={loadSampleProfileAction} variant="primary" className="rounded-xl font-bold">
+                <Button disabled={savingProfile || running} onClick={loadSampleProfileAction} variant="primary" className="rounded-xl font-bold">
                   샘플 불러오기
                 </Button>
               ) : null}
               {selectedProfileId && !quickStartVm.beginnerStepRunDone && !quickStartVm.runStatusReviewRequired ? (
                 <Button
+                  aria-describedby={runButtonDescribedBy}
                   data-testid="planning-quickstart-run-cta"
-                  disabled={running || preflightHasBlockers}
+                  disabled={running || preflightHasBlockers || runNeedsWarningConfirmation}
                   id="planning-quickstart-run-cta"
                   onClick={() => void runPlanAction()}
                   variant="primary"
                   className="rounded-xl px-6 font-bold"
                 >
-                  {running ? "실행 중..." : "첫 실행 시작"}
-                </Button>
-              ) : null}
-              {selectedProfileId && quickStartVm.beginnerStepRunDone && !quickStartVm.beginnerStepSaveDone ? (
-                <Button
-                  aria-describedby={saveButtonDescribedBy}
-                  data-testid="planning-quickstart-save-run-button"
-                  disabled={savingRun || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
-                  id="planning-quickstart-save-run-button"
-                  onClick={() => void saveRunAction()}
-                  variant="primary"
-                  className="rounded-xl px-6 font-bold"
-                >
-                  {savingRun ? "저장 중..." : "결과 저장"}
+                  {running ? "실행 중..." : "첫 실행·기록 저장"}
                 </Button>
               ) : null}
               <Link
@@ -164,7 +148,7 @@ export function PlanningWorkspaceTopSurfacePanel({
               >
                 실행 내역
               </Link>
-              {quickStartVm.beginnerStepSaveDone ? (
+              {quickStartVm.beginnerStepRunDone ? (
                 <Link
                   href={quickStartVm.selectedRunReportHref}
                   data-testid="planning-quickstart-report-button"
@@ -174,7 +158,7 @@ export function PlanningWorkspaceTopSurfacePanel({
                   리포트
                 </Link>
               ) : (
-                <Button disabled title="실행 결과를 저장하면 리포트를 열 수 있습니다." variant="outline" className="rounded-xl font-bold opacity-50">
+                <Button disabled title="플래닝 실행과 기록 저장이 완료되면 리포트를 열 수 있습니다." variant="outline" className="rounded-xl font-bold opacity-50">
                   리포트 대기
                 </Button>
               )}
@@ -188,7 +172,7 @@ export function PlanningWorkspaceTopSurfacePanel({
           <span className="rounded-md bg-slate-900/5 px-2 py-1">점검: {preflightHasBlockers ? `차단 ${preflightBlockIssues.length}` : preflightWarnIssues.length > 0 ? `경고 ${preflightWarnIssues.length}` : "정상"}</span>
           {savedRun ? (
             <span className="rounded-md bg-primary/10 px-2 py-1 text-primary">
-              최근 저장: {formatRunOverallStatusKo(savedRun.overallStatus)}
+              최근 실행 기록: {formatRunOverallStatusKo(savedRun.overallStatus)}
             </span>
           ) : null}
         </div>
@@ -230,7 +214,7 @@ export function PlanningWorkspaceTopSurfacePanel({
       {beginnerMode ? (
         <BodyInset className="mb-6">
           <p className="text-xs font-semibold text-slate-800">5분 진행 안내</p>
-          <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-2 xl:grid-cols-3">
             {quickStartVm.progressItems.map((item) => (
               <p key={item.label} className={`rounded-lg border px-3 py-2 ${quickStartProgressToneClassName(item.state)}`}>
                 {item.label} · {item.stateLabel}
@@ -242,7 +226,7 @@ export function PlanningWorkspaceTopSurfacePanel({
 
       {beginnerMode ? (
         <PlanningOnboardingWizard
-          disabled={savingProfile || running || savingRun}
+          disabled={savingProfile || running}
           onApply={applyWizardOutputAction}
         />
       ) : null}

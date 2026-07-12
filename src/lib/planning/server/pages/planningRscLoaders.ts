@@ -2,6 +2,7 @@ import {
   toPlanningPageLoadMessage,
   withCurrentPlanningPageUser,
 } from "@/lib/planning/server/pageAuth";
+import { sanitizeRunRecordForResponse } from "@/lib/planning/api/runResponseSanitizer";
 import { createPlanningPageLoadTelemetry } from "@/lib/planning/server/pages/planningPageLoadTelemetry";
 import {
   getCurrentUserDefaultProfileId,
@@ -98,14 +99,15 @@ export async function loadPlanningRunsPageInitialData(input: {
       }
 
       try {
-        runs = await telemetry.step("runs", () =>
+        const rawRuns = await telemetry.step("runs", () =>
           listCurrentUserRuns({
             ...(filterProfileId ? { profileId: filterProfileId } : {}),
             limit: 200,
           }),
         );
+        runs = rawRuns.map((run) => sanitizeRunRecordForResponse(run));
         actionProgressSummaryByRunId = await telemetry.step("actionProgress", () =>
-          summarizeCurrentUserRunActionProgressByRunId(runs),
+          summarizeCurrentUserRunActionProgressByRunId(rawRuns),
         );
         runsReady = true;
       } catch (error) {
@@ -199,7 +201,7 @@ export async function loadPlanningReportDetailPageInitialData(
     return {
       initialError: "",
       initialReport: loaded.report,
-      initialRun: loaded.run,
+      initialRun: loaded.run ? sanitizeRunRecordForResponse(loaded.run) : null,
     };
   } catch (error) {
     console.error("[planning/reports/detail] failed to load initial report detail", error);

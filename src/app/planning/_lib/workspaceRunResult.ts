@@ -69,7 +69,7 @@ export type WorkspaceHealthGuardState = {
   summary: WorkspaceHealthSummary | null;
   warnings: WorkspaceHealthWarning[];
   hasCriticalHealth: boolean;
-  saveBlockedByHealth: boolean;
+  advancedActionsBlockedByHealth: boolean;
   disabledReason: string;
 };
 
@@ -269,7 +269,7 @@ export function buildWorkspaceHealthGuardState(input: {
   const summary = input.runResult?.meta?.health ?? null;
   const warnings = mergeHealthWarnings(summary, input.runResult?.healthWarnings ?? []);
   const hasCriticalHealth = (summary?.criticalCount ?? 0) > 0;
-  const saveBlockedByHealth = hasCriticalHealth && !input.healthAck;
+  const advancedActionsBlockedByHealth = hasCriticalHealth && !input.healthAck;
   const warningCodes = new Set([
     ...(summary?.warningCodes ?? []),
     ...warnings.map((warning) => warning.code),
@@ -280,12 +280,12 @@ export function buildWorkspaceHealthGuardState(input: {
     summary,
     warnings,
     hasCriticalHealth,
-    saveBlockedByHealth,
-    disabledReason: saveBlockedByHealth
+    advancedActionsBlockedByHealth,
+    disabledReason: advancedActionsBlockedByHealth
       ? (
         hasVeryStaleSnapshot
           ? "치명 경고 확인이 필요합니다. 스냅샷이 매우 오래되었습니다. /ops/assumptions에서 동기화를 권장합니다."
-          : "치명 경고 확인이 필요합니다. 확인 전에는 실행 기록 저장 및 고비용 액션이 제한됩니다."
+          : "치명 경고 확인이 필요합니다. 확인 전에는 고비용 분석과 추천 후보 기능이 제한됩니다."
       )
       : "",
   };

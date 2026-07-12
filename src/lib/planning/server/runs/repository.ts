@@ -5,6 +5,7 @@ import {
   getRunBlob,
   hardDeleteRun,
   hardDeleteRunFromTrash,
+  hasRunIdReservation,
   listRunIndexEntries,
   listRuns,
   restoreRunFromTrash,
@@ -62,6 +63,10 @@ export async function listCurrentUserRunIndexEntries(
 
 export async function getCurrentUserRun(id: string): Promise<CurrentUserPlanningRunRecord | null> {
   return getRun(id);
+}
+
+export async function hasCurrentUserRunIdReservation(id: string): Promise<boolean> {
+  return hasRunIdReservation(id);
 }
 
 export async function getCurrentUserRunProfile(

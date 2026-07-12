@@ -10,6 +10,7 @@ import {
   ensureCurrentUserRunActionProgress,
   ensureCurrentUserRunActionPlan,
   getCurrentUserRun,
+  hasCurrentUserRunIdReservation,
   getCurrentUserRunActionPlanSnapshot,
   getCurrentUserRunActionProgress,
   getCurrentUserRunBlob,
@@ -52,6 +53,10 @@ export type CurrentUserRunActionProgressResult = {
 };
 
 export type CurrentUserRunBlobResponseData = unknown;
+
+export async function hasCurrentUserRunIdReservationForRoute(runId: string): Promise<boolean> {
+  return hasCurrentUserRunIdReservation(runId);
+}
 
 type RunAuditResult = "SUCCESS" | "ERROR";
 type TrashMoveAuditResult = RunAuditResult | "REJECTED";

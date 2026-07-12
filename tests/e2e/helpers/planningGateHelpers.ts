@@ -63,7 +63,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 function isRunStartResponse(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.pathname === "/api/planning/run";
+    return parsed.pathname === "/api/planning/v2/runs";
   } catch {
     return false;
   }

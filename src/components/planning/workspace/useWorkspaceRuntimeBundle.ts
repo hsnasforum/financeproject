@@ -141,7 +141,6 @@ type RuntimeGuardBundleInput = {
   preflightHasBlockers: boolean;
   preflightBlockIssues: PreflightIssue[];
   preflightWarnIssues: PreflightIssue[];
-  saveBlockedByHealth: boolean;
   healthSummary: {
     criticalCount?: number;
     warningCodes?: string[];
@@ -250,7 +249,6 @@ export function useWorkspaceRuntimeActionsBundle({
     preflightHasBlockers,
     preflightBlockIssues,
     preflightWarnIssues,
-    saveBlockedByHealth,
     healthSummary,
   } = guard;
   const {
@@ -590,10 +588,8 @@ export function useWorkspaceRuntimeActionsBundle({
   });
 
   const {
-    persistRunAction,
     runPlanAction,
     runScenarioAction,
-    saveRunAction,
   } = useWorkspaceRunExecutionActions({
     locale,
     beginnerMode,
@@ -606,7 +602,6 @@ export function useWorkspaceRuntimeActionsBundle({
     preflightHasBlockers,
     preflightBlockIssues,
     preflightWarnIssues,
-    saveBlockedByHealth,
     parseRunInputs,
     buildRunInputScenarioFromSelection,
     syncProfileIfNeeded,
@@ -650,10 +645,8 @@ export function useWorkspaceRuntimeActionsBundle({
     runOptimizeAction,
     pollRunUntilTerminal,
     syncProfileIfNeeded,
-    persistRunAction,
     runPlanAction,
     runScenarioAction,
-    saveRunAction,
     submitPlanningFeedbackAction,
   };
 }

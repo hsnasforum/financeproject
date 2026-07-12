@@ -28,7 +28,6 @@ export type WorkspaceSelectedProfileSyncState = "missing" | "unknown" | "dirty" 
 export type WorkspaceQuickStartVm = {
   beginnerStepProfileDone: boolean;
   beginnerStepRunDone: boolean;
-  beginnerStepSaveDone: boolean;
   profileSyncState: WorkspaceSelectedProfileSyncState;
   runStatusReviewRequired: boolean;
   selectedRunReportHref: string;
@@ -82,7 +81,7 @@ export function focusWorkspaceQuickStartTarget(targetId: string): boolean {
   } catch {
     target.focus();
   }
-  return true;
+  return document.activeElement === target;
 }
 
 export function buildWorkspaceLiveSummary(profileForm: ProfileFormModel): WorkspaceLiveSummary {
@@ -149,7 +148,6 @@ export function buildWorkspaceQuickStartVm(input: {
   profileSyncState: WorkspaceSelectedProfileSyncState;
   beginnerStepProfileDone: boolean;
   beginnerStepRunDone: boolean;
-  beginnerStepSaveDone: boolean;
   runStatusReviewRequired?: boolean;
   savedRunId?: string;
   savedRunOverallStatus?: PlanningRunOverallStatus;
@@ -161,7 +159,6 @@ export function buildWorkspaceQuickStartVm(input: {
     profileSyncState,
     beginnerStepProfileDone,
     beginnerStepRunDone,
-    beginnerStepSaveDone,
     runStatusReviewRequired: rawRunStatusReviewRequired = false,
     savedRunId,
     savedRunOverallStatus,
@@ -185,26 +182,22 @@ export function buildWorkspaceQuickStartVm(input: {
         : runStatusReviewRequired
           ? "최근 실행 상태를 자동 확인하지 못했습니다. 진행 상태를 다시 확인해 주세요."
           : !beginnerStepRunDone
-          ? "프로필 저장/선택이 끝났습니다. 이제 첫 실행만 남았습니다."
-          : !beginnerStepSaveDone
-            ? "첫 실행이 끝났습니다. 결과 저장만 하면 저장된 리포트 확인으로 이어집니다."
-            : "프로필 저장/선택, 첫 실행, 결과 저장까지 완료했습니다. 이제 저장된 리포트를 확인할 수 있습니다.";
+          ? "프로필 저장/선택이 끝났습니다. 이제 첫 실행·기록 저장만 남았습니다."
+          : "프로필 저장/선택과 첫 실행·기록 저장을 완료했습니다. 이제 저장된 리포트를 확인할 수 있습니다.";
 
   const description = profileSyncState === "missing"
     ? "새로고침 뒤에는 간단 시작 적용 완료 안내를 안전하게 복원할 수 없으니, 아래 프로필 영역에서 실제 저장 상태를 먼저 확인해 주세요."
     : profileSyncState === "unknown"
       ? "저장된 프로필과 현재 편집값을 아직 맞춰 보지 못했습니다. 아래 프로필 목록을 새로고침한 뒤 상태를 다시 확인해 주세요."
       : profileSyncState === "dirty"
-        ? "현재 편집본은 아직 저장 전이라 1단계를 완료로 보지 않습니다. 이전 실행이나 리포트가 최신 변경을 반영하지 않을 수 있으니, 아래 저장 버튼으로 반영한 뒤 첫 실행을 다시 확인하세요."
+        ? "현재 편집본은 아직 저장 전이라 1단계를 완료로 보지 않습니다. 이전 실행이나 리포트가 최신 변경을 반영하지 않을 수 있으니, 아래 저장 버튼으로 반영한 뒤 첫 실행·기록 저장을 다시 확인하세요."
       : runStatusReviewRequired
         ? "현재 환경에서는 최근 저장 실행과 현재 프로필의 일치 여부를 자동 확인하지 못했습니다. 아래 실행 내역에서 진행 상태를 다시 확인해 주세요."
         : !beginnerStepRunDone
           ? beginnerStepProfileDone
-            ? "사전 점검 차단이 없다면 아래 첫 실행 시작 버튼으로 요약, 액션, 경고를 한 번에 계산하고, 결과 저장 뒤 저장된 리포트 확인으로 이어집니다."
-            : "저장된 프로필을 기준으로는 첫 실행부터 이어갈 수 있고, 빈 항목은 아래에서 계속 보완할 수 있습니다."
-          : !beginnerStepSaveDone
-            ? "결과를 저장해야 같은 조건 재실행, What-if 비교, 저장된 리포트 확인을 다시 열 수 있습니다."
-            : `최근 저장 상태: ${formatRunOverallStatus(savedRunOverallStatus)} · 저장된 결과는 리포트에서 다시 보고, 실행 기록에서 비교를 이어갈 수 있습니다.`;
+            ? "사전 점검 차단이 없다면 아래 첫 실행·기록 저장 버튼으로 요약, 액션, 경고를 계산하고 저장된 리포트 확인으로 이어집니다."
+            : "저장된 프로필을 기준으로는 첫 실행·기록 저장부터 이어갈 수 있고, 빈 항목은 아래에서 계속 보완할 수 있습니다."
+          : `최근 실행 기록 상태: ${formatRunOverallStatus(savedRunOverallStatus)} · 저장된 결과는 리포트에서 다시 보고, 실행 기록에서 비교를 이어갈 수 있습니다.`;
 
   const completedSummary = profileSyncState === "missing"
     ? "실제 저장 상태를 다시 확인해 주세요."
@@ -216,9 +209,7 @@ export function buildWorkspaceQuickStartVm(input: {
           ? "프로필 저장 완료 · 실행 상태 확인 필요"
           : !beginnerStepRunDone
           ? "프로필 저장 완료"
-          : beginnerStepSaveDone
-            ? "프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료"
-            : "프로필 저장 완료 · 첫 실행 완료";
+          : "프로필 저장 완료 · 첫 실행·기록 저장 완료";
 
   const nextStepSummary = profileSyncState === "missing" || profileSyncState === "dirty"
     ? "프로필 저장"
@@ -227,48 +218,38 @@ export function buildWorkspaceQuickStartVm(input: {
       : runStatusReviewRequired
         ? "진행 상태 다시 확인"
         : !beginnerStepRunDone
-        ? "첫 실행 시작"
-        : !beginnerStepSaveDone
-          ? "결과 저장 후 리포트 확인"
-          : "저장된 리포트 확인 또는 실행 내역 비교";
+        ? "첫 실행·기록 저장"
+        : "저장된 리포트 확인 또는 실행 내역 비교";
 
   const progressItems: WorkspaceQuickStartProgressItem[] = profileSyncState === "saved" && runStatusReviewRequired
     ? [
       { label: "프로필 저장", state: "done", stateLabel: "완료" },
-      { label: "첫 실행", state: "current", stateLabel: "확인 필요" },
-      { label: "결과 저장", state: "pending", stateLabel: "대기" },
+      { label: "첫 실행·기록 저장", state: "current", stateLabel: "확인 필요" },
       { label: "리포트 확인", state: "pending", stateLabel: "대기" },
     ]
     : profileSyncState === "saved"
     ? [
       { label: "프로필 저장", state: "done", stateLabel: "완료" },
       {
-        label: "첫 실행",
+        label: "첫 실행·기록 저장",
         state: beginnerStepRunDone ? "done" : "current",
         stateLabel: beginnerStepRunDone ? "완료" : "다음",
       },
       {
-        label: "결과 저장",
-        state: beginnerStepSaveDone ? "done" : beginnerStepRunDone ? "current" : "pending",
-        stateLabel: beginnerStepSaveDone ? "완료" : beginnerStepRunDone ? "다음" : "대기",
-      },
-      {
         label: "리포트 확인",
-        state: beginnerStepSaveDone ? "current" : "pending",
-        stateLabel: beginnerStepSaveDone ? "다음" : "대기",
+        state: beginnerStepRunDone ? "current" : "pending",
+        stateLabel: beginnerStepRunDone ? "다음" : "대기",
       },
     ]
     : profileSyncState === "unknown"
       ? [
         { label: "프로필 저장", state: "pending", stateLabel: "확인 필요" },
-        { label: "첫 실행", state: "pending", stateLabel: "대기" },
-        { label: "결과 저장", state: "pending", stateLabel: "대기" },
+        { label: "첫 실행·기록 저장", state: "pending", stateLabel: "대기" },
         { label: "리포트 확인", state: "pending", stateLabel: "대기" },
       ]
       : [
         { label: "프로필 저장", state: "current", stateLabel: "다음" },
-        { label: "첫 실행", state: "pending", stateLabel: "대기" },
-        { label: "결과 저장", state: "pending", stateLabel: "대기" },
+        { label: "첫 실행·기록 저장", state: "pending", stateLabel: "대기" },
         { label: "리포트 확인", state: "pending", stateLabel: "대기" },
       ];
 
@@ -276,18 +257,15 @@ export function buildWorkspaceQuickStartVm(input: {
     ? "border-sky-200 bg-sky-50"
     : profileSyncState === "unknown" || profileSyncState === "dirty"
       ? "border-amber-200 bg-amber-50"
-      : runStatusReviewRequired
+        : runStatusReviewRequired
         ? "border-amber-200 bg-amber-50"
         : !beginnerStepRunDone
         ? "border-amber-200 bg-amber-50"
-        : !beginnerStepSaveDone
-          ? "border-primary/20 bg-primary/5"
-          : "border-slate-200 bg-slate-50";
+        : "border-slate-200 bg-slate-50";
 
   return {
     beginnerStepProfileDone,
     beginnerStepRunDone,
-    beginnerStepSaveDone,
     profileSyncState,
     runStatusReviewRequired,
     selectedRunReportHref,

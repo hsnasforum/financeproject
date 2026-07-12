@@ -1,12 +1,10 @@
-export function buildPlanningWorkspaceSaveButtonDescribedBy(input: {
+export function buildPlanningWorkspaceRunButtonDescribedBy(input: {
   preflightHasBlockers: boolean;
-  saveBlockedByHealth: boolean;
   hasPreflightWarnings: boolean;
 }): string | undefined {
   return [
     input.preflightHasBlockers ? "planning-preflight-block-reason" : "",
-    input.saveBlockedByHealth ? "planning-save-disabled-reason" : "",
-    input.hasPreflightWarnings ? "planning-save-warning-confirm-hint" : "",
+    input.hasPreflightWarnings ? "planning-run-warning-confirm-hint" : "",
   ].filter((item) => item.length > 0).join(" ") || undefined;
 }
 

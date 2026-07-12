@@ -1,23 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildPlanningWorkspaceSaveButtonDescribedBy,
+  buildPlanningWorkspaceRunButtonDescribedBy,
   shouldAutoFocusPlanningQuickStartTarget,
   shouldCompletePlanningQuickStartFocusAttempt,
 } from "../../../src/components/planning/workspace/controllerUtils";
 
 describe("planning workspace controller utils", () => {
-  it("builds save button described-by ids in stable order", () => {
-    expect(buildPlanningWorkspaceSaveButtonDescribedBy({
+  it("builds run button described-by ids in stable order", () => {
+    expect(buildPlanningWorkspaceRunButtonDescribedBy({
       preflightHasBlockers: true,
-      saveBlockedByHealth: true,
       hasPreflightWarnings: true,
     })).toBe(
-      "planning-preflight-block-reason planning-save-disabled-reason planning-save-warning-confirm-hint",
+      "planning-preflight-block-reason planning-run-warning-confirm-hint",
     );
 
-    expect(buildPlanningWorkspaceSaveButtonDescribedBy({
+    expect(buildPlanningWorkspaceRunButtonDescribedBy({
       preflightHasBlockers: false,
-      saveBlockedByHealth: false,
       hasPreflightWarnings: false,
     })).toBeUndefined();
   });

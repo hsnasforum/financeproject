@@ -1,9 +1,11 @@
 import { getPlanningFeatureFlags } from "../config";
+import { sanitizeRunRecordForResponse } from "../../api/runResponseSanitizer";
 import { resolvePlanningRunAssumptions } from "../v2/runAssumptionsRouteService";
 import {
   createCurrentUserRunResponseData,
   getCurrentUserRunForRoute,
   getCurrentUserRunProfileForRoute,
+  hasCurrentUserRunIdReservationForRoute,
   recordCurrentUserRunCreateAudit,
   recordCurrentUserRunStageMetrics,
   type CurrentUserRunStageResult,
@@ -16,8 +18,13 @@ import {
 import { prepareCreatePlanningRunInputContext } from "./createRunInputContext";
 import {
   assemblePlanningRunRecordInput,
+  buildCreatePlanningRunSuccessMeta,
   totalStageDurationMs,
 } from "./createRunRecordAssembler";
+import {
+  type PlanningRunIdempotencyContext,
+  withPlanningRunIdempotency,
+} from "./createRunIdempotency";
 import { persistCreatePlanningRunRecord } from "./createRunPersistence";
 import {
   recordCreateRunFailureAudit,
@@ -45,6 +52,7 @@ export {
 
 export type CreatePlanningRunContext = {
   requestBaseUrl: string;
+  idempotency?: PlanningRunIdempotencyContext;
 };
 
 export type CreatePlanningRunResult =
@@ -62,6 +70,7 @@ export type CreatePlanningRunDependencies = {
   getFeatureFlags?: typeof getPlanningFeatureFlags;
   getProfile?: typeof getCurrentUserRunProfileForRoute;
   getRun?: typeof getCurrentUserRunForRoute;
+  hasRunIdReservation?: typeof hasCurrentUserRunIdReservationForRoute;
   resolveAssumptions?: typeof resolvePlanningRunAssumptions;
   runPipeline?: CreatePlanningRunStagePipelineDependencies["runPipeline"];
   matchCandidatesProvider?: CreatePlanningRunStagePipelineDependencies["matchCandidatesProvider"];
@@ -82,6 +91,7 @@ function resolveCreateDependencies(
     getFeatureFlags: dependencies.getFeatureFlags ?? getPlanningFeatureFlags,
     getProfile: dependencies.getProfile ?? getCurrentUserRunProfileForRoute,
     getRun: dependencies.getRun ?? getCurrentUserRunForRoute,
+    hasRunIdReservation: dependencies.hasRunIdReservation ?? hasCurrentUserRunIdReservationForRoute,
     resolveAssumptions: dependencies.resolveAssumptions ?? resolvePlanningRunAssumptions,
     runPipeline: dependencies.runPipeline ?? stagePipelineDependencies.runPipeline,
     matchCandidatesProvider: dependencies.matchCandidatesProvider ?? stagePipelineDependencies.matchCandidatesProvider,
@@ -122,7 +132,7 @@ export function recordCreatePlanningRunParseFailure(
   });
 }
 
-export async function createPlanningRun(
+async function createPlanningRunOnce(
   command: CreatePlanningRunCommand,
   context: CreatePlanningRunContext,
   dependencies?: CreatePlanningRunDependencies,
@@ -135,6 +145,62 @@ export async function createPlanningRun(
     monteCarloConfig,
   } = command;
   const scenarioMeta = command.scenarioMeta;
+
+  if (context.idempotency) {
+    try {
+      const existing = await deps.getRun(context.idempotency.runId);
+      if (existing) {
+        const storedIdempotency = existing.meta.idempotency;
+        const matchesRequest = storedIdempotency?.version === 1
+          && storedIdempotency.keyHash === context.idempotency.keyHash
+          && storedIdempotency.requestFingerprint === context.idempotency.requestFingerprint;
+        if (!matchesRequest) {
+          recordCreateRunFailureAudit({
+            recordAudit: deps.recordAudit,
+            recordId: existing.id,
+            message: "idempotency key reused with a different planning run request",
+          });
+          return errorResult({
+            code: "IDEMPOTENCY_CONFLICT",
+            message: "동일한 Idempotency-Key가 다른 플래닝 실행 요청에 이미 사용되었습니다.",
+            status: 409,
+          });
+        }
+        return {
+          ok: true,
+          status: 201,
+          payload: {
+            meta: storedIdempotency.responseMeta,
+            data: sanitizeRunRecordForResponse(existing),
+          },
+        };
+      }
+      if (await deps.hasRunIdReservation(context.idempotency.runId)) {
+        recordCreateRunFailureAudit({
+          recordAudit: deps.recordAudit,
+          recordId: context.idempotency.runId,
+          message: "idempotency run target is reserved but unavailable for replay",
+        });
+        return errorResult({
+          code: "IDEMPOTENCY_CONFLICT",
+          message: "동일한 Idempotency-Key의 기존 실행 기록이 삭제되었거나 읽을 수 없어 재생성하지 않았습니다.",
+          status: 409,
+        });
+      }
+    } catch (error) {
+      const auditMessage = error instanceof Error ? error.message : "idempotency replay lookup failed";
+      recordCreateRunFailureAudit({
+        recordAudit: deps.recordAudit,
+        recordId: context.idempotency.runId,
+        message: auditMessage,
+      });
+      return errorResult({
+        code: "INTERNAL",
+        message: "실행 기록 재시도 상태를 확인하지 못했습니다.",
+        status: 500,
+      });
+    }
+  }
 
   const featureFlags = deps.getFeatureFlags();
   if (includeProducts && !featureFlags.includeProductsEnabled) {
@@ -237,6 +303,15 @@ export async function createPlanningRun(
     }
 
     const scenarioMetaForRecord = scenarioMeta ?? (scenarioInput ? toLegacyScenarioMetaFromInput(scenarioInput, deps) : undefined);
+    const generatedAt = deps.now().toISOString();
+    const responseMeta = buildCreatePlanningRunSuccessMeta({
+      generatedAt,
+      snapshotMeta,
+      profileNormalization,
+      healthSummary: health.summary,
+      overallStatus: pipeline.overallStatus,
+      stages,
+    });
     const { recordInput } = assemblePlanningRunRecordInput({
       command,
       profileId: profileRecord.id,
@@ -257,6 +332,19 @@ export async function createPlanningRun(
         ...stageOutputs,
         simulatePlan: stageOutputs.simulatePlan,
       },
+      ...(context.idempotency
+        ? {
+          idempotency: {
+            runId: context.idempotency.runId,
+            meta: {
+              version: 1,
+              keyHash: context.idempotency.keyHash,
+              requestFingerprint: context.idempotency.requestFingerprint,
+              responseMeta,
+            },
+          },
+        }
+        : {}),
     });
 
     const created = await persistCreatePlanningRunRecord({
@@ -278,7 +366,7 @@ export async function createPlanningRun(
     });
 
     return buildCreatePlanningRunSuccessResult({
-      generatedAt: deps.now().toISOString(),
+      generatedAt,
       snapshotMeta,
       profileNormalization,
       healthSummary: health.summary,
@@ -316,4 +404,23 @@ export async function createPlanningRun(
       },
     });
   }
+}
+
+export async function createPlanningRun(
+  command: CreatePlanningRunCommand,
+  context: CreatePlanningRunContext,
+  dependencies?: CreatePlanningRunDependencies,
+): Promise<CreatePlanningRunResult> {
+  if (!context.idempotency) {
+    return createPlanningRunOnce(command, context, dependencies);
+  }
+  return withPlanningRunIdempotency(
+    context.idempotency,
+    () => createPlanningRunOnce(command, context, dependencies),
+    () => errorResult({
+      code: "IDEMPOTENCY_CONFLICT",
+      message: "동일한 Idempotency-Key가 다른 플래닝 실행 요청에 사용 중입니다.",
+      status: 409,
+    }),
+  );
 }
