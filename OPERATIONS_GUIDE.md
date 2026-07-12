@@ -114,6 +114,17 @@ Custom archive path:
 pnpm v3:export -- --out=.data/exports/v3-backup.zip
 ```
 
+Experimental owner-aware encrypted export is available only for disposable fixtures or an explicitly offline copy:
+```bash
+chmod 700 /secure
+chmod 600 /secure/finance-owner-passphrase
+pnpm v3:export -- --format=owner --passphrase-file=/secure/finance-owner-passphrase --ack-quiesced --out=/secure/v3-owner-backup.owner.enc.json
+```
+- The passphrase and output paths must be outside every registered Planning owner.
+- The output directory chain must be owned by the current POSIX user or root; a group/other-writable non-sticky directory fails with `OWNER_ARCHIVE_OUTPUT_DIRECTORY_UNTRUSTED`.
+- `--ack-quiesced` records an operator assertion; it does not stop application writers or acquire a global lock.
+- Runtime-key encrypted stable profile/run payloads are not yet portable and make export fail closed.
+
 ## 5.4 Restore validation (preview only)
 Dry-run validation:
 ```bash
@@ -121,6 +132,13 @@ pnpm v3:restore -- --in=.data/exports/v3-backup.zip
 ```
 - `--apply` is disabled and exits with `V3_RESTORE_APPLY_DISABLED` until owner-aware staged restore is verified.
 - Do not manually rename or copy `.data` or `PLANNING_DATA_DIR` to bypass the guard.
+
+Experimental strict owner archive preview:
+```bash
+pnpm v3:restore -- --format=owner --passphrase-file=/secure/finance-owner-passphrase --in=/secure/v3-owner-backup.owner.enc.json
+```
+- This command decrypts and validates the manifest, exact ZIP entry set, checksums, namespace, and limits without writing restored data.
+- Linux fixtures are covered. Native Windows owner export/passphrase-file input fails closed with `OWNER_ARCHIVE_WINDOWS_ACL_UNVERIFIED` until junction/reparse-point, ACL, rename, and open-handle behavior are verified.
 
 ## 5.5 Migrate (manual only)
 Preview migration:
