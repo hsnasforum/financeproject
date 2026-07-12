@@ -53,7 +53,7 @@ jobs:
         run: pnpm seed:debug
 
       - name: Run smoke + core flows
-        run: pnpm e2e -- tests/e2e/smoke.spec.ts tests/e2e/flow-planner-to-history.spec.ts tests/e2e/flow-history-to-report.spec.ts tests/e2e/dart-flow.spec.ts
+        run: pnpm e2e -- tests/e2e/smoke.spec.ts tests/e2e/home-hero-carousel.spec.ts tests/e2e/flow-planner-to-history.spec.ts tests/e2e/flow-history-to-report.spec.ts tests/e2e/dart-flow.spec.ts
 
   dart_index_present:
     runs-on: ubuntu-latest
