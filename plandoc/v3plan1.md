@@ -32,7 +32,7 @@
   - stable `/planning/reports/[id]`
 - representative funnel 내부 helper/handoff micro batch는 현재 `none for now`로 park하는 편이 맞다.
 - `Stream B. Contract & QA`는 targeted proof set 문서 고정과 baseline PASS 기록까지 닫혔다.
-- `Stream C. Ops & Readiness`는 disposable sandbox에서 `v3:doctor`, `v3:export`, `v3:restore` preview/apply, `v3:support-bundle` baseline까지 모두 기록됐다.
+- `Stream C. Ops & Readiness`는 2026-03-26 disposable sandbox에서 `v3:doctor`, `v3:export`, `v3:restore` preview/apply, `v3:support-bundle` 과거 baseline을 기록했다. 현재 restore apply는 차단됐다.
 - promotion / exposure 질문은 이제 “broad v3를 더 열 것인가”가 아니라 “official entry, public beta inventory, stable destination tier를 실제로 바꿔야 하는 정책 trigger가 생겼는가”로 좁혀 읽는다.
 
 ## 2. 전체 단계 요약
@@ -41,7 +41,7 @@
 | --- | --- | --- | --- |
 | Stage 1. Product Flow Baseline | 완료 후 parked | 대표 사용자 흐름을 실제 route/handoff 기준으로 닫기 | 현재 `none for now` |
 | Stage 2. Stream B. Contract & QA | baseline closeout 완료 | targeted beta gate와 evidence bundle을 공식 proof set으로 고정 | PASS proof set 기록 완료 |
-| Stage 3. Stream C. Ops & Readiness | baseline closeout 완료 | doctor/export/restore/support bundle 같은 운영 readiness를 baseline으로 고정 | restore preview/apply warning inventory와 archive 이동 semantics까지 분리 기록 |
+| Stage 3. Stream C. Ops & Readiness | restore safety 재개 | doctor/export/restore/support bundle 같은 운영 readiness를 baseline으로 고정 | 과거 preview/apply 기록은 보존하고 현재 apply는 `V3_RESTORE_APPLY_DISABLED`로 차단 |
 | Stage 4. Promotion / Exposure | 정책 잠금 완료 | broader route promotion, visibility, stable/public 노출 확대 판단 | 현 시점 broad promotion 불필요 |
 
 ## 3. 단계별 상세 계획
@@ -137,14 +137,14 @@
 
 현재 상태:
 
-- baseline execution audit에서 `/tmp/finance-v3-ops-audit` disposable sandbox를 만들고 아래 묶음을 실제로 실행했다.
+- [과거 실행 기록] baseline execution audit에서 `/tmp/finance-v3-ops-audit` disposable sandbox를 만들고 아래 묶음을 실제로 실행했다.
   - `pnpm v3:doctor` PASS
   - `pnpm v3:export` PASS, archive=`/tmp/finance-v3-ops-audit/.data/exports/v3-data-backup-20260326124207.zip`
   - `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip` preview PASS, `errors=0 warnings=124`
-  - `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip --apply` PASS, `restoredFiles=787`, `doctor ok=true`
+  - 당시 `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip --apply` PASS, `restoredFiles=787`, `doctor ok=true`
   - `pnpm v3:support-bundle -- --out=.data/exports/v3-support-bundle-20260326124216.zip` PASS
 - preview warning 124건은 `.data/news/**`, `.data/alerts/**`, `.data/indicators/specOverrides.json` 같은 허용 경로 내 확장 파일을 structure-only로 읽은 inventory다.
-- `v3:restore --apply`는 현재 `.data` 전체를 먼저 `.data.bak-*`로 rename하기 때문에, archive를 `.data/exports` 아래에 둘 경우 apply 뒤 원래 archive path는 backup 쪽으로 이동한다. 이 archive placement semantics는 [검증 필요] operator residual risk로 분리한다.
+- 당시 `v3:restore --apply`는 `.data` 전체를 먼저 `.data.bak-*`로 rename했다. 현재는 owner 누락 데이터 손실 위험 때문에 `V3_RESTORE_APPLY_DISABLED`로 차단하며, archive placement나 수동 파일 교체로 우회하지 않는다.
 - route/href/current-screens/public exposure는 건드리지 않고 ops baseline만 닫았다.
 
 완료 기준:

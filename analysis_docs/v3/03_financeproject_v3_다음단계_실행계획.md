@@ -364,7 +364,7 @@
 - 아직 dedicated script가 없는 상태에서 새 command나 CI matrix를 먼저 만들면, representative funnel proof와 stable/public smoke, 그리고 `Stream C` ops readiness를 한 덩어리로 묶어 읽게 될 위험이 크다.
 - 따라서 지금은 `targeted beta gate set`과 `evidence bundle asset map`을 문서로만 잠그고, 실행 방식의 집계 자동화는 별도 후속 라운드에서 다루는 편이 맞다.
 
-### 3.5 2026-03-26 Stream C ops-readiness baseline execution audit
+### 3.5 2026-03-26 Stream C ops-readiness baseline execution audit (과거 기록)
 
 [현행 확인]
 
@@ -372,24 +372,24 @@
 - `pnpm v3:doctor`는 sandbox에서 PASS했고, `ok=true checks=8 files=652 errors=0 warnings=0`를 남겼다.
 - `pnpm v3:export`는 PASS했고, archive=`/tmp/finance-v3-ops-audit/.data/exports/v3-data-backup-20260326124207.zip`, `scanned=787 exported=787 skipped=0`을 남겼다.
 - `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip`는 preview 기준으로 PASS했고, `errors=0 warnings=124`를 남겼다.
-- 같은 archive로 `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip --apply`도 PASS했고, `restoredFiles=787`, backup=`/tmp/finance-v3-ops-audit/.data.bak-20260326124215`, post-restore `doctor ok=true errors=0 warnings=0`를 남겼다.
+- [과거 실행 기록] 같은 archive로 당시 `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip --apply`도 PASS했고, `restoredFiles=787`, backup=`/tmp/finance-v3-ops-audit/.data.bak-20260326124215`, post-restore `doctor ok=true errors=0 warnings=0`를 남겼다. 현재 apply는 `V3_RESTORE_APPLY_DISABLED`로 차단된다.
 - `pnpm v3:support-bundle -- --out=.data/exports/v3-support-bundle-20260326124216.zip`는 PASS했고, `scan allowed=787`, `doctor ok=true`, `archiveBytes=3401`을 남겼다.
 - preview warning 124건은 `.data/news/**`, `.data/alerts/**`, `.data/indicators/specOverrides.json` 같은 허용 경로 내 확장 파일을 restore가 structure-only inventory로 읽은 결과이며, current baseline 기준 restore blocker가 아니라 `UNKNOWN_ALLOWED_PATH` warning-only inventory notice다.
-- `restore --apply`는 현재 `.data` 전체를 먼저 `.data.bak-*`로 rename하기 때문에, archive를 `.data/exports` 아래에 둘 경우 apply 뒤 원래 archive path는 backup 쪽으로 이동한다. safest archive placement rule은 current `.data` 밖 절대 경로이고, 이 operator rule은 `docs/runbook.md`에 이미 landed 했다.
+- 당시 `restore --apply`는 `.data` 전체를 먼저 `.data.bak-*`로 rename했다. 이 동작은 데이터 owner를 보존하지 못해 현재 차단됐으며, archive placement만으로 우회하지 않는다.
 - 이번 baseline execution은 route/href/current-screens/public exposure를 건드리지 않았다.
 
 [권장]
 
-- Stage 3 baseline은 아래 형태로 닫는다.
-  - `doctor/export/restore preview/apply/support-bundle` PASS baseline
-  - restore warning inventory 분류와 archive placement 운영 규칙은 `/work`와 `docs/runbook.md`에 closeout memo로 고정
+- Stage 3의 과거 실행 증거는 보존하되 현재 operator baseline은 아래 형태로 갱신한다.
+  - `doctor/export/restore preview/support-bundle` PASS baseline
+  - restore apply는 `V3_RESTORE_APPLY_DISABLED`로 fail-closed이며 owner-aware staging·checksum·rollback 완료 전 재활성화하지 않음
 - restore warning inventory와 archive placement note는 product-flow reopen reason이 아니라 닫힌 operator memo로만 남긴다.
 - `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`는 계속 operator readiness 층으로 두고, targeted beta gate나 full `pnpm e2e:rc`와 섞지 않는다.
 
 [해석]
 
 - Stage 3의 목적은 operator readiness 명령의 현재 입력 조건과 failure mode를 baseline으로 남기는 것이지, broad product UI batch를 다시 여는 것이 아니다.
-- 이번 라운드에서는 live repo root 대신 disposable sandbox에서 preview/apply까지 실제로 닫았고, follow-up audit에서 operator memo도 landed 했다. 따라서 current baseline question은 새 구현 후보가 아니라 `parked baseline 유지`로 읽는 편이 맞다.
+- 2026-03-26에는 disposable sandbox에서 preview/apply를 실행했지만, 이후 owner 누락 위험이 확인돼 현재 apply는 차단됐다. 과거 PASS는 현재 안전성의 근거로 사용하지 않는다.
 
 ### 3.6 2026-03-26 promotion / exposure policy sync
 
@@ -425,7 +425,7 @@
 
 - 기본 next step은 새 구현 배치나 새 official axis 선정이 아니라 `parked baseline 유지`다.
 - representative funnel, targeted beta gate/evidence bundle, ops/readiness baseline, promotion/exposure policy overlay는 현재 문서와 `/work` evidence 기준으로 모두 닫힌 상태로 읽는다.
-- `v3:restore` warning 124건 warning-only inventory와 archive placement runbook rule도 이미 closeout 완료 항목으로 읽고, 별도 future candidate로 다시 세우지 않는다.
+- `v3:restore` warning 124건은 과거 preview 증거로만 보존한다. destructive apply 차단과 owner-aware staged restore는 각각 #228과 후속 Issue에서 다시 열린 범위다.
 
 ### 4.2 후속 reopen이 필요해진다면
 
@@ -438,7 +438,7 @@
 
 현재 판단:
 
-- 둘 다 기본 next step은 아니다.
+- restore validator·archive persistence trigger는 발생했으며 #228과 후속 owner-aware restore Issue에서 처리한다.
 - wording sync, closeout memo 보강, current inventory 재확인만으로는 reopen trigger가 되지 않는다.
 
 ## 5. parked 상태에서 다시 열 조건과 비범위
@@ -508,14 +508,14 @@ reopen trigger:
 - `pnpm v3:doctor`
 - `pnpm v3:export`
 - `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip`
-- `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip --apply`
+- restore apply는 실행하지 않고 focused test에서 `V3_RESTORE_APPLY_DISABLED`, checksum 불변, backup 미생성을 검증
 - `pnpm v3:support-bundle -- --out=.data/exports/v3-support-bundle-20260326124216.zip`
 - 실행 조건: workdir=`/tmp/finance-v3-ops-audit` disposable sandbox
 
 [해석]
 
-- current baseline은 `doctor/export/restore preview/apply/support-bundle` PASS, `restore` warning-only inventory notice, 그리고 `docs/runbook.md`에 landed 한 archive placement rule 기준으로 남긴다.
-- archive를 `.data/exports` 아래에 둘 경우 apply 뒤 원래 archive path는 `.data.bak-*` 쪽으로 이동하므로, safest placement는 current `.data` 밖 절대 경로다.
+- current baseline은 `doctor/export/restore preview/support-bundle`과 apply fail-closed guard다.
+- archive는 preview 입력으로만 사용하며, `.data` 또는 `PLANNING_DATA_DIR` 수동 교체로 apply 차단을 우회하지 않는다.
 
 ---
 
@@ -526,8 +526,8 @@ reopen trigger:
 - `Import-to-Planning Beta` representative funnel follow-through chain은 현재 기준으로 closeout 가능한 상태다.
 - current smallest viable next candidate는 이 체인 안에서 `none for now`로 둔다.
 - current targeted beta gate는 base gate 3개와 representative e2e asset 3개를 묶은 proof set으로 고정돼 있고, `pnpm e2e:rc`나 `planning-v2-fast` 같은 broader regression asset과는 구분한다.
-- `Stream C. Ops & Readiness`도 `doctor/export/restore preview/apply/support-bundle` baseline까지 기록됐다.
-- `operator safety follow-up audit` 결과도 `/work`와 `docs/runbook.md` 기준으로 닫힌 상태로 읽는다.
+- `Stream C. Ops & Readiness`의 `doctor/export/restore preview/apply/support-bundle`은 2026-03-26 과거 baseline으로만 보존한다. 현재 restore apply는 차단됐다.
+- restore operator safety는 더 이상 닫힌 상태가 아니며, #228의 차단과 후속 owner-aware staged restore Issue를 현재 기준으로 따른다.
 - current promotion / exposure question은 “broad rewrite”가 아니라 “official entry, public beta inventory, stable destination tier를 실제로 바꿔야 하는 정책 trigger가 생겼는가”로 좁혀진다.
 - product-flow beta proof와 ops/readiness routine은 계속 다른 층으로 유지한다.
 

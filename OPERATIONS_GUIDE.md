@@ -114,16 +114,13 @@ Custom archive path:
 pnpm v3:export -- --out=.data/exports/v3-backup.zip
 ```
 
-## 5.4 Restore (dry-run first)
+## 5.4 Restore validation (preview only)
 Dry-run validation:
 ```bash
 pnpm v3:restore -- --in=.data/exports/v3-backup.zip
 ```
-Apply restore:
-```bash
-pnpm v3:restore -- --in=.data/exports/v3-backup.zip --apply
-```
-- On apply, current `.data` is backed up to `.data.bak-<timestamp>`.
+- `--apply` is disabled and exits with `V3_RESTORE_APPLY_DISABLED` until owner-aware staged restore is verified.
+- Do not manually rename or copy `.data` or `PLANNING_DATA_DIR` to bypass the guard.
 
 ## 5.5 Migrate (manual only)
 Preview migration:
@@ -147,11 +144,8 @@ pnpm v3:doctor
 ```bash
 pnpm v3:restore -- --in=<archive.zip>
 ```
-4. Apply restore only after dry-run is clean:
-```bash
-pnpm v3:restore -- --in=<archive.zip> --apply
-```
-5. Re-check integrity:
+4. Preserve the current data roots and archive separately. Do not attempt restore apply or manual file replacement.
+5. Re-check current integrity:
 ```bash
 pnpm v3:doctor
 ```

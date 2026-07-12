@@ -64,15 +64,13 @@ Optional output path:
 pnpm v3:export -- --out=.data/exports/my-v3-backup.zip
 ```
 
-### Restore (dry-run first)
+### Restore validation (preview only)
 Preview/validate archive structure and schemas:
 ```bash
 pnpm v3:restore -- --in=.data/exports/v3-data-backup-YYYYMMDDHHMMSS.zip
 ```
-Apply restore (creates backup of current `.data` first):
-```bash
-pnpm v3:restore -- --in=.data/exports/v3-data-backup-YYYYMMDDHHMMSS.zip --apply
-```
+
+Restore apply is temporarily disabled and exits with `V3_RESTORE_APPLY_DISABLED` until owner-aware staging, checksums, and rollback are implemented. Do not bypass this protection by manually renaming or copying `.data` or `PLANNING_DATA_DIR`.
 
 ### Health check and maintenance
 ```bash
