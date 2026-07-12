@@ -1,6 +1,6 @@
-import { assumptionsFormToRecord, type AssumptionsFormModel } from "@/app/planning/_lib/workspaceAssumptionsEditor";
-import { debtOfferRowsToPayload, type DebtOfferFormRow } from "@/app/planning/_lib/workspaceDebtOffersEditor";
-import { type ProfileFormModel } from "@/app/planning/_lib/profileFormModel";
+import { assumptionsFormToRecord, type AssumptionsFormModel } from "@/lib/planning/ui/workspaceAssumptionsEditor";
+import { debtOfferRowsToPayload, type DebtOfferFormRow } from "@/lib/planning/ui/workspaceDebtOffersEditor";
+import { type ProfileFormModel } from "@/lib/planning/ui/profileFormModel";
 import {
   buildWorkspaceActionsDebugSections,
   buildWorkspaceActionsVm,
@@ -12,16 +12,16 @@ import {
   buildWorkspaceWarningsGoalsDebugSections,
   buildWorkspaceResultSummaryVm,
   buildWorkspaceScenarioVm,
-} from "@/app/planning/_lib/workspaceResultInsights";
+} from "@/lib/planning/ui/workspaceResultInsights";
 import {
   buildWorkspaceQuickStartVm,
   isWorkspaceQuickStartProfileDone,
   type WorkspaceQuickStartVm,
   type WorkspaceSelectedProfileSyncState,
-} from "@/app/planning/_lib/workspaceQuickStart";
-import { getVisibleSections, type PlanningTabId } from "@/app/planning/_lib/workspaceUiState";
-import { type SnapshotSelection } from "@/app/planning/_lib/snapshotSelection";
-import { type StepStatus } from "@/app/planning/_lib/runPipeline";
+} from "@/lib/planning/ui/workspaceQuickStart";
+import { getVisibleSections, type PlanningTabId } from "@/lib/planning/ui/workspaceUiState";
+import { type SnapshotSelection } from "@/lib/planning/ui/snapshotSelection";
+import { type StepStatus } from "@/lib/planning/ui/runPipeline";
 import { LIMITS } from "@/lib/planning/v2/limits";
 import { type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
 import { preflightRun } from "@/lib/planning/v2/preflight";

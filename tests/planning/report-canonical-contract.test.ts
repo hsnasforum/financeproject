@@ -8,7 +8,7 @@ import {
   buildReportVM,
   buildReportVMFromRun,
   type ReportVM,
-} from "../../src/app/planning/reports/_lib/reportViewModel";
+} from "../../src/lib/planning/reports/reportViewModel";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 import { buildResultDtoV1FromRunRecord } from "../../src/lib/planning/v2/resultDto";
 
@@ -185,8 +185,8 @@ describe("planning report canonical contract", () => {
     const reportSourceFiles = [
       "src/app/planning/reports/_components/reportDashboard/shared.ts",
       "src/app/planning/reports/_components/ReportDashboard.tsx",
-      "src/app/planning/reports/_components/ReportRecommendationsSection.tsx",
-      "src/app/planning/reports/_lib/reportViewModel.ts",
+      "src/components/planning/reports/ReportRecommendationsSection.tsx",
+      "src/lib/planning/reports/reportViewModel.ts",
     ];
 
     const combined = reportSourceFiles

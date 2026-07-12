@@ -7,7 +7,7 @@ import {
   safeBuildReportVMFromRun,
   type ReportActionRow,
   type ReportVM,
-} from "@/app/planning/reports/_lib/reportViewModel";
+} from "@/lib/planning/reports/reportViewModel";
 import {
   AdvancedJsonPanel,
   GoalsTable,

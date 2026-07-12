@@ -4,7 +4,7 @@ import {
   assumptionsFormToRecord,
   parseAssumptionsEditorJson,
   splitAssumptionsRecord,
-} from "../../../src/app/planning/_lib/workspaceAssumptionsEditor";
+} from "../../../src/lib/planning/ui/workspaceAssumptionsEditor";
 
 describe("workspaceAssumptionsEditor", () => {
   it("splits assumptions form fields from extra overrides", () => {

@@ -1,5 +1,5 @@
 import { type SnapshotSelection } from "./snapshotSelection";
-import { type SnapshotListItem } from "./snapshotList";
+import { type SnapshotListItem } from "./snapshotListTypes";
 
 export type SnapshotPickerItems = {
   latest?: SnapshotListItem;

@@ -6,18 +6,18 @@ import {
   normalizeDraftWithDisclosure,
   toProfileJson,
   type FormDraft,
-} from "@/app/planning/_lib/profileFormModel";
+} from "@/lib/planning/ui/profileFormModel";
 import {
   resolveWorkspaceSelectedProfileSyncState,
   stableStringifyWorkspaceValue,
-} from "@/app/planning/_lib/workspaceQuickStart";
+} from "@/lib/planning/ui/workspaceQuickStart";
 import {
   buildWorkspaceHealthGuardState,
   buildWorkspaceSnapshotState,
-} from "@/app/planning/_lib/workspaceRunResult";
-import { type SnapshotListItem } from "@/app/planning/_lib/snapshotList";
-import { normalizeWorkspaceSnapshotItemsState } from "@/app/planning/_lib/workspaceSnapshotSelection";
-import { buildMetricEvidence } from "@/app/planning/_lib/metricEvidence";
+} from "@/lib/planning/ui/workspaceRunResult";
+import { type SnapshotListItem } from "@/lib/planning/ui/snapshotListTypes";
+import { normalizeWorkspaceSnapshotItemsState } from "@/lib/planning/ui/workspaceSnapshotSelection";
+import { buildMetricEvidence } from "@/lib/planning/ui/metricEvidence";
 import { writeDevCsrfToken } from "@/lib/dev/clientCsrf";
 import { type PlanningFeatureFlags } from "@/lib/planning/config";
 import { type Locale } from "@/lib/planning/i18n";

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { createInitialStepStatuses } from "@/app/planning/_lib/runPipeline";
-import { buildWorkspaceCompletedRunState } from "@/app/planning/_lib/workspaceRunResult";
+import { createInitialStepStatuses } from "@/lib/planning/ui/runPipeline";
+import { buildWorkspaceCompletedRunState } from "@/lib/planning/ui/workspaceRunResult";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { isApiBaseResponse } from "@/lib/http/apiContract";
 import { t, type Locale } from "@/lib/planning/i18n";

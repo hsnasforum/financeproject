@@ -1,4 +1,4 @@
-import { estimateDebtMonthlyPaymentKrw } from "@/app/planning/_lib/profileFormModel";
+import { estimateDebtMonthlyPaymentKrw } from "@/lib/planning/ui/profileFormModel";
 import ProfileV2Form from "@/components/planning/ProfileV2Form";
 import { Button } from "@/components/ui/Button";
 import {

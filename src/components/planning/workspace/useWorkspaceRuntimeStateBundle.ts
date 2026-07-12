@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import {
   createInitialStepStatuses,
   type StepStatus,
-} from "@/app/planning/_lib/runPipeline";
+} from "@/lib/planning/ui/runPipeline";
 import {
   type WorkspaceRunMeta as PlanningMeta,
   type WorkspaceRunResult,
-} from "@/app/planning/_lib/workspaceRunResult";
+} from "@/lib/planning/ui/workspaceRunResult";
 import { type PlanningApiEngineEnvelope } from "@/lib/planning/api/contracts";
 import { type PlanningRunRecord } from "@/lib/planning/store/types";
 import {

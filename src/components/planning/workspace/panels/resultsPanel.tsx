@@ -1,4 +1,4 @@
-import PlanningMiniCharts from "@/app/planning/_components/PlanningMiniCharts";
+import PlanningMiniCharts from "@/components/planning/workspace/PlanningMiniCharts";
 import {
   AdvancedJsonPanel,
   GoalsTable,

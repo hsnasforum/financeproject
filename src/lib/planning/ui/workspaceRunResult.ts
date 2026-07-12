@@ -6,7 +6,7 @@ import {
 } from "@/lib/planning/v2/normalizationDisclosure";
 import { type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
 import { resolveWarningCatalog } from "@/lib/planning/catalog/warningCatalog";
-import { type SnapshotListItem } from "./snapshotList";
+import { type SnapshotListItem } from "./snapshotListTypes";
 import {
   createInitialStepStatuses,
   type StepId,

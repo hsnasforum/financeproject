@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ASSUMPTIONS_FORM_DEFAULT } from "../../../src/app/planning/_lib/workspaceAssumptionsEditor";
-import { type StepStatus } from "../../../src/app/planning/_lib/runPipeline";
-import { type ProfileFormModel } from "../../../src/app/planning/_lib/profileFormModel";
+import { ASSUMPTIONS_FORM_DEFAULT } from "../../../src/lib/planning/ui/workspaceAssumptionsEditor";
+import { type StepStatus } from "../../../src/lib/planning/ui/runPipeline";
+import { type ProfileFormModel } from "../../../src/lib/planning/ui/profileFormModel";
 import {
   buildWorkspaceExecutionGuardPresenter,
   buildWorkspaceQuickStartPresenter,

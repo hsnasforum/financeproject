@@ -36,7 +36,7 @@
   - `run -> resultDto -> ReportInputContract -> ReportVM`
   - 구현 위치:
     - `src/lib/planning/reports/reportInputContract.ts`
-    - `src/app/planning/reports/_lib/reportViewModel.ts`
+    - `src/lib/planning/reports/reportViewModel.ts`
     - `src/app/api/planning/v2/runs/[id]/report/route.ts`
     - `src/app/api/planning/reports/[runId]/export.html/route.ts`
   - Production UI 계약:
@@ -62,9 +62,11 @@
 
 ## Import 경계 규칙
 - `app/api/planning/v2/*`는 `src/lib/planning/server/*` 경로를 우선 사용합니다.
+- reusable Planning UI model/type은 `src/lib/planning/ui/*`, reusable report model은 `src/lib/planning/reports/*`, shared report component는 `src/components/planning/reports/*`가 소유합니다.
+- `src/components/**`는 route-private `src/app/**`를 import하지 않습니다. page 전용 client가 server action을 필요로 하면 해당 route의 `_components`에 둡니다.
 - `use client` 파일은 `src/lib/planning/server/*` import를 금지합니다.
 - `src/lib/planning/core/*`는 `src/lib/planning/server/*` import를 금지합니다.
-- 경계 위반은 `pnpm planning:v2:guard`에서 정적 스캔으로 차단합니다.
+- Planning server/client 경계는 `pnpm planning:v2:guard`, components→app 역방향 의존은 `pnpm components:app-import:guard`에서 정적 스캔으로 차단합니다.
 
 ## 재현성
 - 실행 재현 키:

@@ -12,7 +12,7 @@
 
 ## 현재 재사용 가능한 자산
 - `/planning/reports`에는 이미 상품 후보 비교 섹션이 있습니다.
-  - `src/app/planning/reports/_components/CandidateComparisonSection.tsx`
+  - `src/components/planning/reports/CandidateComparisonSection.tsx`
   - `src/lib/planning/reports/productCandidates.ts`
 - `/recommend` 허브에는 예금/적금과 혜택 추천 흐름이 이미 있습니다.
   - `src/components/RecommendHubClient.tsx`

@@ -1,7 +1,6 @@
-import {
-  formatSnapshotLabel } from "../../../../planning/_lib/formatSnapshotLabel";
-import { loadSnapshotListForPlanning,
-  type SnapshotListItem } from "../../../../planning/_lib/snapshotList";
+import { loadSnapshotListForPlanning } from "../../../../planning/_lib/snapshotList";
+import { formatSnapshotLabel } from "@/lib/planning/ui/formatSnapshotLabel";
+import { type SnapshotListItem } from "@/lib/planning/ui/snapshotListTypes";
 import {
   assertLocalHost,
   toGuardErrorResponse,

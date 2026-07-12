@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { mergePullRequestAction } from "@/app/ops/auto-merge/actions";
+import { mergePullRequestAction } from "../actions";
 import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";

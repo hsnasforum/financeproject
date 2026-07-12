@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMetricEvidence } from "../../../src/app/planning/_lib/metricEvidence";
+import { buildMetricEvidence } from "../../../src/lib/planning/ui/metricEvidence";
 import { type ProfileV2 } from "../../../src/lib/planning/v2/types";
 
 function profileFixture(overrides?: Partial<ProfileV2>): ProfileV2 {

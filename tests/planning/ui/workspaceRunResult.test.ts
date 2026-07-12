@@ -6,7 +6,7 @@ import {
   buildWorkspaceSnapshotState,
   buildStepStatusesFromRunStages,
   buildWorkspaceRunResultFromRecord,
-} from "../../../src/app/planning/_lib/workspaceRunResult";
+} from "../../../src/lib/planning/ui/workspaceRunResult";
 import { type PlanningRunRecord } from "../../../src/lib/planning/store/types";
 
 function createResultDto() {

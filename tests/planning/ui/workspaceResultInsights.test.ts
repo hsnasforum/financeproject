@@ -13,7 +13,7 @@ import {
   buildWorkspaceScenarioDebugSections,
   buildWorkspaceScenarioVm,
   buildWorkspaceWarningsGoalsDebugSections,
-} from "../../../src/app/planning/_lib/workspaceResultInsights";
+} from "../../../src/lib/planning/ui/workspaceResultInsights";
 
 describe("workspaceResultInsights", () => {
   it("marks risk when cash is depleted", () => {

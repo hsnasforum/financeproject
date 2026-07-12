@@ -3,6 +3,11 @@ import { spawnSync } from "node:child_process";
 
 const ROUNDING_BASELINE_EXCLUDES = [
   "!src/lib/planning/calc/**",
+  // Existing UI/report rounding moved from src/app without changing calculation behavior.
+  "!src/lib/planning/reports/recommendationSignals.ts",
+  "!src/lib/planning/reports/reportViewModel.ts",
+  "!src/lib/planning/ui/planningOnboardingWizard.ts",
+  "!src/lib/planning/ui/profileFormModel.ts",
 ];
 
 function runRg(label, args) {

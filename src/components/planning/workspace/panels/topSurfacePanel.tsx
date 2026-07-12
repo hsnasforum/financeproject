@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { type WorkspaceQuickStartProgressState } from "@/app/planning/_lib/workspaceQuickStart";
+import { type WorkspaceQuickStartProgressState } from "@/lib/planning/ui/workspaceQuickStart";
 import PlanningOnboardingWizard from "@/components/planning/PlanningOnboardingWizard";
 import PlanningQuickStartGate from "@/components/planning/PlanningQuickStartGate";
 import { Button } from "@/components/ui/Button";

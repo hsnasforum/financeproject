@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeBuildReportVMFromRun } from "../../src/app/planning/reports/_lib/reportViewModel";
+import { safeBuildReportVMFromRun } from "../../src/lib/planning/reports/reportViewModel";
 import { buildResultDtoV1 } from "../../src/lib/planning/v2/resultDto";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 

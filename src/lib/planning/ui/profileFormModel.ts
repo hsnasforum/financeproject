@@ -1,14 +1,14 @@
-import { amortizingMonthlyPayment, normalizeAprPct } from "../../../lib/planning/calc";
-import { loadCanonicalProfile } from "../../../lib/planning/v2/loadCanonicalProfile";
-import { normalizeProfileInput } from "../../../lib/planning/v2/profileNormalize";
-import { type ProfileCashflowV2, type ProfileDefaultsAppliedV2, type ProfileV2 } from "../../../lib/planning/v2/types";
-import { type ProfileNormalizationDisclosure } from "../../../lib/planning/v2/normalizationDisclosure";
+import { amortizingMonthlyPayment, normalizeAprPct } from "@/lib/planning/calc";
+import { loadCanonicalProfile } from "@/lib/planning/v2/loadCanonicalProfile";
+import { normalizeProfileInput } from "@/lib/planning/v2/profileNormalize";
+import { type ProfileCashflowV2, type ProfileDefaultsAppliedV2, type ProfileV2 } from "@/lib/planning/v2/types";
+import { type ProfileNormalizationDisclosure } from "@/lib/planning/v2/normalizationDisclosure";
 import {
   normalizeProfileWithReport,
   type NormalizationReport,
-} from "../../../lib/planning/v2/normalizationReport";
-import { isAllocationPolicyId } from "../../../lib/planning/v2/policy/presets";
-import { type AllocationPolicyId } from "../../../lib/planning/v2/policy/types";
+} from "@/lib/planning/v2/normalizationReport";
+import { isAllocationPolicyId } from "@/lib/planning/v2/policy/presets";
+import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 
 export type ProfileFormDebt = {
   id: string;

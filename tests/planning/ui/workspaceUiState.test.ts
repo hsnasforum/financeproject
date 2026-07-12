@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaults, getVisibleSections } from "../../../src/app/planning/_lib/workspaceUiState";
+import { defaults, getVisibleSections } from "../../../src/lib/planning/ui/workspaceUiState";
 
 describe("planning workspace ui state", () => {
   it("returns beginner tabs only", () => {

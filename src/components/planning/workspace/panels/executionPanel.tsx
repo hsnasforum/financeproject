@@ -1,7 +1,7 @@
 import Link from "next/link";
-import SnapshotPicker from "@/app/planning/_components/SnapshotPicker";
-import { type StepStatus } from "@/app/planning/_lib/runPipeline";
-import { ASSUMPTIONS_FORM_DEFAULT } from "@/app/planning/_lib/workspaceAssumptionsEditor";
+import SnapshotPicker from "@/components/planning/workspace/SnapshotPicker";
+import { type StepStatus } from "@/lib/planning/ui/runPipeline";
+import { ASSUMPTIONS_FORM_DEFAULT } from "@/lib/planning/ui/workspaceAssumptionsEditor";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildReportVM } from "../../src/app/planning/reports/_lib/reportViewModel";
-import { toInterpretationInputFromReportVM } from "../../src/app/planning/reports/_lib/reportInterpretationAdapter";
+import { buildReportVM } from "../../src/lib/planning/reports/reportViewModel";
+import { toInterpretationInputFromReportVM } from "../../src/lib/planning/reports/reportInterpretationAdapter";
 import { buildInterpretationVM } from "../../src/lib/planning/v2/insights/interpretationVm";
 import { type PlanningRunRecord, type PlanningRunStageId, type PlanningRunStageStatus } from "../../src/lib/planning/store/types";
 import { type ResultDtoV1 } from "../../src/lib/planning/v2/resultDto";

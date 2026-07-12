@@ -5,7 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   resetAutoMergePolicyAction,
   saveAutoMergePolicyAction,
-} from "@/app/ops/auto-merge/policy/actions";
+} from "../actions";
 import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";

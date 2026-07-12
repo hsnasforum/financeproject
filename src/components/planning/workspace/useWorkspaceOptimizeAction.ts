@@ -11,7 +11,7 @@ import {
 } from "@/components/planning/workspace/workspaceRuntimeHelpers";
 import {
   type WorkspaceRunMeta as PlanningMeta,
-} from "@/app/planning/_lib/workspaceRunResult";
+} from "@/lib/planning/ui/workspaceRunResult";
 
 type ApiError = {
   code?: string;

@@ -4,8 +4,8 @@ import { useCallback } from "react";
 import {
   hydrateProfileJsonEditorState,
   type ProfileJsonEditorState,
-} from "@/app/planning/_lib/profileFormModel";
-import { type PlanningWizardOutput } from "@/app/planning/_lib/planningOnboardingWizard";
+} from "@/lib/planning/ui/profileFormModel";
+import { type PlanningWizardOutput } from "@/lib/planning/ui/planningOnboardingWizard";
 
 type WorkspaceQuickStartHandoffInput = {
   profileName: string;

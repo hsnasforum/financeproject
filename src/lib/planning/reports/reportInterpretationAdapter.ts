@@ -1,4 +1,4 @@
-import { type InterpretationInput } from "../../../../lib/planning/v2/insights/interpretationVm";
+import { type InterpretationInput } from "@/lib/planning/v2/insights/interpretationVm";
 import { type ReportVM } from "./reportViewModel";
 
 export function toInterpretationInputFromReportVM(vm: ReportVM): InterpretationInput {
