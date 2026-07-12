@@ -1,6 +1,6 @@
 # 현재 제공 화면/기능 카탈로그 (v1.0 RC)
 
-기준일: 2026-07-01
+기준일: 2026-07-12
 기준 소스: `src/app/**/page.tsx`
 최근 검증: page route 95개, `pnpm planning:current-screens:guard`, `pnpm planning:ssot:check`
 
@@ -17,6 +17,10 @@
 - primary navigation owner는 `<768px`에서 MobileBottomNav, `768~1023px`에서 header horizontal strip, `>=1024px`에서 desktop header다. public 경로의 `<768px` header는 브랜드만 유지하며 fixed bottom nav 높이와 safe area는 같은 CSS contract로 본문 뒤 공간에 예약한다.
 
 ## Route Policy 분류 기준
+- `src/lib/navigation/routeRegistry.ts`의 route policy registry가 아래 95개 page를 `page` 또는 `redirect`로 빠짐없이 명시 분류한다.
+- 등록되지 않은 runtime pathname은 `internal/unknown`으로 fail closed하며 Public Stable로 추정하지 않는다.
+- navigation prefix는 정확히 같은 경로이거나 다음 `/` segment로 이어질 때만 일치한다. 예를 들어 `/planning`은 `/planning/runs`와 일치하지만 `/planning-v3`와는 일치하지 않는다.
+- redirect entry는 `canonicalHref`를 가지며 목적지가 실존하는 명시 분류 page인지 guard에서 확인한다.
 - `Public Stable`: 사용자 문서, 헤더, 홈 바로가기에서 기본 노출 가능한 공식 경로
 - `Public Beta`: 실험 또는 preview 성격이 남아 있어 기본 메뉴에는 올리지 않되 공개 검토가 가능한 경로
 - `Legacy Redirect`: 공식 경로가 아니며 안정 경로로 즉시 보내는 호환용 진입점
@@ -68,7 +72,9 @@
 - `/planning/reports`, `/planning/reports/[id]`, `/planning/runs`는 공식 planning run/report 경로다.
 - `/report`는 legacy redirect 경로이며 공식 planning report 경로와 구분해서 다룬다.
 - `/report` 진입은 현재 `/planning/reports` 또는 `/planning/reports?runId=...`로 `permanentRedirect` 된다.
-- `/planning/v3/*`와 `/planning/reports/prototype`는 공개 검토가 필요한 `Public Beta`로 취급한다.
+- `/compare`, `/products/deposit`, `/products/saving`, `/planning/v3/transactions`도 route policy에서 공개 redirect entry와 canonical destination을 별도로 유지한다.
+- `/planning/v3/balances`, `/planning/v3/profile/drafts`, `/planning/v3/transactions`, `/planning/v3/transactions/batches`와 `/planning/reports/prototype`는 공개 검토가 필요한 `Public Beta`로 취급한다. 그 밖의 현재 v3 page 21개는 `Internal`이다.
+- `/planner/[...slug]`는 route policy에 등록된 planning route로만 하위 경로를 보존한다. 등록된 redirect면 canonical page로 보내고 미등록 목적지는 `/planning`으로 보낸다.
 - `/ops/*`, `/dashboard/artifacts`, `/debug/*`, `/dev/*`는 사용자 문서/헤더/홈 바로가기 노출 대상이 아니다.
 
 ## Planning 공식 route/API 정책
