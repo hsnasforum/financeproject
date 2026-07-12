@@ -2,7 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { getOrBuildSnapshot, isSnapshotFresh, loadSnapshot, saveSnapshot } from "../src/lib/publicApis/benefitsSnapshot";
+import {
+  getOrBuildSnapshot,
+  getSnapshotOrNull,
+  isSnapshotFresh,
+  loadSnapshot,
+  saveSnapshot,
+} from "../src/lib/publicApis/benefitsSnapshot";
 import { type BenefitCandidate } from "../src/lib/publicApis/contracts/types";
 
 function makeItem(id: string): BenefitCandidate {
@@ -66,5 +72,41 @@ describe("benefits snapshot", () => {
     expect(built.snapshot.items[0]?.id).toBe("new");
     fs.rmSync(file, { force: true });
   });
-});
 
+  it("reloads an atomic snapshot replacement written by an external CLI process", () => {
+    const file = tempFile("snapshot-external-replace");
+    const first = {
+      meta: { generatedAt: "2026-07-11T00:00:00.000Z", totalItemsInSnapshot: 1 },
+      items: [makeItem("old")],
+    };
+    saveSnapshot(file, first);
+    expect(getSnapshotOrNull({ filePath: file })?.snapshot.items[0]?.id).toBe("old");
+    expect(getSnapshotOrNull({ filePath: file })?.fromCache).toBe("memory");
+
+    const next = {
+      meta: { generatedAt: "2026-07-12T00:00:00.000Z", totalItemsInSnapshot: 2 },
+      items: [makeItem("new-a"), makeItem("new-b")],
+    };
+    const externalTemp = `${file}.external.tmp`;
+    fs.writeFileSync(externalTemp, JSON.stringify(next), "utf8");
+    fs.renameSync(externalTemp, file);
+
+    const reloaded = getSnapshotOrNull({ filePath: file });
+    expect(reloaded?.fromCache).toBe("disk");
+    expect(reloaded?.snapshot.meta.generatedAt).toBe("2026-07-12T00:00:00.000Z");
+    expect(reloaded?.snapshot.items.map((item) => item.id)).toEqual(["new-a", "new-b"]);
+    fs.rmSync(file, { force: true });
+  });
+
+  it("does not serve stale memory after the snapshot file is removed", () => {
+    const file = tempFile("snapshot-external-delete");
+    saveSnapshot(file, {
+      meta: { generatedAt: new Date().toISOString(), totalItemsInSnapshot: 1 },
+      items: [makeItem("cached")],
+    });
+    expect(getSnapshotOrNull({ filePath: file })?.fromCache).toBe("memory");
+
+    fs.rmSync(file, { force: true });
+    expect(getSnapshotOrNull({ filePath: file })).toBeNull();
+  });
+});

@@ -18,10 +18,6 @@ describe("runScript whitelist", () => {
       command: "pnpm",
       args: ["seed:debug"],
     });
-    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["daily:refresh"] })).toEqual({
-      command: "pnpm",
-      args: ["daily:refresh"],
-    });
     expect(sanitizeRunScriptInput({ command: "pnpm", args: ["dart:watch"] })).toEqual({
       command: "pnpm",
       args: ["dart:watch"],
@@ -33,10 +29,6 @@ describe("runScript whitelist", () => {
     expect(sanitizeRunScriptInput({ command: "pnpm", args: ["datago:sync"] })).toEqual({
       command: "pnpm",
       args: ["datago:sync"],
-    });
-    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["gov24:sync:if-stale"] })).toEqual({
-      command: "pnpm",
-      args: ["gov24:sync:if-stale"],
     });
     expect(sanitizeRunScriptInput({ command: "pnpm", args: ["news:refresh"] })).toEqual({
       command: "pnpm",
@@ -96,6 +88,8 @@ describe("runScript whitelist", () => {
 
   it("rejects commands outside whitelist without executing", async () => {
     expect(sanitizeRunScriptInput({ command: "bash", args: ["-lc", "echo test"] })).toBeNull();
+    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["gov24:sync:if-stale"] })).toBeNull();
+    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["daily:refresh"] })).toBeNull();
     expect(sanitizeRunScriptInput({ command: "pnpm", args: ["dart:watch", "--silent"] })).toBeNull();
     expect(sanitizeRunScriptInput({
       command: "node",
@@ -118,7 +112,8 @@ describe("runScript whitelist", () => {
     expect(isAllowedFixId("SEED_DEBUG")).toBe(true);
     expect(isAllowedFixId("FINLIFE_SYNC_IF_STALE")).toBe(true);
     expect(isAllowedFixId("DATAGO_SYNC")).toBe(true);
-    expect(isAllowedFixId("GOV24_SYNC_IF_STALE")).toBe(true);
+    expect(isAllowedFixId("GOV24_SYNC_IF_STALE")).toBe(false);
+    expect(isAllowedFixId("DAILY_REFRESH")).toBe(false);
     expect(isAllowedFixId("NEWS_REFRESH")).toBe(true);
     expect(isAllowedFixId("INDICATORS_REFRESH")).toBe(true);
     expect(isAllowedFixId("UNKNOWN_FIX")).toBe(false);

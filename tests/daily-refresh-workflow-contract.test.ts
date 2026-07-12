@@ -72,6 +72,8 @@ describe("daily refresh workflow contract", () => {
       "ECOS_API_KEY",
       "EXIM_EXCHANGE_API_KEY",
       "EXIM_EXCHANGE_API_URL",
+      "MOIS_BENEFITS_API_KEY",
+      "MOIS_BENEFITS_API_URL",
       "OPENDART_API_KEY",
     ]) {
       const secretExpression = "${{ secrets." + envName + " }}";

@@ -6,6 +6,7 @@ import { fetchOfficialGov24Detail } from "@/lib/gov24/officialClient";
 import { normalizeEligibilityLines } from "@/lib/gov24/eligibilityNormalize";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
 import { attachFallback } from "@/lib/http/fallbackMeta";
+import { BENEFITS_FLOW_COPY } from "@/lib/publicApis/benefitsFlowContract";
 import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
 
 function splitLines(...texts: Array<string | undefined>): string[] {
@@ -112,7 +113,7 @@ export async function GET(request: Request) {
     : {
         mode: "CACHE" as const,
         sourceKey: "gov24",
-        reason: "snapshot_detail",
+        reason: snapshot?.isStale ? "snapshot_stale" : "snapshot_detail",
         generatedAt: snapshot?.snapshot.meta.generatedAt,
       };
 
@@ -133,6 +134,7 @@ export async function GET(request: Request) {
     },
     meta: attachFallback({
       snapshotGeneratedAt: snapshot?.snapshot.meta.generatedAt ?? null,
+      ...(snapshot?.isStale ? { message: BENEFITS_FLOW_COPY.snapshotStale } : {}),
     }, fallbackMeta),
   });
 }

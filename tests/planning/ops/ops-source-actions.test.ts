@@ -18,7 +18,6 @@ vi.mock("../../../src/lib/dev/runScript", async (importOriginal) => {
 const sourceActions = [
   ["FINLIFE_SYNC_IF_STALE", "FINLIFE_SYNC_IF_STALE", "FinLife"],
   ["DATAGO_SYNC", "DATAGO_SYNC", "DataGo"],
-  ["GOV24_SYNC_IF_STALE", "GOV24_SYNC_IF_STALE", "Gov24"],
   ["NEWS_REFRESH", "NEWS_REFRESH", "뉴스"],
   ["INDICATORS_REFRESH", "INDICATORS_REFRESH", "지표"],
 ] as const satisfies ReadonlyArray<readonly [OpsActionId, string, string]>;

@@ -109,7 +109,12 @@ async function main() {
   };
 
   if (typeof scripts["warm:if-stale"] === "string" && scripts["warm:if-stale"].trim()) {
-    plan.push({ name: "warm:if-stale", required: false, runnable: true });
+    plan.push({
+      name: "warm:if-stale",
+      required: false,
+      runnable: true,
+      args: ["--", "--exchange-only"],
+    });
   } else {
     plan.push({ name: "warm:if-stale", required: false, runnable: false, reason: "script_not_found" });
   }
@@ -187,7 +192,10 @@ async function main() {
 
     addLog(`${stepPrefix} start`);
     const startedAt = Date.now();
-    const childArgs = options.strict && step.passStrict ? ["--", "--strict"] : [];
+    const childArgs = [
+      ...(step.args ?? []),
+      ...(options.strict && step.passStrict ? ["--", "--strict"] : []),
+    ];
     const result = await runPnpmScript(step.name, cwd, childArgs);
     const tookMs = Date.now() - startedAt;
 

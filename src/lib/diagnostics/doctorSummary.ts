@@ -122,7 +122,6 @@ function buildDailyRefreshItem(baseDir: string): DoctorSummaryItem {
       status: "WARN",
       message: "결과 파일이 없습니다. 아직 실행하지 않았을 수 있습니다.",
       action: { label: "재실행", command: "pnpm daily:refresh" },
-      fixId: "DAILY_REFRESH",
     };
   }
   if (parsed.error) {
@@ -133,7 +132,6 @@ function buildDailyRefreshItem(baseDir: string): DoctorSummaryItem {
       status: "FAIL",
       message: `JSON 파싱 실패: ${parsed.error}`,
       action: { label: "재실행", command: "pnpm daily:refresh" },
-      fixId: "DAILY_REFRESH",
     };
   }
   if (!isRecord(parsed.data) || !Array.isArray(parsed.data.steps)) {
@@ -144,7 +142,6 @@ function buildDailyRefreshItem(baseDir: string): DoctorSummaryItem {
       status: "FAIL",
       message: "steps 배열이 없어 상태를 판정할 수 없습니다.",
       action: { label: "재실행", command: "pnpm daily:refresh" },
-      fixId: "DAILY_REFRESH",
     };
   }
   const steps = parsed.data.steps as Array<Record<string, unknown>>;
@@ -159,7 +156,6 @@ function buildDailyRefreshItem(baseDir: string): DoctorSummaryItem {
       status: "FAIL",
       message: `실패 단계가 있습니다. 마지막 단계: ${lastName}`,
       action: { label: "재실행", command: "pnpm daily:refresh" },
-      fixId: "DAILY_REFRESH",
     };
   }
   if (steps.length < 1) {
@@ -170,7 +166,6 @@ function buildDailyRefreshItem(baseDir: string): DoctorSummaryItem {
       status: "WARN",
       message: "steps가 비어 있습니다.",
       action: { label: "재실행", command: "pnpm daily:refresh" },
-      fixId: "DAILY_REFRESH",
     };
   }
   return {
@@ -180,7 +175,6 @@ function buildDailyRefreshItem(baseDir: string): DoctorSummaryItem {
     status: "OK",
     message: `최근 실행 정상 (마지막 단계: ${String(last?.name ?? "-")})`,
     action: { label: "재실행", command: "pnpm daily:refresh" },
-    fixId: "DAILY_REFRESH",
   };
 }
 

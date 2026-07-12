@@ -159,6 +159,24 @@ describe.sequential("ops actions run route", () => {
     expect(payload.error?.code).toBe("NOT_IMPLEMENTED");
   });
 
+  it.each(["GOV24_SYNC_IF_STALE", "DAILY_REFRESH"])(
+    "does not execute %s through the Ops action route",
+    async (actionId) => {
+      const response = await actionRunPOST(new Request(`${LOCAL_ORIGIN}/api/ops/actions/run`, {
+        method: "POST",
+        headers: localHeaders(),
+        body: JSON.stringify({
+          csrf: "csrf-token",
+          actionId,
+        }),
+      }));
+
+      const payload = await response.json() as { error?: { code?: string } };
+      expect(response.status).toBe(501);
+      expect(payload.error?.code).toBe("NOT_IMPLEMENTED");
+    },
+  );
+
   it("preview returns redacted metadata and run logs audit/metrics/action-log", async () => {
     const previewRes = await actionPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/actions/preview`, {
       method: "POST",

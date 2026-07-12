@@ -158,8 +158,8 @@ lint 경고는 `pnpm lint` 출력에서 확인 가능 (`pnpm exec eslint .` 또�
 갱신은 수동으로 `pnpm live:smoke` 또는 `pnpm live:sync`를 실행한 뒤 배너의 `재확인`으로 상태를 다시 조회하세요.
 `/products/deposit`에서는 FINLIFE는 required, KDB는 optional(참고)로 표시되며 `?strict=1` 또는 `?freshness=strict`로 optional도 required 판정을 강제할 수 있습니다.
 INFO(옵션 소스 stale)는 `/products/deposit`, `/recommend`에서 compact로 축약 표시되어 노이즈를 줄입니다.
-`/api/sync/smoke`는 개발/로컬 환경 전용이며 Origin/Host 검증을 통과한 요청만 실행됩니다.
-포트포워딩/프록시 환경에서 403이면 `x-forwarded-host` 전달 설정을 확인하고, Origin 없는 요청은 필요 시 `ALLOW_LOCAL_SYNC=1`에서만 허용됩니다.
+`/api/sync/smoke`는 HTTP에서 process를 실행하지 않습니다. development/test에서는 `403 OPERATOR_COMMAND_REQUIRED`, production에서는 `404 NOT_FOUND`를 반환하며 `ALLOW_LOCAL_SYNC`로 열리지 않습니다.
+갱신은 저장소에 접근할 수 있는 로컬 운영 터미널에서 `pnpm live:smoke` 또는 `pnpm live:sync`를 실행한 뒤 화면의 `Refresh`/`재확인`으로 다시 조회하세요.
 
 Report includes:
 

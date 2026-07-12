@@ -126,6 +126,7 @@ async function warmExchangeSnapshot() {
 
 async function main() {
   const offline = process.argv.includes("--offline");
+  const exchangeOnly = process.argv.includes("--exchange-only");
 
   const finlifeDepositPath = path.join(DATA_DIR, "finlife_deposit_snapshot.json");
   const finlifeSavingPath = path.join(DATA_DIR, "finlife_saving_snapshot.json");
@@ -141,16 +142,20 @@ async function main() {
 
   let ok = true;
 
-  if (finlifeStale) {
-    ok = runStep("finlife", ["finlife:sync:if-stale"]) && ok;
+  if (exchangeOnly) {
+    console.log("[warm] finlife and gov24/benefits: covered by canonical daily steps, skip");
   } else {
-    console.log("[warm] finlife: fresh, skip");
-  }
+    if (finlifeStale) {
+      ok = runStep("finlife", ["finlife:sync:if-stale"]) && ok;
+    } else {
+      console.log("[warm] finlife: fresh, skip");
+    }
 
-  if (gov24Stale || benefitsStale) {
-    ok = runStep("gov24/benefits", ["gov24:sync:if-stale"]) && ok;
-  } else {
-    console.log("[warm] gov24/benefits: fresh, skip");
+    if (gov24Stale || benefitsStale) {
+      ok = runStep("gov24/benefits", ["gov24:sync:if-stale"]) && ok;
+    } else {
+      console.log("[warm] gov24/benefits: fresh, skip");
+    }
   }
 
   if (exchangeStale) {

@@ -154,11 +154,12 @@ export async function POST(request: Request) {
     meta: {
       generatedAt: snap.snapshot.meta.generatedAt,
       snapshotTotal: snap.snapshot.meta.totalItemsInSnapshot,
+      ...(snap.isStale ? { message: BENEFITS_FLOW_COPY.snapshotStale } : {}),
       residenceFilter: { before: snap.snapshot.items.length, after: residenceItems.length },
       fallback: {
         mode: "CACHE",
         sourceKey: "gov24",
-        reason: "snapshot_read",
+        reason: snap.isStale ? "snapshot_stale" : "snapshot_read",
         generatedAt: snap.snapshot.meta.generatedAt,
       },
     },
