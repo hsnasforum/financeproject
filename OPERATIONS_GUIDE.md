@@ -87,8 +87,13 @@ Also avoid:
 ```bash
 pnpm v3:doctor
 ```
-- Validates local `.data` files against schemas.
-- Reports counts, warnings, and errors.
+- Resolves the same 17-owner registry used by owner archive/restore, including `PLANNING_DATA_DIR`, packaged vault, namespace, and runtime-shared paths.
+- Reports one deterministic summary per owner and fails closed on contract drift, symlink/special files, hard-link aliases, unknown schema paths, malformed JSON/NDJSON, semantic schema mismatch, and size limits without creating or rewriting data.
+- Directory enumeration stops at the entry budget and file reads are bounded to the pre-open size plus a one-byte growth probe.
+- A live owner with no files is valid when `emptyAllowed=true`; archive manifest completeness remains a separate strict check.
+- Runtime-key encrypted stable payloads cannot be authenticated by the standalone CLI, so they are reported as `OWNER_DOCTOR_ENCRYPTED_PAYLOAD_UNVERIFIED`, not as corruption or success.
+- Namespace mode requires an explicit user identity. Run the command separately for each user namespace; only runtime-shared owners are common.
+- The top-level report fields remain stable, but summaries now use the 17 owner IDs rather than the previous partial check names. Support bundles and post-migration doctor output therefore have new diagnostic semantics without changing stored data.
 
 ## 5.2 Trim (manual retention)
 Preview only:
@@ -140,7 +145,8 @@ pnpm v3:restore -- --format=owner --passphrase-file=/secure/finance-owner-passph
 - This command decrypts and validates the manifest, exact ZIP entry set, checksums, namespace, and limits without writing restored data.
 - Linux fixtures are covered. Native Windows owner export/passphrase-file input fails closed with `OWNER_ARCHIVE_WINDOWS_ACL_UNVERIFIED` until junction/reparse-point, ACL, rename, and open-handle behavior are verified.
 - A same-volume staged transaction and durable rollback journal now exist only as an internal `os.tmpdir()` fixture engine. There is no operator command or HTTP API for it, and it must not be invoked against copied or live user data.
-- Restore apply remains blocked until owner-specific schema validation, registry-wide doctor coverage, offline single-writer enforcement, and native Windows rename/locking tests are complete.
+- The legacy whole-`.data` rename/write apply implementation has been removed. Both legacy and owner `--apply` remain blocked before archive or passphrase reads.
+- Registry-wide read-only doctor coverage does not activate restore. Apply remains blocked until semantic validation is wired into the restore plan, offline single-writer enforcement and orphan-lock policy exist, runtime-shared scope is approved, and native Windows rename/locking tests are complete.
 
 ## 5.5 Migrate (manual only)
 Preview migration:

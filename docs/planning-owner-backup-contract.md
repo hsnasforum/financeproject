@@ -5,6 +5,7 @@
 - 기준 Issue: [#229](https://github.com/hsnasforum/financeproject/issues/229)
 - 선행 안전 차단: [#228](https://github.com/hsnasforum/financeproject/issues/228)
 - `v3:restore --apply`는 owner archive, staging, rollback, doctor 통합이 모두 검증될 때까지 `V3_RESTORE_APPLY_DISABLED`로 차단합니다.
+- legacy restore의 전체 `.data` rename/write/rollback 구현은 제거했습니다. 미래 owner apply 활성화가 legacy destructive apply를 우연히 다시 열 수 없습니다.
 - 기존 `v3:export`와 `v3:restore` 기본 형식은 유지합니다. PR-B는 명시적인 `--format=owner`에서만 암호화 writer와 read-only preview를 추가하며 운영 기본값으로 승격하지 않습니다.
 - owner writer는 fixture·실험 검증용입니다. `--ack-quiesced`는 실제 writer lock이나 애플리케이션 drain을 수행하지 않으므로 운영 데이터의 일관된 snapshot을 보장하지 않습니다.
 
@@ -148,6 +149,7 @@ owner archive는 평문 ZIP을 파일에 쓰지 않고 다음 strict JSON envelo
 - ZIP writer는 UTF-8 filename flag와 ZIP32 hard limit를 사용합니다. strict reader는 archive·compressed·uncompressed 한도, canonical path, encrypted/directory/non-regular entry를 검증합니다.
 - preview는 manifest 외 ZIP payload exact-set, entry size, SHA-256, owner checksum, namespace를 모두 확인합니다. 누락·추가·변조·user A/B 불일치에서 활성 데이터나 대상 namespace를 생성하지 않습니다.
 - preview는 read-only이며 apply 경로로 fallback하지 않습니다. owner archive도 legacy archive로 fallback하지 않습니다.
+- encrypt·decrypt·ZIP decode는 초기 limit/secret/random/KDF 실패, 성공, 인증 실패, malformed archive, callback 실패에서 소유한 plaintext와 파생 키 buffer를 zeroize합니다. caller가 제공한 ZIP/secret buffer와 성공 반환 buffer는 변경하지 않고 caller 생명주기로 넘깁니다.
 
 ## 실험용 CLI
 
@@ -175,26 +177,42 @@ PR-C는 검증된 owner archive payload를 callback 범위에서만 전달하고
 - commit은 journal intent를 먼저 기록한 뒤 `active -> backup`, `stage -> active`, parent directory `fsync` 순서로 진행합니다. file target은 hard-link no-clobber로 게시하고 directory target은 같은 volume의 rename으로 교체합니다. backup은 게시 직후와 committed 정리 전에 original checksum을 다시 검증합니다.
 - 일반 실패는 전체 location을 역순 rollback합니다. destructive rollback 전에 현재 target이 durable desired state인지, backup이 original checksum인지 먼저 확인하며 둘 중 하나라도 모호하면 target을 지우지 않고 evidence를 보존합니다.
 - process crash를 모사한 실패는 journal·lock·stage·backup을 보존합니다. pending recovery는 현재 registry에서 target을 다시 계산해 journal과 정확히 일치할 때만 rollback하거나, durable `committed` 상태라면 desired checksum을 확인한 뒤 evidence만 정리합니다.
-- journal 없이 lock만 남은 상태는 commit 전 crash와 journal 유실 뒤 partial commit을 구분할 수 없으므로 자동 삭제하지 않고 `OWNER_RESTORE_JOURNAL_MISSING_WITH_LOCK`로 fail-closed합니다. evidence 판정과 orphan 정리는 PR-D doctor·운영 절차가 필요합니다.
+- journal 없이 lock만 남은 상태는 commit 전 crash와 journal 유실 뒤 partial commit을 구분할 수 없으므로 자동 삭제하지 않고 `OWNER_RESTORE_JOURNAL_MISSING_WITH_LOCK`로 fail-closed합니다. evidence 판정과 orphan 정리는 별도 recovery doctor·운영 절차가 필요하며 PR-D의 read-only owner doctor 범위에는 포함하지 않습니다.
 - rollback이 실패하면 `OWNER_RESTORE_ROLLBACK_INCOMPLETE`로 종료하고 journal과 backup evidence를 보존합니다. 동일 journal의 recovery를 다시 실행해 original checksum으로 수렴할 수 있습니다.
 - manifest v1은 physical location의 missing과 empty directory를 구분하지 않습니다. PR-C의 고정 규칙은 directory location은 payload가 0개여도 빈 directory로 게시하고, file location은 대응 payload가 없으면 target file을 absent로 게시하는 것입니다. archive format v1 자체는 바꾸지 않습니다.
 - native Windows, fixture boundary 밖 target, transaction root가 fixture root의 직접 자식이 아닌 경우는 fail-closed입니다. actual apply를 활성화할 수 있는 production API는 제공하지 않습니다.
 
 fixture 검증은 accounts, batches, drafts, stable profiles/runs, news, shared indicators, unrelated data, explicit `PLANNING_DATA_DIR`, packaged XDG root, user A/B mismatch, cross-device 주입, mid-commit failure, crash recovery, rollback-incomplete, target/backup 동시 변경, no-clobber 게시, journal target·anchor 변조를 포함합니다. 실제 사용자 데이터나 `--apply` 경로는 호출하지 않습니다.
 
+## Registry 기반 read-only doctor
+
+`pnpm v3:doctor`는 archive/restore와 동일한 runtime context와 17-owner registry를 사용합니다. 기존 `cwd/.data` 고정 검사 목록은 사용하지 않습니다.
+
+- summary owner ID는 `PLANNING_DATA_OWNER_IDS`와 exact-set이며 신규 owner에 validator가 없으면 typecheck 또는 `OWNER_DOCTOR_SCHEMA_VALIDATOR_MISSING`으로 실패합니다.
+- supplied owner contract는 canonical owner의 ID, schema version, logical path, namespace, physical location과 파일을 읽기 전에 비교합니다. user A/B mismatch나 target 재지정에서 untrusted path를 열지 않습니다.
+- walker는 `lstat`, `realpath`, POSIX `O_NOFOLLOW`, open-handle `fstat`, bounded `opendir`, exact-size read와 one-byte growth probe를 사용합니다. symlink, special file, owner 밖 hard-link를 포함한 source alias, realpath escape, 읽기 중 identity 변경, entry·file·total byte limit 초과를 typed error로 보고합니다.
+- stable profile/run·registry/index/action contract, v3 draft와 세 override 저장 계약을 포함해 각 owner의 known JSON/NDJSON/UTF-8 path를 validator에 연결합니다. 실제 writer 계약이 record 수준인 blob/search-index만 그 수준으로 검사하고, 그 밖의 unknown path는 `OWNER_DOCTOR_SCHEMA_VALIDATOR_MISSING`으로 실패합니다.
+- active filesystem의 missing location과 empty location은 따로 집계합니다. 현재 모든 owner는 `emptyAllowed=true`이므로 fresh install의 빈 owner는 오류나 경고가 아닙니다. `requiredInManifest`는 archive record completeness에만 적용합니다.
+- standalone CLI는 web process의 in-memory vault key를 공유하지 않습니다. 구조상 정상인 runtime-key encrypted stable payload는 corruption이 아니라 `OWNER_DOCTOR_ENCRYPTED_PAYLOAD_UNVERIFIED` error로 분리하며, malformed encryption marker는 `OWNER_DOCTOR_ENCRYPTED_PAYLOAD_INVALID`입니다.
+- doctor는 raw bytes와 pure schema만 사용합니다. read 과정에서 migration·normalization write를 수행할 수 있는 store API, 자동 repair, journal/lock 삭제, restore/rollback을 호출하지 않습니다.
+
+doctor 성공은 현재 owner 파일의 read-only 진단 근거이지 production apply 승인 신호가 아닙니다. semantic validator를 strict archive plan과 transaction 전에 연결하는 orchestration, 실제 writer drain, cross-process 실행 소유권, orphan evidence 운영 정책, native Windows 검증이 별도로 필요합니다.
+
+`v3:doctor` summary key는 기존 partial check 이름에서 17 owner ID로 바뀝니다. public HTTP 응답과 stored/migration format은 바뀌지 않지만 support bundle의 doctor section과 migration post-check 결과 의미는 달라집니다. directory scan은 read-only best-effort 진단이며, native Windows reparse/ACL 검증과 동일 권한 공격자의 directory swap-back 경쟁까지 authoritative snapshot으로 증명하지 않습니다.
+
 ## 영향 계약
 
 - public HTTP API·응답 shape: 변경 없음
 - stored data: archive format v1과 owner 파일 schema는 변경하지 않습니다. fixture transaction 실행 중에만 별도 owner-external journal, lock, stage, backup artifact가 생기며 정상 commit/rollback 뒤 정리됩니다.
 - DB query·cache·revalidation: 변경 없음
-- migration: 변경 없음. legacy ZIP이나 runtime-key encrypted stable payload를 변환하지 않습니다.
+- migration: stored format 변경 없음. legacy ZIP이나 runtime-key encrypted stable payload를 변환하지 않지만 migration post-check의 doctor 판정 범위는 17 owner로 확대됩니다.
 
 ## 구현 순서와 중단 조건
 
 1. registry·manifest 계약 — PR-A 완료
 2. 암호화된 archive writer와 strict preview reader — PR-B 구현, fixture·실험 단계
 3. target과 같은 volume의 staging 및 durable journal rollback — PR-C fixture engine 구현, production 비연결
-4. registry 기반 doctor와 제한적 apply 활성화
+4. registry 기반 read-only doctor와 legacy destructive apply 제거 — PR-D 구현. 제한적 apply는 활성화하지 않음
 
 stable profile/run 개인정보가 추가되므로 평문 `v3:export`를 그대로 확장하지 않습니다. portable encrypted backup과 동일 runtime key 전용 disaster-recovery snapshot 중 제품·보안 정책이 정해지기 전에는 writer를 운영 기본값으로 만들지 않습니다.
 
@@ -204,7 +222,7 @@ Linux symlink alias·escape fixture는 PR-B에서 고정했습니다. 실제 Win
 
 - exact namespace와 owner completeness 검증
 - 모든 file·owner checksum 검증
-- owner별 schema validator
+- owner별 schema validator의 strict archive/restore plan 연결
 - same-volume staging과 pending journal recovery
 - injected failure 뒤 활성 데이터 checksum 불변
 - rollback incomplete 시 evidence 보존

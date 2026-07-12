@@ -170,6 +170,18 @@ describe("planning v3 restore cli", () => {
     }
   });
 
+  it("does not retain a legacy whole-data-root apply implementation behind the guard", () => {
+    const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
+    const source = fs.readFileSync(
+      path.join(repositoryRoot, "src/lib/planning/v3/ops/restore.ts"),
+      "utf-8",
+    );
+
+    expect(source).not.toContain("fs.renameSync(dataDir");
+    expect(source).not.toContain("RESTORE_FAILED:");
+    expect(source).not.toContain(".data.bak-");
+  });
+
   it("returns a stable non-zero CLI error without mutating the temporary data roots", () => {
     const root = createRoot();
     const existingDataPath = path.join(root, ".data/news/items/old.json");

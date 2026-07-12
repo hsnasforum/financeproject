@@ -160,7 +160,7 @@ function deriveKey(secret: Buffer, salt: Buffer): Promise<Buffer> {
         reject(new PlanningOwnerArchiveError("OWNER_ARCHIVE_KDF_FAILED"));
         return;
       }
-      resolve(Buffer.from(derivedKey));
+      resolve(derivedKey);
     });
   });
 }
@@ -212,14 +212,17 @@ export async function encryptPlanningOwnerArchiveBytes(input: {
 }): Promise<Buffer> {
   const limits = validateLimits(input.limits ?? DEFAULT_PLANNING_OWNER_ARCHIVE_LIMITS);
   const zipBytes = Buffer.from(input.zipBytes);
-  if (zipBytes.length < 1 || zipBytes.length > limits.maxZipBytes) {
-    throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ZIP_SIZE_LIMIT_EXCEEDED");
-  }
-  const secret = copySecret(input.secret);
-  const salt = crypto.randomBytes(16);
-  const iv = crypto.randomBytes(12);
+  let secret: Buffer | undefined;
+  let salt: Buffer | undefined;
+  let iv: Buffer | undefined;
   let key: Buffer | undefined;
   try {
+    if (zipBytes.length < 1 || zipBytes.length > limits.maxZipBytes) {
+      throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ZIP_SIZE_LIMIT_EXCEEDED");
+    }
+    secret = copySecret(input.secret);
+    salt = crypto.randomBytes(16);
+    iv = crypto.randomBytes(12);
     key = await deriveKey(secret, salt);
     const saltBase64 = salt.toString("base64");
     const ivBase64 = iv.toString("base64");
@@ -240,7 +243,9 @@ export async function encryptPlanningOwnerArchiveBytes(input: {
     }
     return serialized;
   } finally {
-    secret.fill(0);
+    secret?.fill(0);
+    salt?.fill(0);
+    iv?.fill(0);
     key?.fill(0);
     zipBytes.fill(0);
   }
@@ -269,15 +274,22 @@ export async function decryptPlanningOwnerArchiveBytes(input: {
   const ciphertext = canonicalBase64(envelope.aead.ciphertext, undefined, limits.maxZipBytes);
   const secret = copySecret(input.secret);
   let key: Buffer | undefined;
+  let updatedBytes: Buffer | undefined;
+  let finalBytes: Buffer | undefined;
+  let zipBytes: Buffer | undefined;
+  let succeeded = false;
   try {
     key = await deriveKey(secret, salt);
     const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
     decipher.setAAD(aadBytes({ salt: envelope.salt, iv: envelope.aead.iv }));
     decipher.setAuthTag(tag);
-    const zipBytes = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    updatedBytes = decipher.update(ciphertext);
+    finalBytes = decipher.final();
+    zipBytes = Buffer.concat([updatedBytes, finalBytes]);
     if (zipBytes.length < 1 || zipBytes.length > limits.maxZipBytes) {
       throw new PlanningOwnerArchiveError("OWNER_ARCHIVE_ZIP_SIZE_LIMIT_EXCEEDED");
     }
+    succeeded = true;
     return zipBytes;
   } catch (error) {
     if (error instanceof PlanningOwnerArchiveError || error instanceof PlanningOwnerContractError) throw error;
@@ -285,6 +297,9 @@ export async function decryptPlanningOwnerArchiveBytes(input: {
   } finally {
     secret.fill(0);
     key?.fill(0);
+    updatedBytes?.fill(0);
+    finalBytes?.fill(0);
+    if (!succeeded) zipBytes?.fill(0);
   }
 }
 
