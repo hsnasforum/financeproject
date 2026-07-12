@@ -4,8 +4,8 @@ import {
   buildWorkspaceQuickStartVm,
   isWorkspaceQuickStartProfileDone,
   resolveWorkspaceSelectedProfileSyncState,
-} from "../../../src/app/planning/_lib/workspaceQuickStart";
-import { toProfileJson, type ProfileFormModel } from "../../../src/app/planning/_lib/profileFormModel";
+} from "../../../src/lib/planning/ui/workspaceQuickStart";
+import { toProfileJson, type ProfileFormModel } from "../../../src/lib/planning/ui/profileFormModel";
 
 function profileFixture(overrides?: Partial<ProfileFormModel>): ProfileFormModel {
   return {

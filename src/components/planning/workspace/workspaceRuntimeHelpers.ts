@@ -1,5 +1,5 @@
-import { type SnapshotSelection } from "@/app/planning/_lib/snapshotSelection";
-import { resolveWorkspaceSnapshotSelectionFallback } from "@/app/planning/_lib/workspaceSnapshotSelection";
+import { type SnapshotSelection } from "@/lib/planning/ui/snapshotSelection";
+import { resolveWorkspaceSnapshotSelectionFallback } from "@/lib/planning/ui/workspaceSnapshotSelection";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import {
   parsePlanningRunHorizonMonthsText,

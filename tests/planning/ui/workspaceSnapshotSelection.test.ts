@@ -8,7 +8,7 @@ import {
   resolveWorkspaceSelectedSnapshotItem,
   resolveWorkspaceSnapshotSelectionFallback,
   sortWorkspaceSnapshotHistory,
-} from "../../../src/app/planning/_lib/workspaceSnapshotSelection";
+} from "../../../src/lib/planning/ui/workspaceSnapshotSelection";
 
 describe("workspaceSnapshotSelection", () => {
   it("parses snapshot list item with trimmed strings and numeric fields", () => {

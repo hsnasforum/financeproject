@@ -10,12 +10,12 @@ import {
   type PlanningQuickRuleStatus,
   type PlanningQuickStartPreview,
   type PlanningQuickStartDraft,
-} from "@/app/planning/_lib/planningQuickStart";
-import { type PlanningWizardOutput } from "@/app/planning/_lib/planningOnboardingWizard";
+} from "@/lib/planning/ui/planningQuickStart";
+import { type PlanningWizardOutput } from "@/lib/planning/ui/planningOnboardingWizard";
 import {
   focusWorkspaceQuickStartTarget,
   type WorkspaceSelectedProfileSyncState,
-} from "@/app/planning/_lib/workspaceQuickStart";
+} from "@/lib/planning/ui/workspaceQuickStart";
 
 type PlanningQuickStartGateProps = {
   disabled?: boolean;

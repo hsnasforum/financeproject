@@ -1,4 +1,4 @@
-import { type StepId } from "@/app/planning/_lib/runPipeline";
+import { type StepId } from "@/lib/planning/ui/runPipeline";
 import { formatDate } from "@/lib/planning/i18n/format";
 import { type Locale } from "@/lib/planning/i18n";
 

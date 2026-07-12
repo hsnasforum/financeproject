@@ -6,14 +6,14 @@ import {
   parseAssumptionsEditorJson,
   splitAssumptionsRecord,
   type AssumptionsFormModel,
-} from "@/app/planning/_lib/workspaceAssumptionsEditor";
+} from "@/lib/planning/ui/workspaceAssumptionsEditor";
 import {
   debtOfferRowsToPayload,
   parseDebtOffersEditorJson,
   parseDebtOffersFormRows,
   type DebtOfferFormRow,
-} from "@/app/planning/_lib/workspaceDebtOffersEditor";
-import { defaults as planningExecutionDefaults } from "@/app/planning/_lib/workspaceUiState";
+} from "@/lib/planning/ui/workspaceDebtOffersEditor";
+import { defaults as planningExecutionDefaults } from "@/lib/planning/ui/workspaceUiState";
 import { type PlanningFeatureFlags } from "@/lib/planning/config";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import {

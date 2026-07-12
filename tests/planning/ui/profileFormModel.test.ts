@@ -17,7 +17,7 @@ import {
   validateDebtOfferLiabilityIds,
   validateProfile,
   validateProfileForm,
-} from "../../../src/app/planning/_lib/profileFormModel";
+} from "../../../src/lib/planning/ui/profileFormModel";
 
 describe("planning profileFormModel", () => {
   it("supports profile json -> form -> profile roundtrip for core fields", () => {

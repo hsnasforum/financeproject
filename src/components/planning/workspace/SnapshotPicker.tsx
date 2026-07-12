@@ -8,16 +8,16 @@ import {
   formatSnapshotLabel,
   getSnapshotFreshness,
   SNAPSHOT_STALE_CAUTION_DAYS,
-} from "../_lib/formatSnapshotLabel";
-import { copySnapshotIdToClipboard } from "../_lib/snapshotClipboard";
+} from "@/lib/planning/ui/formatSnapshotLabel";
+import { copySnapshotIdToClipboard } from "@/lib/planning/ui/snapshotClipboard";
 import {
   buildSnapshotPickerSelectValue,
   getSnapshotDetailsToggleLabel,
   parseSnapshotPickerSelectValue,
   resolveSnapshotPickerSelectedItem,
-} from "../_lib/snapshotPickerModel";
-import { type SnapshotSelection } from "../_lib/snapshotSelection";
-import { type SnapshotListItem } from "../_lib/snapshotList";
+} from "@/lib/planning/ui/snapshotPickerModel";
+import { type SnapshotSelection } from "@/lib/planning/ui/snapshotSelection";
+import { type SnapshotListItem } from "@/lib/planning/ui/snapshotListTypes";
 
 type SnapshotPickerProps = {
   items: { latest?: SnapshotListItem; history: SnapshotListItem[] };

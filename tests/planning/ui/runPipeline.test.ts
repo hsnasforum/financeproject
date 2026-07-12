@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeRunPipeline, RunPipelineFatalError, type StepStatus } from "../../../src/app/planning/_lib/runPipeline";
+import { executeRunPipeline, RunPipelineFatalError, type StepStatus } from "../../../src/lib/planning/ui/runPipeline";
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {

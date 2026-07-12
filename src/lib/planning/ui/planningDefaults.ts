@@ -1,4 +1,4 @@
-import { type ProfileV2 } from "../../../lib/planning/v2/types";
+import { type ProfileV2 } from "@/lib/planning/v2/types";
 
 export const PLANNING_DEFAULTS = {
   version: 1,

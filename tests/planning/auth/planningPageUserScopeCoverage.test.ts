@@ -82,6 +82,7 @@ const OPS_USER_SCOPED_IMPORT_MARKERS = [
 const SNAPSHOT_LIST_SHARED_IMPORTS = [
   "../../../lib/planning/assumptions/storage",
   "../../../lib/planning/assumptions/types",
+  "@/lib/planning/ui/snapshotListTypes",
   "node:fs/promises",
   "node:path",
 ] as const;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import SnapshotPicker from "../../../src/app/planning/_components/SnapshotPicker";
-import { type SnapshotListItem } from "../../../src/app/planning/_lib/snapshotList";
+import SnapshotPicker from "../../../src/components/planning/workspace/SnapshotPicker";
+import { type SnapshotListItem } from "../../../src/lib/planning/ui/snapshotListTypes";
 
 describe("SnapshotPicker", () => {
   it("renders unavailable latest guidance and stale risk state for a selected history snapshot", () => {

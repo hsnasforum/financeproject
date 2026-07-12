@@ -7,19 +7,9 @@ import {
   loadLatestAssumptionsSnapshot,
 } from "../../../lib/planning/assumptions/storage";
 import { type AssumptionsSnapshot } from "../../../lib/planning/assumptions/types";
+import { type SnapshotListItem } from "@/lib/planning/ui/snapshotListTypes";
 
-export type SnapshotListItem = {
-  id: string;
-  asOf?: string;
-  fetchedAt?: string;
-  staleDays?: number;
-  korea?: {
-    policyRatePct?: number;
-    cpiYoYPct?: number;
-    newDepositAvgPct?: number;
-  };
-  warningsCount?: number;
-};
+export type { SnapshotListItem } from "@/lib/planning/ui/snapshotListTypes";
 
 type LoadOptions = {
   baseDir?: string;

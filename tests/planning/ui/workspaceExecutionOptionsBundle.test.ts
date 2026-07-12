@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ASSUMPTIONS_FORM_DEFAULT } from "../../../src/app/planning/_lib/workspaceAssumptionsEditor";
+import { ASSUMPTIONS_FORM_DEFAULT } from "../../../src/lib/planning/ui/workspaceAssumptionsEditor";
 import {
   transitionWorkspaceExecutionOptionsForMode,
   type WorkspaceAdvancedExecutionOptions,

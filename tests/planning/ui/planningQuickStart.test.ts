@@ -4,7 +4,7 @@ import {
   buildPlanningQuickStartOutput,
   isPlanningQuickStartReady,
   resolvePlanningQuickRuleStatus,
-} from "../../../src/app/planning/_lib/planningQuickStart";
+} from "../../../src/lib/planning/ui/planningQuickStart";
 
 describe("planningQuickStart", () => {
   it("requires income, fixed expense, and one goal before apply", () => {

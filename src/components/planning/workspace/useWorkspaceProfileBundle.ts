@@ -14,8 +14,8 @@ import {
   type ProfileFormGoal,
   type ProfileJsonEditorState,
   type ProfileFormModel,
-} from "@/app/planning/_lib/profileFormModel";
-import { buildWorkspaceLiveSummary } from "@/app/planning/_lib/workspaceQuickStart";
+} from "@/lib/planning/ui/profileFormModel";
+import { buildWorkspaceLiveSummary } from "@/lib/planning/ui/workspaceQuickStart";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { isApiBaseResponse } from "@/lib/http/apiContract";
