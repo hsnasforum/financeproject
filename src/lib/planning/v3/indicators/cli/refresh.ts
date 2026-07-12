@@ -80,7 +80,7 @@ function monthsAgo(base: Date, monthOffset: number): string {
 }
 
 function quartersAgo(base: Date, quarterOffset: number): string {
-  const month = Math.floor(base.getUTCMonth() / 3) * 3;
+  const month = Math.trunc(base.getUTCMonth() / 3) * 3;
   return new Date(Date.UTC(base.getUTCFullYear(), month - (quarterOffset * 3), 1))
     .toISOString()
     .slice(0, 10);

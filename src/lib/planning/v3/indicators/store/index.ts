@@ -76,7 +76,7 @@ function observationPeriodKey(date: string, frequency: SeriesFrequency | undefin
     if (!quarter) return date;
     const quarterNumber = quarter[2]
       ? Number(quarter[2])
-      : Math.floor((Number(quarter[3]) - 1) / 3) + 1;
+      : Math.trunc((Number(quarter[3]) - 1) / 3) + 1;
     return quarter[1] + "-Q" + String(quarterNumber);
   }
   if (frequency === "Y") return date.slice(0, 4);
