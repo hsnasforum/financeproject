@@ -50,6 +50,7 @@
 - `git diff --check 8267399de0ee14bca002ba620751519359a386a3` — PASS
 - `DATABASE_URL=file:./prisma/dev.db NEXT_BUILD_HEARTBEAT_MS=20000 corepack pnpm build` — PASS, 250개 static page 생성 포함 종료 코드 0
 - `DATABASE_URL=file:./prisma/dev.db corepack pnpm e2e:rc` — PASS, 38 passed / 2 skipped
+- GitHub Actions PR #269 — CI run `29202116426`, E2E run `29202116417` 모두 job step과 log가 생성되기 전에 즉시 실패했습니다. 모든 job이 `steps=null`, `logs_url=null`이라 코드 실패로 판정할 근거가 없으며 기존 runner/billing 외부 차단과 같은 상태입니다.
 
 ## 남은 리스크
 
@@ -64,5 +65,5 @@
 
 ## 다음 라운드 우선순위
 
-- #237 변경을 `codex/236-feedback-boundary` 기준의 스택형 draft PR로 게시하고, Actions 외부 runner/billing 상태를 별도 확인합니다.
+- Draft PR #269는 `codex/236-feedback-boundary` 기준으로 게시됐으며, 외부 runner/billing 차단이 해소되면 원격 CI/E2E를 다시 확인합니다.
 - 1차 PR 세트 뒤 Issue #232/#233의 배포 모드·인증 readiness를 별도 작은 PR로 진행합니다.
