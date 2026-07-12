@@ -24,9 +24,11 @@ function parsePortFromBaseUrl(value: string): number | null {
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : parsePortFromBaseUrl(configuredBaseUrl) ?? 3126;
 const baseURL = explicitBaseUrl || `http://127.0.0.1:${PORT}`;
+const disablePlanningE2EAuthHeader = (process.env.PLANNING_E2E_DISABLE_AUTH_HEADER ?? "").trim() === "1";
 const planningE2EUserId = (
-  process.env.PLANNING_E2E_USER_ID
-  || (externalBaseUrl ? "" : "playwright-local")
+  disablePlanningE2EAuthHeader
+    ? ""
+    : (process.env.PLANNING_E2E_USER_ID || (externalBaseUrl ? "" : "playwright-local"))
 ).trim();
 const webServerMode = (process.env.E2E_WEB_SERVER_MODE || "development").trim().toLowerCase();
 const resolvedWebServerMode = webServerMode === "production" ? "production" : "development";

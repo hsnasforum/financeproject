@@ -265,6 +265,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const [baselineRunId, setBaselineRunId] = useState(initialBaselineRunId);
   const [loading, setLoading] = useState((props.initialRuns?.length ?? 0) < 1);
   const [error, setError] = useState("");
+  const [loadFailureKind, setLoadFailureKind] = useState<"generic" | "auth-required">("generic");
   const [candidatePayload, setCandidatePayload] = useState<CandidateRecommendationsPayload | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
   const [candidateError, setCandidateError] = useState("");
@@ -615,6 +616,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     async function loadRuns(): Promise<void> {
       setLoading(true);
       setError("");
+      setLoadFailureKind("generic");
       try {
         const params = new URLSearchParams();
         params.set("limit", String(DEFAULT_REPORT_RUN_SCOPE_LIMIT));
@@ -625,6 +627,16 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         });
         const rawPayload = await response.json().catch(() => null);
         const payload = parsePlanningV2Response<PlanningRunRecord[]>(rawPayload);
+        if (!active || controller.signal.aborted) return;
+        if (response.status === 401) {
+          setRuns([]);
+          setSelectedRunId("");
+          setBaselineRunId("");
+          setCompareMode(false);
+          setLoadFailureKind("auth-required");
+          setError("로그인 상태를 확인한 뒤 다시 시도해주세요.");
+          return;
+        }
         const requestedRun = initialPreferredRun ?? await loadRequestedRunFallback(preferredRunId);
         if (!active || controller.signal.aborted) return;
         if (!payload.ok || !response.ok || !Array.isArray(payload.data)) {
@@ -791,7 +803,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       {loading ? (
         <LoadingState description="실행 기록을 불러오는 중입니다." />
       ) : error ? (
-        <ErrorState message={error} onRetry={() => window.location.reload()} />
+        <ErrorState kind={loadFailureKind} message={error} onRetry={() => window.location.reload()} />
       ) : runs.length < 1 ? (
         <div className="space-y-6">
           <EmptyState
