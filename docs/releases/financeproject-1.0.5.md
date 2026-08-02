@@ -33,6 +33,15 @@
 
 이 표의 `v1.1.0`~`v1.4.0`은 이미 게시된 태그가 아니라 회고용 구간명입니다. 해당 버전의 실제 릴리즈는 `v1.0.5` 이후 새 변경분을 기준으로 순차 작성합니다.
 
+### 단계별 회고 노트
+
+아래 문서는 실제 태그·GitHub Release가 아니라, `v1.0.5`에 이미 포함된 변경을 검토하기 위한 상세 구간 노트입니다.
+
+- [`v1.1.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.1.0.md)
+- [`v1.2.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.2.0.md)
+- [`v1.3.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.3.0.md)
+- [`v1.4.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.4.0.md)
+
 ## 보안·개인정보
 
 - 사용자별 저장 namespace, route auth coverage와 fail-closed production 설정을 확대했습니다.
