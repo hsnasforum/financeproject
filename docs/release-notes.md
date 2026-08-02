@@ -1,6 +1,16 @@
 # Release Notes
 
 ## Published releases (latest first)
+### 2026-08-02 (v1.2.0)
+
+### 릴리즈 성격
+- 공식 회고 공개 릴리즈이며 신규 제품 기능은 없습니다.
+- 실제 `v1.1.0...v1.2.0`에는 버전·릴리즈 메타데이터 변경만 포함됩니다.
+- `3de12780..e82f57ea`의 86개 커밋은 신규 배포가 아니라 `v1.0.5`에 이미 포함된 역사 기능 범위입니다.
+- 첨부 자산은 역사 구간 끝 SHA의 과거 빌드가 아니라 `v1.2.0` 태그 커밋에서 다시 빌드한 결과입니다.
+
+상세 내용: [financeproject-1.2.0.md](./releases/financeproject-1.2.0.md)
+
 ### 2026-08-02 (v1.1.0)
 
 ### 릴리즈 성격
@@ -22,7 +32,7 @@
 |---|---:|---|---|
 | 초기 연결 구간 | 2026-03-17 | Planning→추천 연결, 데이터 기준 시점·신뢰 안내 | [공식 v1.0.5 누적 노트](./releases/financeproject-1.0.5.md) |
 | `v1.1.0` 계획 참고 | 2026-06-15 | Planning v3 계약, UI 책임 분리, CSP·검증 게이트 | [보존용 회고 노트](./releases/retrospectives/financeproject-1.1.0.md) |
-| `v1.2.0` 계획 참고 | 2026-06-23 | 사용자별 인증·저장 격리, 서비스 경계, PostgreSQL 준비 | [financeproject-1.2.0.md](./releases/financeproject-1.2.0.md) |
+| `v1.2.0` 계획 참고 | 2026-06-23 | 사용자별 인증·저장 격리, 서비스 경계, PostgreSQL 준비 | [보존용 회고 노트](./releases/retrospectives/financeproject-1.2.0.md) |
 | `v1.3.0` 계획 참고 | 2026-07-10 | run·migration 경계, 저장소 원자성, FINLIFE 영속화 | [financeproject-1.3.0.md](./releases/financeproject-1.3.0.md) |
 | `v1.4.0` 계획 참고 | 2026-07-12 | 백업·복원 안전성, 접근성, route·release provenance | [financeproject-1.4.0.md](./releases/financeproject-1.4.0.md) |
 

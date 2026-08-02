@@ -38,7 +38,7 @@
 아래 문서는 `v1.0.5`에 이미 포함된 변경을 검토하기 위한 보존용 회고 구간 노트입니다.
 
 - [`v1.1.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.1.0/docs/releases/retrospectives/financeproject-1.1.0.md)
-- [`v1.2.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.2.0.md)
+- [`v1.2.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.2.0/docs/releases/retrospectives/financeproject-1.2.0.md)
 - [`v1.3.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.3.0.md)
 - [`v1.4.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.4.0.md)
 
