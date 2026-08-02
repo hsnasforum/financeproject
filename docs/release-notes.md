@@ -1,7 +1,7 @@
 # Release Notes
 
 ## Latest
-### 2026-07-16 (v1.0.5)
+### 2026-08-02 (v1.0.5)
 
 ### 릴리즈 범위
 - `v1.0.4` 이후 `main`에 누적된 400개 변경 커밋과 이번 릴리즈 준비 변경을 하나의 누적 릴리즈로 제공합니다.
@@ -28,6 +28,7 @@
 - Planning v2·v3, 뉴스, 제품 후보와 운영 경로에 사용자별 namespace와 route auth 검증을 확대했습니다.
 - 백업·복원에는 manifest, checksum, 암호화 archive와 transaction 경계를 적용했습니다.
 - migration·backfill·release evidence에는 사용자 금융 원문 대신 안전한 분류 결과와 메타 정보만 사용합니다.
+- Auth.js, Next.js, Prisma와 관련 전이 의존성을 공개 보안 권고의 수정 버전으로 갱신하고 lockfile 전체 감사를 다시 통과하도록 했습니다.
 
 ### 알려진 제한
 - Planning v3 owner restore의 `--apply`는 운영 안전 계약이 확정될 때까지 비활성입니다.

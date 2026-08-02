@@ -1,7 +1,7 @@
 # Finance Project Release Notes (1.0.5)
 
 - Version: `1.0.5`
-- Release date: `2026-07-16`
+- Release date: `2026-08-02`
 - Base release: `v1.0.4`
 - 변경 기준: `v1.0.4` 이후 `main`의 400개 변경 커밋과 `v1.0.5` 릴리즈 준비 변경
 - 상태: `공식 누적 릴리즈 문서`
@@ -39,6 +39,8 @@
 - backup·restore에는 owner manifest, checksum, 암호화 archive와 transaction 경계를 적용했습니다.
 - migration·backfill·운영 telemetry에는 사용자 금융 원문을 포함하지 않습니다.
 - 릴리즈 게시 권한은 검증·패키징과 게시 job으로 분리하고 기존 Release 덮어쓰기를 차단합니다.
+- 2026년 7월 이후 공개된 권고 31건에 대응해 Auth.js(`next-auth 5.0.0-beta.32`, `@auth/core 0.41.3`), Next.js(`16.2.12`), Prisma(`7.9.1`)와 관련 전이 의존성을 수정 버전으로 갱신했습니다.
+- 갱신된 lockfile 전체를 npm Bulk Advisory API로 다시 검사해 공개 권고가 남지 않은 상태를 릴리즈 게이트에서 확인합니다.
 
 ## 알려진 제한
 

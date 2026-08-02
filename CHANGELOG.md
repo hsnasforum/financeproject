@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.0.5 - 2026-07-16
+## v1.0.5 - 2026-08-02
 
 ### Added
 - Planning 결과·추천 이력·저장 리포트를 연결하는 실행 맥락과 양방향 이동 경로를 추가했습니다.
@@ -10,6 +10,7 @@
 - Planning v3 데이터·서비스·화면 책임과 run·migration·FINLIFE canonical persistence 경계를 정리했습니다.
 - 모바일 내비게이션, 접근성, 오류 복구, route registry와 release workflow를 fail-closed 기준으로 강화했습니다.
 - dependency audit가 lockfile의 정확한 버전을 npm Bulk Advisory API에서 확인하도록 변경했습니다.
+- 2026년 7월 이후 공개된 보안 권고에 맞춰 Auth.js, Next.js, Prisma와 관련 전이 의존성을 수정 버전으로 갱신했습니다.
 
 ### Fixed
 - 외부 데이터 부분 실패와 freshness가 성공으로 축약되거나 잘못 해석되지 않도록 상태·기준 시점 표시를 보강했습니다.
