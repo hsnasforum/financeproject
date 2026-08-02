@@ -1,5 +1,16 @@
 # 2026-08-02 v1.1.0~v1.4.0 문서화 전용 릴리즈 후보
 
+## 변경 파일
+
+- `CHANGELOG.md`
+- `README.md`
+- `docs/release-notes.md`
+- `docs/releases/financeproject-1.0.5.md`
+- `docs/releases/financeproject-1.4.0.md`
+- `docs/releases/retrospectives/financeproject-1.4.0.md`
+- `package.json`
+- `work/8/2/2026-08-02-release-v1-series-candidates.md`
+
 ## 변경 이유
 
 - `v1.0.5`에 누적 게시된 역사 기능을 신규 기능처럼 중복 게시하지 않으면서 `v1.1.0`부터 `v1.4.0`까지 단계적으로 확인할 수 있는 실제 태그와 GitHub Release를 준비합니다.
@@ -20,7 +31,7 @@
 | `v1.1.0` | `0bccf0817bb82613c22d0bf0f9fac89af94801ec` | `v1.0.5` | `05c3990c..3de12780` 119개 | 신규 기능 없는 문서화 전용 릴리즈 |
 | `v1.2.0` | `236ce42dafb12b49e8aadead0193ae5c64170ae8` | `v1.1.0` | `3de12780..e82f57ea` 86개 | 신규 기능 없는 문서화 전용 릴리즈 |
 | `v1.3.0` | `5ff45c5da792d5911874d6c98bdb681b1f56c1b7` | `v1.2.0` | `e82f57ea..8c118d58` 83개 | 신규 기능 없는 문서화 전용 릴리즈 |
-| `v1.4.0` | 이 문서를 포함하는 후보 커밋 | `v1.3.0` | `8c118d58..5e15a1ae` 63개 | 신규 기능 없는 문서화 전용 릴리즈 |
+| `v1.4.0` | `e647a0dc94d42b8a0b91f2f53e542a5bb27d810e`와 이 기록 보정 커밋 | `v1.3.0` | `8c118d58..5e15a1ae` 63개 | 신규 기능 없는 문서화 전용 릴리즈 |
 
 ## 이번 라운드 완료 항목
 
@@ -38,15 +49,19 @@
 - `v1.4.0`: 변경 전 `release:prepare -- --bump=minor` PASS(465초), 변경 후 `release:verify` PASS(541.9초), `pnpm build` PASS(243.3초).
 - `v1.4.0` 준비 첫 실행에서 `tests/planning-v3-profiles-api.test.ts` 정렬 테스트 1건이 실패했으나 단독 1회와 별도 반복 20회가 모두 PASS했습니다. 릴리즈 문서 변경과 무관한 wall-clock 동률 가능성으로 분리했습니다.
 - 각 후보에서 `git diff --check`와 버전 표면 7곳을 확인했고 제품 코드·의존성·lockfile 변경이 없음을 확인했습니다.
+- PR #274의 CI·E2E Smoke·build·desktop provenance gate가 PASS했고 merge commit `3969c116aae8a20f7a414adfa98f39b2d13c6545`로 병합했습니다.
+- `v1.1.0`~`v1.3.0` Release workflow와 자산 3종·manifest·공식 본문 검증을 완료했습니다.
+- 첫 `v1.4.0` Release workflow `30741121754`는 이 문서에 `변경 파일` 섹션이 없어 `multi-agent:guard`에서 중단됐으며 Release와 자산은 생성되지 않았습니다.
+- `corepack pnpm multi-agent:guard`: PASS, 최신 work note의 필수 섹션과 tracked 상태를 확인했습니다.
 
 ## 남은 리스크
 
 - `updatedAt` 동률일 때 profile store는 ID 내림차순, API는 ID 오름차순을 사용합니다. 이번 릴리즈 범위 밖의 잠재 일관성 문제이며 별도 후속 수정이 필요합니다.
-- protected `v*` tag/ruleset과 GitHub Actions 가용성은 실제 게시 시점에 다시 확인해야 합니다.
-- 네 후보는 아직 원격 `main`에 병합되거나 태그·GitHub Release로 게시되지 않았습니다.
+- `v1.4.0` 원격 태그는 첫 workflow 실패 커밋을 가리키며, 이 기록 보정 커밋이 `main`에 병합된 뒤 Release가 없는 태그를 교체해야 합니다.
+- 태그 교체와 재실행 전후에 remote tag SHA와 GitHub Release 부재·생성을 각각 확인해야 합니다.
 
 ## 다음 라운드 우선순위
 
-- 브랜치를 push하고 draft PR에서 CI를 확인한 뒤 merge commit 방식으로 병합해 네 후보 SHA를 보존합니다.
-- 각 후보가 원격 `main`의 조상임을 확인한 뒤 `v1.1.0`부터 `v1.4.0`까지 태그를 하나씩 게시합니다.
-- 각 Release workflow와 자산 3종을 확인하고 공식 노트로 GitHub Release 본문을 갱신한 뒤 다음 버전으로 진행합니다.
+- 이 기록 보정만 별도 PR로 검증·병합합니다.
+- Release가 생성되지 않은 `v1.4.0` 태그를 보정 커밋으로 교체하고 Release workflow를 재실행합니다.
+- v1.4.0 자산 3종·manifest·공식 본문과 Latest 상태를 확인한 뒤 최종 종료 기록을 남깁니다.
