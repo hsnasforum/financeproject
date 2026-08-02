@@ -40,7 +40,7 @@
 - [`v1.1.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.1.0/docs/releases/retrospectives/financeproject-1.1.0.md)
 - [`v1.2.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.2.0/docs/releases/retrospectives/financeproject-1.2.0.md)
 - [`v1.3.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.3.0/docs/releases/retrospectives/financeproject-1.3.0.md)
-- [`v1.4.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.4.0.md)
+- [`v1.4.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.4.0/docs/releases/retrospectives/financeproject-1.4.0.md)
 
 ## 보안·개인정보
 
