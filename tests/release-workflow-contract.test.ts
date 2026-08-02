@@ -37,6 +37,7 @@ describe("tag release workflow contract", () => {
     expect(verifyJob).toContain("permissions:\n      contents: read");
     expect(verifyJob).toContain("fetch-depth: 0");
     expect(verifyJob).toContain("fetch-tags: true");
+    expect(verifyJob).toContain("persist-credentials: true");
     expect(verifyJob).toContain("--verify-remote-tag=true");
     expect(verifyJob.match(/release_tag_guard\.mjs/g)).toHaveLength(3);
     expect(requiredGate).toBeGreaterThan(0);
@@ -59,6 +60,7 @@ describe("tag release workflow contract", () => {
 
     expect(publishJob).toContain("needs: verify_and_package");
     expect(publishJob).toContain("permissions:\n      contents: write");
+    expect(publishJob).toContain("persist-credentials: true");
     expect(remoteGuard).toBeGreaterThan(0);
     expect(existingGuard).toBeGreaterThan(remoteGuard);
     expect(download).toBeGreaterThan(existingGuard);
