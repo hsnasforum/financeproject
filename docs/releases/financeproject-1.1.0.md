@@ -27,7 +27,7 @@
 - Planning v2 검증과 release dependency audit를 보강했습니다.
 - [역사 SHA 비교: `05c3990c...3de12780`](https://github.com/hsnasforum/financeproject/compare/05c3990c2f4df8175b060b37d8b180177db2c1a2...3de12780b0260a81363e636a3b6cdb4c10e56c94)
 
-보존용 원문: [financeproject-1.1.0.md](./retrospectives/financeproject-1.1.0.md)
+보존용 회고 노트: [financeproject-1.1.0.md](./retrospectives/financeproject-1.1.0.md)
 
 ## 알려진 제한
 

@@ -27,7 +27,7 @@
 - public source의 daily refresh와 strict freshness, PostgreSQL 전환 readiness 게이트를 추가했습니다.
 - [역사 SHA 비교: `3de12780...e82f57ea`](https://github.com/hsnasforum/financeproject/compare/3de12780b0260a81363e636a3b6cdb4c10e56c94...e82f57eab11504a943babce70f1c51ae18cf84bd)
 
-보존용 원문: [financeproject-1.2.0.md](./retrospectives/financeproject-1.2.0.md)
+보존용 회고 노트: [financeproject-1.2.0.md](./retrospectives/financeproject-1.2.0.md)
 
 ## 알려진 제한
 
