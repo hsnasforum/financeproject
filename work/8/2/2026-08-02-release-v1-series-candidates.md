@@ -1,4 +1,4 @@
-# 2026-08-02 v1.1.0~v1.4.0 문서화 전용 릴리즈 후보
+# 2026-08-02 v1.1.0~v1.4.0 문서화 전용 릴리즈 게시 완료
 
 ## 변경 파일
 
@@ -6,7 +6,13 @@
 - `README.md`
 - `docs/release-notes.md`
 - `docs/releases/financeproject-1.0.5.md`
+- `docs/releases/financeproject-1.1.0.md`
+- `docs/releases/financeproject-1.2.0.md`
+- `docs/releases/financeproject-1.3.0.md`
 - `docs/releases/financeproject-1.4.0.md`
+- `docs/releases/retrospectives/financeproject-1.1.0.md`
+- `docs/releases/retrospectives/financeproject-1.2.0.md`
+- `docs/releases/retrospectives/financeproject-1.3.0.md`
 - `docs/releases/retrospectives/financeproject-1.4.0.md`
 - `package.json`
 - `work/8/2/2026-08-02-release-v1-series-candidates.md`
@@ -23,11 +29,11 @@
 - `planning-gate-selector`: 버전·릴리즈 문서 변경에 맞는 검증 세트를 선정했습니다.
 - `github:yeet`: 브랜치 게시, draft PR, merge commit과 순차 태그 게시 절차를 점검했습니다.
 - `github:gh-fix-ci`: 첫 v1.4.0 Release workflow 실패 로그를 확인하고 work note guard 원인을 분리했습니다.
-- `work-log-closeout`: 후보별 변경, 검증 결과와 남은 게시 단계를 기록했습니다.
+- `work-log-closeout`: 버전별 변경, 검증 결과와 최종 게시 상태를 기록했습니다.
 
-## 릴리즈 후보
+## 릴리즈 결과
 
-| 버전 | 후보 커밋 | 실제 base | 역사 회고 범위 | 성격 |
+| 버전 | 태그 커밋 | 실제 base | 역사 회고 범위 | 성격 |
 |---|---|---|---|---|
 | `v1.1.0` | `0bccf0817bb82613c22d0bf0f9fac89af94801ec` | `v1.0.5` | `05c3990c..3de12780` 119개 | 신규 기능 없는 문서화 전용 릴리즈 |
 | `v1.2.0` | `236ce42dafb12b49e8aadead0193ae5c64170ae8` | `v1.1.0` | `3de12780..e82f57ea` 86개 | 신규 기능 없는 문서화 전용 릴리즈 |
