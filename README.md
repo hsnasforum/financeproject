@@ -1,4 +1,4 @@
-# Finance Project (v1.0.5)
+# Finance Project (v1.4.0)
 
 개인 재무설계, 금융상품 추천, 공공데이터 연동, DART 공시 모니터링을 통합한 Next.js 기반 서비스입니다.
 

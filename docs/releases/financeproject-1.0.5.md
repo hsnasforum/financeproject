@@ -6,7 +6,7 @@
 - 변경 기준: `v1.0.4` 이후 `main`의 400개 변경 커밋과 `v1.0.5` 릴리즈 준비 변경
 - 상태: `공식 누적 릴리즈 문서`
 
-`v1.0.5`는 `v1.0.4` 이후 오랫동안 누적된 변경을 현재 `main` 기준으로 정리한 catch-up 릴리즈입니다. 과거 커밋에 여러 태그를 소급 생성하지 않고, 검증된 현재 소스에 `v1.0.5` 태그 하나만 발행합니다.
+`v1.0.5`는 `v1.0.4` 이후 오랫동안 누적된 변경을 현재 `main` 기준으로 정리한 catch-up 릴리즈입니다. 게시 당시에는 과거 커밋에 여러 태그를 소급 생성하지 않고, 검증된 현재 소스에 `v1.0.5` 태그 하나만 발행했습니다.
 
 ## 주요 변경
 
@@ -31,16 +31,16 @@
 | `v1.3.0` 계획 참고 | `e82f57ea..8c118d58` | 83 | run·migration 구조, FINLIFE 영속화 |
 | `v1.4.0` 계획 참고 | `8c118d58..5e15a1ae` | 63 | 백업·복원, 접근성, release provenance |
 
-이 표의 `v1.1.0`~`v1.4.0`은 이미 게시된 태그가 아니라 회고용 구간명입니다. 해당 버전의 실제 릴리즈는 `v1.0.5` 이후 새 변경분을 기준으로 순차 작성합니다.
+이 표의 `v1.1.0`~`v1.4.0`은 `v1.0.5` 게시 당시 사용한 회고용 구간명입니다. 이후 같은 이름의 버전이 문서화 전용 릴리즈로 게시되더라도 아래 역사 범위는 신규 기능 변경이 아니라 계속 `v1.0.5`의 구성 요소로 봅니다.
 
 ### 단계별 회고 노트
 
-아래 문서는 실제 태그·GitHub Release가 아니라, `v1.0.5`에 이미 포함된 변경을 검토하기 위한 상세 구간 노트입니다.
+아래 문서는 `v1.0.5`에 이미 포함된 변경을 검토하기 위한 보존용 회고 구간 노트입니다.
 
-- [`v1.1.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.1.0.md)
-- [`v1.2.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.2.0.md)
-- [`v1.3.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.3.0.md)
-- [`v1.4.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/main/docs/releases/financeproject-1.4.0.md)
+- [`v1.1.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.1.0/docs/releases/retrospectives/financeproject-1.1.0.md)
+- [`v1.2.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.2.0/docs/releases/retrospectives/financeproject-1.2.0.md)
+- [`v1.3.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.3.0/docs/releases/retrospectives/financeproject-1.3.0.md)
+- [`v1.4.0` 회고 구간 노트](https://github.com/hsnasforum/financeproject/blob/v1.4.0/docs/releases/retrospectives/financeproject-1.4.0.md)
 
 ## 보안·개인정보
 
