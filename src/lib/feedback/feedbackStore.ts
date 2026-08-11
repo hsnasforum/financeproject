@@ -280,7 +280,16 @@ export function addFeedback(input: FeedbackInput): FeedbackItem {
 }
 
 export function addPublicFeedback(input: PublicFeedbackInput): FeedbackItem {
-  return addFeedback({ ...input, recordKind: "public-feedback" });
+  return addFeedback({
+    recordKind: "public-feedback",
+    category: input.category,
+    message: input.message,
+    traceId: input.traceId,
+    userAgent: input.userAgent,
+    url: input.url,
+    appVersion: input.appVersion,
+    ...(input.snapshot ? { snapshot: input.snapshot } : {}),
+  });
 }
 
 export function addOpsFeedback(input: OpsFeedbackInput): FeedbackItem {

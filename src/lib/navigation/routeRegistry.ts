@@ -470,6 +470,9 @@ export function isExplicitPageRoute(pathname: string): boolean {
 }
 
 export function isOpsOrDevRoute(pathname: string): boolean {
+  const visibility = resolveRouteVisibility(pathname).visibility;
+  if (visibility === "ops" || visibility === "dev") return true;
+
   return NAVIGATION_ROUTE_REGISTRY.some(
     (item) => (item.visibility === "ops" || item.visibility === "dev") && isNavigationItemActive(pathname, item),
   );

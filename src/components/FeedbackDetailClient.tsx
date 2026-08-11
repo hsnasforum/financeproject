@@ -20,6 +20,7 @@ const DEV_CSRF_SESSION_KEY = "dev_action_csrf_v1";
 type FeedbackCategory = "bug" | "improve" | "question";
 type FeedbackStatus = "OPEN" | "DOING" | "DONE";
 type FeedbackPriority = "P0" | "P1" | "P2" | "P3";
+type FeedbackRecordKind = "public-feedback" | "ops-ticket";
 type FeedbackTask = {
   id: string;
   text: string;
@@ -58,6 +59,7 @@ type DiagnosticsSnapshot = {
 };
 
 type FeedbackDetail = {
+  recordKind: FeedbackRecordKind;
   id: string;
   createdAt: string;
   category: FeedbackCategory;

@@ -223,6 +223,13 @@ export function middleware(request: NextRequest) {
     return notFoundResponse(request, contentSecurityPolicy);
   }
 
+  if (
+    isFeedbackManagementPath(pathname)
+    && (request.headers.get("x-forwarded-host") ?? "").trim()
+  ) {
+    return blockResponse(request, contentSecurityPolicy);
+  }
+
   const needsLocalOnly = isOpsPath(pathname)
     || isFeedbackManagementPath(pathname)
     || isPlanningMutationPath(pathname, request.method)
@@ -264,6 +271,8 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    { source: "/feedback/:path*" },
+    { source: "/api/feedback/:path*" },
     {
       source: "/((?!_next/static|_next/image|favicon.ico).*)",
       missing: PREFETCH_MATCHER,

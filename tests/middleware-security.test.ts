@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { middleware } from "../middleware";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
+import { config, middleware } from "../middleware";
 
 const originalAllowRemote = process.env.ALLOW_REMOTE;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -85,6 +86,38 @@ describe("security middleware", () => {
     for (const path of ["/feedback/list", "/feedback/feedback-id", "/api/feedback/list", "/api/feedback/feedback-id"]) {
       const response = middleware(makeRequest(`https://example.com${path}`, {
         headers: { host: "example.com" },
+      }));
+      expect(response.status).toBe(403);
+    }
+  });
+
+  it("keeps feedback management routes matched for prefetch requests", () => {
+    for (const url of [
+      "https://example.com/feedback/list",
+      "https://example.com/feedback/feedback-id",
+      "https://example.com/api/feedback/list",
+      "https://example.com/api/feedback/feedback-id",
+    ]) {
+      expect(unstable_doesMiddlewareMatch({
+        config,
+        url,
+        headers: { "next-router-prefetch": "1" },
+      })).toBe(true);
+      expect(unstable_doesMiddlewareMatch({
+        config,
+        url,
+        headers: { purpose: "prefetch" },
+      })).toBe(true);
+    }
+  });
+
+  it("rejects forwarded host on feedback management routes", () => {
+    for (const path of ["/feedback/list", "/api/feedback/list"]) {
+      const response = middleware(makeRequest(`https://example.com${path}`, {
+        headers: {
+          host: "example.com",
+          "x-forwarded-host": "localhost:3000",
+        },
       }));
       expect(response.status).toBe(403);
     }

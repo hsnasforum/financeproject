@@ -7,6 +7,7 @@ import {
   getPublicDesktopNavItems,
   isExplicitPageRoute,
   isNavigationItemActive,
+  isOpsOrDevRoute,
   isRoutePatternMatch,
   isSegmentAwarePrefixMatch,
   resolveRouteVisibility,
@@ -53,6 +54,9 @@ describe("navigation route registry", () => {
       visibility: "ops",
       status: "ops",
     });
+    expect(isOpsOrDevRoute("/feedback")).toBe(false);
+    expect(isOpsOrDevRoute("/feedback/list")).toBe(true);
+    expect(isOpsOrDevRoute("/feedback/feedback-id")).toBe(true);
   });
 
   it("separates planning v3 official beta entries from internal v3 routes", () => {

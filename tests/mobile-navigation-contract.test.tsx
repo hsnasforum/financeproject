@@ -49,9 +49,24 @@ describe("mobile primary navigation contract", () => {
   });
 
   it("removes both nav and spacer from ops and dev routes", () => {
-    for (const pathname of ["/ops", "/dev/data", "/debug/unified", "/dashboard/artifacts"]) {
+    for (const pathname of [
+      "/ops",
+      "/feedback/list",
+      "/feedback/feedback-id",
+      "/dev/data",
+      "/debug/unified",
+      "/dashboard/artifacts",
+    ]) {
       expect(renderMobileBottomNav(pathname)).toBe("");
     }
+  });
+
+  it("shows the operations strip on feedback management pages", () => {
+    navigationState.pathname = "/feedback/list";
+    const markup = renderToStaticMarkup(<SiteHeader />);
+
+    expect(markup).toContain("운영 화면");
+    expect(markup).not.toContain('aria-current="page"');
   });
 
   it("does not mark a public header destination current on dev routes", () => {

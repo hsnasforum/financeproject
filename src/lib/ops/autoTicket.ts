@@ -148,7 +148,7 @@ export function createOrAppendOpsTicket(input: CreateOrAppendOpsTicketInput): {
   });
 
   const recent = findRecentByFingerprint(fingerprint, RECENT_WINDOW_MS);
-  if (recent) {
+  if (recent?.recordKind === "ops-ticket") {
     const updated = appendNote(recent.id, note);
     return {
       ok: true,
@@ -203,6 +203,7 @@ export function resolveOpsTicketsOnSuccess(input: ResolveOpsTicketInput): {
   const resolvedIds: string[] = [];
   for (const row of rows) {
     if (!row || (row.status !== "OPEN" && row.status !== "DOING")) continue;
+    if (row.recordKind !== "ops-ticket") continue;
     const tags = normalizeTags(row.tags).map((tag) => tag.toUpperCase());
     if (!tags.includes("OPS")) continue;
     const hasIdInTags = tags.includes(normalizedId.toUpperCase());
