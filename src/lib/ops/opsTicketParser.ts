@@ -20,6 +20,7 @@ function isChainId(value: string): value is (typeof KNOWN_CHAIN_IDS)[number] {
 }
 
 type OpsTicketLike = {
+  recordKind?: "public-feedback" | "ops-ticket";
   message?: string;
   tags?: string[];
   priority?: string;
@@ -78,6 +79,9 @@ function parseMessage(message: string): { id?: string; cause?: string } {
 }
 
 export function isOpsTicket(item: OpsTicketLike): boolean {
+  if (item.recordKind === "public-feedback") return false;
+  if (item.recordKind === "ops-ticket") return true;
+
   const priorityP0 = normUpper(item.priority) === "P0";
   if (!priorityP0) return false;
   const tags = splitTags(item.tags).map((tag) => tag.toLowerCase());

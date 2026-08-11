@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listFeedback } from "../src/lib/feedback/feedbackStore";
+import { addFeedback, listFeedback } from "../src/lib/feedback/feedbackStore";
 import { buildFingerprint, createOrAppendOpsTicket, resolveOpsTicketsOnSuccess } from "../src/lib/ops/autoTicket";
 
 const TEST_STORE_PATH = path.join(process.cwd(), "tmp", "user_feedback.auto-ticket.test.json");
@@ -93,6 +93,37 @@ describe("ops auto ticket", () => {
     expect(note.match(/\[AUTO\]\[OPS\]/g)?.length).toBe(2);
   });
 
+  it("does not append an ops occurrence to public feedback with the same fingerprint", () => {
+    const fingerprint = buildFingerprint("FIX", "SEED_DEBUG", "DB_NOT_READY");
+    const publicFeedback = addFeedback({
+      recordKind: "public-feedback",
+      category: "bug",
+      message: "공개 피드백",
+      traceId: null,
+      userAgent: "test",
+      url: "/feedback",
+      appVersion: null,
+      fingerprint,
+    });
+
+    const result = createOrAppendOpsTicket({
+      type: "FIX",
+      id: "SEED_DEBUG",
+      cause: "DB_NOT_READY",
+      summary: "DB 준비 상태가 불완전합니다.",
+      stderrTail: "no such table: users",
+      stdoutTail: "",
+      suggestedFixIds: ["SEED_DEBUG"],
+      tookMs: 412,
+    });
+
+    expect(result.action).toBe("created");
+    expect(result.ticketId).not.toBe(publicFeedback.id);
+    const rows = listFeedback(10);
+    expect(rows.find((row) => row.id === publicFeedback.id)?.note).toBe("");
+    expect(rows.find((row) => row.id === result.ticketId)?.recordKind).toBe("ops-ticket");
+  });
+
   it("creates a new ticket after 1 hour window", () => {
     const first = createOrAppendOpsTicket({
       type: "FIX",
@@ -151,5 +182,43 @@ describe("ops auto ticket", () => {
     expect(rows[0]?.status).toBe("DONE");
     expect(rows[0]?.note).toContain("[AUTO][OPS][RECOVERED]");
     expect(rows[0]?.note).toContain("historyId: hist-001");
+  });
+
+  it("does not resolve explicit public feedback that resembles an ops ticket", () => {
+    const publicFeedback = addFeedback({
+      recordKind: "public-feedback",
+      category: "bug",
+      message: "[OPS][FULL_REPAIR] 실패: UNKNOWN",
+      traceId: null,
+      userAgent: "test",
+      url: "/feedback",
+      appVersion: null,
+      status: "OPEN",
+      priority: "P0",
+      tags: ["ops", "FULL_REPAIR"],
+    });
+    const opsTicket = createOrAppendOpsTicket({
+      type: "CHAIN",
+      id: "FULL_REPAIR",
+      cause: "UNKNOWN",
+      summary: "복구 체인 실패",
+      stderrTail: "db failed",
+      stdoutTail: "",
+      suggestedFixIds: ["SEED_DEBUG"],
+      tookMs: 1000,
+    });
+
+    const resolved = resolveOpsTicketsOnSuccess({
+      type: "CHAIN",
+      id: "FULL_REPAIR",
+      summary: "복구 체인 실행 성공",
+      historyId: "hist-002",
+      tookMs: 2200,
+    });
+
+    expect(resolved.ticketIds).toEqual([opsTicket.ticketId]);
+    const rows = listFeedback(10);
+    expect(rows.find((row) => row.id === publicFeedback.id)?.status).toBe("OPEN");
+    expect(rows.find((row) => row.id === opsTicket.ticketId)?.status).toBe("DONE");
   });
 });

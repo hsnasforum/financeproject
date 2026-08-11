@@ -165,7 +165,7 @@ export function FeedbackFormClient() {
         return;
       }
       setMessage("");
-      setNotice("의견이 저장되었습니다. 이후 피드백 목록과 상세 화면에서 접수 내용과 진행 상태를 다시 확인할 수 있습니다.");
+      setNotice("의견이 접수되었습니다. 운영 기록과 첨부 진단 정보는 로컬 운영자만 확인할 수 있습니다.");
     } catch {
       setError("네트워크 오류로 저장하지 못했습니다.");
     } finally {
@@ -196,7 +196,7 @@ export function FeedbackFormClient() {
     <PageShell>
       <PageHeader
         title="의견과 도움 요청 남기기"
-        description="문제 상황이나 개선 아이디어를 기록으로 남기면 이후 목록과 상세 화면에서 다시 확인할 수 있습니다."
+        description="문제 상황이나 개선 아이디어를 안전하게 접수합니다. 운영 기록은 로컬 운영 환경에서만 확인할 수 있습니다."
         action={
           <Link href="/dashboard">
             <Button variant="outline" size="sm">대시보드로 이동</Button>
@@ -209,10 +209,10 @@ export function FeedbackFormClient() {
           <div className="rounded-[1.5rem] border border-slate-100 bg-surface-muted/70 p-5">
             <p className="text-sm font-black text-slate-800">무엇을 남기나요?</p>
             <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
-              이 화면은 즉시 답변을 받는 곳이 아니라, 문제 상황과 개선 아이디어를 기록으로 남겨 두는 support entry 화면입니다.
+              이 화면은 즉시 답변을 받는 곳이 아니라, 문제 상황과 개선 아이디어를 운영자에게 전달하는 support entry 화면입니다.
             </p>
             <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">
-              저장 뒤에는 피드백 목록과 상세 화면에서 접수 시각, 진행 상태, 첨부 진단 정보를 다시 볼 수 있습니다. 진단 번들은 오류 재현이나 지원 대응에 직접 공유가 필요할 때만 내려받으세요.
+              제출 응답에는 운영 메모나 첨부 진단 정보가 포함되지 않습니다. 진단 번들은 오류 재현이나 지원 대응에 직접 공유가 필요할 때만 내려받으세요.
             </p>
           </div>
 

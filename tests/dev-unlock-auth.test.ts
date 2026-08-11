@@ -75,6 +75,7 @@ describe("dev unlock + dart watch auth", () => {
     const setCookie = unlockResponse.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("dev_action=1");
     expect(setCookie).toContain("dev_csrf=");
+    expect(setCookie).toContain("feedback_management=v1.");
 
     const csrf = unlockJson.csrf as string;
     const watchResponse = await watchPOST(new Request(`${origin}/api/dev/dart/watch`, {

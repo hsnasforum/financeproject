@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { listFeedback } from "@/lib/feedback/feedbackStore";
+import { toFeedbackAdminRecord } from "@/lib/feedback/feedbackContracts";
+import { guardFeedbackManagementAccess } from "../_lib/managementGuard";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const accessGuard = guardFeedbackManagementAccess(request);
+  if (accessGuard) return accessGuard;
+
   try {
     return NextResponse.json({
       ok: true,
-      data: listFeedback(20),
+      data: listFeedback(20).map(toFeedbackAdminRecord),
     });
   } catch {
     return NextResponse.json(

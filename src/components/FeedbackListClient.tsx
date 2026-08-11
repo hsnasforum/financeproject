@@ -12,6 +12,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { cn } from "@/lib/utils";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 
 type FeedbackCategory = "bug" | "improve" | "question";
 type FeedbackStatus = "OPEN" | "DOING" | "DONE";
@@ -139,10 +140,10 @@ export function FeedbackListClient() {
         if (!active) return;
         setRows(payload.data);
         setError(null);
-      } catch {
+      } catch (loadError) {
         if (!active) return;
         setRows([]);
-        setError("피드백 목록을 불러오지 못했습니다.");
+        setError(loadError instanceof Error ? loadError.message : "피드백 목록을 불러오지 못했습니다.");
       } finally {
         if (active) setLoading(false);
       }
@@ -206,7 +207,11 @@ export function FeedbackListClient() {
         <LoadingState title="제출한 내용을 불러오고 있습니다" />
       ) : error ? (
         <Card className="rounded-[2rem] p-12 text-center border-rose-100 bg-rose-50/30">
-          <p className="text-sm font-black text-rose-600">{error}</p>
+          <DevUnlockShortcutMessage
+            message={error}
+            className="text-sm font-black text-rose-600"
+            linkClassName="text-primary"
+          />
           <Button variant="outline" size="sm" className="mt-4 rounded-xl font-black" onClick={() => window.location.reload()}>다시 시도</Button>
         </Card>
       ) : rows.length === 0 ? (

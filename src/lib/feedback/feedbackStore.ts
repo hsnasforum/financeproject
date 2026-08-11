@@ -15,6 +15,7 @@ export const MAX_FEEDBACK_FINGERPRINT_LENGTH = 160;
 export type FeedbackCategory = "bug" | "improve" | "question";
 export type FeedbackStatus = "OPEN" | "DOING" | "DONE";
 export type FeedbackPriority = "P0" | "P1" | "P2" | "P3";
+export type FeedbackRecordKind = "public-feedback" | "ops-ticket";
 export type FeedbackTask = {
   id: string;
   text: string;
@@ -31,6 +32,7 @@ export type FeedbackUpdatePatch = {
 };
 
 export type FeedbackItem = {
+  recordKind: FeedbackRecordKind;
   id: string;
   createdAt: string;
   category: FeedbackCategory;
@@ -50,6 +52,7 @@ export type FeedbackItem = {
 };
 
 export type FeedbackInput = {
+  recordKind?: FeedbackRecordKind;
   category: FeedbackCategory;
   message: string;
   traceId: string | null;
@@ -64,6 +67,15 @@ export type FeedbackInput = {
   tasks?: FeedbackTask[];
   fingerprint?: string | null;
   snapshot?: DiagnosticsSnapshot;
+};
+
+export type PublicFeedbackInput = Pick<
+  FeedbackInput,
+  "category" | "message" | "traceId" | "userAgent" | "url" | "appVersion" | "snapshot"
+>;
+
+export type OpsFeedbackInput = FeedbackInput & {
+  fingerprint: string;
 };
 
 function resolveFeedbackPath(): string {
@@ -86,6 +98,21 @@ function normalizeStatus(value: unknown): FeedbackStatus {
 function normalizePriority(value: unknown): FeedbackPriority {
   if (value === "P0" || value === "P1" || value === "P2" || value === "P3") return value;
   return "P2";
+}
+
+function inferLegacyRecordKind(record: Record<string, unknown>): FeedbackRecordKind {
+  const priority = normalizePriority(record.priority);
+  const tags = normalizeTags(record.tags).map((tag) => tag.toLowerCase());
+  const message = typeof record.message === "string" ? record.message.trim() : "";
+  if (priority === "P0" && (tags.includes("ops") || /^\[OPS\]\[[^\]]+\]/i.test(message))) {
+    return "ops-ticket";
+  }
+  return "public-feedback";
+}
+
+function normalizeRecordKind(value: unknown, legacyRecord?: Record<string, unknown>): FeedbackRecordKind {
+  if (value === "public-feedback" || value === "ops-ticket") return value;
+  return legacyRecord ? inferLegacyRecordKind(legacyRecord) : "public-feedback";
 }
 
 function normalizeDueDate(value: unknown): string | null {
@@ -175,6 +202,7 @@ function normalizeItem(value: unknown): FeedbackItem | null {
   if (!id || !createdAt || message.length < 1) return null;
 
   return {
+    recordKind: normalizeRecordKind(record.recordKind, record),
     id,
     createdAt,
     category,
@@ -225,6 +253,7 @@ function readAll(): FeedbackItem[] {
 export function addFeedback(input: FeedbackInput): FeedbackItem {
   const fingerprint = normalizeFingerprint(input.fingerprint);
   const next: FeedbackItem = {
+    recordKind: normalizeRecordKind(input.recordKind),
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     category: input.category,
@@ -248,6 +277,23 @@ export function addFeedback(input: FeedbackInput): FeedbackItem {
   const capped = rows.length > MAX_FEEDBACK_ITEMS ? rows.slice(rows.length - MAX_FEEDBACK_ITEMS) : rows;
   writeAll(capped);
   return next;
+}
+
+export function addPublicFeedback(input: PublicFeedbackInput): FeedbackItem {
+  return addFeedback({
+    recordKind: "public-feedback",
+    category: input.category,
+    message: input.message,
+    traceId: input.traceId,
+    userAgent: input.userAgent,
+    url: input.url,
+    appVersion: input.appVersion,
+    ...(input.snapshot ? { snapshot: input.snapshot } : {}),
+  });
+}
+
+export function addOpsFeedback(input: OpsFeedbackInput): FeedbackItem {
+  return addFeedback({ ...input, recordKind: "ops-ticket" });
 }
 
 export function listRecent(limit = 20): FeedbackItem[] {

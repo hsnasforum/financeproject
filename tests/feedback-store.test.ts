@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addFeedback, getFeedbackById, listFeedback, listRecent, updateFeedback } from "../src/lib/feedback/feedbackStore";
+import {
+  addFeedback,
+  addPublicFeedback,
+  getFeedbackById,
+  listFeedback,
+  listRecent,
+  updateFeedback,
+} from "../src/lib/feedback/feedbackStore";
 
 const TEST_STORE_PATH = path.join(process.cwd(), "tmp", "user_feedback.test.json");
 
@@ -41,6 +48,34 @@ describe("feedback store", () => {
     expect(rows[0]?.id).toBe(saved.id);
     expect(rows[0]?.category).toBe("bug");
     expect(rows[0]?.message).toContain("검색 필터");
+  });
+
+  it("allowlists public feedback fields at runtime", () => {
+    const widerInput = {
+      category: "bug" as const,
+      message: "공개 피드백",
+      traceId: null,
+      userAgent: "test-agent",
+      url: "/feedback",
+      appVersion: "test",
+      recordKind: "ops-ticket",
+      status: "DONE",
+      priority: "P0",
+      tags: ["ops"],
+      note: "internal",
+      tasks: [{ id: "task", text: "internal", done: true }],
+      fingerprint: "internal-fingerprint",
+    };
+
+    const saved = addPublicFeedback(widerInput);
+
+    expect(saved.recordKind).toBe("public-feedback");
+    expect(saved.status).toBe("OPEN");
+    expect(saved.priority).toBe("P2");
+    expect(saved.tags).toEqual([]);
+    expect(saved.note).toBe("");
+    expect(saved.tasks).toEqual([]);
+    expect(saved.fingerprint).toBeUndefined();
   });
 
   it("keeps only latest 200 rows", () => {
@@ -126,6 +161,28 @@ describe("feedback store", () => {
     expect(updated?.dueDate).toBe("2026-03-01");
     expect(updated?.tasks).toHaveLength(2);
     expect(updated?.tasks[0]?.done).toBe(true);
+  });
+
+  it("infers legacy OPS records once and persists their immutable record kind on update", () => {
+    fs.mkdirSync(path.dirname(TEST_STORE_PATH), { recursive: true });
+    fs.writeFileSync(TEST_STORE_PATH, JSON.stringify([{
+      id: "legacy-ops",
+      createdAt: "2026-07-12T00:00:00.000Z",
+      category: "bug",
+      message: "[OPS][DATA_DOCTOR] 실패: DB_NOT_READY",
+      priority: "P0",
+      tags: ["ops", "auto"],
+    }]), "utf-8");
+
+    expect(getFeedbackById("legacy-ops")?.recordKind).toBe("ops-ticket");
+    const updated = updateFeedback("legacy-ops", {
+      priority: "P1",
+      tags: ["resolved"],
+    });
+    expect(updated?.recordKind).toBe("ops-ticket");
+
+    const persisted = JSON.parse(fs.readFileSync(TEST_STORE_PATH, "utf-8")) as Array<Record<string, unknown>>;
+    expect(persisted[0]?.recordKind).toBe("ops-ticket");
   });
 
   it("resets file when stored json is invalid", () => {

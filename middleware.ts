@@ -81,6 +81,10 @@ function isPlanningApiPath(pathname: string): boolean {
   return pathname === "/api/planning" || pathname.startsWith("/api/planning/");
 }
 
+function isFeedbackManagementPath(pathname: string): boolean {
+  return pathname.startsWith("/feedback/") || pathname.startsWith("/api/feedback/");
+}
+
 function isDevOnlyPath(pathname: string): boolean {
   return pathname === "/api/dev"
     || pathname.startsWith("/api/dev/")
@@ -165,6 +169,22 @@ function blockResponse(request: NextRequest, contentSecurityPolicy: string): Nex
   return withSecurityHeaders(new NextResponse("Forbidden", { status: 403 }), contentSecurityPolicy);
 }
 
+function notFoundResponse(request: NextRequest, contentSecurityPolicy: string): NextResponse {
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return withSecurityHeaders(NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Not found",
+        },
+      },
+      { status: 404 },
+    ), contentSecurityPolicy);
+  }
+  return withSecurityHeaders(new NextResponse("Not found", { status: 404 }), contentSecurityPolicy);
+}
+
 function authRequiredResponse(contentSecurityPolicy: string): NextResponse {
   return withSecurityHeaders(NextResponse.json(
     {
@@ -199,7 +219,19 @@ export function middleware(request: NextRequest) {
     nonce ? { nonce } : undefined,
   );
 
+  if (isProduction && isFeedbackManagementPath(pathname)) {
+    return notFoundResponse(request, contentSecurityPolicy);
+  }
+
+  if (
+    isFeedbackManagementPath(pathname)
+    && (request.headers.get("x-forwarded-host") ?? "").trim()
+  ) {
+    return blockResponse(request, contentSecurityPolicy);
+  }
+
   const needsLocalOnly = isOpsPath(pathname)
+    || isFeedbackManagementPath(pathname)
     || isPlanningMutationPath(pathname, request.method)
     || (!isProduction && isDevOnlyPath(pathname));
   if (needsLocalOnly && !isLocalRequest(request)) {
@@ -239,6 +271,8 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    { source: "/feedback/:path*" },
+    { source: "/api/feedback/:path*" },
     {
       source: "/((?!_next/static|_next/image|favicon.ico).*)",
       missing: PREFETCH_MATCHER,

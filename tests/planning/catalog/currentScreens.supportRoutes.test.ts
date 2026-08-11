@@ -9,14 +9,15 @@ function readCurrentScreens(): string {
 }
 
 describe("current screens SSOT for support and settings routes", () => {
-  it("documents public support routes used by dashboard and feedback flows", () => {
+  it("keeps public feedback submission separate from local management routes", () => {
     const markdown = readCurrentScreens();
+    const publicSection = markdown.split("## Public 화면")[1]?.split("\n## ")[0] ?? "";
 
-    expect(markdown).toContain("- `/feedback`");
-    expect(markdown).toContain("- `/feedback/list`");
-    expect(markdown).toContain("- `/feedback/[id]`");
-    expect(markdown).toContain("- `/planning/trash`");
-    expect(markdown).toContain("- `/planning/runs/[id]`");
+    expect(publicSection).toContain("- `/feedback`");
+    expect(publicSection).not.toContain("- `/feedback/list`");
+    expect(publicSection).not.toContain("- `/feedback/[id]`");
+    expect(publicSection).toContain("- `/planning/trash`");
+    expect(publicSection).toContain("- `/planning/runs/[id]`");
   });
 
   it("documents settings routes used by settings and recovery flows", () => {

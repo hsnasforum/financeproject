@@ -14,6 +14,18 @@ describe("ops ticket parser", () => {
       tags: ["ops"],
       message: "[OPS][SEED_DEBUG] 실패: DB_NOT_READY",
     })).toBe(false);
+
+    expect(isOpsTicket({
+      recordKind: "public-feedback",
+      priority: "P0",
+      tags: ["ops"],
+      message: "[OPS][SEED_DEBUG] 실패: DB_NOT_READY",
+    })).toBe(false);
+
+    expect(isOpsTicket({
+      recordKind: "ops-ticket",
+      priority: "P1",
+    })).toBe(true);
   });
 
   it("parses action from tags first", () => {
