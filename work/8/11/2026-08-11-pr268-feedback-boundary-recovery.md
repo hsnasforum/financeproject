@@ -1,4 +1,4 @@
-# PR #268 피드백 경계 최신 main 복구
+# 2026-08-11 PR #268 피드백 경계 최신 main 복구
 
 ## 기준
 
@@ -52,7 +52,7 @@
 - `DATABASE_URL=<local-dummy-postgres-url> corepack pnpm e2e:rc` — PASS, 38 passed / 2 skipped
 - `git diff --check` — PASS
 
-## 남은 리스크와 엣지케이스
+## 남은 리스크
 
 - 표준 `Request`에서 직접 연결 peer IP를 항상 검증할 수 없으므로 development 서버를 외부에 공개하지 않는 운영 전제는 유지된다. 피드백 관리 경로는 전달 host를 거부하고 production에서는 404다.
 - `recordKind`가 없는 레거시 저장 항목만 제한된 P0/OPS 휴리스틱으로 한 번 분류된다. 명시된 `recordKind`는 이후 태그·우선순위와 무관하게 우선한다.
