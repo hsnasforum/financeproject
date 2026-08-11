@@ -10,7 +10,7 @@ describe("fix failure analyzer", () => {
 
     expect(analyzed.cause).toBe("MISSING_OPENDART_KEY");
     expect(analyzed.suggestedFixIds).toContain("DART_WATCH");
-    expect(analyzed.suggestedFixIds).toContain("DAILY_REFRESH");
+    expect(analyzed.suggestedFixIds).not.toContain("DAILY_REFRESH");
   });
 
   it("classifies missing corp index", () => {
@@ -40,7 +40,7 @@ describe("fix failure analyzer", () => {
     });
 
     expect(analyzed.cause).toBe("UPSTREAM_UNAVAILABLE");
-    expect(analyzed.suggestedFixIds).toContain("DAILY_REFRESH");
+    expect(analyzed.suggestedFixIds).not.toContain("DAILY_REFRESH");
   });
 
   it("falls back to unknown when no pattern matches", () => {

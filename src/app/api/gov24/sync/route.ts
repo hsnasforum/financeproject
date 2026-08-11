@@ -1,64 +1,25 @@
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { isDebugEnabled, makeHttpError } from "@/lib/http/apiError";
-import { attachFallback } from "@/lib/http/fallbackMeta";
-import { statusFromExternalApiErrorCode } from "@/lib/publicApis/errorContract";
-import { runGov24SyncOnce } from "@/lib/publicApis/gov24SyncState";
-import { runGov24SnapshotSync } from "@/lib/gov24/syncRunner";
-import { singleflight } from "../../../../lib/cache/singleflight";
-import { guardGov24MutationOrigin } from "../_lib/trustedOriginGuard";
 
-export async function POST(request: Request) {
-  const originGuard = guardGov24MutationOrigin(request);
-  if (originGuard) return originGuard;
-
-  const { searchParams } = new URL(request.url);
-  const debugEnabled = isDebugEnabled(searchParams);
-  const traceId = crypto.randomUUID();
-  try {
-    const result = await singleflight("gov24-sync", () => runGov24SyncOnce(async () => {
-      const synced = await runGov24SnapshotSync({
-        scanPages: "auto",
-        rows: 200,
-        limit: 100_000,
-        maxMatches: 200_000,
-      });
-      if (!synced.ok) {
-        throw synced.error;
-      }
-      return synced.meta;
-    }));
-    return NextResponse.json({
-      ok: true,
-      meta: attachFallback((result ?? {}) as Record<string, unknown>, {
-        mode: "LIVE",
-        sourceKey: "gov24",
-        reason: "sync_success",
-      }),
-    });
-  } catch (error) {
-    const parsed = error && typeof error === "object"
-      ? error as { code?: string; message?: string; upstreamStatus?: number; diagnostics?: Record<string, unknown> }
-      : {};
-    const code = parsed.code ?? "INTERNAL";
-    const message = parsed.message ?? "gov24 sync failed";
+export async function POST() {
+  if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
       {
         ok: false,
-        meta: attachFallback({}, {
-          mode: "LIVE",
-          sourceKey: "gov24",
-          reason: "sync_failed",
-        }),
-        error: makeHttpError(code, message, {
-          debugEnabled,
-          debug: {
-            upstreamStatus: parsed.upstreamStatus,
-            traceId,
-          },
-        }),
+        error: { code: "NOT_FOUND", message: "Not found" },
       },
-      { status: statusFromExternalApiErrorCode(code) },
+      { status: 404 },
     );
   }
+
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: "OPERATOR_COMMAND_REQUIRED",
+        message: "Gov24 전체 갱신은 HTTP 요청으로 실행할 수 없습니다.",
+        hint: "로컬 운영 터미널에서 pnpm gov24:sync:if-stale 명령을 실행하세요.",
+      },
+    },
+    { status: 403 },
+  );
 }

@@ -7,10 +7,8 @@ export const OPS_ACTION_IDS = [
   "DART_WATCH",
   "FINLIFE_SYNC_IF_STALE",
   "DATAGO_SYNC",
-  "GOV24_SYNC_IF_STALE",
   "NEWS_REFRESH",
   "INDICATORS_REFRESH",
-  "DAILY_REFRESH",
 ] as const;
 
 export type OpsActionId = (typeof OPS_ACTION_IDS)[number];

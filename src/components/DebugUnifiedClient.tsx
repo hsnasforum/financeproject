@@ -117,9 +117,6 @@ export default function DebugUnifiedPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState("");
-  const [syncError, setSyncError] = useState("");
   const [refreshStaleSources, setRefreshStaleSources] = useState(true);
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
   const [rows, setRows] = useState<UnifiedRow[]>([]);
@@ -234,33 +231,6 @@ export default function DebugUnifiedPage() {
       }
     }
   }, [includeKdb, includeSources, kind, limit, mode, q, qMode, refreshStaleSources, singleSourceId]);
-
-  const runSmokeSync = useCallback(async () => {
-    setSyncing(true);
-    setSyncError("");
-    setSyncMessage("");
-    try {
-      const response = await fetch("/api/sync/smoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const json = (await response.json()) as { ok?: boolean; reportPath?: string | null; error?: { message?: string } };
-      if (!response.ok || !json.ok) {
-        setSyncError(json.error?.message ?? "스모크 업데이트에 실패했습니다.");
-        return;
-      }
-      setSyncMessage("스모크 업데이트를 완료했습니다.");
-      nextCursorRef.current = null;
-      setNextCursor(null);
-      setHasMore(false);
-      await reload(false);
-    } catch {
-      setSyncError("스모크 업데이트에 실패했습니다.");
-    } finally {
-      setSyncing(false);
-    }
-  }, [reload]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -423,14 +393,9 @@ export default function DebugUnifiedPage() {
           >
             Refresh
           </button>
-          <button
-            type="button"
-            onClick={() => void runSmokeSync()}
-            disabled={syncing || loading}
-            className="rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm font-medium text-navy disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {syncing ? "스모크 업데이트 중..." : "스모크 업데이트"}
-          </button>
+          <span className="text-xs text-slate-500">
+            갱신은 로컬에서 pnpm live:smoke 실행 후 Refresh
+          </span>
           <button
             type="button"
             disabled={mode !== "merged" || !singleSourceId || !hasMore || autoRefresh || loading}
@@ -469,8 +434,6 @@ export default function DebugUnifiedPage() {
           {singleSourceId && autoRefresh ? (
             <span className="text-slate-500">Auto refresh ON: 매 주기 첫 페이지로 재로딩됩니다.</span>
           ) : null}
-          {syncMessage ? <span className="text-navy">{syncMessage}</span> : null}
-          {syncError ? <span className="text-rose-700">{syncError}</span> : null}
           <span className="text-slate-500">rows: {filtered.length}</span>
           {singleSourceId ? <span className="text-slate-500">nextCursor: {nextCursor ? "yes" : "none"}</span> : null}
         </div>

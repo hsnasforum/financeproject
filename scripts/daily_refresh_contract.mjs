@@ -77,6 +77,8 @@ const DAILY_REFRESH_ENV_REQUIREMENTS = [
   { label: "BOK_ECOS_API_KEY or ECOS_API_KEY", anyOf: ["BOK_ECOS_API_KEY", "ECOS_API_KEY"] },
   { label: "EXIM_EXCHANGE_API_KEY", anyOf: ["EXIM_EXCHANGE_API_KEY"] },
   { label: "EXIM_EXCHANGE_API_URL", anyOf: ["EXIM_EXCHANGE_API_URL"] },
+  { label: "MOIS_BENEFITS_API_KEY", anyOf: ["MOIS_BENEFITS_API_KEY"] },
+  { label: "MOIS_BENEFITS_API_URL", anyOf: ["MOIS_BENEFITS_API_URL"] },
   { label: "OPENDART_API_KEY", anyOf: ["OPENDART_API_KEY"] },
 ];
 
@@ -117,6 +119,16 @@ export function validateDailyRefreshEnvironment(env = process.env) {
   }
   if (exchangeUrl.protocol !== "https:") {
     throw new Error("daily refresh EXIM_EXCHANGE_API_URL must use https");
+  }
+
+  let benefitsUrl;
+  try {
+    benefitsUrl = new URL(String(env.MOIS_BENEFITS_API_URL).trim());
+  } catch {
+    throw new Error("daily refresh MOIS_BENEFITS_API_URL is invalid");
+  }
+  if (benefitsUrl.protocol !== "https:") {
+    throw new Error("daily refresh MOIS_BENEFITS_API_URL must use https");
   }
 
   return {

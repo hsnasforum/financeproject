@@ -153,7 +153,7 @@ export function decideTrustedOrigin(headers: Headers, opts: DecideOptions = {}):
         ok: false,
         code: "MISSING_ORIGIN",
         message: "요청을 검증할 Origin 헤더가 없어 차단되었습니다.",
-        hint: "브라우저에서 요청하거나, 로컬 개발에서만 ALLOW_LOCAL_SYNC=1 설정 후 다시 시도하세요.",
+        hint: "동일 origin 브라우저 요청으로 다시 시도하세요.",
       };
     }
 

@@ -170,14 +170,17 @@ export async function GET(request: Request) {
           sync: {
             state: isGov24SyncInFlight()
               ? "syncing"
+              : snap.isStale
+                ? "needs_sync"
               : completionRate !== undefined && completionRate >= 0.95
                 ? "ready"
                 : "needs_sync",
           },
+          ...(snap.isStale ? { message: BENEFITS_FLOW_COPY.snapshotStale } : {}),
         }, {
           mode: "CACHE",
           sourceKey: "gov24",
-          reason: "snapshot_read",
+          reason: snap.isStale ? "snapshot_stale" : "snapshot_read",
           generatedAt: snap.snapshot.meta.generatedAt,
         });
         return { payload, meta };

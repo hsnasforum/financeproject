@@ -156,13 +156,6 @@
       "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
     },
     {
-      "file": "src/components/data/DataFreshnessBanner.tsx",
-      "storage": ["localStorage", "sessionStorage"],
-      "categories": ["permanent-user-setting", "temporary-draft"],
-      "purpose": "auto-smoke 사용자 설정을 localStorage에, path별 한 번 실행 플래그를 sessionStorage에 저장합니다.",
-      "rscPlan": "auto-smoke 설정은 운영 설정 API 후보이고 run-once 플래그는 client state로 유지합니다."
-    },
-    {
       "file": "src/components/opsDashboard/useOpsDashboardController.ts",
       "storage": ["localStorage"],
       "categories": ["permanent-user-setting", "temporary-draft"],

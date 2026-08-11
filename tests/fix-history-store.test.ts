@@ -45,7 +45,7 @@ describe("fix history store", () => {
       analysis: {
         cause: "MISSING_OPENDART_KEY",
         summary: "OPENDART_API_KEY 설정이 필요합니다.",
-        suggestedFixIds: ["DART_WATCH", "DAILY_REFRESH"],
+        suggestedFixIds: ["DART_WATCH", "DATA_DOCTOR"],
       },
     });
 
@@ -55,7 +55,7 @@ describe("fix history store", () => {
     expect(rows[1]?.id).toBe(one.id);
     expect(rows[0]?.errorCode).toBe("EXIT_NON_ZERO");
     expect(rows[0]?.analysis?.cause).toBe("MISSING_OPENDART_KEY");
-    expect(rows[0]?.analysis?.suggestedFixIds).toEqual(["DART_WATCH", "DAILY_REFRESH"]);
+    expect(rows[0]?.analysis?.suggestedFixIds).toEqual(["DART_WATCH", "DATA_DOCTOR"]);
   });
 
   it("applies list limit and caps history at 200 entries", () => {

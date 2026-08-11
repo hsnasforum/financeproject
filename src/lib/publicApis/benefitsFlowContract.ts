@@ -9,6 +9,7 @@ export type BenefitsSnapshotInput = {
     generatedAt?: string;
     uniqueCount?: number;
     truncatedByHardCap?: boolean;
+    isStale?: boolean;
   } | null;
   sync?: {
     state?: string;
@@ -30,6 +31,7 @@ export type BenefitsSnapshotStatus = {
   totalItems: number | null;
   uniqueCount: number | null;
   completionRate: number | null;
+  isStale: boolean;
   notice: string | null;
 };
 
@@ -40,6 +42,8 @@ export const BENEFITS_FLOW_COPY = {
     "이 화면은 확정 수급 판정이 아니라, 지금 조건에서 다시 확인할 혜택 후보를 좁혀 보는 단계입니다. 신청 전에는 상세에서 지원 조건과 신청 방법을 다시 확인하세요.",
   snapshotMissing:
     "공공 혜택 기준 데이터가 아직 준비되지 않았습니다. 잠시 후 다시 조회하거나 검색 범위를 줄여 주세요.",
+  snapshotStale:
+    "공공 혜택 기준 시점이 오래되었습니다. 현재 결과는 마지막으로 저장된 자료이며 최신 내용은 신청 전에 다시 확인해 주세요.",
   requestFailed: "혜택 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.",
   empty: "조건이나 키워드를 조금 넓혀서 혜택 후보를 다시 찾아보세요.",
   loading: "현재 조건에 맞는 정부 혜택 후보를 찾고 있습니다.",
@@ -85,6 +89,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
   const uniqueCount = asNumber(snapshot?.uniqueCount) ?? asNumber(meta?.uniqueCount);
   const completionRate = asNumber(snapshot?.completionRate) ?? asNumber(meta?.completionRate);
   const syncState = asString(meta?.sync?.state);
+  const isStale = snapshot?.isStale === true || fallbackReason === "snapshot_stale";
 
   if (syncState === "syncing") {
     return {
@@ -94,7 +99,21 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: "공공 혜택 기준 데이터를 갱신하는 중입니다. 잠시 후 결과가 늘어날 수 있습니다.",
+    };
+  }
+
+  if (isStale) {
+    return {
+      state: "needs_sync",
+      stateLabel: "기준 시점 오래됨",
+      generatedAt,
+      totalItems,
+      uniqueCount,
+      completionRate,
+      isStale,
+      notice: sanitizeBenefitUserMessage(meta?.message, BENEFITS_FLOW_COPY.snapshotStale),
     };
   }
 
@@ -106,6 +125,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: sanitizeBenefitUserMessage(meta?.message, BENEFITS_FLOW_COPY.snapshotMissing),
     };
   }
@@ -119,6 +139,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: `일부 혜택은 순차 반영 중일 수 있습니다. 현재 반영 범위 ${percent}`,
     };
   }
@@ -131,6 +152,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: null,
     };
   }
@@ -142,6 +164,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
     totalItems,
     uniqueCount,
     completionRate,
+    isStale,
     notice: null,
   };
 }

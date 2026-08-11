@@ -8,7 +8,7 @@ import type { ChainId, FixChainRisk } from "@/lib/diagnostics/fixChains";
 import { recommendRunbook } from "@/lib/diagnostics/runbookRecommender";
 
 type DoctorStatus = "OK" | "WARN" | "FAIL";
-type DoctorFixId = "PRISMA_DB_PUSH" | "PRISMA_PUSH" | "SEED_DEBUG" | "DATA_DOCTOR" | "DART_WATCH" | "DAILY_REFRESH";
+type DoctorFixId = "PRISMA_DB_PUSH" | "PRISMA_PUSH" | "SEED_DEBUG" | "DATA_DOCTOR" | "DART_WATCH";
 type DoctorChainId = ChainId;
 
 const DEV_CSRF_SESSION_KEY = "dev_action_csrf_v1";
@@ -162,8 +162,7 @@ function isDoctorFixId(value: string): value is DoctorFixId {
     || value === "PRISMA_PUSH"
     || value === "SEED_DEBUG"
     || value === "DATA_DOCTOR"
-    || value === "DART_WATCH"
-    || value === "DAILY_REFRESH";
+    || value === "DART_WATCH";
 }
 
 function historyFixStateKey(historyId: string, fixId: DoctorFixId): string {

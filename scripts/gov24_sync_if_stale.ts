@@ -1,9 +1,17 @@
-import "dotenv/config";
-import { getSnapshotOrNull } from "../src/lib/publicApis/benefitsSnapshot";
-import { shouldRunGov24Sync } from "../src/lib/gov24/syncPolicy";
-import { runGov24SnapshotSync } from "../src/lib/gov24/syncRunner";
+import { loadCliEnvFiles } from "./load_cli_env";
+
+loadCliEnvFiles();
 
 async function main() {
+  const [
+    { getSnapshotOrNull },
+    { shouldRunGov24Sync },
+    { runGov24SnapshotSync },
+  ] = await Promise.all([
+    import("../src/lib/publicApis/benefitsSnapshot"),
+    import("../src/lib/gov24/syncPolicy"),
+    import("../src/lib/gov24/syncRunner"),
+  ]);
   const ttlMs = 24 * 60 * 60 * 1000;
   const snap = getSnapshotOrNull({ ttlMs });
   const decision = shouldRunGov24Sync(snap?.snapshot.meta ?? null, Date.now(), {
@@ -32,4 +40,3 @@ async function main() {
 }
 
 void main();
-

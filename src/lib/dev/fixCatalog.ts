@@ -11,10 +11,8 @@ export const ALLOWED_FIX_MAP = {
   DART_WATCH: { command: "pnpm", args: ["dart:watch"] },
   FINLIFE_SYNC_IF_STALE: { command: "pnpm", args: ["finlife:sync:if-stale"] },
   DATAGO_SYNC: { command: "pnpm", args: ["datago:sync"] },
-  GOV24_SYNC_IF_STALE: { command: "pnpm", args: ["gov24:sync:if-stale"] },
   NEWS_REFRESH: { command: "pnpm", args: ["news:refresh"] },
   INDICATORS_REFRESH: { command: "pnpm", args: ["indicators:refresh"] },
-  DAILY_REFRESH: { command: "pnpm", args: ["daily:refresh"] },
 } as const satisfies Record<string, AllowedCommand>;
 
 export type AllowedFixId = keyof typeof ALLOWED_FIX_MAP;
