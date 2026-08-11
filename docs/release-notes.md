@@ -1,6 +1,83 @@
 # Release Notes
 
-## Latest
+## Published releases (latest first)
+### 2026-08-02 (v1.4.0)
+
+### 릴리즈 성격
+- 공식 회고 공개 릴리즈이며 신규 제품 기능은 없습니다.
+- 실제 `v1.3.0...v1.4.0`에는 버전·릴리즈 메타데이터 변경만 포함됩니다.
+- `8c118d58..5e15a1ae`의 63개 커밋은 신규 배포가 아니라 `v1.0.5`에 이미 포함된 역사 기능 범위입니다.
+- 첨부 자산은 역사 구간 끝 SHA의 과거 빌드가 아니라 `v1.4.0` 태그 커밋에서 다시 빌드한 결과입니다.
+
+상세 내용: [financeproject-1.4.0.md](./releases/financeproject-1.4.0.md)
+
+### 2026-08-02 (v1.3.0)
+
+### 릴리즈 성격
+- 공식 회고 공개 릴리즈이며 신규 제품 기능은 없습니다.
+- 실제 `v1.2.0...v1.3.0`에는 버전·릴리즈 메타데이터 변경만 포함됩니다.
+- `e82f57ea..8c118d58`의 83개 커밋은 신규 배포가 아니라 `v1.0.5`에 이미 포함된 역사 기능 범위입니다.
+- 첨부 자산은 역사 구간 끝 SHA의 과거 빌드가 아니라 `v1.3.0` 태그 커밋에서 다시 빌드한 결과입니다.
+
+상세 내용: [financeproject-1.3.0.md](./releases/financeproject-1.3.0.md)
+
+### 2026-08-02 (v1.2.0)
+
+### 릴리즈 성격
+- 공식 회고 공개 릴리즈이며 신규 제품 기능은 없습니다.
+- 실제 `v1.1.0...v1.2.0`에는 버전·릴리즈 메타데이터 변경만 포함됩니다.
+- `3de12780..e82f57ea`의 86개 커밋은 신규 배포가 아니라 `v1.0.5`에 이미 포함된 역사 기능 범위입니다.
+- 첨부 자산은 역사 구간 끝 SHA의 과거 빌드가 아니라 `v1.2.0` 태그 커밋에서 다시 빌드한 결과입니다.
+
+상세 내용: [financeproject-1.2.0.md](./releases/financeproject-1.2.0.md)
+
+### 2026-08-02 (v1.1.0)
+
+### 릴리즈 성격
+- 공식 회고 공개 릴리즈이며 신규 제품 기능은 없습니다.
+- 실제 `v1.0.5...v1.1.0`에는 버전·릴리즈 메타데이터 변경만 포함됩니다.
+- `05c3990c..3de12780`의 119개 커밋은 신규 배포가 아니라 `v1.0.5`에 이미 포함된 역사 기능 범위입니다.
+- 첨부 자산은 역사 구간 끝 SHA의 과거 빌드가 아니라 `v1.1.0` 태그 커밋에서 다시 빌드한 결과입니다.
+
+상세 내용: [financeproject-1.1.0.md](./releases/financeproject-1.1.0.md)
+
+### 2026-08-02 (v1.0.5)
+
+### 릴리즈 범위
+- `v1.0.4` 이후 `main`에 누적된 400개 변경 커밋과 이번 릴리즈 준비 변경을 하나의 누적 릴리즈로 제공합니다.
+- 게시 당시 과거 끝 커밋에는 태그를 소급 생성하지 않았고, 실제 태그와 GitHub Release는 당시 `main`의 `v1.0.5` 한 건만 생성했습니다.
+- 큰 변경 흐름은 아래 다섯 회고 구간으로 나눠 확인할 수 있습니다. 이후 같은 이름의 문서화 전용 릴리즈가 게시되더라도 회고 구간 자체는 계속 `v1.0.5`에 포함된 역사 범위입니다.
+
+| 회고 구간 | 기준일 | 주요 내용 | 상세 문서 |
+|---|---:|---|---|
+| 초기 연결 구간 | 2026-03-17 | Planning→추천 연결, 데이터 기준 시점·신뢰 안내 | [공식 v1.0.5 누적 노트](./releases/financeproject-1.0.5.md) |
+| `v1.1.0` 계획 참고 | 2026-06-15 | Planning v3 계약, UI 책임 분리, CSP·검증 게이트 | [보존용 회고 노트](./releases/retrospectives/financeproject-1.1.0.md) |
+| `v1.2.0` 계획 참고 | 2026-06-23 | 사용자별 인증·저장 격리, 서비스 경계, PostgreSQL 준비 | [보존용 회고 노트](./releases/retrospectives/financeproject-1.2.0.md) |
+| `v1.3.0` 계획 참고 | 2026-07-10 | run·migration 경계, 저장소 원자성, FINLIFE 영속화 | [보존용 회고 노트](./releases/retrospectives/financeproject-1.3.0.md) |
+| `v1.4.0` 계획 참고 | 2026-07-12 | 백업·복원 안전성, 접근성, route·release provenance | [보존용 회고 노트](./releases/retrospectives/financeproject-1.4.0.md) |
+
+### 주요 변경
+- Planning 결과, 추천 실행, 저장된 리포트와 이력을 서로 연결해 판단 근거를 다시 확인하기 쉬워졌습니다.
+- Planning v3의 데이터 계약과 저장·서비스 책임을 정리하고 사용자별 데이터 격리와 인증 경계를 강화했습니다.
+- 외부 데이터의 기준 시점, 부분 실패, freshness를 구분해 표시하고 FINLIFE 갱신 결과를 canonical 저장소에 안전하게 영속화했습니다.
+- 백업·복원과 run 저장의 원자성, 레거시 migration 관측·재시도, PostgreSQL 전환 준비를 보강했습니다.
+- 모바일 내비게이션, 버튼 대비, 단일 `<main>`, 오류 복구와 route·component architecture 검증을 강화했습니다.
+- 태그·패키지 버전·기본 브랜치 SHA·desktop artifact provenance가 일치한 경우에만 GitHub Release가 생성되도록 강화하고, dependency audit를 npm Bulk Advisory API에 맞췄습니다.
+
+### 보안·개인정보
+- Planning v2·v3, 뉴스, 제품 후보와 운영 경로에 사용자별 namespace와 route auth 검증을 확대했습니다.
+- 백업·복원에는 manifest, checksum, 암호화 archive와 transaction 경계를 적용했습니다.
+- migration·backfill·release evidence에는 사용자 금융 원문 대신 안전한 분류 결과와 메타 정보만 사용합니다.
+- Auth.js, Next.js, Prisma와 관련 전이 의존성을 공개 보안 권고의 수정 버전으로 갱신하고 lockfile 전체 감사를 다시 통과하도록 했습니다.
+
+### 알려진 제한
+- Planning v3 owner restore의 `--apply`는 운영 안전 계약이 확정될 때까지 비활성입니다.
+- 실제 OAuth provider, reverse proxy, populated PostgreSQL 환경과 외부 데이터 최신성은 배포 환경에서 별도 확인이 필요합니다.
+- `v1.1.0` 이후 문서화 전용 릴리즈는 `v1.0.5`에 포함된 역사 범위를 신규 기능으로 재게시하지 않습니다.
+
+상세 내용과 GitHub Release 본문: [financeproject-1.0.5.md](./releases/financeproject-1.0.5.md)
+
+## Published baseline
 ### 2026-03-16 (v1.0.4)
 ### 변경 요약
 - Planning v2 후속 정리 버전 `v1.0.4` 준비를 위해 패키지 버전과 릴리즈 스크립트 버전 파라미터를 `1.0.4`로 맞췄습니다.
