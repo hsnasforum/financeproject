@@ -33,9 +33,15 @@ describe("Gov24 sync entrypoint contract", () => {
       scripts?: Record<string, string>;
     };
     const guide = fs.readFileSync(path.join(process.cwd(), "docs/gov24-sync.md"), "utf8");
+    const syncSource = fs.readFileSync(path.join(process.cwd(), "scripts/gov24_sync.ts"), "utf8");
+    const staleSyncSource = fs.readFileSync(path.join(process.cwd(), "scripts/gov24_sync_if_stale.ts"), "utf8");
 
     expect(packageJson.scripts?.["gov24:sync"]).toBeTruthy();
     expect(packageJson.scripts?.["gov24:sync:if-stale"]).toBeTruthy();
+    expect(syncSource).toContain("loadCliEnvFiles();");
+    expect(staleSyncSource).toContain("loadCliEnvFiles();");
+    expect(syncSource).not.toContain('import "dotenv/config"');
+    expect(staleSyncSource).not.toContain('import "dotenv/config"');
     expect(guide).toContain("pnpm gov24:sync");
     expect(guide).toContain("OPERATOR_COMMAND_REQUIRED");
   });

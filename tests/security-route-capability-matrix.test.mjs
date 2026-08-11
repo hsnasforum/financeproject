@@ -270,6 +270,46 @@ describe("security route capability matrix", () => {
     expect(result.stats.disabled).toBe(1);
   });
 
+  it("rejects a tombstone that shadows NextResponse inside the handler", () => {
+    const root = makeRoot();
+    write(root, "src/app/api/example/route.ts", `
+      import { NextResponse } from "next/server";
+      export async function POST() {
+        const NextResponse = { json: () => undefined };
+        if (process.env.NODE_ENV === "production") {
+          return NextResponse.json({ ok: false, error: { code: "NOT_FOUND" } }, { status: 404 });
+        }
+        return NextResponse.json({
+          ok: false,
+          error: { code: "OPERATOR_COMMAND_REQUIRED", hint: "run pnpm example:sync locally" },
+        }, { status: 403 });
+      }
+    `);
+    const custom = registry({
+      profiles: { disabledHttp: profile({}, "disabled") },
+      exactRoutes: [exact({
+        risk: "high",
+        effect: "external-job",
+        profile: "disabledHttp",
+        disabledContract: {
+          allowedImports: ["next/server"],
+          errorCodes: ["NOT_FOUND", "OPERATOR_COMMAND_REQUIRED"],
+          statuses: [403, 404],
+          commandHint: "pnpm example:sync",
+          responsePairs: [
+            { code: "NOT_FOUND", status: 404, hint: "forbidden" },
+            { code: "OPERATOR_COMMAND_REQUIRED", status: 403, hint: "required" },
+          ],
+        },
+      })],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "disabled-http: every return must be NextResponse.json -> POST src/app/api/example/route.ts",
+    );
+  });
+
   it("rejects runner imports and calls from a disabled-http route", () => {
     const root = makeRoot();
     write(root, "src/app/api/example/route.ts", `
@@ -383,6 +423,588 @@ describe("security route capability matrix", () => {
     );
   });
 
+  it("does not count a result provider that is only observed or logged", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", `
+      export function decideOrigin() { return null; }
+    `);
+    write(root, "src/app/api/example/route.ts", `
+      import { decideOrigin } from "@/lib/security/guards";
+      export async function POST(request) {
+        const decision = decideOrigin(request);
+        console.log(decision);
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact()],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["decideOrigin"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.results[0]?.observed.originCsrf).toBe(false);
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=test profile=publicOrigin]",
+    );
+  });
+
+  it("rejects an inverted result-provider branch that lets blocked requests mutate", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function decideOrigin() { return null; }");
+    write(root, "src/app/api/example/route.ts", `
+      import { decideOrigin } from "@/lib/security/guards";
+      export async function POST(request) {
+        const blocked = decideOrigin(request);
+        if (!blocked) return new Response(null, { status: 204 });
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact()],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["decideOrigin"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=test profile=publicOrigin]",
+    );
+  });
+
+  it("rejects providers hidden behind unsupported short-circuit conditions", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      export async function POST(request) {
+        request.headers.has("x-authorize") && authorize();
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("rejects a throwing provider when its failure is swallowed", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      export async function POST() {
+        try {
+          authorize();
+        } catch {}
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("rejects a helper that converts a throwing provider failure into a local return", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      function safeAuthorize() {
+        try {
+          authorize();
+        } catch {
+          return;
+        }
+      }
+      export async function POST() {
+        safeAuthorize();
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("does not recreate an enforced return boundary through a two-hop helper", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      function safeAuthorize() {
+        try {
+          authorize();
+        } catch {
+          return;
+        }
+      }
+      const proxy = () => safeAuthorize();
+      export async function POST() {
+        proxy();
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("rejects an asserted falsy catch return as a blocking result", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      function safeAuthorize() {
+        try {
+          authorize();
+        } catch {
+          return false as boolean;
+        }
+      }
+      export async function POST() {
+        const blocked = safeAuthorize();
+        if (blocked) return blocked;
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("rejects an unknown catch return as a blocking result", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      function failOpen() {
+        return false;
+      }
+      function safeAuthorize() {
+        try {
+          authorize();
+        } catch {
+          return failOpen();
+        }
+      }
+      export async function POST() {
+        const blocked = safeAuthorize();
+        if (blocked) return blocked;
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("does not trust a shadowed Response.json as a blocking result", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      const Response = { json: () => false };
+      function failOpen() {
+        return Response.json();
+      }
+      function safeAuthorize() {
+        try {
+          authorize();
+        } catch {
+          return failOpen();
+        }
+      }
+      export async function POST() {
+        const blocked = safeAuthorize();
+        if (blocked) return blocked;
+        await updateRecord();
+        return new globalThis.Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("does not trust a shadowed NextResponse.json as a blocking result", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { NextResponse } from "next/server";
+      import { authorize } from "@/lib/security/guards";
+      function failOpen() {
+        const NextResponse = { json: () => false };
+        return NextResponse.json();
+      }
+      function safeAuthorize() {
+        try {
+          authorize();
+        } catch {
+          return failOpen();
+        }
+      }
+      export async function POST() {
+        const blocked = safeAuthorize();
+        if (blocked) return blocked;
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("uses the route effect contract to catch a domain mutation before its guard", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function decideOrigin() { return null; }");
+    write(root, "src/lib/feedback/feedbackStore.ts", "export function addPublicFeedback() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { decideOrigin } from "@/lib/security/guards";
+      import { addPublicFeedback } from "@/lib/feedback/feedbackStore";
+      export async function POST(request) {
+        addPublicFeedback();
+        const blocked = decideOrigin(request);
+        if (blocked) return blocked;
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact({ effect: "public-submission" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["decideOrigin"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=public-submission profile=publicOrigin]",
+    );
+  });
+
+  it("follows a renamed mutation wrapper to its write implementation", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function decideOrigin() { return null; }");
+    write(root, "src/lib/records.ts", `
+      import { writeFileSync } from "node:fs";
+      const emit = writeFileSync;
+      export function finalizeRecord() { emit("record.json", "{}"); }
+    `);
+    write(root, "src/app/api/example/route.ts", `
+      import { decideOrigin } from "@/lib/security/guards";
+      import { finalizeRecord } from "@/lib/records";
+      export async function POST(request) {
+        finalizeRecord();
+        const blocked = decideOrigin(request);
+        if (blocked) return blocked;
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact()],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["decideOrigin"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=test profile=publicOrigin]",
+    );
+  });
+
+  it("follows a destructured external mutation alias", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function decideOrigin() { return null; }");
+    write(root, "src/lib/records.ts", `
+      import * as fs from "node:fs";
+      const { writeFileSync: emit } = fs;
+      export function finalizeRecord() { emit("record.json", "{}"); }
+    `);
+    write(root, "src/app/api/example/route.ts", `
+      import { decideOrigin } from "@/lib/security/guards";
+      import { finalizeRecord } from "@/lib/records";
+      export async function POST(request) {
+        finalizeRecord();
+        const blocked = decideOrigin(request);
+        if (blocked) return blocked;
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact()],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["decideOrigin"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=test profile=publicOrigin]",
+    );
+  });
+
+  it("rejects a required guard that only runs on one reachable branch", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      export async function POST(request) {
+        if (request.headers.get("x-authorize")) authorize();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: incompatible branches for auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("rejects a required guard that runs after a mutation effect", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function authorize() {}");
+    write(root, "src/app/api/example/route.ts", `
+      import { authorize } from "@/lib/security/guards";
+      async function mutate() { await writeRecord(); }
+      export async function POST() {
+        await mutate();
+        authorize();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      profiles: { authenticated: profile({ auth: true }) },
+      exactRoutes: [exact({ profile: "authenticated" })],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["authorize"],
+        enforcement: "throws",
+        provides: capabilities({ auth: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing auth -> POST src/app/api/example/route.ts [risk=medium effect=test profile=authenticated]",
+    );
+  });
+
+  it("evaluates mutation arguments before recording provider evidence", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function decideOrigin() { return null; }");
+    write(root, "src/app/api/example/route.ts", `
+      import { decideOrigin } from "@/lib/security/guards";
+      export async function POST() {
+        const blocked = decideOrigin(updateRecord());
+        if (blocked) return blocked;
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact()],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["decideOrigin"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=test profile=publicOrigin]",
+    );
+  });
+
+  it("does not use an imported provider hidden by a lexical binding", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function check() { return null; }");
+    write(root, "src/app/api/example/route.ts", `
+      import { check } from "@/lib/security/guards";
+      export async function POST(request) {
+        const check = () => null;
+        const blocked = check(request);
+        if (blocked) return blocked;
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact()],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["check"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=test profile=publicOrigin]",
+    );
+  });
+
+  it("does not use a namespace provider hidden by a lexical binding", () => {
+    const root = makeRoot();
+    write(root, "src/lib/security/guards.ts", "export function check() { return null; }");
+    write(root, "src/app/api/example/route.ts", `
+      import * as guards from "@/lib/security/guards";
+      export async function POST(request) {
+        const guards = { check: () => null };
+        const blocked = guards.check(request);
+        if (blocked) return blocked;
+        await updateRecord();
+        return new Response();
+      }
+    `);
+    const custom = registry({
+      exactRoutes: [exact()],
+      providers: [{
+        module: "src/lib/security/guards.ts",
+        symbols: ["check"],
+        enforcement: "result",
+        provides: capabilities({ originCsrf: true }),
+      }],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "route-capability: missing originCsrf -> POST src/app/api/example/route.ts [risk=medium effect=test profile=publicOrigin]",
+    );
+  });
+
   it("binds disabled status and error codes to actual response objects", () => {
     const root = makeRoot();
     write(root, "src/app/api/example/route.ts", `
@@ -456,6 +1078,95 @@ describe("security route capability matrix", () => {
     );
     expect(result.issues).toContain(
       "disabled-http: unexpected response pair NOT_FOUND/403 -> POST src/app/api/example/route.ts",
+    );
+  });
+
+  it("rejects disabled response pairs bound to the wrong NODE_ENV branch", () => {
+    const root = makeRoot();
+    write(root, "src/app/api/example/route.ts", `
+      import { NextResponse } from "next/server";
+      export async function POST() {
+        if (process.env.NODE_ENV === "production") {
+          return NextResponse.json({
+            ok: false,
+            error: { code: "OPERATOR_COMMAND_REQUIRED", hint: "run pnpm example:sync locally" },
+          }, { status: 403 });
+        }
+        return NextResponse.json({ ok: false, error: { code: "NOT_FOUND" } }, { status: 404 });
+      }
+    `);
+    const custom = registry({
+      profiles: { disabledHttp: profile({}, "disabled") },
+      exactRoutes: [exact({
+        risk: "high",
+        effect: "external-job",
+        profile: "disabledHttp",
+        disabledContract: {
+          allowedImports: ["next/server"],
+          errorCodes: ["NOT_FOUND", "OPERATOR_COMMAND_REQUIRED"],
+          statuses: [403, 404],
+          commandHint: "pnpm example:sync",
+          responsePairs: [
+            { code: "NOT_FOUND", status: 404, hint: "forbidden" },
+            { code: "OPERATOR_COMMAND_REQUIRED", status: 403, hint: "required" },
+          ],
+        },
+      })],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "disabled-http: NOT_FOUND/404 must be returned from the production branch -> POST src/app/api/example/route.ts",
+    );
+    expect(result.issues).toContain(
+      "disabled-http: OPERATOR_COMMAND_REQUIRED/403 must be returned from the non-production branch -> POST src/app/api/example/route.ts",
+    );
+  });
+
+  it("validates every duplicate disabled response pair against its NODE_ENV branch", () => {
+    const root = makeRoot();
+    write(root, "src/app/api/example/route.ts", `
+      import { NextResponse } from "next/server";
+      export async function POST() {
+        if (process.env.NODE_ENV !== "production") {
+          return NextResponse.json({
+            ok: false,
+            error: { code: "OPERATOR_COMMAND_REQUIRED", hint: "run pnpm example:sync locally" },
+          }, { status: 403 });
+        }
+        if (process.env.NODE_ENV === "production") {
+          if (true) {
+            return NextResponse.json({ ok: false, error: { code: "NOT_FOUND" } }, { status: 404 });
+          }
+          return NextResponse.json({
+            ok: false,
+            error: { code: "OPERATOR_COMMAND_REQUIRED", hint: "run pnpm example:sync locally" },
+          }, { status: 403 });
+        }
+      }
+    `);
+    const custom = registry({
+      profiles: { disabledHttp: profile({}, "disabled") },
+      exactRoutes: [exact({
+        risk: "high",
+        effect: "external-job",
+        profile: "disabledHttp",
+        disabledContract: {
+          allowedImports: ["next/server"],
+          errorCodes: ["NOT_FOUND", "OPERATOR_COMMAND_REQUIRED"],
+          statuses: [403, 404],
+          commandHint: "pnpm example:sync",
+          responsePairs: [
+            { code: "NOT_FOUND", status: 404, hint: "forbidden" },
+            { code: "OPERATOR_COMMAND_REQUIRED", status: 403, hint: "required" },
+          ],
+        },
+      })],
+    });
+
+    const result = scanMutationRouteCapabilities({ root, registry: custom });
+    expect(result.issues).toContain(
+      "disabled-http: OPERATOR_COMMAND_REQUIRED/403 must be returned from the non-production branch -> POST src/app/api/example/route.ts",
     );
   });
 
@@ -567,5 +1278,5 @@ describe("security route capability matrix", () => {
     expect(result.issues).toEqual([]);
     expect(result.stats.mutationMethods).toBeGreaterThan(0);
     expect(result.stats.classified).toBe(result.stats.mutationMethods);
-  });
+  }, 15_000);
 });

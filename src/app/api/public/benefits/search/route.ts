@@ -112,7 +112,7 @@ export async function GET(request: Request) {
       selectedTopics,
       topicMode,
     });
-    const hit = getApiCacheRecord(key);
+    const hit = useSnapshotPath ? null : getApiCacheRecord(key);
     if (hit) {
       const payload = hit.entry.payload as Record<string, unknown>;
       return NextResponse.json({
@@ -201,6 +201,17 @@ export async function GET(request: Request) {
       payload = buildBenefitsSearchPayload(result.data, filters, {
         ...(result.meta ?? {}),
         neededPagesEstimate: result.meta?.neededPagesEstimate,
+      });
+    }
+
+    if (useSnapshotPath) {
+      return NextResponse.json({
+        ...payload,
+        meta: {
+          ...payload.meta,
+          cache: "bypass",
+          key,
+        },
       });
     }
 

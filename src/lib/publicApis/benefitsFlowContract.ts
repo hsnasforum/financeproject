@@ -9,6 +9,7 @@ export type BenefitsSnapshotInput = {
     generatedAt?: string;
     uniqueCount?: number;
     truncatedByHardCap?: boolean;
+    isStale?: boolean;
   } | null;
   sync?: {
     state?: string;
@@ -30,6 +31,7 @@ export type BenefitsSnapshotStatus = {
   totalItems: number | null;
   uniqueCount: number | null;
   completionRate: number | null;
+  isStale: boolean;
   notice: string | null;
 };
 
@@ -87,6 +89,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
   const uniqueCount = asNumber(snapshot?.uniqueCount) ?? asNumber(meta?.uniqueCount);
   const completionRate = asNumber(snapshot?.completionRate) ?? asNumber(meta?.completionRate);
   const syncState = asString(meta?.sync?.state);
+  const isStale = snapshot?.isStale === true || fallbackReason === "snapshot_stale";
 
   if (syncState === "syncing") {
     return {
@@ -96,11 +99,12 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: "공공 혜택 기준 데이터를 갱신하는 중입니다. 잠시 후 결과가 늘어날 수 있습니다.",
     };
   }
 
-  if (fallbackReason === "snapshot_stale") {
+  if (isStale) {
     return {
       state: "needs_sync",
       stateLabel: "기준 시점 오래됨",
@@ -108,6 +112,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: sanitizeBenefitUserMessage(meta?.message, BENEFITS_FLOW_COPY.snapshotStale),
     };
   }
@@ -120,6 +125,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: sanitizeBenefitUserMessage(meta?.message, BENEFITS_FLOW_COPY.snapshotMissing),
     };
   }
@@ -133,6 +139,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: `일부 혜택은 순차 반영 중일 수 있습니다. 현재 반영 범위 ${percent}`,
     };
   }
@@ -145,6 +152,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       totalItems,
       uniqueCount,
       completionRate,
+      isStale,
       notice: null,
     };
   }
@@ -156,6 +164,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
     totalItems,
     uniqueCount,
     completionRate,
+    isStale,
     notice: null,
   };
 }

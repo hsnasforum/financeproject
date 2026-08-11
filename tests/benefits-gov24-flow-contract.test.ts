@@ -40,6 +40,36 @@ describe("benefits/gov24 shared flow contract", () => {
       totalItems: 25,
       generatedAt: "2026-07-01T00:00:00.000Z",
       notice: BENEFITS_FLOW_COPY.snapshotStale,
+      isStale: true,
+    });
+  });
+
+  it("preserves stale status when Gov24 rebuilds status from the previous payload", () => {
+    const initial = buildBenefitsSnapshotStatus({
+      snapshot: {
+        totalItems: 25,
+        generatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      sync: { state: "needs_sync" },
+      fallback: { reason: "snapshot_stale" },
+      message: BENEFITS_FLOW_COPY.snapshotStale,
+    });
+
+    const rerendered = buildBenefitsSnapshotStatus({
+      snapshot: {
+        totalItems: initial.totalItems ?? undefined,
+        generatedAt: initial.generatedAt ?? undefined,
+        isStale: initial.isStale,
+      },
+      sync: { state: "needs_sync" },
+      message: initial.notice,
+    });
+
+    expect(rerendered).toMatchObject({
+      state: "needs_sync",
+      stateLabel: "기준 시점 오래됨",
+      isStale: true,
+      notice: BENEFITS_FLOW_COPY.snapshotStale,
     });
   });
 

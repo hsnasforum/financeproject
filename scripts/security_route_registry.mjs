@@ -285,6 +285,15 @@ export const CAPABILITY_PROVIDERS = Object.freeze([
     enforcement: "effect",
     provides: capabilities({ audit: true }),
   }),
+  Object.freeze({
+    module: "src/lib/planning/server/profiles/routeService.ts",
+    symbols: Object.freeze([
+      "recordCurrentUserProfileAudit",
+      "recordCurrentUserProfileTrashAudit",
+    ]),
+    enforcement: "effect",
+    provides: capabilities({ audit: true }),
+  }),
 ]);
 
 export const ROUTE_SECURITY_REGISTRY = Object.freeze({

@@ -1,7 +1,9 @@
-import "dotenv/config";
-import { runGov24SnapshotSync } from "../src/lib/gov24/syncRunner";
+import { loadCliEnvFiles } from "./load_cli_env";
+
+loadCliEnvFiles();
 
 async function main() {
+  const { runGov24SnapshotSync } = await import("../src/lib/gov24/syncRunner");
   const result = await runGov24SnapshotSync({
     scanPages: "auto",
     rows: 200,
@@ -25,4 +27,3 @@ async function main() {
 }
 
 void main();
-

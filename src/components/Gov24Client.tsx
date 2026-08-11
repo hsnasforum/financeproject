@@ -67,10 +67,15 @@ type Gov24SearchStatusResponse = {
       pagesFetched?: number;
       uniqueCount?: number;
       truncatedByHardCap?: boolean;
+      isStale?: boolean;
     } | null;
     sync?: {
       state?: SyncState;
     };
+    fallback?: {
+      reason?: string;
+    };
+    message?: string;
   };
 };
 
@@ -122,6 +127,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   const [snapshotTotal, setSnapshotTotal] = useState<number | null>(null);
   const [completionRate, setCompletionRate] = useState<number | null>(null);
   const [syncMetaNote, setSyncMetaNote] = useState<string>("");
+  const [snapshotIsStale, setSnapshotIsStale] = useState(false);
 
   const [detailData, setDetailData] = useState<Gov24ServiceDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -135,10 +141,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       completionRate: completionRate ?? undefined,
       generatedAt: snapshotGeneratedAt || undefined,
       uniqueCount: syncUniqueCount ?? undefined,
+      isStale: snapshotIsStale,
     },
     sync: { state: syncing ? "syncing" : syncState },
     message: syncMetaNote || undefined,
-  }), [completionRate, snapshotGeneratedAt, snapshotTotal, syncMetaNote, syncState, syncing, syncUniqueCount]);
+  }), [completionRate, snapshotGeneratedAt, snapshotIsStale, snapshotTotal, syncMetaNote, syncState, syncing, syncUniqueCount]);
 
   const summaryLine = useMemo(() => {
     const incomeLabel = INCOME_OPTIONS.find((entry) => entry.value === incomeBracket)?.label ?? incomeBracket;
@@ -170,10 +177,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
         generatedAt: snapshot?.generatedAt,
         uniqueCount: snapshot?.uniqueCount,
         truncatedByHardCap: snapshot?.truncatedByHardCap,
+        isStale: snapshot?.isStale,
       },
       sync: statusJson.meta?.sync,
-      message: (statusJson.meta as { message?: string } | undefined)?.message,
-      fallback: (statusJson.meta as { fallback?: { reason?: string } } | undefined)?.fallback,
+      message: statusJson.meta?.message,
+      fallback: statusJson.meta?.fallback,
     });
     setSnapshotTotal(snapshot?.totalItems ?? null);
     setCompletionRate(typeof snapshot?.completionRate === "number" ? snapshot.completionRate : null);
@@ -181,6 +189,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     setSyncUniqueCount(typeof snapshot?.uniqueCount === "number" ? snapshot.uniqueCount : null);
     setSyncState(statusJson.meta?.sync?.state ?? "needs_sync");
     setSyncing((statusJson.meta?.sync?.state ?? "needs_sync") === "syncing");
+    setSnapshotIsStale(nextStatus.isStale);
     setSyncMetaNote(nextStatus.notice ?? "");
     return { snapshot };
   }, []);
