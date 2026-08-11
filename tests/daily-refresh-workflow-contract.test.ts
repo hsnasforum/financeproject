@@ -58,6 +58,11 @@ describe("daily refresh workflow contract", () => {
     expect(workflow).toContain("group: daily-refresh-${{ github.repository }}");
     expect(workflow).toContain("cancel-in-progress: false");
     expect(workflow).toContain("peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1");
+    const setupNodeBlock = workflow.slice(
+      workflow.indexOf("      - name: Setup Node"),
+      workflow.indexOf("      - name: Install"),
+    );
+    expect(setupNodeBlock).not.toContain('cache: "pnpm"');
     for (const envName of [
       "FINLIFE_API_KEY",
       "FINLIFE_TOPFIN_GRP_LIST",
