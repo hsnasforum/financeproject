@@ -34,6 +34,8 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install
+        env:
+          DATABASE_URL: "file:./prisma/ci.db"
         run: pnpm install --frozen-lockfile
 
       - name: Validate refresh configuration

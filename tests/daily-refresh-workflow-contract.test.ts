@@ -75,6 +75,7 @@ describe("daily refresh workflow contract", () => {
     expect(setupNodeBlock).toContain("cache-dependency-path: pnpm-lock.yaml");
 
     const installBlock = extractStepBlock(workflow, "Install");
+    expect(installBlock).toContain('DATABASE_URL: "file:./prisma/ci.db"');
     expect(installBlock).toContain("run: pnpm install --frozen-lockfile");
     expect(installBlock).not.toContain("corepack enable");
     expect(workflow).not.toContain("corepack enable");
