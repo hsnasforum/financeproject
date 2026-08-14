@@ -36,8 +36,8 @@
 - `corepack pnpm install --frozen-lockfile`: PASS, 로컬 pnpm `9.15.9`로 564 packages 설치 및 Prisma generate 완료.
 - `DATABASE_URL=file:/tmp/finance-daily-refresh-test.db corepack pnpm test tests/daily-refresh-workflow-contract.test.ts tests/daily-refresh-ci-contract.test.ts tests/daily-refresh-ops-contract.test.ts`: PASS, 3 files / 22 tests.
 - `DATABASE_URL=file:/tmp/finance-daily-refresh-test.db corepack pnpm test`: PASS, 833 files / 3,005 tests.
-- `DATABASE_URL=file:/tmp/finance-daily-refresh-test.db corepack pnpm verify`: PASS, lint·typecheck·보안·데이터 계약과 833 files / 3,005 tests 포함.
-- `DATABASE_URL=file:/tmp/finance-daily-refresh-build.db corepack pnpm build`: PASS, Next.js production build와 250 static pages 생성 완료.
+- `DATABASE_URL=file:/tmp/finance-daily-refresh-test.db corepack pnpm verify`: 최초 toolchain 변경 기준 PASS, lint·typecheck·보안·데이터 계약과 833 files / 3,005 tests 포함.
+- `DATABASE_URL=file:/tmp/finance-daily-refresh-build.db corepack pnpm build`: 최초 toolchain 변경 기준 PASS, Next.js production build와 250 static pages 생성 완료. 이후 추가 변경은 Install 단계 env와 문자열 계약 테스트에 한정했고 focused·전체 테스트를 재실행했습니다.
 - `git diff --check`: PASS.
 - Daily Refresh #170 (`31792248302`, head `4c3521ae`): pnpm `9.15.9`, Node `v20.20.2`, cache 복원까지 성공. Install은 Prisma postinstall의 `DATABASE_URL` 누락으로 실패했고 evidence failure·artifact success·자동 PR skipped가 유지됐습니다.
 - Daily Refresh #171 (`31792501003`, head `3a5c63ec`): Setup pnpm, Setup Node, Install 모두 성공. 실제 버전은 pnpm `9.15.9`, Node `v20.20.2`이며 frozen install은 5.5초에 완료됐습니다.
