@@ -21,15 +21,20 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 20
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Validate refresh configuration
         id: preflight
