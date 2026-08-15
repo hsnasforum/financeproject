@@ -19,11 +19,11 @@
 
 ## 핵심 변경
 
-- PR #279가 open Draft이고 로컬·원격 head가 `0269018407277186a08df2ff784dc8b5b858c2cf`로 일치함을 확인했습니다.
+- PR #279가 open Draft이고 감사 대상 코드 head와 원격 브랜치가 `0269018407277186a08df2ff784dc8b5b858c2cf`로 일치함을 확인했습니다. 이후 완료 감사 문서 커밋은 workflow와 계약 테스트 내용을 바꾸지 않았습니다.
 - Daily Refresh #171에서 pnpm `9.15.9`, Node `v20.20.2`, `pnpm install --frozen-lockfile`과 Prisma postinstall이 성공했음을 재확인했습니다.
 - 이후 preflight는 필수 외부 데이터 env 누락으로 실패했고, refresh·자동 PR은 skip, artifact 업로드는 성공해 fail-closed 계약이 유지됐습니다.
 - PR CI의 두 실패는 변경되지 않은 `nanoid <3.3.18`에 새 HIGH advisory가 반영된 dependency audit 실패로 확인했습니다.
-- hosted run head 이후 현재 PR head까지 workflow와 계약 테스트 내용이 동일하고, `package.json`과 `pnpm-lock.yaml`도 기준 main 대비 변경되지 않았습니다.
+- hosted run head 이후 감사 대상 코드 head까지 workflow와 계약 테스트 내용이 동일하고, `package.json`과 `pnpm-lock.yaml`도 기준 main 대비 변경되지 않았습니다.
 
 ## 검증
 
@@ -35,6 +35,8 @@
 - Daily Refresh #171 (`31792501003`): Setup pnpm, Setup Node, Install 성공; preflight·evidence 실패, artifact 성공, 자동 PR skip.
 - E2E Smoke #410 (`31792761255`): `core_flows`, `dart_index_present`, `dart_index_missing` 모두 PASS.
 - CI #1236 (`31792761402`) 및 push CI (`31792758002`): `nanoid` advisory를 감지한 dependency audit에서 FAIL. dependency·lockfile 비변경으로 이번 toolchain 변경과 분리했습니다.
+- 완료 감사 문서 반영 후 E2E Smoke (`31858897244`): 3개 job 모두 PASS.
+- 완료 감사 문서 반영 후 PR CI (`31858897228`)와 push CI (`31858895633`): 동일한 `nanoid` dependency audit에서만 FAIL.
 
 ## 남은 리스크
 
