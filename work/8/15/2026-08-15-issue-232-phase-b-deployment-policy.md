@@ -1,4 +1,4 @@
-# Issue #232 Phase B — desktop-local ADR 및 pure deployment policy resolver
+# 2026-08-15 Issue #232 Phase B — desktop-local ADR 및 pure deployment policy resolver
 
 ## 판정
 
@@ -199,21 +199,44 @@ Public API, stored data format, database schema, migration, cache contract,
 production bind, auth requirement, local request 판정, trusted header 동작,
 namespace path와 restore apply 상태는 변경하지 않았습니다.
 
-## 실행한 명령과 실제 결과
+## 실행한 검증
 
 1. `git fetch origin --prune` — PASS
 2. open PR 및 #232/deployment-policy 중복 검색 — open duplicate 0
-3. `DATABASE_URL=file:/tmp/finance-issue-232-policy.db corepack pnpm vitest run tests/planning/deployment/planningDeploymentPolicy.test.ts`
-   — 1 file / 59 tests PASS
-4. `DATABASE_URL=file:/tmp/finance-issue-232-lint.db corepack pnpm lint`
+3. temporary SQLite `DATABASE_URL`을 사용한
+   `corepack pnpm install --frozen-lockfile` — PASS; lockfile 변경 없음
+4. `node --check src/lib/planning/deployment/policy.mjs`
    — PASS
-5. `DATABASE_URL=file:/tmp/finance-issue-232-test.db corepack pnpm test`
-   — 834 files / 3,064 tests PASS
-6. `DATABASE_URL=file:/tmp/finance-issue-232-build.db corepack pnpm build`
+5. `DATABASE_URL=file:/tmp/finance-issue-232-policy.db corepack pnpm vitest run tests/planning/deployment/planningDeploymentPolicy.test.ts`
+   — 1 file / 59 tests PASS
+6. policy 및 기존 auth·storage·local-request·middleware focused regression
+   — 7 files / 131 tests PASS
+7. `DATABASE_URL=file:/tmp/finance-issue-232-lint.db corepack pnpm lint`
+   — PASS
+8. `corepack pnpm typecheck`
+   — PASS
+9. `corepack pnpm planning:ssot:check`
+   — guard PASS; 5 files / 11 tests PASS
+10. `corepack pnpm deps:audit`
+    — 662 packages / 687 versions / 0 advisories, PASS
+11. `DATABASE_URL=file:/tmp/finance-232-phase-b-final-retry.db corepack pnpm verify`
+    — 834 files / 3,064 tests PASS
+12. `DATABASE_URL=file:/tmp/finance-issue-232-build.db corepack pnpm build`
    — PASS; compile, TypeScript, 250 static pages generated
-7. runtime entry point import scan — resolver import 없음, PASS
-8. runtime entry point `origin/main` diff audit — 변경 없음, PASS
-9. `git diff --cached --check` — PASS
+13. `corepack pnpm multi-agent:guard` — PASS
+14. runtime entry point import scan — resolver import 없음, PASS
+15. runtime entry point `origin/main` diff audit — 변경 없음, PASS
+16. `git diff --check` 및 `git status --short` — PASS; clean
+
+첫 최종 `verify`에서는 전체 병렬 부하 중 기존 static guard 한 건이 5초 제한을
+넘어 timeout됐습니다. 같은 guard의 focused 실행은 1 file / 2 tests PASS였고,
+마지막 canonical `verify` 재실행에서는 해당 guard를 포함해 834 files / 3,064
+tests가 모두 PASS했습니다.
+
+최종 diff 감사에서는 resolver의 purity, environment/request 비참조,
+missing·unknown·unsupported fail-closed, desktop-local invariant, web mode 성공
+경로 부재, runtime 미연결, single-source 구현, ADR의 지원 상태 표현과
+`restoreApplyAllowed=false`를 실제 diff 및 테스트와 재대조했습니다.
 
 전체 test와 build가 갱신한 범위 밖 generated reports 3개는 변경 전 tracked
 content로 복구했습니다. Policy 또는 runtime consumer 변경과 관련된
@@ -255,7 +278,7 @@ Phase C는 security boundary와 production runtime behavior를 바꾸므로 별�
 Resolver는 runtime에 연결되지 않아 rollback은 production bind, auth, storage,
 DB 또는 stored data를 변경하지 않습니다.
 
-## 남은 위험
+## 남은 리스크
 
 - Accepted decision이 아직 runtime에서 강제되지 않습니다.
 - Desktop launcher는 아직 local identity/session을 만들지 않습니다.
@@ -264,7 +287,7 @@ DB 또는 stored data를 변경하지 않습니다.
 - Node 20 실제 direct-import 실행은 이 환경에서 검증하지 못했습니다.
 - `web-single`과 `web-multi`는 계속 unsupported입니다.
 
-## 사용한 skill
+## 사용 skill
 
 - `finance-skill-routing`: Issue #232 범위에 필요한 최소 local skill 조합을
   선택하는 데 사용했습니다.
@@ -272,9 +295,19 @@ DB 또는 stored data를 변경하지 않습니다.
   전체 test, build와 runtime 미연결 검증을 선택하는 데 사용했습니다.
 - `work-log-closeout`: 변경·검증·잔여 위험을 이 문서 형식으로 정리하는 데
   사용했습니다.
+- `github:yeet`: 변경 범위·검증·Draft 상태를 확인하고 branch push 및 Draft PR
+  메타데이터를 게시하는 데 사용했습니다.
+
+## 다음 라운드 우선순위
+
+Phase C에서 startup·desktop launcher·middleware·`currentUser`·`routeAuth`가
+같은 resolver를 소비하도록 연결하고, launcher-established local identity를
+구현합니다. 이 단계는 security boundary와 production runtime behavior를
+변경하므로 별도 승인과 독립 보안 감사 범위로 진행합니다.
 
 ## 완료 상태
 
+- `ISSUE_232_PHASE_B_COMPLETE`
 - `ADR_DECISION_RECORDED=true`
 - `PURE_POLICY_RESOLVER_IMPLEMENTED=true`
 - `RUNTIME_POLICY_WIRED=false`
@@ -283,3 +316,4 @@ DB 또는 stored data를 변경하지 않습니다.
 - `WEB_MULTI_SUPPORTED=false`
 - `REMOTE_MUTATION_ENABLED=false`
 - `RESTORE_APPLY_ENABLED=false`
+- `DRAFT_PR_CREATED=true`
