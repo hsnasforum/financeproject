@@ -13,6 +13,7 @@ const SUCCESS_DECISION = Object.freeze({
   proxyTrust: "none",
   forwardedHeadersTrusted: false,
   processModel: "single",
+  writerExclusivity: "data-root-exclusive",
   singleWriter: true,
   dataRootKind: "local",
   userScope: "default",
@@ -90,6 +91,9 @@ function desktopLocalConflicts(input) {
   }
   if (input?.processModel !== "single") {
     conflicts.push("processModel");
+  }
+  if (input?.writerExclusivity !== "data-root-exclusive") {
+    conflicts.push("writerExclusivity");
   }
   if (input?.singleUserModeEnabled !== true) {
     conflicts.push("singleUserModeEnabled");

@@ -28,6 +28,7 @@ function desktopLocalInput(
     databaseProvider: "sqlite",
     databaseConnection: "file",
     processModel: "single",
+    writerExclusivity: "data-root-exclusive",
     dataRootKind: "local",
     proxyMode: "none",
     ...overrides,
@@ -43,6 +44,7 @@ const EXACT_DESKTOP_LOCAL_DECISION = {
   proxyTrust: "none",
   forwardedHeadersTrusted: false,
   processModel: "single",
+  writerExclusivity: "data-root-exclusive",
   singleWriter: true,
   dataRootKind: "local",
   userScope: "default",
@@ -156,6 +158,9 @@ describe("planning deployment policy", () => {
     ["unknown identity provenance", { desktopLocalIdentityProvenance: "unknown" }, ["desktopLocalIdentityProvenance"]],
     ["multi process", { processModel: "multi" }, ["processModel"]],
     ["unknown process model", { processModel: "unknown" }, ["processModel"]],
+    ["process-local writer serialization", { writerExclusivity: "process-local-only" }, ["writerExclusivity"]],
+    ["multiple writers", { writerExclusivity: "multi-writer" }, ["writerExclusivity"]],
+    ["unknown writer exclusivity", { writerExclusivity: "unknown" }, ["writerExclusivity"]],
     ["single-user flag disabled", { singleUserModeEnabled: false }, ["singleUserModeEnabled"]],
     ["raw multi-user namespace enabled", { namespaceEnabled: true }, ["namespaceEnabled"]],
     ["shared data root", { dataRootKind: "shared" }, ["dataRootKind"]],
@@ -185,6 +190,7 @@ describe("planning deployment policy", () => {
     ["identity provenance", { desktopLocalIdentityProvenance: undefined }, "DEPLOYMENT_POLICY_CONFLICT", ["desktopLocalIdentityProvenance"]],
     ["identity readiness", { desktopLocalIdentityReady: undefined }, "DEPLOYMENT_AUTH_NOT_READY", ["desktopLocalIdentityReady"]],
     ["process model", { processModel: undefined }, "DEPLOYMENT_POLICY_CONFLICT", ["processModel"]],
+    ["writer exclusivity", { writerExclusivity: undefined }, "DEPLOYMENT_POLICY_CONFLICT", ["writerExclusivity"]],
     ["single-user flag", { singleUserModeEnabled: undefined }, "DEPLOYMENT_POLICY_CONFLICT", ["singleUserModeEnabled"]],
     ["namespace flag", { namespaceEnabled: undefined }, "DEPLOYMENT_POLICY_CONFLICT", ["namespaceEnabled"]],
     ["data root", { dataRootKind: undefined }, "DEPLOYMENT_POLICY_CONFLICT", ["dataRootKind"]],
@@ -214,6 +220,39 @@ describe("planning deployment policy", () => {
     });
   });
 
+  it.each(["process-local-only", "multi-writer", "unknown", undefined] as const)(
+    "never reports single-writer success for unsafe writer exclusivity: %s",
+    (writerExclusivity) => {
+      const decision = resolvePlanningDeploymentPolicy(desktopLocalInput({
+        writerExclusivity,
+      }));
+
+      expect(decision.ok).toBe(false);
+      expect(decision).toMatchObject({
+        code: "DEPLOYMENT_POLICY_CONFLICT",
+        conflicts: ["writerExclusivity"],
+      });
+    },
+  );
+
+  it("treats process model and writer exclusivity as independent facts", () => {
+    expect(resolvePlanningDeploymentPolicy(desktopLocalInput({
+      processModel: "multi",
+      writerExclusivity: "data-root-exclusive",
+    }))).toMatchObject({
+      ok: false,
+      conflicts: ["processModel"],
+    });
+
+    expect(resolvePlanningDeploymentPolicy(desktopLocalInput({
+      processModel: "multi",
+      writerExclusivity: "process-local-only",
+    }))).toMatchObject({
+      ok: false,
+      conflicts: ["processModel", "writerExclusivity"],
+    });
+  });
+
   it("orders multiple conflicts deterministically", () => {
     expect(resolvePlanningDeploymentPolicy(desktopLocalInput({
       requestedBindHost: "localhost",
@@ -223,6 +262,7 @@ describe("planning deployment policy", () => {
       desktopLocalIdentityMode: "other",
       desktopLocalIdentityProvenance: "other",
       processModel: "multi",
+      writerExclusivity: "process-local-only",
       singleUserModeEnabled: false,
       namespaceEnabled: true,
       dataRootKind: "shared",
@@ -241,6 +281,7 @@ describe("planning deployment policy", () => {
         "desktopLocalIdentityMode",
         "desktopLocalIdentityProvenance",
         "processModel",
+        "writerExclusivity",
         "singleUserModeEnabled",
         "namespaceEnabled",
         "dataRootKind",

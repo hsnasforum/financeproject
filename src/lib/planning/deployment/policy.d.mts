@@ -20,6 +20,11 @@ export type PlanningDeploymentPolicyInput = {
   databaseProvider: "sqlite" | "postgresql" | "unknown";
   databaseConnection: "file" | "network" | "unknown";
   processModel: "single" | "multi" | "unknown";
+  writerExclusivity:
+    | "data-root-exclusive"
+    | "process-local-only"
+    | "multi-writer"
+    | "unknown";
   dataRootKind: "local" | "shared" | "unknown";
   proxyMode: "none" | "trusted" | "untrusted" | "unknown";
 };
@@ -32,6 +37,7 @@ export type PlanningDeploymentPolicyConflict =
   | "desktopLocalIdentityMode"
   | "desktopLocalIdentityProvenance"
   | "processModel"
+  | "writerExclusivity"
   | "singleUserModeEnabled"
   | "namespaceEnabled"
   | "dataRootKind"
@@ -56,6 +62,7 @@ export type PlanningDeploymentPolicyDecision =
       readonly proxyTrust: "none";
       readonly forwardedHeadersTrusted: false;
       readonly processModel: "single";
+      readonly writerExclusivity: "data-root-exclusive";
       readonly singleWriter: true;
       readonly dataRootKind: "local";
       readonly userScope: "default";

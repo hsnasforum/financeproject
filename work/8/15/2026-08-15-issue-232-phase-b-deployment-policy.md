@@ -3,15 +3,22 @@
 ## 판정
 
 - ADR decision accepted
-- Pure resolver implemented
+- Pure resolver corrected after independent review
 - Runtime wiring pending
+- Writer exclusivity enforcement pending Phase C / Issue #234
 - Supported end-to-end now: none
 - Phase B local verification: PASS
-- GitHub checks: `NOT_QUERIED_BEFORE_PUSH`
+- GitHub checks after corrective push: pending external verification
 
 이 기록은 Planning deployment 결정을 문서화하고 아직 runtime에 연결하지 않은
 pure policy contract를 추가한 Phase B / PR 1 작업입니다. `desktop-local`을
 현재 지원 완료로 표현하지 않습니다.
+
+독립 검토의 `REVIEW_CHANGES_REQUIRED` 판정에서 P1 한 건이 확인됐습니다. 기존
+resolver가 `processModel: "single"`만 확인하고 `singleWriter: true`를 반환해
+application process 수와 data-root writer exclusivity를 같은 사실로 취급한
+문제입니다. 이번 수정은 두 사실을 분리하고 unsafe writer 상태를 fail
+closed하도록 계약을 교정합니다.
 
 ## 사용자 승인 결정
 
@@ -91,6 +98,7 @@ smoke는 PASS했습니다. Node 20 executable은 local environment에 없어 Nod
 - `databaseProvider`
 - `databaseConnection`
 - `processModel`
+- `writerExclusivity`
 - `dataRootKind`
 - `proxyMode`
 
@@ -108,6 +116,7 @@ Resolver는 `process.env`, filesystem, network, request headers, Auth.js session
 - `proxyTrust: "none"`
 - `forwardedHeadersTrusted: false`
 - `processModel: "single"`
+- `writerExclusivity: "data-root-exclusive"`
 - `singleWriter: true`
 - `dataRootKind: "local"`
 - `userScope: "default"`
@@ -141,6 +150,7 @@ inventory는 freeze되고, caller mutation이 후속 호출에 영향을 주지 
 - identity mode는 `desktop-local-session`
 - identity provenance는 `launcher-process`
 - process model은 `single`
+- writer exclusivity는 `data-root-exclusive`
 - `singleUserModeEnabled=true`
 - raw `namespaceEnabled=false`
 - data root는 `local`
@@ -149,10 +159,17 @@ inventory는 freeze되고, caller mutation이 후속 호출에 영향을 주지 
 - `desktopLocalIdentityReady=true`
 
 `localhost`, `0.0.0.0`, `::1`, trusted/untrusted/unknown proxy,
-multi/unknown process, shared/unknown data root, PostgreSQL/unknown DB,
+multi/unknown process, `process-local-only`/`multi-writer`/unknown/missing writer
+exclusivity, shared/unknown data root, PostgreSQL/unknown DB,
 multi-user raw namespace와 identity-not-ready 조합은 모두 fail closed합니다.
 OAuth provider 수는 policy capability가 아니며 provider count 0도
 `desktopLocalIdentityReady=true`인 pure policy decision을 막지 않습니다.
+
+`processModel: "single"`은 `writerExclusivity: "data-root-exclusive"`의 증거가
+아닙니다. 후자는 모든 지원 mutating entrypoint가 공유하는 data-root-scoped
+lock/lease, 검증된 offline/quiesced ownership 또는 동등한 fail-closed
+capability가 실제로 성립할 때만 Phase C adapter가 만들 수 있습니다. 현재
+launcher 전용 lock과 process-local keyed queue는 그 증거로 사용하지 않습니다.
 
 ## Unsupported modes
 
@@ -191,6 +208,9 @@ TypeScript가 loader 변경이나 판단 로직 복제 없이 single source를 �
 - `scripts/planning_storage_mode_guard.mjs`
 - `scripts/start_local.mjs`
 - `scripts/planning_v2_desktop_launch.mjs`
+- `src/lib/planning/v3/ops/trim.ts`
+- `src/lib/planning/v3/ops/migrate.ts`
+- `src/lib/planning/v3/ops/restore.ts`
 - `.env.example`
 - `docs/deploy.md`
 - `docs/current-screens.md`
@@ -207,10 +227,10 @@ namespace path와 restore apply 상태는 변경하지 않았습니다.
    `corepack pnpm install --frozen-lockfile` — PASS; lockfile 변경 없음
 4. `node --check src/lib/planning/deployment/policy.mjs`
    — PASS
-5. `DATABASE_URL=file:/tmp/finance-issue-232-policy.db corepack pnpm vitest run tests/planning/deployment/planningDeploymentPolicy.test.ts`
-   — 1 file / 59 tests PASS
-6. policy 및 기존 auth·storage·local-request·middleware focused regression
-   — 7 files / 131 tests PASS
+5. `DATABASE_URL=file:/tmp/finance-pr291-writer-fix.db corepack pnpm vitest run tests/planning/deployment/planningDeploymentPolicy.test.ts`
+   — 1 file / 68 tests PASS
+6. 기존 auth·storage·local-request·middleware focused regression
+   — 5 files / 55 tests PASS
 7. `DATABASE_URL=file:/tmp/finance-issue-232-lint.db corepack pnpm lint`
    — PASS
 8. `corepack pnpm typecheck`
@@ -219,19 +239,14 @@ namespace path와 restore apply 상태는 변경하지 않았습니다.
    — guard PASS; 5 files / 11 tests PASS
 10. `corepack pnpm deps:audit`
     — 662 packages / 687 versions / 0 advisories, PASS
-11. `DATABASE_URL=file:/tmp/finance-232-phase-b-final-retry.db corepack pnpm verify`
-    — 834 files / 3,064 tests PASS
-12. `DATABASE_URL=file:/tmp/finance-issue-232-build.db corepack pnpm build`
+11. `DATABASE_URL=file:/tmp/finance-pr291-writer-verify.db corepack pnpm verify`
+    — 834 files / 3,073 tests PASS
+12. `DATABASE_URL=file:/tmp/finance-pr291-writer-build.db corepack pnpm build`
    — PASS; compile, TypeScript, 250 static pages generated
 13. `corepack pnpm multi-agent:guard` — PASS
 14. runtime entry point import scan — resolver import 없음, PASS
 15. runtime entry point `origin/main` diff audit — 변경 없음, PASS
 16. `git diff --check` 및 `git status --short` — PASS; clean
-
-첫 최종 `verify`에서는 전체 병렬 부하 중 기존 static guard 한 건이 5초 제한을
-넘어 timeout됐습니다. 같은 guard의 focused 실행은 1 file / 2 tests PASS였고,
-마지막 canonical `verify` 재실행에서는 해당 guard를 포함해 834 files / 3,064
-tests가 모두 PASS했습니다.
 
 최종 diff 감사에서는 resolver의 purity, environment/request 비참조,
 missing·unknown·unsupported fail-closed, desktop-local invariant, web mode 성공
@@ -250,11 +265,11 @@ compile/test 실패는 없습니다.
 - Local `pnpm e2e:rc`: `NOT_RUN`
   - Reason: Phase B adds a pure unused policy contract and does not change
     runtime route, UI, selector, startup, or authentication behavior.
-- GitHub E2E Smoke: push 및 Draft PR 생성 후 checks 1회 조회 대상입니다.
+- GitHub E2E Smoke: corrective push 후 checks 1회 조회 대상입니다.
 
 ## GitHub checks
 
-이 기록 작성 시점은 push 전이므로 `NOT_QUERIED_BEFORE_PUSH`입니다. 최종 push
+이 corrective commit 기록 작성 시점은 push 전입니다. 최종 push
 후 CI, E2E Smoke, dependency audit, typecheck/verify/build와 contract test를
 한 번만 조회합니다. Pending 또는 queued이면 최종 상태는
 `AWAITING_EXTERNAL_CHECKS`이며 polling, rerun 또는 반복 조회를 하지 않습니다.
@@ -265,6 +280,8 @@ compile/test 실패는 없습니다.
 - `next_prod_safe.mjs`와 desktop launcher startup preflight wiring
 - middleware, `currentUser`, `routeAuth`의 같은 resolver decision 소비
 - launcher-established local session/capability 구현
+- Issue #234의 data-root-scoped exclusive writer ownership capability 구현 또는
+  검증된 offline/quiesced ownership adapter 연결
 - raw trusted header가 아닌 desktop local identity 검증
 - authenticated production desktop CRUD smoke
 - web mode startup rejection과 fail-closed diagnostics
@@ -282,6 +299,8 @@ DB 또는 stored data를 변경하지 않습니다.
 
 - Accepted decision이 아직 runtime에서 강제되지 않습니다.
 - Desktop launcher는 아직 local identity/session을 만들지 않습니다.
+- 모든 writer entrypoint가 공유하는 lock/lease 또는 동등한 exclusive ownership은
+  아직 구현되지 않았습니다.
 - 기존 deploy/env 문서는 Phase D 전까지 current support 상태를 과장해 읽힐 수
   있습니다.
 - Node 20 실제 direct-import 실행은 이 환경에서 검증하지 못했습니다.
@@ -295,14 +314,16 @@ DB 또는 stored data를 변경하지 않습니다.
   전체 test, build와 runtime 미연결 검증을 선택하는 데 사용했습니다.
 - `work-log-closeout`: 변경·검증·잔여 위험을 이 문서 형식으로 정리하는 데
   사용했습니다.
-- `github:yeet`: 변경 범위·검증·Draft 상태를 확인하고 branch push 및 Draft PR
-  메타데이터를 게시하는 데 사용했습니다.
+- `github:yeet`: 변경 범위·검증·Ready 상태를 확인하고 기존 PR branch의 일반
+  push 및 PR 메타데이터 갱신 절차를 점검하는 데 사용했습니다.
 
 ## 다음 라운드 우선순위
 
 Phase C에서 startup·desktop launcher·middleware·`currentUser`·`routeAuth`가
-같은 resolver를 소비하도록 연결하고, launcher-established local identity를
-구현합니다. 이 단계는 security boundary와 production runtime behavior를
+같은 resolver를 소비하도록 연결하고, launcher-established local identity와
+Issue #234의 data-root-scoped exclusive writer ownership capability를 실제
+enforcement 결과로 정규화합니다. Process count에서 writer exclusivity를
+추론하지 않습니다. 이 단계는 security boundary와 production runtime behavior를
 변경하므로 별도 승인과 독립 보안 감사 범위로 진행합니다.
 
 ## 완료 상태
@@ -310,10 +331,14 @@ Phase C에서 startup·desktop launcher·middleware·`currentUser`·`routeAuth`�
 - `ISSUE_232_PHASE_B_COMPLETE`
 - `ADR_DECISION_RECORDED=true`
 - `PURE_POLICY_RESOLVER_IMPLEMENTED=true`
+- `PROCESS_MODEL_SEPARATED=true`
+- `WRITER_EXCLUSIVITY_FACT_ADDED=true`
+- `WRITER_EXCLUSIVITY_ENFORCEMENT_IMPLEMENTED=false`
 - `RUNTIME_POLICY_WIRED=false`
 - `DESKTOP_LOCAL_END_TO_END_SUPPORTED=false`
 - `WEB_SINGLE_SUPPORTED=false`
 - `WEB_MULTI_SUPPORTED=false`
 - `REMOTE_MUTATION_ENABLED=false`
 - `RESTORE_APPLY_ENABLED=false`
-- `DRAFT_PR_CREATED=true`
+- `PR_291_READY=true`
+- `PR_291_MERGED=false`
