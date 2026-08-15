@@ -34,7 +34,55 @@ function extractUploadPaths(source: string): string[] {
   return out;
 }
 
+function extractStepBlock(source: string, name: string): string {
+  const marker = `      - name: ${name}\n`;
+  const start = source.indexOf(marker);
+  if (start < 0) return "";
+  const next = source.indexOf("\n      - name: ", start + marker.length);
+  return source.slice(start, next < 0 ? undefined : next);
+}
+
 describe("daily refresh workflow contract", () => {
+  it("pins pnpm 9 before the Node 20 pnpm cache and frozen install", () => {
+    const workflow = fs.readFileSync(
+      path.join(process.cwd(), ".github", "workflows", "daily-refresh.yml"),
+      "utf-8",
+    );
+    const stepNames = [
+      "Checkout",
+      "Setup pnpm",
+      "Setup Node",
+      "Install",
+      "Validate refresh configuration",
+      "Run daily refresh",
+      "Validate refresh result and build evidence",
+      "Upload artifacts",
+      "Create refresh pull request",
+    ];
+    const positions = stepNames.map((name) => workflow.indexOf(`      - name: ${name}\n`));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+
+    const setupPnpmBlock = extractStepBlock(workflow, "Setup pnpm");
+    expect(setupPnpmBlock).toContain("uses: pnpm/action-setup@v6");
+    expect(setupPnpmBlock).toMatch(/\n\s+version: 9\s*$/m);
+
+    const setupNodeBlock = extractStepBlock(workflow, "Setup Node");
+    expect(setupNodeBlock).toContain("uses: actions/setup-node@v5");
+    expect(setupNodeBlock).toMatch(/\n\s+node-version: 20\s*$/m);
+    expect(setupNodeBlock).toContain('cache: "pnpm"');
+    expect(setupNodeBlock).toContain("cache-dependency-path: pnpm-lock.yaml");
+
+    const installBlock = extractStepBlock(workflow, "Install");
+    expect(installBlock).toContain('DATABASE_URL: "file:./prisma/ci.db"');
+    expect(installBlock).toContain("run: pnpm install --frozen-lockfile");
+    expect(installBlock).not.toContain("corepack enable");
+    expect(workflow).not.toContain("corepack enable");
+    expect(workflow).toContain("workflow_dispatch: {}");
+    expect(workflow).toMatch(/\n  schedule:\n\s+- cron:/);
+  });
+
   it("fails closed before creating a pull request and uses only approved tracked paths", () => {
     const workflow = fs.readFileSync(
       path.join(process.cwd(), ".github", "workflows", "daily-refresh.yml"),
@@ -58,11 +106,6 @@ describe("daily refresh workflow contract", () => {
     expect(workflow).toContain("group: daily-refresh-${{ github.repository }}");
     expect(workflow).toContain("cancel-in-progress: false");
     expect(workflow).toContain("peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1");
-    const setupNodeBlock = workflow.slice(
-      workflow.indexOf("      - name: Setup Node"),
-      workflow.indexOf("      - name: Install"),
-    );
-    expect(setupNodeBlock).not.toContain('cache: "pnpm"');
     for (const envName of [
       "FINLIFE_API_KEY",
       "FINLIFE_TOPFIN_GRP_LIST",
@@ -96,6 +139,8 @@ describe("daily refresh workflow contract", () => {
     expect(workflow).toContain("tmp/daily_refresh.log");
     expect(workflow).toContain("tmp/daily_refresh_evidence.json");
     expect(workflow).toContain("${{ runner.temp }}/daily_refresh_pr_body.md");
+    expect(extractStepBlock(workflow, "Validate refresh result and build evidence")).toContain("if: always()");
+    expect(extractStepBlock(workflow, "Upload artifacts")).toContain("if: always()");
     expect(extractUploadPaths(workflow)).toEqual([
       ...DAILY_REFRESH_DIAGNOSTIC_ARTIFACT_PATHS.slice(0, 3),
       "${{ runner.temp }}/daily_refresh_pr_body.md",
