@@ -1,11 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import {
-  getPlanningUserDir,
-  isPlanningNamespaceEnabled,
-  resolvePlanningUserId,
-} from "@/lib/planning/store/namespace";
+import { resolvePlanningWriterTarget } from "@/lib/planning/storage/writerTargets";
+import { resolvePlanningUserId } from "@/lib/planning/store/namespace";
 import { parseWithV3Whitelist } from "../security/whitelist";
 import { TopicScenarioTemplateSchema, type TopicScenarioTemplate } from "../news/scenario/contracts";
 
@@ -118,10 +115,12 @@ export const SCENARIO_LIBRARY_SSOT: ScenarioLibraryEntry[] = RAW_SCENARIO_LIBRAR
   }));
 
 function defaultDataDir(cwd = process.cwd()): string {
-  if (isPlanningNamespaceEnabled()) {
-    return path.join(getPlanningUserDir(resolvePlanningUserId(), cwd), "scenarios");
-  }
-  return path.join(cwd, ".data", "scenarios");
+  const overridesPath = resolvePlanningWriterTarget("archive:v3.scenario-overrides", {
+    cwd,
+    userId: resolvePlanningUserId(),
+  }).paths[0];
+  if (!overridesPath) throw new Error("PLANNING_WRITER_TARGET_PATH_MISSING:archive:v3.scenario-overrides");
+  return path.dirname(overridesPath);
 }
 
 function defaultOverrides(): ScenarioLibraryOverrides {

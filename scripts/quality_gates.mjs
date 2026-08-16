@@ -47,6 +47,7 @@ export const QUALITY_GATES = [
     script: "planning:user-scope:check",
   }),
   gate({ id: "planning:v2:guard", tier: "required", scope: ["planning-v2"], script: "planning:v2:guard" }),
+  gate({ id: "planning:writer:guard", tier: "required", scope: ["storage", "security"], script: "planning:writer:guard" }),
   gate({ id: "sec:check", tier: "required", scope: ["security"], script: "sec:check" }),
   gate({
     id: "planning:v2:freeze:guard",
@@ -120,6 +121,7 @@ export const QUALITY_GATE_SUITES = {
       "deps:audit",
     ],
     earlyRequired: [
+      "planning:writer:guard",
       "planning:v2:complete",
       "multi-agent:guard",
     ],

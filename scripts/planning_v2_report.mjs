@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tsImport } from "tsx/esm/api";
+import { resolvePlanningReportPaths } from "./planning_runtime_paths.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -237,7 +238,7 @@ async function run() {
     ...(debt ? { debt } : {}),
   });
 
-  const defaultOut = path.join(".data", "planning", "reports", `${toIsoTimestamp()}.md`);
+  const defaultOut = path.join(resolvePlanningReportPaths({ cwd: process.cwd() }).root, `${toIsoTimestamp()}.md`);
   const outRel = asString(args.outPath) || defaultOut;
   const outAbs = path.resolve(process.cwd(), outRel);
   await writeTextAtomic(outAbs, markdown);

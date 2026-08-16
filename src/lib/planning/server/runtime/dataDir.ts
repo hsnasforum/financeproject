@@ -1,51 +1,34 @@
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-
-const DEFAULT_APP_NAME = "PlanningV2";
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function sanitizeAppName(value: unknown): string {
-  const raw = asString(value);
-  if (!raw) return DEFAULT_APP_NAME;
-  const sanitized = raw.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-").trim();
-  return sanitized || DEFAULT_APP_NAME;
-}
-
-function resolvePackagedPlanningRoot(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string {
-  const appName = sanitizeAppName(env.PLANNING_APP_NAME);
-
-  if (platform === "win32") {
-    const localAppData = asString(env.LOCALAPPDATA) || asString(env.APPDATA);
-    const base = localAppData || path.join(os.homedir(), "AppData", "Local");
-    return path.resolve(base, appName, "vault");
-  }
-
-  const xdgDataHome = asString(env.XDG_DATA_HOME);
-  const base = xdgDataHome || path.join(os.homedir(), ".local", "share");
-  return path.resolve(base, appName, "vault");
-}
+import {
+  isPlanningPackagedRuntime,
+  normalizePlanningRuntimePlatform,
+  resolvePlanningLegacyServerProductionRoot,
+  resolvePlanningRuntimeRoots,
+} from "../../storage/runtimeRoots.mjs";
 
 export function resolvePlanningDataDir(options?: {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  homeDir?: string;
 }): string {
-  const cwd = path.resolve(options?.cwd ?? process.cwd());
-  const env = options?.env ?? process.env;
-  const platform = options?.platform ?? process.platform;
-
-  const explicit = asString(env.PLANNING_DATA_DIR);
-  if (explicit) return path.resolve(cwd, explicit);
-
-  if (env.NODE_ENV !== "production") {
-    return path.resolve(cwd, ".data", "planning");
+  const input = {
+    cwd: options?.cwd ?? process.cwd(),
+    env: options?.env ?? process.env,
+    platform: normalizePlanningRuntimePlatform(options?.platform ?? process.platform),
+    homeDir: options?.homeDir ?? os.homedir(),
+  };
+  const planningRoot = resolvePlanningRuntimeRoots(input).planningRoot;
+  const legacyRoot = resolvePlanningLegacyServerProductionRoot(input);
+  if (isPlanningPackagedRuntime(input.env)
+    && legacyRoot !== planningRoot
+    && fsSync.existsSync(legacyRoot)) {
+    throw new Error(`PATH_MIGRATION_REQUIRED:${legacyRoot}->${planningRoot}`);
   }
-
-  return resolvePackagedPlanningRoot(env, platform);
+  return planningRoot;
 }
 
 export async function ensureDir(dirPath: string): Promise<string> {
@@ -53,4 +36,3 @@ export async function ensureDir(dirPath: string): Promise<string> {
   await fs.mkdir(resolved, { recursive: true });
   return resolved;
 }
-

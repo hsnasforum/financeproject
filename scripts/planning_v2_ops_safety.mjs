@@ -6,12 +6,11 @@ import {
 import { fileURLToPath } from "node:url";
 import { runOpsPipeline } from "./planning_v2_ops_run.mjs";
 import {
-  OPS_LOGS_RELATIVE,
-  OPS_REPORTS_RELATIVE,
   makeTimestampToken,
   writeJsonAtomic,
   writeTextAtomic,
 } from "./planning_v2_ops_common.mjs";
+import { resolvePlanningOpsPaths } from "./planning_runtime_paths.mjs";
 
 const DEFAULT_KEEP = 50;
 const DEFAULT_STALE_DAYS = 45;
@@ -416,8 +415,9 @@ export async function runOpsSafetyPipeline(options = {}) {
   const ok = Boolean(opsResult.ok) && legacySection.status !== "FAIL";
   const finishedAt = new Date().toISOString();
   const token = makeTimestampToken(startedAt).replace(/Z$/, "");
-  const reportPathAbs = path.resolve(cwd, OPS_REPORTS_RELATIVE, `${token}-safety.json`);
-  const logPathAbs = path.resolve(cwd, OPS_LOGS_RELATIVE, `${token}-safety.log`);
+  const opsPaths = resolvePlanningOpsPaths({ cwd });
+  const reportPathAbs = path.join(opsPaths.reports, `${token}-safety.json`);
+  const logPathAbs = path.join(opsPaths.logs, `${token}-safety.log`);
 
   const report = {
     version: 1,

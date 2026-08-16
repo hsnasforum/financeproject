@@ -51,3 +51,8 @@
 - `DESKTOP_LOCAL_IDENTITY_IMPLEMENTED=false`
 - `DESKTOP_LOCAL_END_TO_END_SUPPORTED=false`
 - `AT_REST_PROTECTION_COMPLETE=false`
+
+## 다음 라운드
+
+- PR A에서 canonical writer owner/root/source/entrypoint와 drift guard를 구현합니다.
+- PR A가 검증된 뒤 PR B에서 cross-process lease primitive와 Linux/Windows native filesystem test를 진행합니다.

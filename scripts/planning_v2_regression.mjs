@@ -3,10 +3,10 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
 import { runPnpm } from "./pnpm_runner.mjs";
+import { resolvePlanningRegressionPaths } from "./planning_runtime_paths.mjs";
 
 const CORPUS_DIR = path.join("tests", "planning-v2", "regression", "corpus");
 const BASELINE_DIR = path.join("tests", "planning-v2", "regression", "baseline");
-const LATEST_REPORT_PATH = path.join(".data", "planning", "eval", "latest.json");
 const DEFAULT_REGRESSION_NOW_ISO = "2026-03-05T00:00:00.000Z";
 
 function asString(value) {
@@ -195,7 +195,7 @@ function baselinePathFor(cwd, caseId) {
 }
 
 function reportPath(cwd) {
-  return path.join(cwd, LATEST_REPORT_PATH);
+  return resolvePlanningRegressionPaths({ cwd }).latest;
 }
 
 function formatDiff(diff) {

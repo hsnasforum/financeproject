@@ -1,8 +1,7 @@
 import fs from "node:fs";
-import path from "node:path";
+import { resolvePlanningOpenApiPaths } from "./planning_runtime_paths.mjs";
 
-const outDir = path.join(process.cwd(), ".data", "planning", "openapi");
-const outPath = path.join(outDir, "planning-v2-api-contract.json");
+const { root: outDir, contract: outPath } = resolvePlanningOpenApiPaths({ cwd: process.cwd() });
 
 const doc = {
   openapi: "3.0.3",
@@ -50,4 +49,3 @@ const doc = {
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
 console.log(outPath);
-

@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { resolvePlanningRuntimeRoots } from "../src/lib/planning/storage/runtimeRoots.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -13,47 +15,15 @@ function toInt(value, fallback, min, max) {
   return Math.max(min, Math.min(max, parsed));
 }
 
-function normalizeBoolean(value) {
-  const normalized = asString(value).toLowerCase();
-  return normalized === "1"
-    || normalized === "true"
-    || normalized === "yes"
-    || normalized === "on"
-    || normalized === "packaged"
-    || normalized === "desktop";
-}
-
-function resolvePackagedDataBaseDir(platform, env) {
-  if (platform === "win32") {
-    const localAppData = asString(env.LOCALAPPDATA);
-    const appData = asString(env.APPDATA);
-    if (localAppData) return localAppData;
-    if (appData) return appData;
-    return path.join(os.homedir(), "AppData", "Local");
-  }
-  if (platform === "darwin") {
-    return path.join(os.homedir(), "Library", "Application Support");
-  }
-  const xdgDataHome = asString(env.XDG_DATA_HOME);
-  if (xdgDataHome) return xdgDataHome;
-  return path.join(os.homedir(), ".local", "share");
-}
-
-function resolveDesktopDataDir(cwd = process.cwd(), env = process.env, platform = process.platform) {
-  const override = asString(env.PLANNING_DATA_DIR);
-  if (override) return path.resolve(cwd, override);
-
-  const packaged = normalizeBoolean(env.PLANNING_PACKAGED_MODE)
-    || normalizeBoolean(env.PLANNING_RUNTIME_PACKAGED)
-    || asString(env.PLANNING_RUNTIME_MODE).toLowerCase() === "packaged";
-  if (!packaged) return path.resolve(cwd, ".data");
-
-  const appName = asString(env.PLANNING_APP_NAME).replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-").trim() || "PlanningV2";
-  return path.resolve(resolvePackagedDataBaseDir(platform, env), appName);
-}
-
-function resolveRuntimeLockPath(cwd = process.cwd(), env = process.env, platform = process.platform) {
-  return path.join(resolveDesktopDataDir(cwd, env, platform), "runtime", "desktop-instance.lock.json");
+export function resolveRuntimeLockPath(
+  cwd = process.cwd(),
+  env = process.env,
+  platform = process.platform,
+  homeDir = os.homedir(),
+) {
+  const roots = resolvePlanningRuntimeRoots({ cwd, env, platform, homeDir });
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
+  return pathApi.join(roots.controlRoot, "desktop-instance.lock.json");
 }
 
 function isProcessAlive(pid) {
@@ -384,7 +354,10 @@ async function main() {
   process.exit(result.code ?? 1);
 }
 
-main().catch((error) => {
-  process.stderr.write(`[planning:v2:desktop:launch] failed ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-  process.exit(1);
-});
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  main().catch((error) => {
+    process.stderr.write(`[planning:v2:desktop:launch] failed ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+    process.exit(1);
+  });
+}

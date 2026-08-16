@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { tsImport } from "tsx/esm/api";
 import { writeTextAtomic } from "./planning_v2_ops_common.mjs";
+import { resolvePlanningReleasePaths } from "./planning_runtime_paths.mjs";
 import { runPnpmBuffered } from "./pnpm_runner.mjs";
 
 const SELF_TEST_DOC_PATH = "docs/planning-v2-5min-selftest.md";
@@ -156,7 +157,7 @@ async function loadRedactText() {
 
 async function runGateWithLog(cwd, version, stepId, scriptName, extraEnv = {}) {
   const result = await runPnpm(scriptName, [], cwd, extraEnv);
-  const logsDirAbs = path.resolve(cwd, ".data/planning/release/logs");
+  const logsDirAbs = resolvePlanningReleasePaths({ cwd }).logs;
   await fs.mkdir(logsDirAbs, { recursive: true });
   const logFileName = `final-report-${version}-${stepId}.log`;
   const logAbs = path.resolve(logsDirAbs, logFileName);
@@ -250,9 +251,10 @@ async function main() {
     }
     printGate(gates[gates.length - 1].status, "acceptance", gates[gates.length - 1].note ?? "");
   } else {
-    const skippedLogRel = `.data/planning/release/logs/final-report-${version}-acceptance.log`;
+    const skippedLogAbs = path.join(resolvePlanningReleasePaths({ cwd }).logs, `final-report-${version}-acceptance.log`);
+    const skippedLogRel = path.relative(cwd, skippedLogAbs).replaceAll("\\", "/");
     await writeTextAtomic(
-      path.resolve(cwd, skippedLogRel),
+      skippedLogAbs,
       "# planning:v2:acceptance\nstatus=SKIPPED\nreason=base-url-not-provided-or-script-missing\n",
     );
     gates.push({

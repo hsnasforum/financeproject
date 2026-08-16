@@ -1,10 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-
-export const OPS_ROOT_RELATIVE = ".data/planning/ops";
-export const OPS_LOGS_RELATIVE = `${OPS_ROOT_RELATIVE}/logs`;
-export const OPS_REPORTS_RELATIVE = `${OPS_ROOT_RELATIVE}/reports`;
-export const OPS_STATE_RELATIVE = `${OPS_ROOT_RELATIVE}/state.json`;
+import { resolvePlanningOpsPaths } from "./planning_runtime_paths.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -96,8 +92,7 @@ export async function pruneDirectoryKeepLatest(dirPath, keep, suffix = "") {
 
 export async function pruneOpsArtifacts(cwd = process.cwd(), keep = 50) {
   const safeKeep = normalizeKeep(keep, 50);
-  const logsAbs = path.resolve(cwd, OPS_LOGS_RELATIVE);
-  const reportsAbs = path.resolve(cwd, OPS_REPORTS_RELATIVE);
+  const { logs: logsAbs, reports: reportsAbs } = resolvePlanningOpsPaths({ cwd });
   const reports = await pruneDirectoryKeepLatest(reportsAbs, safeKeep, ".json");
   const logs = await pruneDirectoryKeepLatest(logsAbs, safeKeep, ".log");
   return {
@@ -108,4 +103,3 @@ export async function pruneOpsArtifacts(cwd = process.cwd(), keep = 50) {
     keptLogs: logs.kept,
   };
 }
-

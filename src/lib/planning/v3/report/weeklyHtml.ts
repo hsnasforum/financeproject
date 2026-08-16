@@ -6,6 +6,7 @@ import { readTodayCache, readTrendsCache } from "../news/store";
 import { shiftKstDay } from "../news/trend";
 import { sanitizeV3LogMessage } from "../security/whitelist";
 import { roundToDigits } from "../../calc/roundingPolicy";
+import { assertPlanningWriterPathCompatibility, resolvePlanningWriterTarget } from "../../storage/writerTargets";
 
 const ScenarioNameOrder: Record<string, number> = {
   Base: 0,
@@ -59,6 +60,10 @@ const WeeklyReportSchema = z.object({
 export type WeeklyReport = z.infer<typeof WeeklyReportSchema>;
 
 export type BuildWeeklyHtmlReportInput = {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  userId?: string;
   rootDir?: string;
   windowDays?: 7 | 30;
 };
@@ -152,16 +157,33 @@ function buildScenarioSignalGrade(
   return rankToGrade(bestRank);
 }
 
-function resolveOutputPath(cwd: string, out?: string): string {
+function resolveNewsRoot(input: BuildWeeklyHtmlReportInput): string {
+  const newsRoot = resolvePlanningWriterTarget("archive:v3.news", {
+    cwd: input.cwd,
+    env: input.env,
+    platform: input.platform,
+    userId: input.userId,
+  }).paths[0];
+  if (!newsRoot) throw new Error("PLANNING_WRITER_TARGET_PATH_MISSING:archive:v3.news");
+  const cwd = input.cwd ?? process.cwd();
+  assertPlanningWriterPathCompatibility([
+    { legacyPath: path.join(cwd, ".data", "news"), canonicalPath: newsRoot },
+  ]);
+  return newsRoot;
+}
+
+function resolveOutputPath(input: RunWeeklyHtmlReportExportInput): string {
+  const cwd = input.cwd ?? process.cwd();
+  const out = input.out;
   const safeOut = asString(out);
   if (!safeOut) {
-    return path.join(cwd, ".data", "news", "reports", "weekly.latest.html");
+    return path.join(resolveNewsRoot(input), "reports", "weekly.latest.html");
   }
   return path.isAbsolute(safeOut) ? safeOut : path.resolve(cwd, safeOut);
 }
 
 export function buildWeeklyHtmlReport(input: BuildWeeklyHtmlReportInput = {}): BuildWeeklyHtmlReportResult {
-  const rootDir = input.rootDir ?? path.join(process.cwd(), ".data", "news");
+  const rootDir = input.rootDir ?? resolveNewsRoot(input);
   const windowDays = input.windowDays ?? 7;
 
   const today = readTodayCache(rootDir);
@@ -323,9 +345,11 @@ export function buildWeeklyHtmlReport(input: BuildWeeklyHtmlReportInput = {}): B
 
 export function runWeeklyHtmlReportExport(input: RunWeeklyHtmlReportExportInput = {}): RunWeeklyHtmlReportExportResult {
   const cwd = input.cwd ?? process.cwd();
-  const rootDir = input.rootDir ?? path.join(cwd, ".data", "news");
-  const outputPath = resolveOutputPath(cwd, input.out);
+  const rootDir = input.rootDir ?? resolveNewsRoot({ ...input, cwd });
+  const outputPath = resolveOutputPath({ ...input, cwd });
   const built = buildWeeklyHtmlReport({
+    ...input,
+    cwd,
     rootDir,
     windowDays: input.windowDays,
   });

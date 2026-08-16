@@ -1,36 +1,29 @@
+import os from "node:os";
 import path from "node:path";
 import { resolvePlanningDataDir as resolvePlanningDataDirFromRuntime } from "../server/runtime/dataDir";
+import { isPlanningPackagedRuntime, normalizePlanningRuntimePlatform, resolvePlanningRuntimeRoots } from "./runtimeRoots.mjs";
 
-const PACKAGED_TRUE_SET = new Set(["1", "true", "yes", "on", "packaged", "desktop"]);
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeBoolean(value: unknown): boolean {
-  const normalized = asString(value).toLowerCase();
-  return PACKAGED_TRUE_SET.has(normalized);
-}
-
-export function isPackagedRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (normalizeBoolean(env.PLANNING_PACKAGED_MODE)) return true;
-  if (normalizeBoolean(env.PLANNING_RUNTIME_PACKAGED)) return true;
-  if (asString(env.PLANNING_RUNTIME_MODE).toLowerCase() === "packaged") return true;
-  return false;
-}
+export const isPackagedRuntime = isPlanningPackagedRuntime;
 
 export function resolveDataDir(options?: {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  homeDir?: string;
 }): string {
-  return path.dirname(resolvePlanningDataDir(options));
+  return resolvePlanningRuntimeRoots({
+    cwd: options?.cwd ?? process.cwd(),
+    env: options?.env ?? process.env,
+    platform: normalizePlanningRuntimePlatform(options?.platform ?? process.platform),
+    homeDir: options?.homeDir ?? os.homedir(),
+  }).runtimeRoot;
 }
 
 export function resolvePlanningDataDir(options?: {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  homeDir?: string;
 }): string {
   return resolvePlanningDataDirFromRuntime(options);
 }
@@ -39,6 +32,8 @@ export function resolveOpsDataDir(options?: {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  homeDir?: string;
 }): string {
-  return path.join(resolvePlanningDataDir(options), "ops");
+  const pathApi = options?.platform === "win32" ? path.win32 : path.posix;
+  return pathApi.join(resolvePlanningDataDir(options), "ops");
 }

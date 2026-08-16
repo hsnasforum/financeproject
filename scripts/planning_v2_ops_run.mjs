@@ -3,8 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPnpmBuffered } from "./pnpm_runner.mjs";
 import {
-  OPS_LOGS_RELATIVE,
-  OPS_REPORTS_RELATIVE,
   makeTimestampToken,
   normalizeKeep,
   pruneOpsArtifacts,
@@ -12,6 +10,7 @@ import {
   writeJsonAtomic,
   writeTextAtomic,
 } from "./planning_v2_ops_common.mjs";
+import { resolvePlanningOpsPaths } from "./planning_runtime_paths.mjs";
 
 const DEFAULT_STALE_DAYS = 45;
 const DEFAULT_KEEP = 50;
@@ -442,8 +441,9 @@ export async function runOpsPipeline(options = {}) {
   };
 
   const token = buildTimestampForFilename(startedAt);
-  const reportPathAbs = path.resolve(cwd, OPS_REPORTS_RELATIVE, `${token}.json`);
-  const logPathAbs = path.resolve(cwd, OPS_LOGS_RELATIVE, `${token}.log`);
+  const opsPaths = resolvePlanningOpsPaths({ cwd });
+  const reportPathAbs = path.join(opsPaths.reports, `${token}.json`);
+  const logPathAbs = path.join(opsPaths.logs, `${token}.log`);
   await writeJsonAtomic(reportPathAbs, report);
   await writeTextAtomic(logPathAbs, resolveStepLogs(logBlocks));
   const retention = await pruneOpsArtifacts(cwd, keep);

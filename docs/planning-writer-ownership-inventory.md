@@ -261,3 +261,23 @@ drift guard가 생기기 전까지 62개를 “완전한 전체 수”로 과장
 PR A가 owner/root/registry 계약을 닫기 전에 lease primitive를 부분 구현하면
 현재 누락된 writer가 그대로 경쟁할 수 있습니다. 이 상태에서
 `data-root-exclusive`를 반환하는 것은 금지합니다.
+
+## PR A 구현 갱신
+
+위 inventory는 기준 main의 감사 하한과 분할 근거로 유지합니다. PR A 구현 결과의 canonical 계약은 `docs/planning-writer-ownership-contract.md`를 따릅니다.
+
+- audited candidate lower bound: 62
+- classified production mutation source: 63
+- explicit exclusion: 17
+- canonical target: 39(기존 archive owner 참조 17 포함)
+- entrypoint: 46
+- unresolved source/target: 0
+- canonical root resolver: implemented
+- AST/package/child/direct-path/exported-bypass drift guard: required gate
+- archive owner exact set/manifest v1: unchanged
+- path migration performed: none
+- writer lease/runtime wiring: not implemented
+
+inventory 당시 `ROOT_FIRST`였던 assumptions/cache/migration/security/journal/trash/local-auth/share/ops/release 경로는 control, derived, output 또는 기존 archive owner target으로 분류했습니다. current instance lock은 별도 control file로 기록하지만 writer exclusivity evidence로 사용하지 않습니다. 자세한 physical path, backup/restore 정책, compatibility와 scanner 한계는 계약 문서에 기록했습니다.
+
+구현 중 `planning:auth:sqlite-backfill`이 추가 mutation source로 확인되었습니다. 이 command는 Prisma SQLite DB를 변경하지만 Planning data-root lease 대상은 아니므로 `outside.prisma-db` target과 `out-of-scope` policy로 명시했으며, package executable scanner가 같은 유형의 미등록 script를 fail closed합니다.

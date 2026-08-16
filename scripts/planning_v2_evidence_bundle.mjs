@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { tsImport } from "tsx/esm/api";
 import { writeJsonAtomic, writeTextAtomic } from "./planning_v2_ops_common.mjs";
+import { resolvePlanningReleasePaths } from "./planning_runtime_paths.mjs";
 import { runPnpmBuffered } from "./pnpm_runner.mjs";
 let redactTextImpl = fallbackRedactText;
 
@@ -163,7 +164,7 @@ async function copyFileSafe(srcAbs, dstAbs) {
 }
 
 async function buildBundleTree(cwd, version, releaseNotesRel, paths, checks, finalCheckRel, outPathAbs) {
-  const releaseRootAbs = path.resolve(cwd, ".data/planning/release");
+  const releaseRootAbs = resolvePlanningReleasePaths({ cwd }).root;
   const stageRootAbs = path.resolve(releaseRootAbs, `_bundle-staging-${Date.now()}`);
   const bundleDirName = `planning-v2-evidence-${version}`;
   const bundleRootAbs = path.resolve(stageRootAbs, bundleDirName);
@@ -241,15 +242,18 @@ async function main() {
   const cwd = path.resolve(process.cwd());
   const args = parseArgs(process.argv.slice(2));
   const version = asString(args.version) || defaultVersionFromDate();
-  const outRel = asString(args.out) || `.data/planning/release/planning-v2-evidence-${version}.tar.gz`;
-  const outPathAbs = path.resolve(cwd, outRel);
+  const releasePaths = resolvePlanningReleasePaths({ cwd });
+  const requestedOut = asString(args.out);
+  const outPathAbs = requestedOut
+    ? path.resolve(cwd, requestedOut)
+    : path.join(releasePaths.root, `planning-v2-evidence-${version}.tar.gz`);
 
   const pkg = await readPackageJson(cwd);
   const scripts = pkg.scripts ?? {};
   const releaseNotesRel = await ensureReleaseNotes(cwd, scripts, version);
 
-  const releaseRootAbs = path.resolve(cwd, ".data/planning/release");
-  const logsDirAbs = path.resolve(releaseRootAbs, "logs");
+  const releaseRootAbs = releasePaths.root;
+  const logsDirAbs = releasePaths.logs;
   await fs.mkdir(logsDirAbs, { recursive: true });
 
   const completeLogAbs = path.resolve(logsDirAbs, "complete.log");

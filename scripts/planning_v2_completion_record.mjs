@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { readJsonIfExists, writeJsonAtomic } from "./planning_v2_ops_common.mjs";
-
-const RECORD_REL = ".data/planning/release/V2_COMPLETION_RECORD.json";
+import { resolvePlanningReleasePaths } from "./planning_runtime_paths.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -95,7 +94,8 @@ async function main() {
     throw new Error("missing required option: --version");
   }
 
-  const recordAbs = path.resolve(cwd, RECORD_REL);
+  const releasePaths = resolvePlanningReleasePaths({ cwd });
+  const recordAbs = releasePaths.completionRecord;
   const existing = await readJsonIfExists(recordAbs);
   if (existing && asString(existing.version) === version) {
     console.log(normalizeRel(cwd, recordAbs));
@@ -103,25 +103,26 @@ async function main() {
   }
 
   const completeGate = await resolveGate(cwd, [
-    ".data/planning/release/logs/complete.log",
-    `.data/planning/release/logs/final-report-${version}-complete.log`,
+    path.join(releasePaths.logs, "complete.log"),
+    path.join(releasePaths.logs, `final-report-${version}-complete.log`),
   ]);
   const regressGate = await resolveGate(cwd, [
-    ".data/planning/release/logs/regress.log",
-    `.data/planning/release/logs/final-report-${version}-regress.log`,
+    path.join(releasePaths.logs, "regress.log"),
+    path.join(releasePaths.logs, `final-report-${version}-regress.log`),
   ]);
   const acceptanceGate = await resolveGate(cwd, [
-    ".data/planning/release/logs/acceptance.log",
-    `.data/planning/release/logs/final-report-${version}-acceptance.log`,
+    path.join(releasePaths.logs, "acceptance.log"),
+    path.join(releasePaths.logs, `final-report-${version}-acceptance.log`),
   ]);
 
   const finalReportRel = `docs/releases/planning-v2-final-report-${version}.md`;
   const releaseNotesRel = `docs/releases/planning-v2-${version}.md`;
-  const evidenceBundleRel = `.data/planning/release/planning-v2-evidence-${version}.tar.gz`;
+  const evidenceBundleAbs = path.join(releasePaths.root, `planning-v2-evidence-${version}.tar.gz`);
+  const evidenceBundleRel = normalizeRel(cwd, evidenceBundleAbs);
 
   const finalReportExists = await statIfExists(path.resolve(cwd, finalReportRel));
   const releaseNotesExists = await statIfExists(path.resolve(cwd, releaseNotesRel));
-  const evidenceBundleExists = await statIfExists(path.resolve(cwd, evidenceBundleRel));
+  const evidenceBundleExists = await statIfExists(evidenceBundleAbs);
 
   const record = {
     version,

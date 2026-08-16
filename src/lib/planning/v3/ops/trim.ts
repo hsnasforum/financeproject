@@ -6,6 +6,7 @@ import { ObservationSchema } from "../indicators/contracts";
 import { JournalEntrySchema } from "../journal/contracts";
 import { NewsItemSchema } from "../news/contracts";
 import { clampRoundedInteger } from "../../calc/roundingPolicy";
+import { assertPlanningWriterPathCompatibility, resolvePlanningWriterTarget } from "../../storage/writerTargets";
 
 type TrimSectionSummary = {
   scanned: number;
@@ -40,6 +41,9 @@ export type V3TrimSummary = {
 
 type RunV3TrimInput = {
   cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  userId?: string;
   retentionDays?: number;
   apply?: boolean;
   now?: Date;
@@ -136,7 +140,7 @@ function trimNewsItems(input: {
   apply: boolean;
 }): TrimSectionSummary {
   const out: TrimSectionSummary = { scanned: 0, candidates: 0, trimmed: 0, errors: 0 };
-  const itemsDir = path.join(input.rootDir, ".data", "news", "items");
+  const itemsDir = path.join(input.rootDir, "items");
   if (!fs.existsSync(itemsDir)) return out;
 
   for (const name of sortedNames(itemsDir).filter((row) => row.endsWith(".json"))) {
@@ -166,7 +170,7 @@ function trimNewsDaily(input: {
   apply: boolean;
 }): TrimSectionSummary {
   const out: TrimSectionSummary = { scanned: 0, candidates: 0, trimmed: 0, errors: 0 };
-  const dailyDir = path.join(input.rootDir, ".data", "news", "daily");
+  const dailyDir = path.join(input.rootDir, "daily");
   if (!fs.existsSync(dailyDir)) return out;
 
   for (const name of sortedNames(dailyDir).filter((row) => row.endsWith(".json"))) {
@@ -199,7 +203,7 @@ function trimIndicatorsSeries(input: {
     filesDeleted: 0,
     rowsKept: 0,
   };
-  const seriesDir = path.join(input.rootDir, ".data", "indicators", "series");
+  const seriesDir = path.join(input.rootDir, "series");
   if (!fs.existsSync(seriesDir)) return out;
 
   for (const name of sortedNames(seriesDir).filter((row) => row.endsWith(".jsonl"))) {
@@ -260,7 +264,7 @@ function trimAlertsEvents(input: {
     errors: 0,
     rowsKept: 0,
   };
-  const filePath = path.join(input.rootDir, ".data", "alerts", "events.jsonl");
+  const filePath = path.join(input.rootDir, "events.jsonl");
   if (!fs.existsSync(filePath)) return out;
 
   const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
@@ -303,7 +307,7 @@ function trimJournalEntries(input: {
   apply: boolean;
 }): TrimSectionSummary {
   const out: TrimSectionSummary = { scanned: 0, candidates: 0, trimmed: 0, errors: 0 };
-  const entriesDir = path.join(input.rootDir, ".data", "journal", "entries");
+  const entriesDir = input.rootDir;
   if (!fs.existsSync(entriesDir)) return out;
 
   for (const name of sortedNames(entriesDir).filter((row) => row.endsWith(".json"))) {
@@ -334,12 +338,31 @@ export function runV3Trim(input: RunV3TrimInput = {}): V3TrimSummary {
   const now = input.now ?? new Date();
   const cutoffMs = now.getTime() - (retentionDays * 24 * 60 * 60 * 1000);
   const cutoffIso = new Date(cutoffMs).toISOString();
+  const targetInput = {
+    cwd,
+    env: input.env,
+    platform: input.platform,
+    userId: input.userId,
+  };
+  const newsRoot = resolvePlanningWriterTarget("archive:v3.news", targetInput).paths[0];
+  const indicatorsRoot = resolvePlanningWriterTarget("archive:v3.indicators", targetInput).paths[0];
+  const alertsRoot = resolvePlanningWriterTarget("archive:v3.alerts", targetInput).paths[0];
+  const journalRoot = resolvePlanningWriterTarget("archive:v3.journal", targetInput).paths[0];
+  if (!newsRoot || !indicatorsRoot || !alertsRoot || !journalRoot) {
+    throw new Error("PLANNING_WRITER_TARGET_PATH_MISSING");
+  }
+  assertPlanningWriterPathCompatibility([
+    { legacyPath: path.join(cwd, ".data", "news"), canonicalPath: newsRoot },
+    { legacyPath: path.join(cwd, ".data", "indicators"), canonicalPath: indicatorsRoot },
+    { legacyPath: path.join(cwd, ".data", "alerts"), canonicalPath: alertsRoot },
+    { legacyPath: path.join(cwd, ".data", "journal", "entries"), canonicalPath: journalRoot },
+  ]);
 
-  const newsItems = trimNewsItems({ rootDir: cwd, cutoffMs, apply });
-  const newsDaily = trimNewsDaily({ rootDir: cwd, cutoffMs, apply });
-  const indicatorsSeries = trimIndicatorsSeries({ rootDir: cwd, cutoffMs, apply });
-  const alertsEvents = trimAlertsEvents({ rootDir: cwd, cutoffMs, apply });
-  const journalEntries = trimJournalEntries({ rootDir: cwd, cutoffMs, apply });
+  const newsItems = trimNewsItems({ rootDir: newsRoot, cutoffMs, apply });
+  const newsDaily = trimNewsDaily({ rootDir: newsRoot, cutoffMs, apply });
+  const indicatorsSeries = trimIndicatorsSeries({ rootDir: indicatorsRoot, cutoffMs, apply });
+  const alertsEvents = trimAlertsEvents({ rootDir: alertsRoot, cutoffMs, apply });
+  const journalEntries = trimJournalEntries({ rootDir: journalRoot, cutoffMs, apply });
 
   const candidates = newsItems.candidates
     + newsDaily.candidates

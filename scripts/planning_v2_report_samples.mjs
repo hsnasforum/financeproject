@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningReportPaths } from "./planning_runtime_paths.mjs";
 
 const ROOT = process.cwd();
 const FIXTURE_DIR = path.join(ROOT, "tests", "planning-v2", "report", "fixtures");
-const OUTPUT_DIR = path.join(ROOT, ".data", "planning", "reports", "samples");
+const OUTPUT_DIR = resolvePlanningReportPaths({ cwd: ROOT }).samples;
 
 const FIXTURES = [
   { name: "dto-ok", title: "Planning v2 Sample Report - OK" },

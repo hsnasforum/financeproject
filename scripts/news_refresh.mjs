@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { resolvePlanningAssumptionsPath } from "./planning_runtime_paths.mjs";
 import dotenv from "dotenv";
 
 function loadEnvFiles(cwd = process.cwd()) {
@@ -362,7 +363,7 @@ function kstDayRangeToUtc(dayKst) {
 }
 
 function loadMacroSnapshot(cwd, generatedAt, resolveNewsMacroOverridePath) {
-  const assumptionsPath = path.join(cwd, ".data", "planning", "assumptions.latest.json");
+  const assumptionsPath = resolvePlanningAssumptionsPath({ cwd });
   const assumptions = readJson(assumptionsPath, null);
   const overridePath = resolveNewsMacroOverridePath(cwd);
   const override = readJson(overridePath, null);

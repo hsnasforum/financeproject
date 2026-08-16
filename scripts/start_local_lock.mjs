@@ -1,47 +1,25 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-
-const DEFAULT_APP_NAME = "PlanningV2";
+import { resolvePlanningRuntimeRoots } from "../src/lib/planning/storage/runtimeRoots.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function sanitizeAppName(value) {
-  const raw = asString(value);
-  if (!raw) return DEFAULT_APP_NAME;
-  const sanitized = raw.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-").trim();
-  return sanitized || DEFAULT_APP_NAME;
-}
-
 export function resolvePlanningDataDir(options = {}) {
-  const cwd = path.resolve(options.cwd || process.cwd());
-  const env = options.env || process.env;
-  const platform = options.platform || process.platform;
-
-  const override = asString(env.PLANNING_DATA_DIR);
-  if (override) return path.resolve(cwd, override);
-
-  if (env.NODE_ENV !== "production") {
-    return path.resolve(cwd, ".data", "planning");
-  }
-
-  const appName = sanitizeAppName(env.PLANNING_APP_NAME);
-  if (platform === "win32") {
-    const localAppData = asString(env.LOCALAPPDATA) || asString(env.APPDATA);
-    const base = localAppData || path.join(os.homedir(), "AppData", "Local");
-    return path.resolve(base, appName, "vault");
-  }
-
-  const xdgDataHome = asString(env.XDG_DATA_HOME);
-  const base = xdgDataHome || path.join(os.homedir(), ".local", "share");
-  return path.resolve(base, appName, "vault");
+  return resolvePlanningRuntimeRoots({
+    cwd: options.cwd || process.cwd(),
+    env: options.env || process.env,
+    platform: options.platform || process.platform,
+    homeDir: options.homeDir || os.homedir(),
+  }).planningRoot;
 }
 
 export function resolveRuntimeLockPath(options = {}) {
   const planningDir = resolvePlanningDataDir(options);
-  return path.join(planningDir, "runtime.lock");
+  const pathApi = options.platform === "win32" ? path.win32 : path.posix;
+  return pathApi.join(planningDir, "runtime.lock");
 }
 
 export function isPidRunning(pid) {
@@ -156,4 +134,3 @@ export async function acquireSingleInstanceLock(lockPath, payload, options = {})
     url: "",
   };
 }
-

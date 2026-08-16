@@ -6,6 +6,7 @@ import { ExposureProfileSchema } from "../exposure/contracts";
 import { IndicatorsStateSchema } from "../indicators/contracts";
 import { DailyDigestSchema, NewsSettingsSchema, RuntimeStateSchema } from "../news/contracts";
 import { ScenariosCacheSchema, TodayCacheSchema, TrendsCacheSchema } from "../news/store";
+import { assertPlanningWriterPathCompatibility, resolvePlanningWriterTarget } from "../../storage/writerTargets";
 import { runV3Doctor } from "./doctor";
 
 type MigrateMode = "preview" | "apply";
@@ -68,12 +69,17 @@ export type V3MigrateSummary = {
 };
 
 type MigrateTarget = {
+  targetId: string;
   relPath: string;
+  reportPath: string;
   schema: z.ZodTypeAny;
 };
 
 type RunV3MigrateInput = {
   cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  userId?: string;
   apply?: boolean;
   now?: Date;
 };
@@ -81,15 +87,15 @@ type RunV3MigrateInput = {
 const CURRENT_SCHEMA_VERSION = 1;
 
 const TARGETS: MigrateTarget[] = [
-  { relPath: ".data/news/state.json", schema: RuntimeStateSchema },
-  { relPath: ".data/news/settings.json", schema: NewsSettingsSchema },
-  { relPath: ".data/news/digest.latest.json", schema: DailyDigestSchema },
-  { relPath: ".data/news/cache/today.latest.json", schema: TodayCacheSchema },
-  { relPath: ".data/news/cache/trends.7d.latest.json", schema: TrendsCacheSchema },
-  { relPath: ".data/news/cache/trends.30d.latest.json", schema: TrendsCacheSchema },
-  { relPath: ".data/news/cache/scenarios.latest.json", schema: ScenariosCacheSchema },
-  { relPath: ".data/indicators/state.json", schema: IndicatorsStateSchema },
-  { relPath: ".data/exposure/profile.json", schema: ExposureProfileSchema },
+  { targetId: "archive:v3.news", relPath: "state.json", reportPath: ".data/news/state.json", schema: RuntimeStateSchema },
+  { targetId: "archive:v3.news", relPath: "settings.json", reportPath: ".data/news/settings.json", schema: NewsSettingsSchema },
+  { targetId: "archive:v3.news", relPath: "digest.latest.json", reportPath: ".data/news/digest.latest.json", schema: DailyDigestSchema },
+  { targetId: "archive:v3.news", relPath: "cache/today.latest.json", reportPath: ".data/news/cache/today.latest.json", schema: TodayCacheSchema },
+  { targetId: "archive:v3.news", relPath: "cache/trends.7d.latest.json", reportPath: ".data/news/cache/trends.7d.latest.json", schema: TrendsCacheSchema },
+  { targetId: "archive:v3.news", relPath: "cache/trends.30d.latest.json", reportPath: ".data/news/cache/trends.30d.latest.json", schema: TrendsCacheSchema },
+  { targetId: "archive:v3.news", relPath: "cache/scenarios.latest.json", reportPath: ".data/news/cache/scenarios.latest.json", schema: ScenariosCacheSchema },
+  { targetId: "archive:v3.indicators", relPath: "state.json", reportPath: ".data/indicators/state.json", schema: IndicatorsStateSchema },
+  { targetId: "archive:v3.exposure", relPath: "", reportPath: ".data/exposure/profile.json", schema: ExposureProfileSchema },
 ];
 
 function asString(value: unknown): string {
@@ -128,8 +134,8 @@ function formatStamp(now: Date): string {
   return `${yyyy}${mm}${dd}${hh}${mi}${ss}`;
 }
 
-function resolveBackupPath(rootDir: string, now: Date): string {
-  const base = path.join(rootDir, `.data.bak-${formatStamp(now)}`);
+function resolveBackupPath(runtimeRoot: string, now: Date): string {
+  const base = `${runtimeRoot}.bak-${formatStamp(now)}`;
   if (!fs.existsSync(base)) return base;
 
   for (let i = 1; i < 1000; i += 1) {
@@ -138,6 +144,32 @@ function resolveBackupPath(rootDir: string, now: Date): string {
   }
 
   throw new Error("BACKUP_PATH_EXHAUSTED");
+}
+
+function backupMigrationTargets(
+  runtimeRoot: string,
+  targetRoots: ReadonlyMap<string, string>,
+  now: Date,
+): string | undefined {
+  const sources = [...new Set(targetRoots.values())]
+    .map((sourcePath) => path.resolve(sourcePath))
+    .filter((sourcePath) => fs.existsSync(sourcePath))
+    .sort((left, right) => left.localeCompare(right));
+  if (sources.length === 0) return undefined;
+
+  const backupPath = resolveBackupPath(runtimeRoot, now);
+  for (const sourcePath of sources) {
+    const relativePath = path.relative(runtimeRoot, sourcePath);
+    if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
+      throw new Error(`MIGRATE_BACKUP_TARGET_OUTSIDE_RUNTIME_ROOT:${sourcePath}`);
+    }
+    fs.cpSync(sourcePath, path.join(backupPath, relativePath), {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+    });
+  }
+  return backupPath;
 }
 
 function readJson(filePath: string): unknown {
@@ -226,7 +258,7 @@ function applySchemaVersionStep(value: unknown): {
   };
 }
 
-function buildMigrationPlan(rootDir: string, now: Date): MigrationPlan {
+function buildMigrationPlan(targetRoots: ReadonlyMap<string, string>, now: Date): MigrationPlan {
   const checkedAt = now.toISOString();
   const files: MigrationFileResult[] = [];
   const writes: Array<{ path: string; value: unknown }> = [];
@@ -241,12 +273,15 @@ function buildMigrationPlan(rootDir: string, now: Date): MigrationPlan {
   };
 
   for (const target of TARGETS) {
-    const filePath = path.join(rootDir, target.relPath);
+    const targetRoot = targetRoots.get(target.targetId);
+    if (!targetRoot) throw new Error(`PLANNING_WRITER_TARGET_PATH_MISSING:${target.targetId}`);
+    const filePath = path.join(targetRoot, target.relPath);
+    const reportPath = target.reportPath;
     const exists = fs.existsSync(filePath);
 
     if (!exists) {
       files.push({
-        path: target.relPath,
+        path: reportPath,
         exists: false,
         currentSchemaVersion: null,
         nextSchemaVersion: null,
@@ -266,7 +301,7 @@ function buildMigrationPlan(rootDir: string, now: Date): MigrationPlan {
         pushIssue(issues, totals, {
           level: "warning",
           code: warning.code,
-          path: target.relPath,
+          path: reportPath,
           message: warning.message,
         });
       }
@@ -278,7 +313,7 @@ function buildMigrationPlan(rootDir: string, now: Date): MigrationPlan {
       }
 
       files.push({
-        path: target.relPath,
+        path: reportPath,
         exists: true,
         currentSchemaVersion: step.currentVersion,
         nextSchemaVersion: step.nextVersion,
@@ -290,11 +325,11 @@ function buildMigrationPlan(rootDir: string, now: Date): MigrationPlan {
       pushIssue(issues, totals, {
         level: "error",
         code: "SCHEMA_INVALID",
-        path: target.relPath,
+        path: reportPath,
         message: "마이그레이션 전/후 스키마 검증에 실패했습니다.",
       });
       files.push({
-        path: target.relPath,
+        path: reportPath,
         exists: true,
         currentSchemaVersion: null,
         nextSchemaVersion: null,
@@ -318,8 +353,26 @@ export function runV3Migrate(input: RunV3MigrateInput = {}): V3MigrateSummary {
   const rootDir = path.resolve(asString(input.cwd) || process.cwd());
   const now = input.now instanceof Date ? input.now : new Date();
   const mode: MigrateMode = input.apply ? "apply" : "preview";
+  const targetInput = {
+    cwd: rootDir,
+    env: input.env,
+    platform: input.platform,
+    userId: input.userId,
+  };
+  const targetRoots = new Map<string, string>();
+  for (const targetId of new Set(TARGETS.map((entry) => entry.targetId))) {
+    const targetPath = resolvePlanningWriterTarget(targetId, targetInput).paths[0];
+    if (!targetPath) throw new Error(`PLANNING_WRITER_TARGET_PATH_MISSING:${targetId}`);
+    targetRoots.set(targetId, targetPath);
+  }
+  const runtimeRoot = path.dirname(resolvePlanningWriterTarget("archive:v3.indicators", targetInput).paths[0] ?? "");
+  assertPlanningWriterPathCompatibility([
+    { legacyPath: path.join(rootDir, ".data", "news"), canonicalPath: targetRoots.get("archive:v3.news") ?? "" },
+    { legacyPath: path.join(rootDir, ".data", "indicators"), canonicalPath: targetRoots.get("archive:v3.indicators") ?? "" },
+    { legacyPath: path.join(rootDir, ".data", "exposure", "profile.json"), canonicalPath: targetRoots.get("archive:v3.exposure") ?? "" },
+  ]);
 
-  const plan = buildMigrationPlan(rootDir, now);
+  const plan = buildMigrationPlan(targetRoots, now);
   const summary: V3MigrateSummary = {
     mode,
     checkedAt: plan.checkedAt,
@@ -343,19 +396,19 @@ export function runV3Migrate(input: RunV3MigrateInput = {}): V3MigrateSummary {
     throw new Error("MIGRATE_BLOCKED:VALIDATION_FAILED");
   }
 
-  const dataDir = path.join(rootDir, ".data");
-  if (fs.existsSync(dataDir)) {
-    const backupPath = resolveBackupPath(rootDir, now);
-    fs.cpSync(dataDir, backupPath, { recursive: true, force: false, errorOnExist: true });
-    summary.backupPath = backupPath;
-  }
+  summary.backupPath = backupMigrationTargets(runtimeRoot, targetRoots, now);
 
   for (const row of plan.writes.sort((a, b) => a.path.localeCompare(b.path))) {
     atomicWriteJson(row.path, row.value);
     summary.totals.applied += 1;
   }
 
-  const doctor = runV3Doctor({ cwd: rootDir });
+  const doctor = runV3Doctor({
+    cwd: rootDir,
+    env: input.env,
+    platform: input.platform,
+    userId: input.userId,
+  });
   summary.doctor = {
     ok: doctor.ok,
     errors: doctor.counts.errors,

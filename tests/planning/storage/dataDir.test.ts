@@ -28,14 +28,15 @@ describe("planning dataDir resolver", () => {
   });
 
   it("uses LOCALAPPDATA in production windows mode", () => {
-    const cwd = "/tmp/planning-dev";
+    const cwd = "C:\\workspace\\app";
     env.NODE_ENV = "production";
     env.LOCALAPPDATA = "C:\\Users\\tester\\AppData\\Local";
     env.PLANNING_APP_NAME = "Planning V2";
     const resolved = resolveDataDir({ cwd, platform: "win32" });
-    const planningDir = path.resolve("C:\\Users\\tester\\AppData\\Local", "Planning V2", "vault");
+    const planningDir = path.win32.resolve("C:\\Users\\tester\\AppData\\Local", "Planning V2", "vault");
     expect(resolvePlanningDataDir({ cwd, platform: "win32" })).toBe(planningDir);
-    expect(resolved).toBe(path.dirname(planningDir));
+    expect(resolved).toBe(path.win32.dirname(planningDir));
+    expect(resolveOpsDataDir({ cwd, platform: "win32" })).toBe(path.win32.join(planningDir, "ops"));
   });
 
   it("supports explicit PLANNING_DATA_DIR override", () => {
