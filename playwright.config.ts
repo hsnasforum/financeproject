@@ -87,7 +87,17 @@ function buildWebServerEnv(): Record<string, string> {
 }
 
 export default defineConfig({
-  testDir: "tests/e2e",
+  testDir: ".",
+  testMatch: [
+    "tests/e2e/**/*.spec.ts",
+    "e2e/**/*.e2e.ts",
+  ],
+  testIgnore: [
+    "**/.next*/**",
+    "**/.dist/**",
+    "**/node_modules/**",
+    "**/tmp/**",
+  ],
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   use: {

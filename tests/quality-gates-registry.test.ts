@@ -13,8 +13,10 @@ function read(filePath: string): string {
 
 describe("quality gate registry", () => {
   it("keeps release and planning v2 complete runners on the shared registry", () => {
+    const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
     const releaseSource = read("scripts/release_verify.mjs");
     const completeSource = read("scripts/planning_v2_complete.mjs");
+    const releaseContractsScript = pkg.scripts?.["e2e:release:contracts"] ?? "";
     const releaseGateIds = [
       ...QUALITY_GATE_SUITES["release:verify"].preflightRequired,
       ...QUALITY_GATE_SUITES["release:verify"].earlyRequired,
@@ -37,6 +39,15 @@ describe("quality gate registry", () => {
       "planning:v2:smoke",
       "planning:v2:e2e:fast",
     ]);
+    expect(QUALITY_GATE_SUITES["release:verify"].preflightRequired).toContain("e2e:inventory:check");
+    expect(renderQualityGateCommand("e2e:inventory:check")).toBe("pnpm e2e:inventory:check");
+    expect(QUALITY_GATE_SUITES["release:verify"].lateRequired).toContain("e2e:release:contracts");
+    expect(renderQualityGateCommand("e2e:release:contracts")).toBe("pnpm e2e:release:contracts");
+    expect(releaseContractsScript).toContain("node scripts/next_build_safe.mjs --webpack");
+    expect(releaseContractsScript).toContain("--runtime=production");
+    expect(releaseContractsScript).toContain("tests/e2e/products-list-query.spec.ts");
+    expect(releaseContractsScript).toContain("tests/e2e/flow-v3-import-to-cashflow.spec.ts");
+    expect(releaseContractsScript).toContain("tests/e2e/v3-draft-apply.spec.ts");
     expect(releaseGateIds.every((id) => Boolean(getQualityGate(id)))).toBe(true);
   });
 

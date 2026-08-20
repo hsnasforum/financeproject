@@ -77,7 +77,7 @@ describe("planning postgres readiness script", () => {
       `--out-dir=${outDir}`,
     ]);
 
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
     const payload = parseStdout(result.stdout);
     expect(payload.ok).toBe(true);
     expect(payload.mode).toBe("dry-run");
@@ -174,7 +174,7 @@ describe("planning postgres readiness script", () => {
       `--out-dir=${outDir}`,
     ]);
 
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
     const payload = parseStdout(result.stdout);
     const dryRunApplyStep = findStep(payload, "dry-run-apply");
     expect(dryRunApplyStep).toMatchObject({
@@ -261,7 +261,7 @@ describe("planning postgres readiness script", () => {
       `--out-dir=${outDir}`,
     ]);
 
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
     const payload = parseStdout(result.stdout);
     expect(findStep(payload, "dry-run-apply")).toMatchObject({
       status: "PASS",
@@ -391,7 +391,7 @@ describe("planning postgres readiness script", () => {
       `--data-dir=${dataDir}`,
       `--out-dir=${outDir}`,
     ]);
-    expect(first.status).toBe(0);
+    expect(first.status, first.stderr || first.stdout).toBe(0);
 
     const stalePath = path.join(outDir, "files", "users", "alice", "profiles", "stale.json");
     writeJson(stalePath, { id: "stale" });

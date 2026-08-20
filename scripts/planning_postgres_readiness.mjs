@@ -12,6 +12,7 @@ const DEFAULT_SQLITE_SCHEMA = "prisma/schema.prisma";
 const DEFAULT_POSTGRES_SCHEMA = "prisma/schema.postgres.prisma";
 const APPLY_CONFIRM = "APPLY POSTGRES READINESS";
 const DATABASE_URL_ENV = "DATABASE_URL";
+const OFFLINE_SCHEMA_DATABASE_URL = "postgresql://readiness.invalid/finance";
 const DB_CONNECTION_TIMEOUT_MS = 10_000;
 const LEGACY_DRY_RUN_USER_ID = "legacy";
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
@@ -152,6 +153,14 @@ function compactProcessOutput(stdout, stderr) {
   return lines.slice(-4).join(" | ");
 }
 
+function offlinePrismaSchemaEnv() {
+  return {
+    ...process.env,
+    [DATABASE_URL_ENV]: asString(process.env[DATABASE_URL_ENV]) || OFFLINE_SCHEMA_DATABASE_URL,
+    NO_COLOR: "1",
+  };
+}
+
 function validatePrismaSchema(root, schemaPath) {
   const prismaBin = resolvePrismaBin(root);
   const absoluteSchemaPath = path.resolve(root, schemaPath);
@@ -167,10 +176,7 @@ function validatePrismaSchema(root, schemaPath) {
   const result = spawnSync(prismaBin, ["validate", "--schema", absoluteSchemaPath], {
     cwd: root,
     encoding: "utf-8",
-    env: {
-      ...process.env,
-      NO_COLOR: "1",
-    },
+    env: offlinePrismaSchemaEnv(),
   });
 
   return {
@@ -251,10 +257,7 @@ function generatePostgresSchemaSql(root, schemaPath, expectedModelCount) {
   ], {
     cwd: root,
     encoding: "utf-8",
-    env: {
-      ...process.env,
-      NO_COLOR: "1",
-    },
+    env: offlinePrismaSchemaEnv(),
   });
 
   if (result.status !== 0) {

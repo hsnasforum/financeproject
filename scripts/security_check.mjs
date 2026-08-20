@@ -4,6 +4,38 @@ import path from "node:path";
 
 const checks = [
   {
+    name: "repo-no-tracked-private-key",
+    cmd: "git",
+    args: [
+      "grep",
+      "-I",
+      "-n",
+      "-E",
+      "-e",
+      "-----BEGIN (OPENSSH |RSA |EC |DSA )?PRIVATE KEY-----",
+      "--",
+      ".",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "repo-history-no-private-key",
+    cmd: "git",
+    args: [
+      "log",
+      "--all",
+      "--full-history",
+      "-G",
+      "-----BEGIN (OPENSSH |RSA |EC |DSA )?PRIVATE KEY-----",
+      "--format=%H %s",
+      "--",
+      ".",
+      ":(exclude)tests/fixtures/**",
+      ":(exclude)scripts/security_check.mjs",
+    ],
+    failOnOutput: true,
+  },
+  {
     name: "report-export-secret-pattern",
     cmd: "rg",
     args: [
@@ -149,6 +181,29 @@ const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
   stdio: "pipe",
   encoding: "utf8",
 }).status === 0;
+
+function checkRepositoryHistoryReadiness() {
+  const result = spawnSync("git", ["rev-parse", "--is-shallow-repository"], {
+    cwd: REPO_ROOT,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+  const stdout = String(result.stdout ?? "").trim();
+  const stderr = String(result.stderr ?? "").trim();
+  if (result.status !== 0) {
+    return { ok: false, output: stderr || stdout || "unable to determine repository history depth" };
+  }
+  if (stdout === "true") {
+    return {
+      ok: false,
+      output: "private-key history scan requires a full clone; fetch complete history before running sec:check",
+    };
+  }
+  if (stdout !== "false") {
+    return { ok: false, output: `unexpected shallow-repository status: ${stdout || "empty"}` };
+  }
+  return { ok: true, output: "" };
+}
 
 function normalizeRelative(filePath) {
   return path.relative(REPO_ROOT, filePath).split(path.sep).join("/");
@@ -309,6 +364,18 @@ function runCheck(check) {
   const stdout = String(result.stdout ?? "").trim();
   const stderr = String(result.stderr ?? "").trim();
 
+  if (check.failOnOutput) {
+    if (result.status !== 0) {
+      return {
+        ok: false,
+        output: stderr || stdout || `${check.name}: check failed to execute`,
+      };
+    }
+    return stdout
+      ? { ok: false, output: stdout }
+      : { ok: true, output: "" };
+  }
+
   if (result.status === 0) {
     return {
       ok: false,
@@ -327,6 +394,32 @@ function runCheck(check) {
 }
 
 let failed = false;
+const historyReadiness = checkRepositoryHistoryReadiness();
+if (historyReadiness.ok) {
+  console.log("[sec:check] PASS repository-history-readiness");
+} else {
+  failed = true;
+  console.error("[sec:check] FAIL repository-history-readiness");
+  console.error(historyReadiness.output);
+}
+
+if (process.argv.includes("--history-readiness-only")) {
+  process.exit(failed ? 1 : 0);
+}
+
+if (process.argv.includes("--private-key-history-only")) {
+  const historyCheck = checks.find((check) => check.name === "repo-history-no-private-key");
+  const outcome = runCheck(historyCheck);
+  if (outcome.ok) {
+    console.log("[sec:check] PASS repo-history-no-private-key");
+  } else {
+    failed = true;
+    console.error("[sec:check] FAIL repo-history-no-private-key");
+    if (outcome.output) console.error(outcome.output);
+  }
+  process.exit(failed ? 1 : 0);
+}
+
 try {
   const clientFiles = listClientComponentFiles();
   if (clientFiles.length > 0) {

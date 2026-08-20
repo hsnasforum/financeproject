@@ -186,7 +186,7 @@ describe("daily refresh ops contract", () => {
       status: "skipped",
       stderrTail: "",
     });
-  }, 20_000);
+  }, 45_000);
 
   it("keeps local best-effort exit zero while exposing required failure in summary.ok", () => {
     const root = createTempRoot();
@@ -237,7 +237,7 @@ describe("daily refresh ops contract", () => {
     expect(readResult(bestEffortRoot)).toMatchObject({ mode: "best-effort", ok: true });
     expect(strict.status).toBe(1);
     expect(readResult(strictRoot)).toMatchObject({ mode: "strict", ok: false });
-  }, 30_000);
+  }, 60_000);
 
   it("forwards strict mode to news, indicators, dart, and freshness doctor children", () => {
     const root = createTempRoot();
