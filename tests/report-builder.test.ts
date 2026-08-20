@@ -6,9 +6,11 @@ import {
   type PlannerLastSnapshot,
 } from "../src/lib/report/reportBuilder";
 import type { SavedRecommendRun } from "../src/lib/recommend/savedRunsStore";
+import { recommendOwnerId } from "../src/lib/recommend/ownerNamespace";
 
 function sampleRun(): SavedRecommendRun {
   return {
+    ownerId: recommendOwnerId("alice"),
     runId: "run_20260225_demo",
     savedAt: "2026-02-25T10:00:00.000Z",
     profile: {

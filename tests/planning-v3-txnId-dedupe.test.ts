@@ -23,6 +23,13 @@ describe("planning v3 txnId + dedupe", () => {
     expect(isTxnId(first)).toBe(true);
   });
 
+  it("accepts the explicit legacy 16-hex transaction id boundary", () => {
+    expect(isTxnId("584464b0cd0721db")).toBe(true);
+    expect(isTxnId("a".repeat(24))).toBe(true);
+    expect(isTxnId("a".repeat(20))).toBe(false);
+    expect(isTxnId("g".repeat(16))).toBe(false);
+  });
+
   it("description normalization converges spacing/case/punctuation variants", () => {
     const variants = [
       "  STARBUCKS  Seoul #12 ",

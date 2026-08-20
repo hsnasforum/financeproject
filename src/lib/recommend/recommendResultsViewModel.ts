@@ -46,6 +46,8 @@ export type RecommendItem = {
 export type RecommendResponse = {
   ok: boolean;
   meta?: {
+    userId?: string;
+    authSource?: string;
     kind: "deposit" | "saving";
     topN: number;
     rateMode: "max" | "base" | "simple";

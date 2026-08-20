@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -16,6 +16,7 @@ import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { SearchPill } from "@/components/ui/SearchPill";
 import { FilterField } from "@/components/ui/FilterField";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
+import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
 import {
   buildCatalogQueryKey,
   buildCatalogRequestParams,
@@ -51,6 +52,8 @@ export default function ProductsCatalogPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [compareNotice, setCompareNotice] = useState("");
+  const catalogRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  if (catalogRequestsRef.current == null) catalogRequestsRef.current = createLatestRequestCoordinator();
   const effectiveIncludeSamplebank = samplebankVisible && includeSamplebank;
   const catalogQueryKey = useMemo(
     () => buildCatalogQueryKey({ kind, q, includeSamplebank: effectiveIncludeSamplebank }),
@@ -83,6 +86,7 @@ export default function ProductsCatalogPage() {
   const filteredRows = catalogViewModel.filteredRows;
 
   const run = useCallback(async (input?: { append?: boolean; cursor?: string | null }) => {
+    const request = catalogRequestsRef.current!.start();
     const append = Boolean(input?.append);
     setLoading(true);
     setError("");
@@ -95,8 +99,12 @@ export default function ProductsCatalogPage() {
         cursor: input?.cursor,
       });
 
-      const res = await fetch(`/api/products/unified?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/products/unified?${params.toString()}`, {
+        cache: "no-store",
+        signal: request.signal,
+      });
       const json = (await res.json()) as UnifiedResponse;
+      if (!request.isCurrent()) return;
       if (!res.ok || !json.ok) {
         const code = json.error?.code ?? "UPSTREAM";
         const message = json.error?.message ?? "통합 카탈로그 조회에 실패했습니다.";
@@ -112,10 +120,12 @@ export default function ProductsCatalogPage() {
         nextCursor: responseNextCursor,
       }));
       setCompareNotice("");
-    } catch {
+    } catch (fetchError) {
+      if (!request.isCurrent() || (fetchError instanceof Error && fetchError.name === "AbortError")) return;
       setError("UPSTREAM: 통합 카탈로그 조회 중 오류가 발생했습니다.");
     } finally {
-      setLoading(false);
+      if (request.isCurrent()) setLoading(false);
+      request.finish();
     }
   }, [catalogQueryKey, effectiveIncludeSamplebank, kind, q]);
 
@@ -157,6 +167,7 @@ export default function ProductsCatalogPage() {
 
     return () => {
       active = false;
+      catalogRequestsRef.current?.cancel();
     };
   }, [run]);
 

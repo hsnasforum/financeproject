@@ -62,8 +62,6 @@ const CATEGORY_OPTIONS: Array<{ value: FeedbackCategory; label: string }> = [
 
 const LOCAL_STATE_KEYS = [
   "planner_last_snapshot_v1",
-  "recommend_last_result_v1",
-  "recommend_profile_v1",
 ] as const;
 
 function parseSavedAtFromJson(value: string): string | null {

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
-import { lockDocumentScroll } from "@/lib/browser/scrollLock";
 import { cn } from "@/lib/utils";
 
 export type QuickViewKind = "deposit" | "saving" | "recommend" | "products" | "fxtool" | "benefits" | "subscription";
@@ -89,21 +89,6 @@ function ProductPreview({ kind }: { kind: "deposit" | "saving" }) {
 export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: QuickViewModalProps) {
   const [productsTab, setProductsTab] = useState<"deposit" | "saving">("deposit");
 
-  useEffect(() => {
-    if (!open) return;
-    const releaseScrollLock = lockDocumentScroll();
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      releaseScrollLock();
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onClose]);
-
   const body = useMemo(() => {
     if (kind === "recommend") {
       return (
@@ -180,14 +165,13 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[110] overflow-y-auto bg-slate-900/45 backdrop-blur-sm p-4"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <AccessibleDialog
+      labelledBy="quickview-title"
+      onClose={onClose}
+      overlayClassName="z-[110] overflow-y-auto bg-slate-900/45 backdrop-blur-sm p-4"
+      panelClassName="mx-auto my-8 w-full max-w-3xl rounded-[2.5rem] bg-white p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="quickview-title" className="mx-auto my-8 w-full max-w-3xl rounded-[2.5rem] bg-white p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="mb-6 flex items-center justify-between gap-3">
           <h2 id="quickview-title" className="text-2xl font-black text-navy tracking-tight leading-tight">{title}</h2>
           <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 hover:bg-surface-muted transition-all shadow-sm" onClick={onClose}>
             닫기
@@ -208,8 +192,7 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
             전체 페이지 새 탭으로 열기
           </a>
         </div>
-      </div>
-    </div>,
+    </AccessibleDialog>,
     document.body,
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useEffectEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -363,14 +364,16 @@ export function PlanningTrashClient() {
         </div>
       </Card>
       {confirmDialog ? (
-        <div
-          aria-labelledby="planning-trash-confirm-title"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
-          role="dialog"
+        <AccessibleDialog
+          labelledBy="planning-trash-confirm-title"
+          onClose={() => {
+            if (!confirmWorking) closeConfirmDialog();
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
         >
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 className="text-base font-black text-navy" id="planning-trash-confirm-title">
+          <h3 className="text-base font-black text-navy" id="planning-trash-confirm-title">
               {confirmDialog.mode === "restore"
                 ? "휴지통 항목 복구"
                 : confirmDialog.mode === "delete"
@@ -406,8 +409,7 @@ export function PlanningTrashClient() {
                 {getConfirmDialogActionLabel(confirmDialog, confirmWorking)}
               </Button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </PageShell>
   );

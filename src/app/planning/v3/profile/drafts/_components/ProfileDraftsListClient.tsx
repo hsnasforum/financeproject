@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Button } from "@/components/ui/Button";
 import {
   BodyActionLink,
@@ -388,13 +389,17 @@ export function ProfileDraftsListClient({
         </Card>
       </div>
       {deleteTargetId ? (
-        <div
-          aria-labelledby="v3-profile-draft-delete-title"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
-          role="dialog"
+        <AccessibleDialog
+          labelledBy="v3-profile-draft-delete-title"
+          onClose={() => {
+            if (!deletingId) setDeleteTargetId("");
+          }}
+          closeOnOverlay={false}
+          testId="v3-profile-draft-delete-dialog"
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-lg"
         >
-          <BodyDialogSurface data-testid="v3-profile-draft-delete-dialog">
+          <BodyDialogSurface>
             <h2 className="text-base font-black text-navy" id="v3-profile-draft-delete-title">초안 삭제 확인</h2>
             <p className="mt-2 text-sm text-slate-700">이 초안을 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.</p>
             <div className={bodyDialogActionsClassName}>
@@ -419,7 +424,7 @@ export function ProfileDraftsListClient({
               </Button>
             </div>
           </BodyDialogSurface>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </PageShell>
   );

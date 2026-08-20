@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Badge } from "@/components/ui/Badge";
+import { useRecommendOwner } from "@/lib/recommend/RecommendOwnerContext";
 import { cn } from "@/lib/utils";
 import { downloadText } from "@/lib/browser/download";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
@@ -221,9 +222,10 @@ export function RecommendHistoryClient({
 }: {
   initialOpenRunId?: string | null;
 }) {
-  const [runs, setRuns] = useState<SavedRecommendRun[]>(() => listRuns());
+  const ownerId = useRecommendOwner();
+  const [runs, setRuns] = useState<SavedRecommendRun[]>(() => listRuns(ownerId));
   const [activeRunId, setActiveRunId] = useState<string | null>(() => {
-    const current = listRuns();
+    const current = listRuns(ownerId);
     if (initialOpenRunId && current.some((run) => run.runId === initialOpenRunId)) return initialOpenRunId;
     return current[0]?.runId ?? null;
   });
@@ -252,7 +254,7 @@ export function RecommendHistoryClient({
   );
 
   function refresh() {
-    const next = listRuns();
+    const next = listRuns(ownerId);
     setRuns(next);
     setActiveRunId((prev) => (next.some((run) => run.runId === prev) ? prev : (next[0]?.runId ?? null)));
     setSelectedRunIds((prev) => prev.filter((runId) => next.some((run) => run.runId === runId)).slice(0, 2));
@@ -267,24 +269,24 @@ export function RecommendHistoryClient({
   }
 
   function removeOne(runId: string) {
-    removeRun(runId);
+    removeRun(ownerId, runId);
     refresh();
     setNotice("실행 기록을 삭제했습니다.");
   }
 
   function clearAll() {
-    clearRuns();
+    clearRuns(ownerId);
     refresh();
     setNotice("모든 실행 기록을 삭제했습니다.");
   }
 
   function exportOneJson(run: SavedRecommendRun) {
-    downloadText(`recommend-run-${run.savedAt.slice(0, 10)}-${run.runId}.json`, exportRunJson(run), "application/json;charset=utf-8");
+    downloadText(`recommend-run-${run.savedAt.slice(0, 10)}-${run.runId}.json`, exportRunJson(ownerId, run), "application/json;charset=utf-8");
     setNotice("JSON 파일을 내보냈습니다.");
   }
 
   function exportOneCsv(run: SavedRecommendRun) {
-    downloadText(`recommend-run-${run.savedAt.slice(0, 10)}-${run.runId}.csv`, exportRunCsv(run), "text/csv;charset=utf-8");
+    downloadText(`recommend-run-${run.savedAt.slice(0, 10)}-${run.runId}.csv`, exportRunCsv(ownerId, run), "text/csv;charset=utf-8");
     setNotice("CSV 파일을 내보냈습니다.");
   }
 

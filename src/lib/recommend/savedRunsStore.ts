@@ -7,8 +7,11 @@ import {
   type RecommendPurpose,
   type UserRecommendProfile,
 } from "@/lib/recommend/types";
+import {
+  recommendOwnerStorageKey,
+  type RecommendOwnerId,
+} from "@/lib/recommend/ownerNamespace";
 
-const STORAGE_KEY = "recommend_saved_runs_v1";
 const MAX_RUNS = 50;
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -44,6 +47,7 @@ export type SavedRunItem = {
 };
 
 export type SavedRecommendRun = {
+  ownerId: RecommendOwnerId;
   runId: string;
   savedAt: string;
   profile: SavedRunProfile;
@@ -243,8 +247,9 @@ function normalizeItem(value: unknown): SavedRunItem | null {
   };
 }
 
-function normalizeRun(value: unknown): SavedRecommendRun | null {
+function normalizeRun(ownerId: RecommendOwnerId, value: unknown): SavedRecommendRun | null {
   if (!isRecord(value)) return null;
+  if (value.ownerId !== ownerId) return null;
   const runId = typeof value.runId === "string" ? value.runId.trim() : "";
   if (!runId) return null;
 
@@ -256,6 +261,7 @@ function normalizeRun(value: unknown): SavedRecommendRun | null {
   const items = rawItems.map(normalizeItem).filter((item): item is SavedRunItem => item !== null);
 
   return {
+    ownerId,
     runId,
     savedAt,
     profile,
@@ -280,24 +286,26 @@ function enforceLimit(items: SavedRecommendRun[]): SavedRecommendRun[] {
   return sortRuns(items).slice(0, MAX_RUNS);
 }
 
-function readRuns(storage?: StorageLike): SavedRecommendRun[] {
+function readRuns(ownerId: RecommendOwnerId, storage?: StorageLike): SavedRecommendRun[] {
   const resolved = resolveStorage(storage);
   if (!resolved) return [];
   try {
-    const raw = resolved.getItem(STORAGE_KEY);
+    const raw = resolved.getItem(recommendOwnerStorageKey(ownerId, "saved-runs"));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return enforceLimit(parsed.map(normalizeRun).filter((item): item is SavedRecommendRun => item !== null));
+    return enforceLimit(parsed
+      .map((item) => normalizeRun(ownerId, item))
+      .filter((item): item is SavedRecommendRun => item !== null));
   } catch {
     return [];
   }
 }
 
-function writeRuns(items: SavedRecommendRun[], storage?: StorageLike): void {
+function writeRuns(ownerId: RecommendOwnerId, items: SavedRecommendRun[], storage?: StorageLike): void {
   const resolved = resolveStorage(storage);
   if (!resolved) return;
-  resolved.setItem(STORAGE_KEY, JSON.stringify(enforceLimit(items)));
+  resolved.setItem(recommendOwnerStorageKey(ownerId, "saved-runs"), JSON.stringify(enforceLimit(items)));
 }
 
 function createRunId(savedAt: string): string {
@@ -306,13 +314,18 @@ function createRunId(savedAt: string): string {
   return `run_${stamp}_${nonce}`;
 }
 
-export function listRuns(storage?: StorageLike): SavedRecommendRun[] {
-  return readRuns(storage);
+export function listRuns(ownerId: RecommendOwnerId, storage?: StorageLike): SavedRecommendRun[] {
+  return readRuns(ownerId, storage);
 }
 
-export function saveRun(input: SavedRunInput, storage?: StorageLike): SavedRecommendRun {
+export function saveRun(
+  ownerId: RecommendOwnerId,
+  input: SavedRunInput,
+  storage?: StorageLike,
+): SavedRecommendRun {
   const savedAt = normalizeDateIso(input.savedAt);
-  const normalized = normalizeRun({
+  const normalized = normalizeRun(ownerId, {
+    ownerId,
     runId: (input.runId ?? "").trim() || createRunId(savedAt),
     savedAt,
     profile: input.profile,
@@ -323,13 +336,14 @@ export function saveRun(input: SavedRunInput, storage?: StorageLike): SavedRecom
     throw new Error("saveRun input is invalid");
   }
 
-  const current = readRuns(storage);
+  const current = readRuns(ownerId, storage);
   const next = [normalized, ...current.filter((run) => run.runId !== normalized.runId)];
-  writeRuns(next, storage);
+  writeRuns(ownerId, next, storage);
   return normalized;
 }
 
 export function buildRunFromRecommend(
+  ownerId: RecommendOwnerId,
   profile: SavedRunProfile,
   response: RecommendLikeResponse,
   overrides?: { runId?: string; savedAt?: string },
@@ -353,6 +367,7 @@ export function buildRunFromRecommend(
   });
 
   return {
+    ownerId,
     runId: (overrides?.runId ?? "").trim() || createRunId(savedAt),
     savedAt,
     profile,
@@ -361,36 +376,53 @@ export function buildRunFromRecommend(
 }
 
 export function saveRunFromRecommend(
+  ownerId: RecommendOwnerId,
   profile: SavedRunProfile,
   response: RecommendLikeResponse,
   storage?: StorageLike,
 ): string {
-  const run = buildRunFromRecommend(profile, response);
-  const saved = saveRun(run, storage);
+  const run = buildRunFromRecommend(ownerId, profile, response);
+  const saved = saveRun(ownerId, run, storage);
   return saved.runId;
 }
 
-export function getRun(runId: string, storage?: StorageLike): SavedRecommendRun | null {
+export function getRun(
+  ownerId: RecommendOwnerId,
+  runId: string,
+  storage?: StorageLike,
+): SavedRecommendRun | null {
   const target = runId.trim();
   if (!target) return null;
-  return readRuns(storage).find((run) => run.runId === target) ?? null;
+  return readRuns(ownerId, storage).find((run) => run.runId === target) ?? null;
 }
 
-export function removeRun(runId: string, storage?: StorageLike): void {
+export function removeRun(ownerId: RecommendOwnerId, runId: string, storage?: StorageLike): void {
   const target = runId.trim();
   if (!target) return;
-  const next = readRuns(storage).filter((run) => run.runId !== target);
-  writeRuns(next, storage);
+  const next = readRuns(ownerId, storage).filter((run) => run.runId !== target);
+  writeRuns(ownerId, next, storage);
 }
 
-export function clearRuns(storage?: StorageLike): void {
+export function clearRuns(ownerId: RecommendOwnerId, storage?: StorageLike): void {
   const resolved = resolveStorage(storage);
   if (!resolved) return;
-  resolved.removeItem(STORAGE_KEY);
+  resolved.removeItem(recommendOwnerStorageKey(ownerId, "saved-runs"));
 }
 
-export function exportRunJson(run: SavedRecommendRun): string {
-  return JSON.stringify(run, null, 2);
+function assertRunOwner(ownerId: RecommendOwnerId, run: SavedRecommendRun): void {
+  if (run.ownerId !== ownerId) {
+    throw new Error("recommend run owner mismatch");
+  }
+}
+
+export function exportRunJson(ownerId: RecommendOwnerId, run: SavedRecommendRun): string {
+  assertRunOwner(ownerId, run);
+  return JSON.stringify({
+    runId: run.runId,
+    savedAt: run.savedAt,
+    profile: run.profile,
+    items: run.items,
+  }, null, 2);
 }
 
 export function escapeCsvCell(value: string): string {
@@ -403,7 +435,8 @@ function formatCsvNumber(value: number | null): string {
   return String(value);
 }
 
-export function exportRunCsv(run: SavedRecommendRun): string {
+export function exportRunCsv(ownerId: RecommendOwnerId, run: SavedRecommendRun): string {
+  assertRunOwner(ownerId, run);
   const headers = [
     "runId",
     "savedAt",
@@ -466,6 +499,6 @@ export function exportRunCsv(run: SavedRecommendRun): string {
 }
 
 export const savedRunsStoreConfig = {
-  storageKey: STORAGE_KEY,
+  storageKey: (ownerId: RecommendOwnerId) => recommendOwnerStorageKey(ownerId, "saved-runs"),
   maxRuns: MAX_RUNS,
 };

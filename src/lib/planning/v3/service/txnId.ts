@@ -10,6 +10,7 @@ export type BuildTxnIdInput = {
 };
 
 const TXN_ID_HEX_LENGTH = 24;
+const LEGACY_TXN_ID_HEX_LENGTH = 16;
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -48,7 +49,7 @@ export function normalizeDescriptionForTxnId(value: unknown): string {
 
 export function isTxnId(value: unknown): value is string {
   const text = asString(value);
-  return new RegExp(`^[a-f0-9]{${TXN_ID_HEX_LENGTH}}$`).test(text);
+  return new RegExp(`^(?:[a-f0-9]{${LEGACY_TXN_ID_HEX_LENGTH}}|[a-f0-9]{${TXN_ID_HEX_LENGTH}})$`).test(text);
 }
 
 export function buildTxnId(input: BuildTxnIdInput): string {

@@ -10,6 +10,7 @@ import { presentBySpecs, presentOptionFallback } from "@/lib/finlife/present";
 import { formatKrwWithEok } from "@/lib/format/krw";
 import { type FinlifeKind, type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
 import { cn } from "@/lib/utils";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 
 type Props = {
   open: boolean;
@@ -81,18 +82,23 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:items-center" role="dialog" aria-modal="true">
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-300" onClick={(e) => e.stopPropagation()}>
+    <AccessibleDialog
+      labelledBy="product-detail-title"
+      describedBy="product-detail-description"
+      onClose={() => onOpenChange(false)}
+      overlayClassName="z-[70] items-end bg-slate-900/40 backdrop-blur-sm p-4 md:items-center"
+      panelClassName="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-300"
+    >
         <div className="p-8 lg:p-10 border-b border-slate-100 flex items-start justify-between bg-surface-muted/50">
           <div className="space-y-2">
             <span className="text-[10px] font-black text-primary uppercase tracking-widest">{summary} 상세 정보</span>
-            <h2 className="text-2xl font-black text-navy tracking-tight leading-tight">{product.fin_prdt_nm ?? "상품 상세"}</h2>
+            <h2 id="product-detail-title" className="text-2xl font-black text-navy tracking-tight leading-tight">{product.fin_prdt_nm ?? "상품 상세"}</h2>
             <p className="text-sm font-bold text-slate-500">{product.kor_co_nm ?? "-"}</p>
-            <p className="max-w-2xl text-xs font-medium leading-relaxed text-slate-500">
+            <p id="product-detail-description" className="max-w-2xl text-xs font-medium leading-relaxed text-slate-500">
               이 창은 확정 추천이 아니라, 현재 비교 기준으로 금리, 가입 조건, 우대사항을 다시 확인하는 단계입니다.
             </p>
           </div>
-          <Button variant="outline" className="rounded-2xl h-10 px-4 font-black" onClick={() => onOpenChange(false)}>닫기</Button>
+          <Button data-dialog-initial-focus variant="outline" className="rounded-2xl h-10 px-4 font-black" onClick={() => onOpenChange(false)}>닫기</Button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 lg:p-10 space-y-10 scrollbar-thin scrollbar-thumb-slate-200">
@@ -256,7 +262,6 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
             상품 상세 창 닫기
           </Button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { CLIENT_STORAGE_WHITELIST } from "@/lib/backup/backupBundle";
+import {
+  isRecommendOwnerStorageKey,
+  RECOMMEND_LEGACY_STORAGE_KEYS,
+} from "@/lib/recommend/ownerNamespace";
 import { DoctorSummaryCard } from "@/components/DoctorSummaryCard";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -175,7 +179,20 @@ export function RecoveryClient() {
 
   function runLocalReset() {
     const removed: string[] = [];
-    for (const key of CLIENT_STORAGE_WHITELIST) {
+    const keys = new Set<string>([
+      ...CLIENT_STORAGE_WHITELIST,
+      ...RECOMMEND_LEGACY_STORAGE_KEYS,
+    ]);
+    try {
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (key && isRecommendOwnerStorageKey(key)) keys.add(key);
+      }
+    } catch {
+      // Continue with the known static keys when localStorage enumeration is unavailable.
+    }
+
+    for (const key of keys) {
       const value = window.localStorage.getItem(key);
       if (value !== null) {
         removed.push(key);
@@ -183,7 +200,7 @@ export function RecoveryClient() {
       window.localStorage.removeItem(key);
     }
     setLocalResetResult({ removed });
-    setNotice(`localStorage whitelist 키 ${removed.length}개를 초기화했습니다.`);
+    setNotice(`앱 설정 및 사용자별 추천 상태 키 ${removed.length}개를 초기화했습니다.`);
   }
 
   async function handleLocalReset() {
@@ -353,7 +370,7 @@ export function RecoveryClient() {
           <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100 flex flex-col">
             <SubSectionHeader title="A) Local 상태 초기화" description="브라우저 localStorage를 초기화합니다." />
             <p className="mt-2 text-xs font-medium text-slate-500 leading-relaxed">
-              화이트리스트에 등록된 앱 설정 키 {CLIENT_STORAGE_WHITELIST.length}개를 즉시 삭제합니다.
+              화이트리스트 앱 설정과 이 브라우저에 남은 사용자별 추천 상태를 삭제합니다.
             </p>
             
             <div className="mt-auto pt-8">

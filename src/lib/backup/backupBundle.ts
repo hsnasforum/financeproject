@@ -1,3 +1,8 @@
+import {
+  isRecommendOwnerStorageKey,
+  RECOMMEND_LEGACY_STORAGE_KEYS,
+} from "@/lib/recommend/ownerNamespace";
+
 const BACKUP_BUNDLE_VERSION = 1 as const;
 
 export const PLANNING_BACKUP_REQUIRED_EXACT = [
@@ -45,8 +50,6 @@ export const DEFAULT_SERVER_EXPORT_PATHS = [
 export const CLIENT_STORAGE_WHITELIST = [
   "planner:last",
   "planner_last_snapshot_v1",
-  "recommend_profile_v1",
-  "recommend_last_result_v1",
   "recommend-hub:v1",
   "products_shelf_v1",
   "products_compare_ids_v1",
@@ -103,7 +106,9 @@ export function isServerPathWhitelisted(relativePath: string): boolean {
 export function isClientStorageKeyWhitelisted(key: string): boolean {
   const normalized = String(key ?? "").trim();
   if (!normalized) return false;
-  return (CLIENT_STORAGE_WHITELIST as readonly string[]).includes(normalized);
+  return (CLIENT_STORAGE_WHITELIST as readonly string[]).includes(normalized)
+    || (RECOMMEND_LEGACY_STORAGE_KEYS as readonly string[]).includes(normalized)
+    || isRecommendOwnerStorageKey(normalized);
 }
 
 export function buildBundle({ serverFilesMap, clientStorageMap }: BuildBundleInput): BackupBundle {

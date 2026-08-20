@@ -1,6 +1,9 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./helpers/e2eTest";
 
+const RECOMMEND_E2E_OWNER_ID = (process.env.PLANNING_E2E_USER_ID || "playwright-local").trim();
+const RECOMMEND_E2E_SAVED_RUNS_KEY = `finance:recommend:v2:${encodeURIComponent(RECOMMEND_E2E_OWNER_ID)}:saved-runs`;
+
 async function expectNoCspConsoleErrors(page: Page, routePath: string) {
   const violations: string[] = [];
   const onConsole = (message: { type(): string; text(): string }) => {
@@ -41,6 +44,8 @@ async function mockRecommendResult(page: Page) {
           candidatePool: "unified",
           candidateSources: ["finlife"],
           depositProtection: "prefer",
+          userId: RECOMMEND_E2E_OWNER_ID,
+          authSource: "trusted-header",
           weights: { rate: 0.5, term: 0.3, liquidity: 0.2 },
           assumptions: {
             rateSelectionPolicy: "최고금리는 우대조건 충족을 가정합니다.",
@@ -130,18 +135,18 @@ test("recommend autorun reuses the saved history run for the same signature", as
   await expect(page.getByText("결과 패널 검증 예금").first()).toBeVisible();
   const firstRunId = new URL(page.url()).searchParams.get("open");
   expect(firstRunId).toMatch(/^run_/);
-  expect(await page.evaluate(() => {
-    const raw = localStorage.getItem("recommend_saved_runs_v1");
+  expect(await page.evaluate((storageKey) => {
+    const raw = localStorage.getItem(storageKey);
     return raw ? JSON.parse(raw).length : 0;
-  })).toBe(1);
+  }, RECOMMEND_E2E_SAVED_RUNS_KEY)).toBe(1);
 
   await page.goto(autorunUrl);
   await expect(page).toHaveURL(/\/recommend\/history\?open=run_/, { timeout: 30_000 });
   expect(new URL(page.url()).searchParams.get("open")).toBe(firstRunId);
-  expect(await page.evaluate(() => {
-    const raw = localStorage.getItem("recommend_saved_runs_v1");
+  expect(await page.evaluate((storageKey) => {
+    const raw = localStorage.getItem(storageKey);
     return raw ? JSON.parse(raw).length : 0;
-  })).toBe(1);
+  }, RECOMMEND_E2E_SAVED_RUNS_KEY)).toBe(1);
 });
 
 test("dart page shows missing index guidance when index absent", async ({ page, request }) => {

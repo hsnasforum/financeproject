@@ -7,6 +7,7 @@ import {
   bodyFieldClassName,
 } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -1041,14 +1042,16 @@ export function PlanningRunsClient({
         </div>
       </div>
       {deleteTargetRunId ? (
-        <div
-          aria-labelledby="planning-runs-delete-title"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
-          role="dialog"
+        <AccessibleDialog
+          labelledBy="planning-runs-delete-title"
+          onClose={() => {
+            if (!deleteWorking) closeDeleteRunDialog();
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10"
         >
-          <div className="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10">
-            <h3 className="text-base font-black text-navy" id="planning-runs-delete-title">실행 기록 삭제 확인</h3>
+          <h3 className="text-base font-black text-navy" id="planning-runs-delete-title">실행 기록 삭제 확인</h3>
             <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
               삭제해도 바로 영구 삭제되지 않고 휴지통으로 이동합니다. 필요하면 바로 복구할 수 있습니다.
             </p>
@@ -1080,18 +1083,19 @@ export function PlanningRunsClient({
                 {deleteWorking ? "휴지통으로 이동 중..." : "휴지통으로 이동"}
               </Button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       ) : null}
       {restoreTargetRunId ? (
-        <div
-          aria-labelledby="planning-runs-restore-title"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
-          role="dialog"
+        <AccessibleDialog
+          labelledBy="planning-runs-restore-title"
+          onClose={() => {
+            if (!restoreWorking) closeRestoreRunDialog();
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10"
         >
-          <div className="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10">
-            <h3 className="text-base font-black text-navy" id="planning-runs-restore-title">실행 기록 복구 확인</h3>
+          <h3 className="text-base font-black text-navy" id="planning-runs-restore-title">실행 기록 복구 확인</h3>
             <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
               방금 휴지통으로 옮긴 실행을 다시 목록으로 돌립니다. 확인 문구를 입력하면 바로 복구됩니다.
             </p>
@@ -1123,8 +1127,7 @@ export function PlanningRunsClient({
                 {restoreWorking ? "복구 중..." : "바로 복구"}
               </Button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </PageShell>
   );

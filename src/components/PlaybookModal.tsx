@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { lockDocumentScroll } from "@/lib/browser/scrollLock";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { playbooks } from "@/lib/planner/playbook.ko";
 
 type PlaybookModalProps = {
@@ -14,32 +13,16 @@ type PlaybookModalProps = {
 export function PlaybookModal({ open, onClose, playbookId }: PlaybookModalProps) {
   const playbook = playbookId ? playbooks[playbookId] : null;
 
-  useEffect(() => {
-    if (!open) return;
-    const releaseScrollLock = lockDocumentScroll();
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      releaseScrollLock();
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onClose]);
-
   if (!open || typeof document === "undefined" || !playbook) return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[115] overflow-y-auto bg-black/45 p-4"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <AccessibleDialog
+      labelledBy="playbook-title"
+      onClose={onClose}
+      overlayClassName="z-[115] overflow-y-auto bg-black/45 p-4"
+      panelClassName="mx-auto my-8 w-full max-w-3xl rounded-xl bg-white p-5 shadow-xl"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="playbook-title" className="mx-auto my-8 w-full max-w-3xl rounded-xl bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex items-center justify-between gap-3">
           <h2 id="playbook-title" className="text-xl font-semibold">{playbook.title}</h2>
           <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-surface-muted" onClick={onClose}>
             닫기
@@ -92,8 +75,7 @@ export function PlaybookModal({ open, onClose, playbookId }: PlaybookModalProps)
             </section>
           ) : null}
         </div>
-      </div>
-    </div>,
+    </AccessibleDialog>,
     document.body,
   );
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -680,14 +681,16 @@ export function OpsBackupClient() {
         </Card>
       ) : null}
       {confirmRestoreOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="ops-backup-restore-confirm-title"
+        <AccessibleDialog
+          labelledBy="ops-backup-restore-confirm-title"
+          onClose={() => {
+            if (!restoring) setConfirmRestoreOpen(false);
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-backup-restore-confirm-title" className="text-base font-black text-navy">Restore 실행 확인</h3>
+          <h3 id="ops-backup-restore-confirm-title" className="text-base font-black text-navy">Restore 실행 확인</h3>
             <p className="mt-2 text-sm text-slate-700">
               {mode === "replace"
                 ? "replace 모드는 기존 데이터를 삭제 후 복원합니다. 계속 진행할까요?"
@@ -719,8 +722,7 @@ export function OpsBackupClient() {
                 Restore 진행
               </Button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </PageShell>
   );

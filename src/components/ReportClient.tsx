@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useRecommendOwner } from "@/lib/recommend/RecommendOwnerContext";
 import {
   Gov24ServiceDetailModal,
   type Gov24ServiceDetailData,
@@ -178,6 +179,7 @@ export function ReportClient({
   disclosureDigest: ReportDisclosureDigest | null;
   dailyBrief: DailyBrief | null;
 }) {
+  const ownerId = useRecommendOwner();
   const [includeDisclosuresFromDigest, setIncludeDisclosuresFromDigest] = useState(false);
   const [includeDailyBrief, setIncludeDailyBrief] = useState(false);
   const [recommendationPageState, setRecommendationPageState] = useState<RecommendationPageState>({
@@ -206,7 +208,7 @@ export function ReportClient({
     }
 
     const requestedRunId = (runId ?? "").trim();
-    const requestedRun = requestedRunId ? getRun(requestedRunId) : null;
+    const requestedRun = requestedRunId ? getRun(ownerId, requestedRunId) : null;
     if (requestedRun) {
       return {
         requestedRunId,
@@ -215,7 +217,7 @@ export function ReportClient({
       };
     }
 
-    const latestRun = listRuns()[0] ?? null;
+    const latestRun = listRuns(ownerId)[0] ?? null;
     if (latestRun) {
       return {
         requestedRunId,
@@ -229,7 +231,7 @@ export function ReportClient({
       savedRun: null,
       source: requestedRunId ? "missing_query" as const : "none" as const,
     };
-  }, [hydrated, runId]);
+  }, [hydrated, ownerId, runId]);
   const savedRun: SavedRecommendRun | null = runResolution.savedRun;
 
   const plannerSnapshot: PlannerLastSnapshot | null = useMemo(() => {

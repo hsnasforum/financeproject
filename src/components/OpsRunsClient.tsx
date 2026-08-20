@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { DevUnlockShortcutLink } from "@/components/DevUnlockShortcutLink";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -444,14 +445,16 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
         </div>
       </Card>
       {confirmDeleteRunId ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="ops-runs-delete-title"
+        <AccessibleDialog
+          labelledBy="ops-runs-delete-title"
+          onClose={() => {
+            if (!deleteRunningId) setConfirmDeleteRunId("");
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-runs-delete-title" className="text-base font-black text-navy">실행 기록 삭제 확인</h3>
+          <h3 id="ops-runs-delete-title" className="text-base font-black text-navy">실행 기록 삭제 확인</h3>
             <p className="mt-2 text-sm text-slate-700">
               실행 기록을 휴지통으로 이동합니다. 계속 진행할까요?
             </p>
@@ -482,8 +485,7 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
                 삭제 진행
               </Button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </PageShell>
   );

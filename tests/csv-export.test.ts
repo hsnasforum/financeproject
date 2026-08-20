@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { escapeCsvCell, exportRunCsv, type SavedRecommendRun } from "../src/lib/recommend/savedRunsStore";
+import { escapeCsvCell, exportRunCsv, exportRunJson, type SavedRecommendRun } from "../src/lib/recommend/savedRunsStore";
+import { recommendOwnerId } from "../src/lib/recommend/ownerNamespace";
+
+const OWNER_ID = recommendOwnerId("alice");
 
 function sampleRun(): SavedRecommendRun {
   return {
+    ownerId: OWNER_ID,
     runId: "run_20260225_abcd12",
     savedAt: "2026-02-25T12:34:56.000Z",
     profile: {
@@ -41,7 +45,7 @@ describe("csv export", () => {
   });
 
   it("exports run as escaped csv rows", () => {
-    const csv = exportRunCsv(sampleRun());
+    const csv = exportRunCsv(OWNER_ID, sampleRun());
     const [header] = csv.split("\n");
 
     expect(header).toContain("runId");
@@ -50,5 +54,12 @@ describe("csv export", () => {
     expect(csv).toContain("\"상품 \"\"A\"\"\n특판\"");
     expect(csv).toContain("finlife:001");
     expect(csv).toContain("0.9123");
+  });
+
+  it("does not expose the owner identifier in exported JSON", () => {
+    const exported = JSON.parse(exportRunJson(OWNER_ID, sampleRun())) as Record<string, unknown>;
+    expect(exported.ownerId).toBeUndefined();
+    expect(exported.runId).toBe("run_20260225_abcd12");
+    expect(() => exportRunJson(recommendOwnerId("bob"), sampleRun())).toThrow("owner mismatch");
   });
 });

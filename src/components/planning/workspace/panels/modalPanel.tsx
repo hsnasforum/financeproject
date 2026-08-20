@@ -1,5 +1,6 @@
 import { type PlanningFeedbackCategory } from "@/lib/ops/feedback/planningFeedbackTypes";
 import { Button } from "@/components/ui/Button";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import {
   BodyDialogSurface,
   bodyFieldClassName,
@@ -48,9 +49,17 @@ export function PlanningWorkspaceModalPanel({
   return (
     <>
       {profileDeleteDialog ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="planning-profile-delete-title">
+        <AccessibleDialog
+          labelledBy="planning-profile-delete-title"
+          onClose={() => {
+            if (!savingProfile) setProfileDeleteDialog(null);
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-md"
+        >
           <BodyDialogSurface className="max-w-md">
-            <SubSectionHeader title="프로필 삭제 확인" />
+            <div id="planning-profile-delete-title"><SubSectionHeader title="프로필 삭제 확인" /></div>
             <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">아래 확인 문구를 정확히 입력해야 삭제가 진행됩니다.</p>
             <div className="mt-4 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 font-mono text-[10px] text-rose-600">{profileDeleteDialog.expectedConfirm}</div>
             <input
@@ -86,13 +95,21 @@ export function PlanningWorkspaceModalPanel({
               </Button>
             </div>
           </BodyDialogSurface>
-        </div>
+        </AccessibleDialog>
       ) : null}
 
       {feedbackModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="planning-feedback-title">
+        <AccessibleDialog
+          labelledBy="planning-feedback-title"
+          onClose={() => {
+            if (!feedbackSubmitting) setFeedbackModalOpen(false);
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-xl"
+        >
           <BodyDialogSurface className="max-w-xl">
-            <SubSectionHeader title="피드백 보내기" />
+            <div id="planning-feedback-title"><SubSectionHeader title="피드백 보내기" /></div>
             <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">/planning 사용 중 발견한 불편한 점이나 버그를 알려주세요. 피드백은 브라우저 로컬 저장소에 안전하게 보관됩니다.</p>
 
             <div className="animate-in fade-in slide-in-from-bottom-2 mt-8 space-y-6 duration-300">
@@ -167,7 +184,7 @@ export function PlanningWorkspaceModalPanel({
               </Button>
             </div>
           </BodyDialogSurface>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </>
   );

@@ -29,6 +29,10 @@ import {
   normalizeDartSearchQuery,
 } from "@/lib/dart/query";
 import { cn } from "@/lib/utils";
+import {
+  createLatestRequestCoordinator,
+  type LatestRequestLease,
+} from "@/lib/browser/latestRequest";
 
 type SearchItem = {
   corpCode: string;
@@ -70,6 +74,23 @@ type CompanyNameResponse = {
     corpName?: string;
   };
 };
+
+type DartBuildContinuation = {
+  request: LatestRequestLease;
+  reloadStatus: (request: LatestRequestLease) => Promise<void>;
+  search?: (request: LatestRequestLease) => Promise<void>;
+};
+
+export async function continueDartBuildAction({
+  request,
+  reloadStatus,
+  search,
+}: DartBuildContinuation): Promise<void> {
+  if (!request.isCurrent()) return;
+  await reloadStatus(request);
+  if (!request.isCurrent() || !search) return;
+  await search(request);
+}
 
 const DART_PENDING_COMPANY_HREF_STORAGE_KEY = "dart:pending-company-href";
 const DART_PENDING_COMPANY_HREF_MAX_AGE_MS = 60_000;
@@ -235,6 +256,10 @@ export function DartSearchClient() {
   const didRestoreSearchRef = useRef(false);
   const scheduledSearchRestoreRef = useRef(false);
   const didApplyMonitorContextRef = useRef(false);
+  const actionRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  const monitorContextRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  if (actionRequestsRef.current == null) actionRequestsRef.current = createLatestRequestCoordinator();
+  if (monitorContextRequestsRef.current == null) monitorContextRequestsRef.current = createLatestRequestCoordinator();
   const urlQuery = normalizeDartSearchQuery(searchParams?.get("q"));
   const urlTab = searchParams?.get("tab") === "monitor" ? "monitor" : "search";
   const urlMonitorCorpCode = normalizeCorpCode(searchParams?.get("corpCode"));
@@ -365,6 +390,8 @@ export function DartSearchClient() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      actionRequestsRef.current?.cancel();
+      monitorContextRequestsRef.current?.cancel();
     };
   }, []);
 
@@ -383,11 +410,12 @@ export function DartSearchClient() {
   }, []);
 
   useEffect(() => {
-    if (!isHydrated || urlTab !== "monitor" || !urlMonitorCorpCode) return;
+    if (!isHydrated || tab !== "monitor" || urlTab !== "monitor" || !urlMonitorCorpCode) return;
     if (didApplyMonitorContextRef.current) return;
 
     didApplyMonitorContextRef.current = true;
     removeSessionStorageItem(DART_PENDING_COMPANY_HREF_STORAGE_KEY);
+    const request = monitorContextRequestsRef.current!.start();
 
     async function applyMonitorContext(): Promise<void> {
       let added = false;
@@ -397,8 +425,10 @@ export function DartSearchClient() {
         try {
           const res = await fetch(`/api/public/disclosure/company?corpCode=${encodeURIComponent(urlMonitorCorpCode)}`, {
             cache: "no-store",
+            signal: request.signal,
           });
           const raw = (await res.json()) as CompanyNameResponse;
+          if (!request.isCurrent()) return;
           const canonicalName = normalizeDartCorpName(raw.data?.corpName);
           if (canonicalName) {
             favoriteName = canonicalName;
@@ -406,6 +436,8 @@ export function DartSearchClient() {
         } catch {
           // Fallback to the carried query value when the company detail lookup fails.
         }
+
+        if (!request.isCurrent()) return;
 
         try {
           addFavorite({
@@ -430,29 +462,47 @@ export function DartSearchClient() {
           window.history.replaceState(window.history.state, "", cleanHref);
         }
       }
+      request.finish();
     }
 
     void applyMonitorContext();
-  }, [isHydrated, refreshLocalLists, urlMonitorCorpCode, urlMonitorCorpName, urlTab]);
+    return () => {
+      monitorContextRequestsRef.current?.cancel();
+      didApplyMonitorContextRef.current = false;
+    };
+  }, [isHydrated, refreshLocalLists, tab, urlMonitorCorpCode, urlMonitorCorpName, urlTab]);
 
-  async function reloadStatus(endpoint?: string): Promise<void> {
+  async function reloadStatus(endpoint?: string, requestOverride?: LatestRequestLease): Promise<void> {
+    const ownsRequest = requestOverride == null;
+    const request = requestOverride ?? actionRequestsRef.current!.start();
+    if (ownsRequest) {
+      setLoading(false);
+      setBuildLoading(false);
+      clearPendingSearchQuery();
+    }
     const target = endpoint ?? missing?.statusEndpoint ?? "/api/public/disclosure/corpcodes/status";
     try {
-      const res = await fetch(target, { cache: "no-store" });
+      const res = await fetch(target, { cache: "no-store", signal: request.signal });
       const raw = (await res.json()) as Record<string, unknown>;
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || !request.isCurrent()) return;
       if (!res.ok && res.status !== 409) return;
       if (res.ok && raw && typeof raw === "object" && raw.exists === true) {
         setMissing(null);
         return;
       }
       setMissing(raw as MissingIndexPayload);
-    } catch {
+    } catch (error) {
+      if (!request.isCurrent() || (error instanceof Error && error.name === "AbortError")) return;
       // Ignore status polling failures; explicit search error handles user feedback.
+    } finally {
+      if (ownsRequest) request.finish();
     }
   }
 
-  const search = useCallback(async (queryOverride?: string): Promise<void> => {
+  const search = useCallback(async (queryOverride?: string, requestOverride?: LatestRequestLease): Promise<void> => {
+    const ownsRequest = requestOverride == null;
+    const request = requestOverride ?? actionRequestsRef.current!.start();
+    if (ownsRequest) setBuildLoading(false);
     const query = normalizeDartSearchQuery(queryOverride ?? q);
     if (query !== q) {
       setQ(query);
@@ -464,6 +514,9 @@ export function DartSearchClient() {
       setItems([]);
       setHasSearched(false);
       setActiveSearchQuery("");
+      setLoading(false);
+      clearPendingSearchQuery();
+      if (ownsRequest) request.finish();
       return;
     }
 
@@ -478,9 +531,12 @@ export function DartSearchClient() {
         q: query,
         limit: "20",
       });
-      const res = await fetch(`/api/public/disclosure/corpcodes/search?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/public/disclosure/corpcodes/search?${params.toString()}`, {
+        cache: "no-store",
+        signal: request.signal,
+      });
       const raw = (await res.json()) as Record<string, unknown>;
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || !request.isCurrent()) return;
 
       if (!res.ok) {
         const missingPayload = raw as MissingIndexPayload;
@@ -506,15 +562,15 @@ export function DartSearchClient() {
       rememberLastSuccessfulSearchQuery(query);
       rememberLastSuccessfulSearchSnapshot(query, normalized);
       clearPendingSearchQuery();
-    } catch {
-      if (!isMountedRef.current) return;
+    } catch (fetchError) {
+      if (!isMountedRef.current || !request.isCurrent() || (fetchError instanceof Error && fetchError.name === "AbortError")) return;
       setError("검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도하세요.");
       setItems([]);
       setActiveSearchQuery(query);
       clearPendingSearchQuery();
     } finally {
-      if (!isMountedRef.current) return;
-      setLoading(false);
+      if (isMountedRef.current && request.isCurrent()) setLoading(false);
+      if (ownsRequest) request.finish();
     }
   }, [
     clearLastSuccessfulSearchQuery,
@@ -671,14 +727,17 @@ export function DartSearchClient() {
 
 
   async function buildIndex() {
+    const request = actionRequestsRef.current!.start();
     const endpoint = missing?.buildEndpoint ?? "/api/public/disclosure/corpcodes/build";
+    setLoading(false);
     setBuildLoading(true);
+    clearPendingSearchQuery();
     setNotice("");
     setError("");
     try {
-      const res = await fetch(endpoint, { method: "POST", cache: "no-store" });
+      const res = await fetch(endpoint, { method: "POST", cache: "no-store", signal: request.signal });
       const raw = (await res.json()) as BuildResult;
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || !request.isCurrent()) return;
       if (!res.ok || raw.ok !== true) {
         setError(typeof raw.message === "string" ? raw.message : "인덱스 생성에 실패했습니다.");
         return;
@@ -687,16 +746,25 @@ export function DartSearchClient() {
       const count = raw.status?.meta?.count;
       const generatedAt = raw.status?.meta?.generatedAt ?? "-";
       setNotice(`인덱스 생성 완료 (count=${typeof count === "number" ? count : "-"}, generatedAt=${generatedAt})`);
-      await reloadStatus(missing?.statusEndpoint);
-      if (normalizeDartSearchQuery(q)) {
-        await search();
-      }
-    } catch {
-      if (!isMountedRef.current) return;
+      await continueDartBuildAction({
+        request,
+        reloadStatus: async (ownedRequest) => {
+          await reloadStatus(missing?.statusEndpoint, ownedRequest);
+        },
+        ...(normalizeDartSearchQuery(q)
+          ? {
+              search: async (ownedRequest: LatestRequestLease) => {
+                await search(undefined, ownedRequest);
+              },
+            }
+          : {}),
+      });
+    } catch (error) {
+      if (!isMountedRef.current || !request.isCurrent() || (error instanceof Error && error.name === "AbortError")) return;
       setError("인덱스 생성 중 오류가 발생했습니다.");
     } finally {
-      if (!isMountedRef.current) return;
-      setBuildLoading(false);
+      if (isMountedRef.current && request.isCurrent()) setBuildLoading(false);
+      request.finish();
     }
   }
 
