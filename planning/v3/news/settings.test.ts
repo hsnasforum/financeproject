@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type NewsItem } from "./contracts";
 import { runNewsRefresh } from "./cli/newsRefresh";
 import { selectTopFromStore } from "./selectTop";
-import { readNewsSettings, writeNewsSettings } from "./settings";
+import { loadEffectiveNewsConfig, readNewsSettings, writeNewsSettings } from "./settings";
 import { upsertItems } from "./store";
 
 describe("planning v3 news settings overrides", () => {
@@ -109,5 +109,33 @@ describe("planning v3 news settings overrides", () => {
     expect(result.sourcesProcessed).toBe(0);
     expect(result.itemsFetched).toBe(0);
     expect(result.itemsNew).toBe(0);
+  });
+
+  it("keeps legacy HTTP sources visible but quarantined", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-v3-settings-legacy-http-"));
+    roots.push(root);
+
+    const saved = writeNewsSettings({
+      sources: [{ id: "kostat_press", enabled: true }],
+      topics: [],
+      customSources: [{
+        id: "legacy_custom",
+        name: "Legacy custom",
+        feedUrl: "http://feeds.example.com/rss",
+        country: "ZZ",
+        language: "und",
+        weight: 1,
+        enabled: true,
+      }],
+    }, root);
+
+    expect(saved.customSources[0]?.enabled).toBe(false);
+    const effective = loadEffectiveNewsConfig(root);
+    const retiredDefault = effective.sources.find((row) => row.id === "kostat_press");
+    const retiredCustom = effective.sources.find((row) => row.id === "legacy_custom");
+    expect(retiredDefault).toMatchObject({ enabled: false });
+    expect(retiredDefault?.retiredReason).toContain("HTTPS");
+    expect(retiredCustom).toMatchObject({ enabled: false });
+    expect(retiredCustom?.retiredReason).toContain("HTTPS");
   });
 });

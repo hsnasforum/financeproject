@@ -16,6 +16,7 @@ export type SourceRow = {
   overrideWeight: number | null;
   effectiveEnabled: boolean;
   effectiveWeight: number;
+  retiredReason?: string | null;
 };
 
 export type TopicRow = {
@@ -287,7 +288,7 @@ export function buildSourceDrafts(rows: SourceRow[]): Record<string, SourceDraft
     row.id,
     {
       id: row.id,
-      enabled: row.overrideEnabled ?? row.defaultEnabled,
+      enabled: row.retiredReason ? false : row.overrideEnabled ?? row.defaultEnabled,
       weight: String(row.overrideWeight ?? row.defaultWeight),
     },
   ]));

@@ -32,7 +32,7 @@ export const FIXTURE_ITEMS: NewsItem[] = [
   },
   {
     id: "i-policy-1",
-    sourceId: "moef_econ_policy_en",
+    sourceId: "bis_press",
     title: "Tariff policy review expands to auto imports",
     url: "https://example.com/news/policy-1",
     publishedAt: "2026-03-03T12:30:00.000Z",

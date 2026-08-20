@@ -6,7 +6,7 @@ import {
   requireCsrf,
   toGuardErrorResponse,
   } from "@/lib/dev/devGuards";
-import { NEWS_SOURCES } from "@/lib/planning/v3/news/sources";
+import { NEWS_SOURCES, RETIRED_NEWS_SOURCES } from "@/lib/planning/v3/news/sources";
 import {
   loadEffectiveNewsConfig,
   readNewsSettings,
@@ -57,6 +57,7 @@ const SettingsGetResponseSchema = z.object({
       overrideWeight: z.number().finite().nullable(),
       effectiveEnabled: z.boolean(),
       effectiveWeight: z.number().finite(),
+      retiredReason: z.string().trim().min(1).nullable(),
     })),
     topics: z.array(z.object({
       id: z.string().trim().min(1),
@@ -140,7 +141,9 @@ export async function GET(request: Request) {
     const effective = loadEffectiveNewsConfig();
     const sourceOverrideById = new Map(settings.sources.map((row) => [row.id, row]));
     const topicOverrideById = new Map(settings.topics.map((row) => [row.id, row]));
-    const defaultSourceById = new Map(NEWS_SOURCES.map((row) => [row.id, row]));
+    const defaultSourceById = new Map(
+      [...NEWS_SOURCES, ...RETIRED_NEWS_SOURCES].map((row) => [row.id, row]),
+    );
 
     const data = {
       updatedAt: settings.updatedAt ?? null,
@@ -159,6 +162,7 @@ export async function GET(request: Request) {
           overrideWeight: Number.isFinite(override?.weight) ? Number(override?.weight) : null,
           effectiveEnabled: source.enabled,
           effectiveWeight: source.weight,
+          retiredReason: source.retiredReason ?? null,
         };
       }).sort((a, b) => a.id.localeCompare(b.id)),
       topics: NEWS_TOPICS.map((topic) => {
