@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROMPT_DIR="$ROOT_DIR/scripts/prompts/multi-agent"
 TMP_BASE="$ROOT_DIR/tmp/codex-multi-agent"
+DEMANDING_MODEL="${CODEX_DEMANDING_MODEL:-gpt-5.6-sol}"
+READ_HEAVY_MODEL="${CODEX_READ_HEAVY_MODEL:-gpt-5.6-terra}"
 
 usage() {
   cat <<'EOF'
@@ -16,6 +18,8 @@ Usage:
 Behavior:
   - role-set `full` (default): creates 7 prompt files for lead, planner, researcher, implementer, reviewer, validator, documenter
   - role-set `core`: creates 3 prompt files for lead, implementer, validator
+  - demanding roles default to gpt-5.6-sol; read-heavy roles default to gpt-5.6-terra
+  - override defaults with CODEX_DEMANDING_MODEL and CODEX_READ_HEAVY_MODEL
   - If tmux is available, opens a multi-window tmux session with interactive codex runs
   - If tmux is unavailable, prints the codex commands to run manually
 EOF
@@ -113,14 +117,34 @@ for role in "${ROLES[@]}"; do
   build_prompt "$PROMPT_DIR/$role.md" "$RUN_DIR/$role.md"
 done
 
-make_cmd() {
-  local prompt_file="$1"
-  printf "cd '%s' && codex -C '%s' --no-alt-screen \"\$(cat '%s')\"" "$ROOT_DIR" "$ROOT_DIR" "$prompt_file"
+role_model() {
+  case "$1" in
+    researcher|validator|documenter) printf '%s' "$READ_HEAVY_MODEL" ;;
+    *) printf '%s' "$DEMANDING_MODEL" ;;
+  esac
 }
 
-lead_cmd="$(make_cmd "$RUN_DIR/lead.md")"
-implementer_cmd="$(make_cmd "$RUN_DIR/implementer.md")"
-validator_cmd="$(make_cmd "$RUN_DIR/validator.md")"
+role_effort() {
+  case "$1" in
+    planner|implementer) printf 'xhigh' ;;
+    documenter) printf 'medium' ;;
+    *) printf 'high' ;;
+  esac
+}
+
+make_cmd() {
+  local role="$1"
+  local prompt_file="$2"
+  local model
+  local effort
+  model="$(role_model "$role")"
+  effort="$(role_effort "$role")"
+  printf "cd '%s' && codex -C '%s' --model '%s' -c 'model_reasoning_effort=\"%s\"' --no-alt-screen \"\$(cat '%s')\"" "$ROOT_DIR" "$ROOT_DIR" "$model" "$effort" "$prompt_file"
+}
+
+lead_cmd="$(make_cmd lead "$RUN_DIR/lead.md")"
+implementer_cmd="$(make_cmd implementer "$RUN_DIR/implementer.md")"
+validator_cmd="$(make_cmd validator "$RUN_DIR/validator.md")"
 
 echo "Prepared prompts:"
 for role in "${ROLES[@]}"; do
@@ -140,10 +164,10 @@ if command -v tmux >/dev/null 2>&1; then
   tmux select-layout -t "$SESSION_NAME:core" tiled >/dev/null
 
   if [[ "$ROLE_SET" == "full" ]]; then
-    planner_cmd="$(make_cmd "$RUN_DIR/planner.md")"
-    researcher_cmd="$(make_cmd "$RUN_DIR/researcher.md")"
-    reviewer_cmd="$(make_cmd "$RUN_DIR/reviewer.md")"
-    documenter_cmd="$(make_cmd "$RUN_DIR/documenter.md")"
+    planner_cmd="$(make_cmd planner "$RUN_DIR/planner.md")"
+    researcher_cmd="$(make_cmd researcher "$RUN_DIR/researcher.md")"
+    reviewer_cmd="$(make_cmd reviewer "$RUN_DIR/reviewer.md")"
+    documenter_cmd="$(make_cmd documenter "$RUN_DIR/documenter.md")"
 
     tmux new-window -t "$SESSION_NAME" -n support -c "$ROOT_DIR" "$planner_cmd"
     tmux split-window -h -t "$SESSION_NAME:support" -c "$ROOT_DIR" "$researcher_cmd"
@@ -172,6 +196,6 @@ echo
 
 for role in "${ROLES[@]}"; do
   echo "[$role]"
-  echo "$(make_cmd "$RUN_DIR/$role.md")"
+  echo "$(make_cmd "$role" "$RUN_DIR/$role.md")"
   echo
 done

@@ -5,7 +5,10 @@ import { spawnSync } from "node:child_process";
 const trackedOnlyPaths = [
   ".codex/config.toml",
   ".codex/rules/default.rules",
+  ".codex/skills/codex-agent-rules-maintenance/SKILL.md",
+  ".codex/skills/codex-agent-rules-maintenance/agents/openai.yaml",
   ".codex/skills/dart-data-source-hardening/SKILL.md",
+  ".codex/skills/finance-skill-routing/SKILL.md",
   ".codex/skills/planning-gate-selector/SKILL.md",
   ".codex/skills/route-ssot-check/SKILL.md",
   ".codex/skills/work-log-closeout/SKILL.md",
@@ -25,6 +28,7 @@ const trackedOnlyPaths = [
   "scripts/prompts/multi-agent/researcher.md",
   "scripts/prompts/multi-agent/reviewer.md",
   "scripts/prompts/multi-agent/validator.md",
+  "scripts/run_codex_multi_agent.sh",
   "work/README.md",
 ];
 
@@ -95,6 +99,29 @@ const coverageChecks = [
   },
 ];
 
+const profileChecks = [
+  { path: ".codex/agents/manager.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "high"$/m] },
+  { path: ".codex/agents/analyzer.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "xhigh"$/m] },
+  { path: ".codex/agents/planner.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "xhigh"$/m] },
+  { path: ".codex/agents/developer.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "xhigh"$/m] },
+  { path: ".codex/agents/reviewer.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "high"$/m] },
+  { path: ".codex/agents/tester.toml", patterns: [/^model = "gpt-5\.6-terra"$/m, /^model_reasoning_effort = "high"$/m] },
+  { path: ".codex/agents/researcher.toml", patterns: [/^model = "gpt-5\.6-terra"$/m, /^model_reasoning_effort = "high"$/m] },
+  { path: ".codex/agents/documenter.toml", patterns: [/^model = "gpt-5\.6-terra"$/m, /^model_reasoning_effort = "high"$/m] },
+  { path: "scripts/run_codex_multi_agent.sh", patterns: [/CODEX_DEMANDING_MODEL:-gpt-5\.6-sol/, /CODEX_READ_HEAVY_MODEL:-gpt-5\.6-terra/, /model_reasoning_effort/] },
+];
+
+const skillDefinitionChecks = [
+  {
+    path: ".codex/skills/codex-agent-rules-maintenance/SKILL.md",
+    patterns: [/^name: codex-agent-rules-maintenance$/m, /^description: .+$/m, /^## Workflow$/m, /^## Verification$/m],
+  },
+  {
+    path: ".codex/skills/codex-agent-rules-maintenance/agents/openai.yaml",
+    patterns: [/^interface:$/m, /^  display_name: .+$/m, /^  short_description: .+$/m, /^  default_prompt: .+$/m],
+  },
+];
+
 const WORK_DIR = "work";
 const WORK_ROOT_README = `${WORK_DIR}/README.md`;
 const WORK_NOTE_PATH_RE = /^work\/(\d{1,2})\/(\d{1,2})\/(\d{4})-(\d{2})-(\d{2})-[^/]+\.md$/;
@@ -113,6 +140,53 @@ function ensureTracked(filePath) {
     stdio: ["ignore", "ignore", "pipe"],
   });
   return result.status === 0;
+}
+
+function normalizePath(filePath) {
+  return filePath.replaceAll("\\", "/").replace(/\/$/, "");
+}
+
+function parseConfiguredSkillPath(configuredPath) {
+  const normalized = normalizePath(configuredPath);
+  if (normalized.startsWith(".codex/skills/")) {
+    return { configuredRoot: normalizePath(process.cwd()), localPath: normalized };
+  }
+
+  const marker = "/.codex/skills/";
+  const markerIndex = normalized.indexOf(marker);
+  if (markerIndex < 0) return null;
+  return {
+    configuredRoot: normalized.slice(0, markerIndex),
+    localPath: normalized.slice(markerIndex + 1),
+  };
+}
+
+function validateConfiguredSkills(configText) {
+  const issues = [];
+  const configuredSkills = [...configText.matchAll(/^path = "([^"]+\/SKILL\.md)"$/gm)]
+    .map((match) => parseConfiguredSkillPath(match[1]))
+    .filter(Boolean);
+  const currentRoot = normalizePath(process.cwd());
+  const repositoryRoots = new Set([currentRoot]);
+
+  for (const skill of configuredSkills) {
+    if (ensureTracked(skill.localPath)) {
+      repositoryRoots.add(skill.configuredRoot);
+    }
+  }
+
+  for (const skill of configuredSkills) {
+    if (!repositoryRoots.has(skill.configuredRoot)) continue;
+    if (!fs.existsSync(skill.localPath)) {
+      issues.push(`configured repository skill is missing from current checkout: ${skill.localPath}`);
+      continue;
+    }
+    if (!ensureTracked(skill.localPath)) {
+      issues.push(`configured repository skill is untracked in current checkout: ${skill.localPath}`);
+    }
+  }
+
+  return issues;
 }
 
 function collectLegacyFlatWorkNotes() {
@@ -227,6 +301,19 @@ function validateLatestWorkNote(filePath) {
 
 const issues = [];
 
+const configText = fs.readFileSync(".codex/config.toml", "utf8");
+issues.push(...validateConfiguredSkills(configText));
+
+if (process.argv.includes("--configured-skills-only")) {
+  if (issues.length > 0) {
+    console.error(`[multi-agent:guard] FAIL issues=${issues.length}`);
+    for (const issue of issues) console.error(`- ${issue}`);
+    process.exit(1);
+  }
+  console.log("[multi-agent:guard] PASS configured-skills");
+  process.exit(0);
+}
+
 for (const filePath of trackedOnlyPaths) {
   if (!fs.existsSync(filePath)) {
     issues.push(`missing file: ${filePath}`);
@@ -243,6 +330,26 @@ for (const check of coverageChecks) {
   for (const pattern of check.patterns) {
     if (!pattern.test(text)) {
       issues.push(`missing handoff coverage ${String(pattern)} -> ${check.path}`);
+    }
+  }
+}
+
+for (const check of profileChecks) {
+  if (!fs.existsSync(check.path)) continue;
+  const text = fs.readFileSync(check.path, "utf8");
+  for (const pattern of check.patterns) {
+    if (!pattern.test(text)) {
+      issues.push(`missing GPT-5.6 agent profile ${String(pattern)} -> ${check.path}`);
+    }
+  }
+}
+
+for (const check of skillDefinitionChecks) {
+  if (!fs.existsSync(check.path)) continue;
+  const text = fs.readFileSync(check.path, "utf8");
+  for (const pattern of check.patterns) {
+    if (!pattern.test(text)) {
+      issues.push(`invalid skill definition ${String(pattern)} -> ${check.path}`);
     }
   }
 }
