@@ -8,6 +8,7 @@ import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
 import { RecommendResultsPanel } from "@/components/recommend/RecommendResultsPanel";
+import { LegacyRecommendMigrationCard } from "@/components/recommend/LegacyRecommendMigrationCard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -53,6 +54,11 @@ import {
   isRecommendOwner,
   type RecommendOwnerId,
 } from "@/lib/recommend/ownerNamespace";
+import {
+  hasLegacyRecommendStorage,
+  LEGACY_RECOMMEND_RESOLVED_EVENT,
+  legacyRecommendDismissSessionKey,
+} from "@/lib/recommend/legacyStorageMigration";
 import {
   attachUnifiedIds,
   formatKoreanDateTime,
@@ -276,7 +282,14 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
       setLastStored(ownedStored);
       lastStoredRef.current = ownedStored;
       setProfile(nextProfile);
-      setReadyToPersist(true);
+      let legacyMigrationPending = false;
+      try {
+        legacyMigrationPending = hasLegacyRecommendStorage(localStorage)
+          && sessionStorage.getItem(legacyRecommendDismissSessionKey(ownerId)) !== "1";
+      } catch {
+        legacyMigrationPending = false;
+      }
+      setReadyToPersist(!legacyMigrationPending);
 
       if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
         autoRunTriggeredRef.current = true;
@@ -294,6 +307,14 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
       active = false;
     };
   }, [ownerId, searchParams, showValidationIssues, submitWithProfile]);
+
+  useEffect(() => {
+    const continueWithOwnedStorage = () => setReadyToPersist(true);
+    window.addEventListener(LEGACY_RECOMMEND_RESOLVED_EVENT, continueWithOwnedStorage);
+    return () => {
+      window.removeEventListener(LEGACY_RECOMMEND_RESOLVED_EVENT, continueWithOwnedStorage);
+    };
+  }, []);
 
   useEffect(() => {
     if (!readyToPersist) return;
@@ -432,6 +453,8 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
         </Link>
         에서 확인할 수 있습니다.
       </p>
+
+      <LegacyRecommendMigrationCard />
 
       <div className="mb-8 space-y-6" data-testid="recommend-root">
         <Card className="rounded-[2.5rem] p-8 shadow-sm">

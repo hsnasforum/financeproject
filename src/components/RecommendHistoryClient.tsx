@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Badge } from "@/components/ui/Badge";
+import { LegacyRecommendMigrationCard } from "@/components/recommend/LegacyRecommendMigrationCard";
 import { useRecommendOwner } from "@/lib/recommend/RecommendOwnerContext";
 import { cn } from "@/lib/utils";
 import { downloadText } from "@/lib/browser/download";
@@ -316,6 +317,8 @@ export function RecommendHistoryClient({
             </Link>
           }
         />
+
+        <LegacyRecommendMigrationCard />
 
         <Card className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">

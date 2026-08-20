@@ -132,6 +132,25 @@ describe("saved runs store", () => {
     expect(runs[0]?.items[0]?.productName).toBe("변경상품");
   });
 
+  it("preserves valid owner runs when another stored row is malformed during mutations", () => {
+    const storage = createMemoryStorage();
+    const ownerId = recommendOwnerId("alice");
+    const storageKey = recommendOwnerStorageKey(ownerId, "saved-runs");
+
+    saveRun(ownerId, makeInput(1), storage);
+    const firstStored = JSON.parse(storage.getItem(storageKey) ?? "[]") as unknown[];
+    storage.setItem(storageKey, JSON.stringify([...firstStored, { ownerId, runId: "broken" }]));
+
+    saveRun(ownerId, makeInput(2), storage);
+    expect(listRuns(ownerId, storage).map((run) => run.runId).sort()).toEqual(["run-1", "run-2"]);
+
+    const storedBeforeRemove = JSON.parse(storage.getItem(storageKey) ?? "[]") as unknown[];
+    storage.setItem(storageKey, JSON.stringify([...storedBeforeRemove, { ownerId: "bob", runId: "foreign" }]));
+    removeRun(ownerId, "run-2", storage);
+
+    expect(listRuns(ownerId, storage).map((run) => run.runId)).toEqual(["run-1"]);
+  });
+
   it("buildRunFromRecommend enforces unifiedId rule with fallback", () => {
     const profile: SavedRunProfile = {
       purpose: "seed-money",

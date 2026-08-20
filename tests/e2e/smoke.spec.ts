@@ -3,6 +3,7 @@ import { expect, test } from "./helpers/e2eTest";
 
 const RECOMMEND_E2E_OWNER_ID = (process.env.PLANNING_E2E_USER_ID || "playwright-local").trim();
 const RECOMMEND_E2E_SAVED_RUNS_KEY = `finance:recommend:v2:${encodeURIComponent(RECOMMEND_E2E_OWNER_ID)}:saved-runs`;
+const RECOMMEND_E2E_PROFILE_KEY = `finance:recommend:v2:${encodeURIComponent(RECOMMEND_E2E_OWNER_ID)}:profile`;
 
 async function expectNoCspConsoleErrors(page: Page, routePath: string) {
   const violations: string[] = [];
@@ -104,6 +105,82 @@ test("recommend page renders", async ({ page }) => {
   await page.goto("/recommend");
   await expect(page.getByTestId("recommend-root")).toBeVisible();
   await expect(page.getByTestId("recommend-submit")).toBeVisible();
+});
+
+test("legacy recommend state waits for confirmation before owner migration", async ({ page }) => {
+  const legacyProfile = {
+    purpose: "emergency",
+    kind: "deposit",
+    preferredTerm: 3,
+    liquidityPref: "high",
+    rateMode: "max",
+    topN: 3,
+    candidatePool: "unified",
+    candidateSources: ["finlife"],
+    depositProtection: "any",
+    weights: { rate: 0.6, term: 0.25, liquidity: 0.15 },
+  };
+  await page.addInitScript((profile) => {
+    const seededKey = "recommend-legacy-e2e-seeded";
+    if (sessionStorage.getItem(seededKey) === "1") return;
+    localStorage.setItem("recommend_profile_v1", JSON.stringify(profile));
+    sessionStorage.setItem(seededKey, "1");
+  }, legacyProfile);
+
+  await page.goto("/recommend");
+  await expect(page.getByTestId("recommend-legacy-migration")).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), RECOMMEND_E2E_PROFILE_KEY)).toBeNull();
+
+  await page.getByRole("button", { name: "현재 계정으로 가져오기" }).click();
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByTestId("recommend-legacy-migration")).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("recommend_profile_v1"))).toBeNull();
+  expect(await page.evaluate((key) => {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  }, RECOMMEND_E2E_PROFILE_KEY)).toMatchObject({
+    version: 2,
+    ownerId: RECOMMEND_E2E_OWNER_ID,
+    profile: { purpose: "emergency", preferredTerm: 3 },
+  });
+});
+
+test("partial legacy recommend migration reloads owner state before persistence resumes", async ({ page }) => {
+  const legacyProfile = {
+    purpose: "emergency",
+    kind: "deposit",
+    preferredTerm: 3,
+    liquidityPref: "high",
+    rateMode: "max",
+    topN: 3,
+    candidatePool: "unified",
+    candidateSources: ["finlife"],
+    depositProtection: "any",
+    weights: { rate: 0.6, term: 0.25, liquidity: 0.15 },
+  };
+  await page.addInitScript((profile) => {
+    const seededKey = "recommend-legacy-partial-e2e-seeded";
+    if (sessionStorage.getItem(seededKey) === "1") return;
+    localStorage.setItem("recommend_profile_v1", JSON.stringify(profile));
+    localStorage.setItem("recommend_last_result_v1", "{broken");
+    sessionStorage.setItem(seededKey, "1");
+  }, legacyProfile);
+
+  await page.goto("/recommend");
+  await page.getByRole("button", { name: "현재 계정으로 가져오기" }).click();
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByTestId("recommend-legacy-migration")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("recommend_last_result_v1"))).toBe("{broken");
+  expect(await page.evaluate((key) => {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  }, RECOMMEND_E2E_PROFILE_KEY)).toMatchObject({
+    version: 2,
+    ownerId: RECOMMEND_E2E_OWNER_ID,
+    profile: { purpose: "emergency", preferredTerm: 3 },
+  });
 });
 
 test("recommend result panel keeps the submit-to-detail flow", async ({ page }) => {
