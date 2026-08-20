@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -23,6 +23,7 @@ import {
   type DartRecent,
 } from "@/lib/dart/dartStore";
 import { cn } from "@/lib/utils";
+import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
 
 type CompanyView = {
   corpCode?: string;
@@ -84,6 +85,8 @@ export function DartCompanyPageClient() {
   const [favorites, setFavorites] = useState<DartFavorite[]>([]);
   const [recent, setRecent] = useState<DartRecent[]>([]);
   const [favoriteOn, setFavoriteOn] = useState(false);
+  const companyRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  if (companyRequestsRef.current == null) companyRequestsRef.current = createLatestRequestCoordinator();
 
   const refreshLists = useCallback(() => {
     setFavorites(listFavorites());
@@ -100,55 +103,57 @@ export function DartCompanyPageClient() {
   }, [refreshLists]);
 
   useEffect(() => {
-    let cancelled = false;
+    const request = companyRequestsRef.current!.start();
     async function run() {
       if (!corpCode) {
         setCompany(null);
         setError("회사 정보가 선택되지 않았습니다. 검색 화면에서 회사를 다시 선택해 주세요.");
+        setLoading(false);
+        request.finish();
         return;
       }
 
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(`/api/public/disclosure/company?corpCode=${encodeURIComponent(corpCode)}`, { cache: "no-store" });
+        const res = await fetch(`/api/public/disclosure/company?corpCode=${encodeURIComponent(corpCode)}`, {
+          cache: "no-store",
+          signal: request.signal,
+        });
         const raw = (await res.json()) as CompanyResponse;
+        if (!request.isCurrent()) return;
         if (!res.ok || !raw.ok) {
-          if (!cancelled) {
-            setCompany(null);
-            setError(raw.error?.message ?? "기업개황을 불러오지 못했습니다. 잠시 후 다시 시도하거나 검색 화면으로 돌아가 다시 선택해 주세요.");
-          }
+          setCompany(null);
+          setError(raw.error?.message ?? "기업개황을 불러오지 못했습니다. 잠시 후 다시 시도하거나 검색 화면으로 돌아가 다시 선택해 주세요.");
           return;
         }
 
         const data = raw.data ?? {};
-        if (!cancelled) {
-          setCompany(data);
-          setFavoriteOn(isFavorite(corpCode));
-          if (data.corpName && isFavorite(corpCode)) {
-            addFavorite({
-              corpCode,
-              corpName: data.corpName,
-            });
-          }
-          pushRecent({
+        setCompany(data);
+        setFavoriteOn(isFavorite(corpCode));
+        if (data.corpName && isFavorite(corpCode)) {
+          addFavorite({
             corpCode,
-            corpName: data.corpName ?? requestedCorpName,
+            corpName: data.corpName,
           });
-          refreshLists();
         }
-      } catch {
-        if (!cancelled) {
-          setCompany(null);
-          setError("기업개황을 불러오지 못했습니다. 잠시 후 다시 시도하거나 검색 화면으로 돌아가 다시 선택해 주세요.");
-        }
+        pushRecent({
+          corpCode,
+          corpName: data.corpName ?? requestedCorpName,
+        });
+        refreshLists();
+      } catch (fetchError) {
+        if (!request.isCurrent() || (fetchError instanceof Error && fetchError.name === "AbortError")) return;
+        setCompany(null);
+        setError("기업개황을 불러오지 못했습니다. 잠시 후 다시 시도하거나 검색 화면으로 돌아가 다시 선택해 주세요.");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (request.isCurrent()) setLoading(false);
+        request.finish();
       }
     }
     void run();
     return () => {
-      cancelled = true;
+      companyRequestsRef.current?.cancel();
     };
   }, [corpCode, refreshLists, requestedCorpName]);
 

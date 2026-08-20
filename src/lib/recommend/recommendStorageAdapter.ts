@@ -1,4 +1,8 @@
 import type { RecommendProfileNormalized } from "@/lib/schemas/recommendProfile";
+import {
+  recommendOwnerStorageKey,
+  type RecommendOwnerId,
+} from "@/lib/recommend/ownerNamespace";
 
 export type RecommendStorageItemInput = {
   sourceId: string;
@@ -23,19 +27,35 @@ export type StoredRecommendItemV1 = {
   saveTrm: string | null;
 };
 
-export type StoredRecommendResultV1<
+export type StoredRecommendProfileV2<TProfile = RecommendProfileNormalized> = {
+  version: 2;
+  ownerId: RecommendOwnerId;
+  profile: TProfile;
+};
+
+export type StoredRecommendResultV2<
   TProfile = RecommendProfileNormalized,
   TMeta = unknown,
 > = {
-  version: 1;
+  version: 2;
+  ownerId: RecommendOwnerId;
   savedAt: string;
   profile: TProfile;
   meta?: TMeta;
   items: StoredRecommendItemV1[];
 };
 
-export const RECOMMEND_RESULT_STORAGE_KEY = "recommend_last_result_v1";
-export const RECOMMEND_AUTORUN_SIG_SESSION_KEY = "recommend_autorun_sig";
+export function recommendProfileStorageKey(ownerId: RecommendOwnerId): string {
+  return recommendOwnerStorageKey(ownerId, "profile");
+}
+
+export function recommendResultStorageKey(ownerId: RecommendOwnerId): string {
+  return recommendOwnerStorageKey(ownerId, "last-result");
+}
+
+export function recommendAutorunSessionKey(ownerId: RecommendOwnerId): string {
+  return recommendOwnerStorageKey(ownerId, "autorun");
+}
 
 function normalizeStoredTerm(value: string | null | undefined, termMonths: number | null | undefined): string | null {
   const raw = typeof value === "string" ? value.trim() : "";
@@ -45,11 +65,12 @@ function normalizeStoredTerm(value: string | null | undefined, termMonths: numbe
 }
 
 export function buildStoredRecommendResult<TProfile, TMeta>(input: {
+  ownerId: RecommendOwnerId;
   profile: TProfile;
   meta?: TMeta;
   items?: RecommendStorageItemInput[];
   now?: Date;
-}): StoredRecommendResultV1<TProfile, TMeta> {
+}): StoredRecommendResultV2<TProfile, TMeta> {
   const items = (input.items ?? []).map((item, index) => ({
     key: `${item.sourceId}::${item.finPrdtCd}`,
     sourceId: item.sourceId,
@@ -62,7 +83,8 @@ export function buildStoredRecommendResult<TProfile, TMeta>(input: {
   }));
 
   return {
-    version: 1,
+    version: 2,
+    ownerId: input.ownerId,
     savedAt: (input.now ?? new Date()).toISOString(),
     profile: input.profile,
     meta: input.meta,
@@ -70,17 +92,40 @@ export function buildStoredRecommendResult<TProfile, TMeta>(input: {
   };
 }
 
-export function parseStoredRecommendResult<TProfile = RecommendProfileNormalized, TMeta = unknown>(
+export function buildStoredRecommendProfile<TProfile>(
+  ownerId: RecommendOwnerId,
+  profile: TProfile,
+): StoredRecommendProfileV2<TProfile> {
+  return { version: 2, ownerId, profile };
+}
+
+export function parseStoredRecommendProfile<TProfile = RecommendProfileNormalized>(
+  ownerId: RecommendOwnerId,
   raw: string | null,
-): StoredRecommendResultV1<TProfile, TMeta> | null {
+): StoredRecommendProfileV2<TProfile> | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<StoredRecommendResultV1<TProfile, TMeta>>;
-    if (parsed.version !== 1) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredRecommendProfileV2<TProfile>>;
+    if (parsed.version !== 2 || parsed.ownerId !== ownerId) return null;
+    if (!parsed.profile || typeof parsed.profile !== "object") return null;
+    return parsed as StoredRecommendProfileV2<TProfile>;
+  } catch {
+    return null;
+  }
+}
+
+export function parseStoredRecommendResult<TProfile = RecommendProfileNormalized, TMeta = unknown>(
+  ownerId: RecommendOwnerId,
+  raw: string | null,
+): StoredRecommendResultV2<TProfile, TMeta> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredRecommendResultV2<TProfile, TMeta>>;
+    if (parsed.version !== 2 || parsed.ownerId !== ownerId) return null;
     if (typeof parsed.savedAt !== "string") return null;
     if (!parsed.profile || typeof parsed.profile !== "object") return null;
     if (!Array.isArray(parsed.items)) return null;
-    return parsed as StoredRecommendResultV1<TProfile, TMeta>;
+    return parsed as StoredRecommendResultV2<TProfile, TMeta>;
   } catch {
     return null;
   }
@@ -104,13 +149,16 @@ export function buildRecommendAutorunSignature(profile: Pick<
   });
 }
 
-export function readRecommendAutorunSessionPayload(storage: Storage | null | undefined = typeof window === "undefined" ? null : window.sessionStorage): {
+export function readRecommendAutorunSessionPayload(
+  ownerId: RecommendOwnerId,
+  storage: Storage | null | undefined = typeof window === "undefined" ? null : window.sessionStorage,
+): {
   sig: string;
   runId: string | null;
 } | null {
   if (!storage) return null;
   try {
-    const raw = storage.getItem(RECOMMEND_AUTORUN_SIG_SESSION_KEY);
+    const raw = storage.getItem(recommendAutorunSessionKey(ownerId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<{ sig: string; runId: string | null }>;
     if (typeof parsed.sig !== "string" || !parsed.sig) return null;
@@ -124,11 +172,12 @@ export function readRecommendAutorunSessionPayload(storage: Storage | null | und
 }
 
 export function writeRecommendAutorunSessionPayload(
+  ownerId: RecommendOwnerId,
   payload: { sig: string; runId: string | null },
   storage: Storage | null | undefined = typeof window === "undefined" ? null : window.sessionStorage,
 ): void {
   if (!storage) return;
-  storage.setItem(RECOMMEND_AUTORUN_SIG_SESSION_KEY, JSON.stringify(payload));
+  storage.setItem(recommendAutorunSessionKey(ownerId), JSON.stringify(payload));
 }
 
 export function buildRecommendRequest(input: {

@@ -1,6 +1,6 @@
 ---
 name: finance-skill-routing
-description: Choose the default and conditional local skills for Finance Project work. Trigger when a task asks which skills to use, when updating .codex/config.toml, or when aligning a new batch with recent /work usage patterns.
+description: Choose the smallest useful local skill set for Finance Project work. Trigger when selecting skills, updating .codex/config.toml, changing agent rules or models, or aligning a new batch with recent /work usage patterns.
 ---
 
 # Finance Skill Routing
@@ -11,7 +11,7 @@ Use this skill to choose the smallest useful set of local repository skills befo
 
 - Intended change scope or actual changed files
 - Whether the round is implementation, verification, or analysis only
-- Whether the task touches routes, hrefs, redirects, DART, data-source settings, env, freshness, or fallback behavior
+- Whether the task touches routes, hrefs, redirects, DART, data-source settings, env, freshness, fallback behavior, or Codex agent rules and models
 - Latest `/work` note when recent usage patterns matter
 
 ## Default selection
@@ -29,6 +29,8 @@ For implementation or verification rounds, start with:
   - add when DART, public/open data, data-source settings, env, freshness, fallback, or partial-failure handling change
 - `planning-v3-batch-contract-narrowing`
   - add when a planning v3 `N2` round touches batch detail or summary, categorized or cashflow, balances/monthly, draft/profile, batch list or batch center, synthetic stored-only batch handling, or batch override helper narrowing
+- `codex-agent-rules-maintenance`
+  - add when changing `AGENTS.md`, `.codex/config.toml`, `.codex/agents/*.toml`, `multi_agent.md`, multi-agent prompts, model family, reasoning effort, subagent policy, or skill routing
 
 ## Usually not needed
 

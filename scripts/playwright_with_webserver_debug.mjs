@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
 import { sanitizePlaywrightColorEnv } from "./runtime_color_env.mjs";
 
 const commandCandidates = process.platform === "win32"
@@ -13,7 +14,7 @@ const commandCandidates = process.platform === "win32"
       { command: "pnpm", args: [] },
       { command: "corepack", args: ["pnpm"] },
     ];
-const env = sanitizePlaywrightColorEnv({
+let env = sanitizePlaywrightColorEnv({
   ...process.env,
   DEBUG: process.env.DEBUG || "pw:webserver",
 });
@@ -60,6 +61,13 @@ function setRuntime(value) {
     process.exit(1);
   }
   env.E2E_WEB_SERVER_MODE = normalized;
+  if (
+    normalized === "production"
+    && !String(env.PLANNING_NAMESPACE_ENABLED ?? "").trim()
+    && !String(env.PLANNING_SINGLE_USER_MODE ?? "").trim()
+  ) {
+    env.PLANNING_NAMESPACE_ENABLED = "true";
+  }
 }
 
 function setPort(value) {
@@ -72,10 +80,28 @@ function setPort(value) {
   env.PORT = normalized;
 }
 
+function portFromBaseUrl(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return undefined;
+  try {
+    const url = new URL(normalized);
+    if (url.port) return url.port;
+    if (url.protocol === "http:") return "80";
+    if (url.protocol === "https:") return "443";
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 for (let index = 0; index < rawArgs.length; index += 1) {
   const arg = rawArgs[index];
   if (arg === "--dev-hmr") {
     env.E2E_DISABLE_DEV_HMR = "0";
+    continue;
+  }
+  if (arg === "--debug-pages") {
+    env.PLANNING_DEBUG_ENABLED = "true";
     continue;
   }
   if (arg.startsWith("--runtime=")) {
@@ -101,6 +127,18 @@ for (let index = 0; index < rawArgs.length; index += 1) {
 
 const args = ["exec", "playwright", ...playwrightArgs];
 const nextEnvSnapshot = await captureFile(nextEnvPath);
+const configuredBaseUrl = env.BASE_URL || env.E2E_BASE_URL || env.PLANNING_BASE_URL;
+const isolated = await createIsolatedPlanningV2E2EOptions(env, {
+  defaultPort: 3126,
+  preferredPort: env.PORT || portFromBaseUrl(configuredBaseUrl),
+  distDirPrefix: ".next-e2e",
+  sandboxPrefix: "finance-full-e2e-",
+  forceIsolatedPlanningData: true,
+});
+env = isolated.env;
+console.log(
+  `[playwright_with_webserver_debug] isolated port=${isolated.port} distDir=${isolated.distDir} planningDataDir=${isolated.planningDataDir}`,
+);
 
 let finalized = false;
 
@@ -139,19 +177,27 @@ async function finalize(code, message) {
   if (finalized) return;
   finalized = true;
 
+  let cleanupFailed = false;
   try {
     await restoreFile(nextEnvPath, nextEnvSnapshot);
   } catch (error) {
     const restoreMessage = error instanceof Error ? error.message : String(error);
     console.error(`[playwright_with_webserver_debug] FAIL restore next-env.d.ts: ${restoreMessage}`);
-    process.exit(1);
-    return;
+    cleanupFailed = true;
+  }
+
+  try {
+    await isolated.cleanup();
+  } catch (error) {
+    const cleanupMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[playwright_with_webserver_debug] FAIL cleanup: ${cleanupMessage}`);
+    cleanupFailed = true;
   }
 
   if (message) {
     console.error(message);
   }
-  process.exit(code);
+  process.exit(cleanupFailed ? 1 : code);
 }
 
 runPlaywright();

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex 에이전트 규칙 유지보수"
+  short_description: "Codex 규칙·모델·서브에이전트 설정을 안전하게 점검"
+  default_prompt: "Use $codex-agent-rules-maintenance to update this repository's Codex agent rules safely."

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { readNewsSettings } from "./settings";
+import { readNewsSettings, writeNewsSettings } from "./settings";
 import {
   applyImportNewsSources,
   exportNewsSourceList,
@@ -24,6 +24,42 @@ describe("planning v3 news source transfer", () => {
     const rows = exportNewsSourceList(root);
     expect(rows.length).toBeGreaterThan(0);
     expect(Object.keys(rows[0] ?? {}).sort()).toEqual(["enabled", "url", "weight"]);
+  });
+
+  it("round-trips every exported built-in source through import preview", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-v3-source-roundtrip-"));
+    roots.push(root);
+    const exported = exportNewsSourceList(root);
+    const preview = previewImportNewsSources(exported, { rootDir: root });
+
+    expect(preview.issueCount).toBe(0);
+    expect(preview.validRows).toBe(exported.length);
+    expect(preview.createCount).toBe(0);
+    expect(preview.updateCount).toBe(exported.length);
+  });
+
+  it("omits quarantined HTTP sources so exports remain importable", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-v3-source-legacy-http-"));
+    roots.push(root);
+    writeNewsSettings({
+      sources: [{ id: "kostat_press", enabled: true }],
+      topics: [],
+      customSources: [{
+        id: "legacy_custom",
+        name: "Legacy custom",
+        feedUrl: "http://feeds.example.com/rss",
+        country: "ZZ",
+        language: "und",
+        weight: 1,
+        enabled: true,
+      }],
+    }, root);
+
+    const exported = exportNewsSourceList(root);
+    expect(exported.some((row) => row.url.startsWith("http:"))).toBe(false);
+    const preview = previewImportNewsSources(exported, { rootDir: root });
+    expect(preview.issueCount).toBe(0);
+    expect(preview.validRows).toBe(exported.length);
   });
 
   it("supports dry-run preview with duplicate filtering", () => {

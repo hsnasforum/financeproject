@@ -10,6 +10,10 @@ import {
   type SavedRunInput,
   type SavedRunProfile,
 } from "../src/lib/recommend/savedRunsStore";
+import {
+  recommendOwnerId,
+  recommendOwnerStorageKey,
+} from "../src/lib/recommend/ownerNamespace";
 
 type MemoryStorage = {
   getItem: (key: string) => string | null;
@@ -80,32 +84,34 @@ function makeInput(index: number): SavedRunInput {
 describe("saved runs store", () => {
   it("supports save/list/get/remove/clear with max 50 cap", () => {
     const storage = createMemoryStorage();
+    const ownerId = recommendOwnerId("alice");
 
     for (let i = 0; i < 55; i += 1) {
-      saveRun(makeInput(i), storage);
+      saveRun(ownerId, makeInput(i), storage);
     }
 
-    const runs = listRuns(storage);
+    const runs = listRuns(ownerId, storage);
     expect(runs).toHaveLength(50);
     expect(runs[0]?.runId).toBe("run-54");
     expect(runs[0]?.profile.planning?.runId).toBe("run_20260316_001");
     expect(runs[0]?.profile.planning?.summary.stage).toBe("DEBT");
     expect(runs[0]?.profile.planningContext?.monthlyIncomeKrw).toBe(4_200_000);
-    expect(getRun("run-54", storage)?.runId).toBe("run-54");
-    expect(getRun("run-0", storage)).toBeNull();
+    expect(getRun(ownerId, "run-54", storage)?.runId).toBe("run-54");
+    expect(getRun(ownerId, "run-0", storage)).toBeNull();
 
-    removeRun("run-54", storage);
-    expect(getRun("run-54", storage)).toBeNull();
+    removeRun(ownerId, "run-54", storage);
+    expect(getRun(ownerId, "run-54", storage)).toBeNull();
 
-    clearRuns(storage);
-    expect(listRuns(storage)).toEqual([]);
+    clearRuns(ownerId, storage);
+    expect(listRuns(ownerId, storage)).toEqual([]);
   });
 
   it("updates existing runId instead of duplicating", () => {
     const storage = createMemoryStorage();
+    const ownerId = recommendOwnerId("alice");
 
-    saveRun(makeInput(1), storage);
-    saveRun({
+    saveRun(ownerId, makeInput(1), storage);
+    saveRun(ownerId, {
       ...makeInput(1),
       items: [
         {
@@ -121,9 +127,28 @@ describe("saved runs store", () => {
       ],
     }, storage);
 
-    const runs = listRuns(storage);
+    const runs = listRuns(ownerId, storage);
     expect(runs).toHaveLength(1);
     expect(runs[0]?.items[0]?.productName).toBe("변경상품");
+  });
+
+  it("preserves valid owner runs when another stored row is malformed during mutations", () => {
+    const storage = createMemoryStorage();
+    const ownerId = recommendOwnerId("alice");
+    const storageKey = recommendOwnerStorageKey(ownerId, "saved-runs");
+
+    saveRun(ownerId, makeInput(1), storage);
+    const firstStored = JSON.parse(storage.getItem(storageKey) ?? "[]") as unknown[];
+    storage.setItem(storageKey, JSON.stringify([...firstStored, { ownerId, runId: "broken" }]));
+
+    saveRun(ownerId, makeInput(2), storage);
+    expect(listRuns(ownerId, storage).map((run) => run.runId).sort()).toEqual(["run-1", "run-2"]);
+
+    const storedBeforeRemove = JSON.parse(storage.getItem(storageKey) ?? "[]") as unknown[];
+    storage.setItem(storageKey, JSON.stringify([...storedBeforeRemove, { ownerId: "bob", runId: "foreign" }]));
+    removeRun(ownerId, "run-2", storage);
+
+    expect(listRuns(ownerId, storage).map((run) => run.runId)).toEqual(["run-1"]);
   });
 
   it("buildRunFromRecommend enforces unifiedId rule with fallback", () => {
@@ -139,7 +164,8 @@ describe("saved runs store", () => {
       depositProtection: "any",
       weights: { rate: 0.55, term: 0.3, liquidity: 0.15 },
     };
-    const run = buildRunFromRecommend(profile, {
+    const ownerId = recommendOwnerId("alice");
+    const run = buildRunFromRecommend(ownerId, profile, {
       items: [
         {
           sourceId: "finlife",
@@ -162,6 +188,7 @@ describe("saved runs store", () => {
     });
 
     expect(run.items[0]?.unifiedId).toBe("finlife:P-001");
+    expect(run.ownerId).toBe(ownerId);
     expect(run.items[0]?.termMonths).toBe(12);
     expect(run.items[1]?.unifiedId).toBe("unknown:P-002");
     expect(run.items[1]?.termMonths).toBe(24);
@@ -169,6 +196,7 @@ describe("saved runs store", () => {
 
   it("saveRunFromRecommend returns runId and stores run", () => {
     const storage = createMemoryStorage();
+    const ownerId = recommendOwnerId("alice");
     const profile: SavedRunProfile = {
       purpose: "emergency",
       kind: "deposit",
@@ -181,7 +209,7 @@ describe("saved runs store", () => {
       depositProtection: "any",
       weights: { rate: 0.6, term: 0.25, liquidity: 0.15 },
     };
-    const runId = saveRunFromRecommend(profile, {
+    const runId = saveRunFromRecommend(ownerId, profile, {
       items: [
         {
           unifiedId: "finlife:EM-001",
@@ -195,7 +223,28 @@ describe("saved runs store", () => {
     }, storage);
 
     expect(typeof runId).toBe("string");
-    const saved = getRun(runId, storage);
+    const saved = getRun(ownerId, runId, storage);
     expect(saved?.items[0]?.unifiedId).toBe("finlife:EM-001");
+  });
+
+  it("isolates account switches and quarantines the legacy global key", () => {
+    const storage = createMemoryStorage();
+    const alice = recommendOwnerId("alice");
+    const bob = recommendOwnerId("bob");
+
+    storage.setItem("recommend_saved_runs_v1", JSON.stringify([{ ...makeInput(99), ownerId: "alice" }]));
+    saveRun(alice, makeInput(1), storage);
+    saveRun(bob, makeInput(2), storage);
+
+    expect(listRuns(alice, storage).map((run) => run.runId)).toEqual(["run-1"]);
+    expect(listRuns(bob, storage).map((run) => run.runId)).toEqual(["run-2"]);
+    expect(storage.getItem("recommend_saved_runs_v1")).not.toBeNull();
+
+    storage.setItem(
+      recommendOwnerStorageKey(bob, "saved-runs"),
+      storage.getItem(recommendOwnerStorageKey(alice, "saved-runs")) ?? "[]",
+    );
+    expect(listRuns(bob, storage)).toEqual([]);
+    expect(listRuns(alice, storage).map((run) => run.runId)).toEqual(["run-1"]);
   });
 });

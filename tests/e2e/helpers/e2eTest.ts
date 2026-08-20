@@ -18,6 +18,7 @@ const test = base.extend({
           || pathname === "/planning/v3/accounts"
           || pathname === "/planning/v3/transactions"
           || pathname.startsWith("/planning/v3/transactions/")
+          || pathname.startsWith("/planning/v3/profile/drafts")
           || pathname === "/products"
           || pathname.startsWith("/products/")
           || pathname === "/recommend"

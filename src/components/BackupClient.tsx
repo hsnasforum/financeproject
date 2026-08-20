@@ -11,6 +11,14 @@ import {
 } from "@/lib/backup/backupBundle";
 import { diffServerFiles, type ServerFileDiffResult } from "@/lib/backup/backupDiff";
 import { downloadText } from "@/lib/browser/download";
+import {
+  recommendOwnerId,
+  recommendOwnerStorageKeys,
+} from "@/lib/recommend/ownerNamespace";
+import {
+  buildLegacyRecommendBackupRestore,
+  countLegacyRecommendStorageEntries,
+} from "@/lib/recommend/legacyStorageMigration";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -71,9 +79,9 @@ function makeFilename(prefix: string): string {
   return `${prefix}_${stamp}.json`;
 }
 
-function readClientStorageMap(): Record<string, string | null> {
+function readClientStorageMap(keys: readonly string[]): Record<string, string | null> {
   const out: Record<string, string | null> = {};
-  for (const key of CLIENT_STORAGE_WHITELIST) {
+  for (const key of keys) {
     try {
       out[key] = window.localStorage.getItem(key);
     } catch {
@@ -83,10 +91,13 @@ function readClientStorageMap(): Record<string, string | null> {
   return out;
 }
 
-function applyClientStorageMap(map: Record<string, string | null>): { applied: string[]; removed: string[] } {
+function applyClientStorageMap(
+  map: Record<string, string | null>,
+  keys: readonly string[],
+): { applied: string[]; removed: string[] } {
   const applied: string[] = [];
   const removed: string[] = [];
-  for (const key of CLIENT_STORAGE_WHITELIST) {
+  for (const key of keys) {
     if (!Object.prototype.hasOwnProperty.call(map, key)) continue;
     const value = map[key];
     try {
@@ -104,7 +115,7 @@ function applyClientStorageMap(map: Record<string, string | null>): { applied: s
   return { applied, removed };
 }
 
-export function BackupClient() {
+export function BackupClient({ ownerId }: { ownerId?: string | null }) {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
@@ -117,14 +128,26 @@ export function BackupClient() {
   const [selectedServerPaths, setSelectedServerPaths] = useState<string[]>([]);
   const [applyServerFiles, setApplyServerFiles] = useState(true);
   const [applyClientStorage, setApplyClientStorage] = useState(true);
+  const [adoptLegacyRecommendations, setAdoptLegacyRecommendations] = useState(false);
   const [restorePointInfo, setRestorePointInfo] = useState<{ exists: boolean; createdAt: string | null }>({
     exists: false,
     createdAt: null,
   });
 
+  const clientStorageKeys = useMemo(() => {
+    if (!ownerId) return [...CLIENT_STORAGE_WHITELIST];
+    try {
+      return [
+        ...CLIENT_STORAGE_WHITELIST,
+        ...recommendOwnerStorageKeys(recommendOwnerId(ownerId)),
+      ];
+    } catch {
+      return [...CLIENT_STORAGE_WHITELIST];
+    }
+  }, [ownerId]);
   const whitelistPreview = useMemo(
-    () => CLIENT_STORAGE_WHITELIST.slice(0, 5).join(", "),
-    [],
+    () => clientStorageKeys.slice(0, 5).join(", "),
+    [clientStorageKeys],
   );
   const selectablePaths = useMemo(() => {
     if (!pendingBundle) return [];
@@ -133,6 +156,12 @@ export function BackupClient() {
       .filter((entry) => entry.length > 0 && isServerPathWhitelisted(entry))
       .sort((a, b) => a.localeCompare(b));
   }, [pendingBundle]);
+  const pendingLegacyRecommendationCount = useMemo(
+    () => pendingBundle
+      ? countLegacyRecommendStorageEntries(pendingBundle.clientStorage)
+      : 0,
+    [pendingBundle],
+  );
   const diffStatusByPath = useMemo(() => {
     const map = new Map<string, "same" | "changed" | "added" | "missing">();
     if (!serverDiff) return map;
@@ -195,7 +224,7 @@ export function BackupClient() {
         return;
       }
       const serverFiles = payload.data?.serverFiles ?? {};
-      const clientStorage = readClientStorageMap();
+      const clientStorage = readClientStorageMap(clientStorageKeys);
       const bundle = buildBundle({
         serverFilesMap: serverFiles,
         clientStorageMap: clientStorage,
@@ -228,6 +257,7 @@ export function BackupClient() {
       const bundle = parsed as BackupBundle;
       setPendingBundle(bundle);
       setPendingFilename(file.name);
+      setAdoptLegacyRecommendations(false);
       setSelectedServerPaths(
         Object.keys(bundle.serverFiles)
           .map((entry) => String(entry).trim().replaceAll("\\", "/"))
@@ -299,9 +329,37 @@ export function BackupClient() {
         return;
       }
 
+      let clientStorageMap = pendingBundle.clientStorage;
+      let migratedLegacyRecommendationCount = 0;
+      let skippedLegacyRecommendationCount = pendingLegacyRecommendationCount;
+      if (
+        applyClientStorage
+        && adoptLegacyRecommendations
+        && ownerId
+        && pendingLegacyRecommendationCount > 0
+      ) {
+        try {
+          const resolvedOwnerId = recommendOwnerId(ownerId);
+          const migration = buildLegacyRecommendBackupRestore(
+            resolvedOwnerId,
+            pendingBundle.clientStorage,
+            readClientStorageMap(recommendOwnerStorageKeys(resolvedOwnerId)),
+          );
+          clientStorageMap = migration.clientStorageMap;
+          migratedLegacyRecommendationCount = migration.migratedEntryCount;
+          skippedLegacyRecommendationCount = migration.skippedLegacyKeys.length;
+        } catch {
+          migratedLegacyRecommendationCount = 0;
+          skippedLegacyRecommendationCount = pendingLegacyRecommendationCount;
+        }
+      }
+
       const local = applyClientStorage
-        ? applyClientStorageMap(pendingBundle.clientStorage)
+        ? applyClientStorageMap(clientStorageMap, clientStorageKeys)
         : { applied: [], removed: [] };
+      const ignoredLegacyRecommendationCount = applyClientStorage
+        ? skippedLegacyRecommendationCount
+        : 0;
       const summary: ImportSummary = {
         localApplied: local.applied,
         localRemoved: local.removed,
@@ -318,7 +376,16 @@ export function BackupClient() {
         issues: payloadIssues,
       };
       setImportSummary(summary);
-      setNotice(payload.validated ? "백업 복원 및 검증 통과가 완료되었습니다." : "백업 복원이 완료되었습니다.");
+      const completionMessage = payload.validated
+        ? "백업 복원 및 검증 통과가 완료되었습니다."
+        : "백업 복원이 완료되었습니다.";
+      setNotice(
+        migratedLegacyRecommendationCount > 0
+          ? `${completionMessage} 확인한 이전 추천 상태 ${migratedLegacyRecommendationCount}개를 현재 사용자 영역으로 변환했습니다.${ignoredLegacyRecommendationCount > 0 ? ` 확인이 더 필요한 ${ignoredLegacyRecommendationCount}개는 적용하지 않았습니다.` : ""}`
+          : (ignoredLegacyRecommendationCount > 0
+            ? `${completionMessage} 이전 전역 추천 상태 ${ignoredLegacyRecommendationCount}개는 사용자 간 혼합을 막기 위해 적용하지 않았습니다.`
+            : completionMessage),
+      );
       await refreshRestorePoint();
       await buildDiffPreview(pendingBundle);
     } catch {
@@ -399,6 +466,11 @@ export function BackupClient() {
       <div className="grid gap-8 lg:grid-cols-2">
         <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
           <SubSectionHeader title="데이터 내보내기 (Export)" description="서버 화이트리스트 파일과 클라이언트 저장소 키를 백업합니다." />
+          <p className="mt-3 text-xs font-medium leading-relaxed text-slate-500">
+            {ownerId
+              ? "로그인한 사용자의 추천 조건·최근 결과·저장 기록도 사용자 범위를 유지해 포함합니다."
+              : "사용자 확인 정보가 없어 사용자별 추천 기록은 이 백업에서 제외됩니다."}
+          </p>
           <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-surface-muted p-3 rounded-xl leading-relaxed">
             대상 키 예시: {whitelistPreview}
           </p>
@@ -509,6 +581,29 @@ export function BackupClient() {
                     <p className="text-[11px] font-bold text-slate-400 mt-0.5">localStorage의 앱 설정을 복원합니다.</p>
                   </div>
                 </label>
+                {applyClientStorage && pendingLegacyRecommendationCount > 0 ? (
+                  ownerId ? (
+                    <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-5 w-5 rounded border-amber-300 text-primary focus:ring-primary"
+                        checked={adoptLegacyRecommendations}
+                        onChange={(event) => setAdoptLegacyRecommendations(event.target.checked)}
+                      />
+                      <div>
+                        <p className="text-sm font-black text-amber-900">이전 추천 데이터를 현재 사용자로 가져오기</p>
+                        <p className="mt-1 text-[11px] font-bold leading-relaxed text-amber-700">
+                          이전 전역 추천 상태 {pendingLegacyRecommendationCount}개를 사용자별 저장 형식으로 변환합니다.
+                          번들에 이미 사용자별 값이 있으면 그 값을 유지합니다.
+                        </p>
+                      </div>
+                    </label>
+                  ) : (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] font-bold leading-relaxed text-amber-800">
+                      이전 추천 데이터가 포함되어 있지만 현재 사용자를 확인할 수 없어 적용하지 않습니다.
+                    </p>
+                  )
+                ) : null}
               </div>
             </div>
 

@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRecommendOwner } from "@/lib/recommend/RecommendOwnerContext";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
 import { RecommendResultsPanel } from "@/components/recommend/RecommendResultsPanel";
+import { LegacyRecommendMigrationCard } from "@/components/recommend/LegacyRecommendMigrationCard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -17,6 +19,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { downloadText } from "@/lib/browser/download";
+import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
@@ -24,7 +27,6 @@ import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compar
 import {
   buildRecommendHistoryHref,
   buildRecommendInitialProfileState,
-  RECOMMEND_PROFILE_STORAGE_KEY,
   resolveRecommendAutorunContinuation,
 } from "@/lib/recommend/recommendPageController";
 import {
@@ -38,13 +40,25 @@ import {
 import {
   buildRecommendAutorunSignature,
   buildRecommendRequest,
+  buildStoredRecommendProfile,
   buildStoredRecommendResult,
+  parseStoredRecommendProfile,
   parseStoredRecommendResult,
   readRecommendAutorunSessionPayload,
-  RECOMMEND_RESULT_STORAGE_KEY,
-  type StoredRecommendResultV1,
+  recommendProfileStorageKey,
+  recommendResultStorageKey,
+  type StoredRecommendResultV2,
   writeRecommendAutorunSessionPayload,
 } from "@/lib/recommend/recommendStorageAdapter";
+import {
+  isRecommendOwner,
+  type RecommendOwnerId,
+} from "@/lib/recommend/ownerNamespace";
+import {
+  hasLegacyRecommendStorage,
+  LEGACY_RECOMMEND_RESOLVED_EVENT,
+  legacyRecommendDismissSessionKey,
+} from "@/lib/recommend/legacyStorageMigration";
 import {
   attachUnifiedIds,
   formatKoreanDateTime,
@@ -60,7 +74,7 @@ import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
 import { type SourceStatusRow } from "@/lib/sources/types";
 
 type StoredProfile = RecommendProfileNormalized;
-type StoredRecommendResult = StoredRecommendResultV1<StoredProfile, RecommendResponse["meta"]>;
+type StoredRecommendResult = StoredRecommendResultV2<StoredProfile, RecommendResponse["meta"]>;
 
 type StatusApiResponse = {
   ok: boolean;
@@ -92,15 +106,19 @@ function toSavedRunProfile(profile: StoredProfile): SavedRunProfile {
   };
 }
 
-function buildExportRun(profile: StoredProfile, response: RecommendResponse): SavedRecommendRun | null {
+function buildExportRun(
+  ownerId: RecommendOwnerId,
+  profile: StoredProfile,
+  response: RecommendResponse,
+): SavedRecommendRun | null {
   if (!Array.isArray(response.items)) return null;
-  return buildRunFromRecommend(toSavedRunProfile(profile), response, {
+  return buildRunFromRecommend(ownerId, toSavedRunProfile(profile), response, {
     runId: `adhoc_${Date.now()}`,
     savedAt: new Date().toISOString(),
   });
 }
 
-function RecommendPageInner() {
+function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<StoredProfile>(defaultProfile);
@@ -117,18 +135,27 @@ function RecommendPageInner() {
   const [sourceStatusReady, setSourceStatusReady] = useState(false);
   const lastStoredRef = useRef<StoredRecommendResult | null>(null);
   const autoRunTriggeredRef = useRef(false);
-  const submitInFlightRef = useRef(false);
   const sourceStatusAbortRef = useRef<AbortController | null>(null);
+  const [requestCoordinator] = useState(() => createLatestRequestCoordinator());
 
-  const showValidationIssues = useCallback((issues: Issue[]) => {
+  const showValidationIssues = useCallback((
+    issues: Issue[],
+    isCurrent: () => boolean = () => true,
+  ) => {
+    if (!isCurrent()) return;
     setFormIssues(issues);
     setError(firstError(issues) ?? "입력값을 확인해 주세요.");
     setTimeout(() => {
+      if (!isCurrent()) return;
       scrollToErrorSummary(ERROR_SUMMARY_ID);
       focusFirstError(issues.map((entry) => entry.path));
       announce(`입력 오류 ${issues.length}건이 있습니다.`);
     }, 0);
   }, []);
+
+  useEffect(() => () => {
+    requestCoordinator.cancel();
+  }, [requestCoordinator]);
 
   const submitWithProfile = useCallback(async (
     profileInput: StoredProfile,
@@ -138,42 +165,58 @@ function RecommendPageInner() {
       autorunSig?: string;
     },
   ) => {
-    if (submitInFlightRef.current) return;
-    submitInFlightRef.current = true;
+    const lease = requestCoordinator.start();
+    const parsedProfile = parseRecommendProfile(profileInput);
+    if (!parsedProfile.ok) {
+      setLoading(false);
+      setResult(null);
+      showValidationIssues(parsedProfile.issues, lease.isCurrent);
+      return;
+    }
+
+    const requestProfile = parsedProfile.value;
     setLoading(true);
     setError("");
     setFormIssues([]);
     setOpenDetailKey(null);
+    setProfile(requestProfile);
+    let keepLeaseForValidationFocus = false;
     try {
-      const parsedProfile = parseRecommendProfile(profileInput);
-      if (!parsedProfile.ok) {
-        showValidationIssues(parsedProfile.issues);
-        return;
-      }
-      const requestProfile = parsedProfile.value;
-      setProfile(requestProfile);
       const request = buildRecommendRequest({ profile: requestProfile });
-      const res = await fetch(request.url, request.init);
+      const res = await fetch(request.url, {
+        ...request.init,
+        signal: lease.signal,
+      });
       const rawJson = (await res.json()) as RecommendResponse;
+      if (!lease.isCurrent()) return;
       if (!res.ok || !rawJson.ok) {
         const apiIssues = parseStringIssues(rawJson.error?.issues ?? []);
         setResult(null);
         if (apiIssues.length > 0) {
-          showValidationIssues(apiIssues);
+          keepLeaseForValidationFocus = true;
+          showValidationIssues(apiIssues, lease.isCurrent);
+          return;
         } else {
           setError(rawJson.error?.message ?? "추천 결과를 불러오지 못했습니다.");
           announce(rawJson.error?.message ?? "추천 결과를 불러오지 못했습니다.");
         }
         return;
       }
+      if (!isRecommendOwner(ownerId, rawJson.meta?.userId)) {
+        setResult(null);
+        setError("현재 로그인 사용자와 추천 결과의 소유자가 일치하지 않아 결과를 저장하지 않았습니다.");
+        announce("추천 결과의 사용자 정보를 확인하지 못해 결과를 저장하지 않았습니다.");
+        return;
+      }
       const json = attachUnifiedIds(rawJson);
 
       const currStored = buildStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>({
+        ownerId,
         profile: requestProfile,
         meta: json.meta,
         items: json.items,
       });
-      localStorage.setItem(RECOMMEND_RESULT_STORAGE_KEY, JSON.stringify(currStored));
+      localStorage.setItem(recommendResultStorageKey(ownerId), JSON.stringify(currStored));
       setLastStored(currStored);
       lastStoredRef.current = currStored;
       setResult(json);
@@ -181,7 +224,7 @@ function RecommendPageInner() {
 
       if (options?.autoSave) {
         const sig = options.autorunSig ?? buildRecommendAutorunSignature(requestProfile);
-        const previous = readRecommendAutorunSessionPayload();
+        const previous = readRecommendAutorunSessionPayload(ownerId);
         const continuation = resolveRecommendAutorunContinuation({
           signature: sig,
           previous,
@@ -190,25 +233,31 @@ function RecommendPageInner() {
         if (continuation.kind === "reuse") {
           if (continuation.historyHref) router.push(continuation.historyHref);
         } else {
-          const runId = saveRunFromRecommend(toSavedRunProfile(requestProfile), json);
-          writeRecommendAutorunSessionPayload({ sig: continuation.signature, runId });
+          const runId = saveRunFromRecommend(ownerId, toSavedRunProfile(requestProfile), json);
+          writeRecommendAutorunSessionPayload(ownerId, { sig: continuation.signature, runId });
           if (continuation.goHistory) router.push(buildRecommendHistoryHref(runId));
         }
       }
-    } catch {
+    } catch (requestError) {
+      if (!lease.isCurrent()) return;
+      if (requestError instanceof Error && requestError.name === "AbortError") return;
       setError("네트워크 오류로 추천 요청에 실패했습니다.");
       announce("네트워크 오류로 추천 요청에 실패했습니다.");
     } finally {
-      setLoading(false);
-      submitInFlightRef.current = false;
+      if (keepLeaseForValidationFocus) setLoading(false);
+      else if (lease.finish()) setLoading(false);
     }
-  }, [router, showValidationIssues]);
+  }, [ownerId, requestCoordinator, router, showValidationIssues]);
 
   useEffect(() => {
     let active = true;
     let storedProfileRaw: string | null = null;
     try {
-      storedProfileRaw = localStorage.getItem(RECOMMEND_PROFILE_STORAGE_KEY);
+      const storedProfile = parseStoredRecommendProfile<StoredProfile>(
+        ownerId,
+        localStorage.getItem(recommendProfileStorageKey(ownerId)),
+      );
+      storedProfileRaw = storedProfile ? JSON.stringify(storedProfile.profile) : null;
     } catch {
       // ignore
     }
@@ -217,8 +266,10 @@ function RecommendPageInner() {
     const nextProfile = initialState.profile;
     const queryOverrides = initialState.queryOverrides;
     const stored = parseStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>(
-      localStorage.getItem(RECOMMEND_RESULT_STORAGE_KEY),
+      ownerId,
+      localStorage.getItem(recommendResultStorageKey(ownerId)),
     );
+    const ownedStored = stored && isRecommendOwner(ownerId, stored.meta?.userId) ? stored : null;
 
     async function applyInitialState() {
       await Promise.resolve();
@@ -228,10 +279,17 @@ function RecommendPageInner() {
       } else {
         setFormIssues([]);
       }
-      setLastStored(stored);
-      lastStoredRef.current = stored;
+      setLastStored(ownedStored);
+      lastStoredRef.current = ownedStored;
       setProfile(nextProfile);
-      setReadyToPersist(true);
+      let legacyMigrationPending = false;
+      try {
+        legacyMigrationPending = hasLegacyRecommendStorage(localStorage)
+          && sessionStorage.getItem(legacyRecommendDismissSessionKey(ownerId)) !== "1";
+      } catch {
+        legacyMigrationPending = false;
+      }
+      setReadyToPersist(!legacyMigrationPending);
 
       if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
         autoRunTriggeredRef.current = true;
@@ -248,12 +306,23 @@ function RecommendPageInner() {
     return () => {
       active = false;
     };
-  }, [searchParams, showValidationIssues, submitWithProfile]);
+  }, [ownerId, searchParams, showValidationIssues, submitWithProfile]);
+
+  useEffect(() => {
+    const continueWithOwnedStorage = () => setReadyToPersist(true);
+    window.addEventListener(LEGACY_RECOMMEND_RESOLVED_EVENT, continueWithOwnedStorage);
+    return () => {
+      window.removeEventListener(LEGACY_RECOMMEND_RESOLVED_EVENT, continueWithOwnedStorage);
+    };
+  }, []);
 
   useEffect(() => {
     if (!readyToPersist) return;
-    localStorage.setItem(RECOMMEND_PROFILE_STORAGE_KEY, JSON.stringify(profile));
-  }, [profile, readyToPersist]);
+    localStorage.setItem(
+      recommendProfileStorageKey(ownerId),
+      JSON.stringify(buildStoredRecommendProfile(ownerId, profile)),
+    );
+  }, [ownerId, profile, readyToPersist]);
 
   useEffect(() => {
     if (!result?.items?.length) {
@@ -335,16 +404,18 @@ function RecommendPageInner() {
 
   function saveCurrentRun() {
     if (!result) return;
-    saveRunFromRecommend(toSavedRunProfile(profile), result);
+    if (!isRecommendOwner(ownerId, result.meta?.userId)) return;
+    saveRunFromRecommend(ownerId, toSavedRunProfile(profile), result);
     setFeedback("결과가 히스토리에 저장되었습니다.");
     setTimeout(() => setFeedback(""), 3000);
   }
 
   function exportCurrentRunJson() {
     if (!result) return;
-    const run = buildExportRun(profile, result);
+    if (!isRecommendOwner(ownerId, result.meta?.userId)) return;
+    const run = buildExportRun(ownerId, profile, result);
     if (!run) return;
-    const content = exportRunJson(run);
+    const content = exportRunJson(ownerId, run);
     downloadText(`recommend-run-${run.savedAt.slice(0, 10)}.json`, content, "application/json;charset=utf-8");
     setFeedback("JSON 파일이 다운로드되었습니다.");
     setTimeout(() => setFeedback(""), 3000);
@@ -352,9 +423,10 @@ function RecommendPageInner() {
 
   function exportCurrentRunCsv() {
     if (!result) return;
-    const run = buildExportRun(profile, result);
+    if (!isRecommendOwner(ownerId, result.meta?.userId)) return;
+    const run = buildExportRun(ownerId, profile, result);
     if (!run) return;
-    const content = exportRunCsv(run);
+    const content = exportRunCsv(ownerId, run);
     downloadText(`recommend-run-${run.savedAt.slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
     setFeedback("CSV 파일이 다운로드되었습니다.");
     setTimeout(() => setFeedback(""), 3000);
@@ -381,6 +453,8 @@ function RecommendPageInner() {
         </Link>
         에서 확인할 수 있습니다.
       </p>
+
+      <LegacyRecommendMigrationCard />
 
       <div className="mb-8 space-y-6" data-testid="recommend-root">
         <Card className="rounded-[2.5rem] p-8 shadow-sm">
@@ -595,7 +669,7 @@ function RecommendPageInner() {
           <div className="flex items-center justify-between mb-6">
             <SubSectionHeader title="지난 추천 히스토리" className="mb-0" />
             <Button size="sm" variant="ghost" className="text-xs text-slate-400 font-bold hover:text-rose-500" onClick={() => {
-              localStorage.removeItem(RECOMMEND_RESULT_STORAGE_KEY);
+              localStorage.removeItem(recommendResultStorageKey(ownerId));
               setLastStored(null);
             }}>기록 삭제</Button>
           </div>
@@ -607,9 +681,10 @@ function RecommendPageInner() {
 }
 
 export default function RecommendPage() {
+  const ownerId = useRecommendOwner();
   return (
     <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-surface-muted"><LoadingState /></div>}>
-      <RecommendPageInner />
+      <RecommendPageOwned key={ownerId} ownerId={ownerId} />
     </Suspense>
   );
 }

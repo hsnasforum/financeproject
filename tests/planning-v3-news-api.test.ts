@@ -594,7 +594,7 @@ describe("planning v3 news api", () => {
       const payload = await response.json() as {
         ok?: boolean;
         data?: {
-          sources?: Array<{ id?: string }>;
+          sources?: Array<{ id?: string; effectiveEnabled?: boolean; retiredReason?: string | null }>;
           topics?: Array<{ id?: string }>;
         };
       };
@@ -602,6 +602,10 @@ describe("planning v3 news api", () => {
       expect(payload.ok).toBe(true);
       expect((payload.data?.sources ?? []).length).toBeGreaterThan(0);
       expect((payload.data?.topics ?? []).length).toBeGreaterThan(0);
+      expect(payload.data?.sources?.find((row) => row.id === "kostat_press")).toMatchObject({
+        effectiveEnabled: false,
+        retiredReason: expect.stringContaining("HTTPS"),
+      });
     } finally {
       restoreFile(settingsPath(), backup);
     }

@@ -32,26 +32,6 @@ const rawSources: NewsSource[] = [
     enabled: true,
   },
   {
-    id: "kostat_press",
-    name: "통계청 보도자료(KOSIS RSS)",
-    feedUrl: "http://kostat.go.kr/menu.es?mid=a10301010000&act=rss",
-    homepageUrl: "https://kostat.go.kr/",
-    country: "KR",
-    language: "ko",
-    weight: 1.2,
-    enabled: true,
-  },
-  {
-    id: "moef_econ_policy_en",
-    name: "MOEF Economic Policy (EN RSS)",
-    feedUrl: "http://english.moef.go.kr/ec/engmosfpolicyrss.do?boardCd=E0005",
-    homepageUrl: "https://english.moef.go.kr/",
-    country: "KR",
-    language: "en",
-    weight: 1.0,
-    enabled: true,
-  },
-  {
     id: "fed_press_all",
     name: "Federal Reserve - All Press Releases (RSS)",
     feedUrl: "https://www.federalreserve.gov/feeds/press_all.xml",
@@ -84,3 +64,32 @@ const rawSources: NewsSource[] = [
 ];
 
 export const NEWS_SOURCES: NewsSource[] = rawSources.map((source) => NewsSourceSchema.parse(source));
+
+const RETIRED_HTTP_SOURCE_REASON = "HTTPS 피드를 제공하지 않아 보안을 위해 비활성화했습니다. HTTPS 주소가 제공되면 다시 등록해 주세요.";
+
+const rawRetiredSources: NewsSource[] = [
+  {
+    id: "kostat_press",
+    name: "통계청 보도자료(KOSIS RSS)",
+    feedUrl: "http://kostat.go.kr/menu.es?mid=a10301010000&act=rss",
+    homepageUrl: "https://kostat.go.kr/",
+    country: "KR",
+    language: "ko",
+    weight: 1.2,
+    enabled: false,
+    retiredReason: RETIRED_HTTP_SOURCE_REASON,
+  },
+  {
+    id: "moef_econ_policy_en",
+    name: "MOEF Economic Policy (EN RSS)",
+    feedUrl: "http://english.moef.go.kr/ec/engmosfpolicyrss.do?boardCd=E0005",
+    homepageUrl: "https://english.moef.go.kr/",
+    country: "KR",
+    language: "en",
+    weight: 1,
+    enabled: false,
+    retiredReason: RETIRED_HTTP_SOURCE_REASON,
+  },
+];
+
+export const RETIRED_NEWS_SOURCES: NewsSource[] = rawRetiredSources.map((source) => NewsSourceSchema.parse(source));

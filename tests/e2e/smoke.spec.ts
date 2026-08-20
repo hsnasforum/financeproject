@@ -1,6 +1,10 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./helpers/e2eTest";
 
+const RECOMMEND_E2E_OWNER_ID = (process.env.PLANNING_E2E_USER_ID || "playwright-local").trim();
+const RECOMMEND_E2E_SAVED_RUNS_KEY = `finance:recommend:v2:${encodeURIComponent(RECOMMEND_E2E_OWNER_ID)}:saved-runs`;
+const RECOMMEND_E2E_PROFILE_KEY = `finance:recommend:v2:${encodeURIComponent(RECOMMEND_E2E_OWNER_ID)}:profile`;
+
 async function expectNoCspConsoleErrors(page: Page, routePath: string) {
   const violations: string[] = [];
   const onConsole = (message: { type(): string; text(): string }) => {
@@ -41,6 +45,8 @@ async function mockRecommendResult(page: Page) {
           candidatePool: "unified",
           candidateSources: ["finlife"],
           depositProtection: "prefer",
+          userId: RECOMMEND_E2E_OWNER_ID,
+          authSource: "trusted-header",
           weights: { rate: 0.5, term: 0.3, liquidity: 0.2 },
           assumptions: {
             rateSelectionPolicy: "최고금리는 우대조건 충족을 가정합니다.",
@@ -101,6 +107,82 @@ test("recommend page renders", async ({ page }) => {
   await expect(page.getByTestId("recommend-submit")).toBeVisible();
 });
 
+test("legacy recommend state waits for confirmation before owner migration", async ({ page }) => {
+  const legacyProfile = {
+    purpose: "emergency",
+    kind: "deposit",
+    preferredTerm: 3,
+    liquidityPref: "high",
+    rateMode: "max",
+    topN: 3,
+    candidatePool: "unified",
+    candidateSources: ["finlife"],
+    depositProtection: "any",
+    weights: { rate: 0.6, term: 0.25, liquidity: 0.15 },
+  };
+  await page.addInitScript((profile) => {
+    const seededKey = "recommend-legacy-e2e-seeded";
+    if (sessionStorage.getItem(seededKey) === "1") return;
+    localStorage.setItem("recommend_profile_v1", JSON.stringify(profile));
+    sessionStorage.setItem(seededKey, "1");
+  }, legacyProfile);
+
+  await page.goto("/recommend");
+  await expect(page.getByTestId("recommend-legacy-migration")).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), RECOMMEND_E2E_PROFILE_KEY)).toBeNull();
+
+  await page.getByRole("button", { name: "현재 계정으로 가져오기" }).click();
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByTestId("recommend-legacy-migration")).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("recommend_profile_v1"))).toBeNull();
+  expect(await page.evaluate((key) => {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  }, RECOMMEND_E2E_PROFILE_KEY)).toMatchObject({
+    version: 2,
+    ownerId: RECOMMEND_E2E_OWNER_ID,
+    profile: { purpose: "emergency", preferredTerm: 3 },
+  });
+});
+
+test("partial legacy recommend migration reloads owner state before persistence resumes", async ({ page }) => {
+  const legacyProfile = {
+    purpose: "emergency",
+    kind: "deposit",
+    preferredTerm: 3,
+    liquidityPref: "high",
+    rateMode: "max",
+    topN: 3,
+    candidatePool: "unified",
+    candidateSources: ["finlife"],
+    depositProtection: "any",
+    weights: { rate: 0.6, term: 0.25, liquidity: 0.15 },
+  };
+  await page.addInitScript((profile) => {
+    const seededKey = "recommend-legacy-partial-e2e-seeded";
+    if (sessionStorage.getItem(seededKey) === "1") return;
+    localStorage.setItem("recommend_profile_v1", JSON.stringify(profile));
+    localStorage.setItem("recommend_last_result_v1", "{broken");
+    sessionStorage.setItem(seededKey, "1");
+  }, legacyProfile);
+
+  await page.goto("/recommend");
+  await page.getByRole("button", { name: "현재 계정으로 가져오기" }).click();
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByTestId("recommend-legacy-migration")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("recommend_last_result_v1"))).toBe("{broken");
+  expect(await page.evaluate((key) => {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  }, RECOMMEND_E2E_PROFILE_KEY)).toMatchObject({
+    version: 2,
+    ownerId: RECOMMEND_E2E_OWNER_ID,
+    profile: { purpose: "emergency", preferredTerm: 3 },
+  });
+});
+
 test("recommend result panel keeps the submit-to-detail flow", async ({ page }) => {
   await mockRecommendResult(page);
 
@@ -130,18 +212,18 @@ test("recommend autorun reuses the saved history run for the same signature", as
   await expect(page.getByText("결과 패널 검증 예금").first()).toBeVisible();
   const firstRunId = new URL(page.url()).searchParams.get("open");
   expect(firstRunId).toMatch(/^run_/);
-  expect(await page.evaluate(() => {
-    const raw = localStorage.getItem("recommend_saved_runs_v1");
+  expect(await page.evaluate((storageKey) => {
+    const raw = localStorage.getItem(storageKey);
     return raw ? JSON.parse(raw).length : 0;
-  })).toBe(1);
+  }, RECOMMEND_E2E_SAVED_RUNS_KEY)).toBe(1);
 
   await page.goto(autorunUrl);
   await expect(page).toHaveURL(/\/recommend\/history\?open=run_/, { timeout: 30_000 });
   expect(new URL(page.url()).searchParams.get("open")).toBe(firstRunId);
-  expect(await page.evaluate(() => {
-    const raw = localStorage.getItem("recommend_saved_runs_v1");
+  expect(await page.evaluate((storageKey) => {
+    const raw = localStorage.getItem(storageKey);
     return raw ? JSON.parse(raw).length : 0;
-  })).toBe(1);
+  }, RECOMMEND_E2E_SAVED_RUNS_KEY)).toBe(1);
 });
 
 test("dart page shows missing index guidance when index absent", async ({ page, request }) => {

@@ -14,6 +14,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { SearchPill } from "@/components/ui/SearchPill";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { FilterWrapper } from "@/components/ui/FilterWrapper";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { cn } from "@/lib/utils";
 import { SIDO_LIST, normalizeSido } from "@/lib/regions/kr";
 import {
@@ -28,6 +29,10 @@ import { getBenefitQualityBucket } from "@/lib/publicApis/benefitsQuality";
 import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
 import { parseBenefitsQueryPreset } from "@/lib/planner/actionQuery";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
+import {
+  createLatestRequestCoordinator,
+  type LatestRequestLease,
+} from "@/lib/browser/latestRequest";
 import {
   BENEFITS_FLOW_COPY,
   benefitResultSummary,
@@ -115,6 +120,22 @@ type PlannerBenefitsContext = {
   incomeBand: string;
 };
 
+type BenefitsRefreshAction = {
+  request: LatestRequestLease;
+  refresh: (signal: AbortSignal) => Promise<void>;
+  search: (request: LatestRequestLease) => Promise<void>;
+};
+
+export async function runBenefitsRefreshAction({
+  request,
+  refresh,
+  search,
+}: BenefitsRefreshAction): Promise<void> {
+  await refresh(request.signal);
+  if (!request.isCurrent()) return;
+  await search(request);
+}
+
 
 function parseFlag(value: string | null, defaultValue = true): boolean {
   if (value === null) return defaultValue;
@@ -163,13 +184,21 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
     ageBand: "all",
     incomeBand: "all",
   });
-  const requestControllerRef = useRef<AbortController | null>(null);
+  const searchRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  const detailRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  if (searchRequestsRef.current == null) searchRequestsRef.current = createLatestRequestCoordinator();
+  if (detailRequestsRef.current == null) detailRequestsRef.current = createLatestRequestCoordinator();
   const initializedFromQueryRef = useRef(false);
   const selectedApplyShortcut = useMemo(
     () => (selected ? extractShortcutFromApplyHow(selected.id, selected.applyHow) : null),
     [selected],
   );
   const snapshotStatus = useMemo(() => buildBenefitsSnapshotStatus(meta), [meta]);
+
+  useEffect(() => () => {
+    searchRequestsRef.current?.cancel();
+    detailRequestsRef.current?.cancel();
+  }, []);
 
   const syncUrl = useCallback((state: FetchState) => {
     const normalizedTopics = isTopicFilterBypassed(state.topics) ? [] : state.topics;
@@ -188,7 +217,13 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
     router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
   }, [pathname, router]);
 
-  const run = useCallback(async (state: FetchState, options?: { deep?: boolean; syncUrl?: boolean; cursor?: number; append?: boolean; includeFacets?: boolean }) => {
+  const run = useCallback(async (
+    state: FetchState,
+    options?: { deep?: boolean; syncUrl?: boolean; cursor?: number; append?: boolean; includeFacets?: boolean },
+    requestOverride?: LatestRequestLease,
+  ) => {
+    const ownsRequest = requestOverride == null;
+    const request = requestOverride ?? searchRequestsRef.current!.start();
     const queryValue = state.query.trim();
     const normalizedTopics = isTopicFilterBypassed(state.topics) ? [] : state.topics;
     setLoading(true);
@@ -213,11 +248,9 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       params.set("maxPages", String(state.maxPages));
       params.set("rows", "200");
 
-      requestControllerRef.current?.abort();
-      const controller = new AbortController();
-      requestControllerRef.current = controller;
-      const res = await fetch(`/api/public/benefits/search?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+      const res = await fetch(`/api/public/benefits/search?${params.toString()}`, { cache: "no-store", signal: request.signal });
       const json = await res.json();
+      if (!request.isCurrent()) return;
       if (!json?.ok) {
         setError(readBenefitErrorMessage(json));
         return;
@@ -236,10 +269,11 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       setMeta(typeof json.meta === "object" && json.meta ? json.meta : {});
       if (options?.syncUrl !== false) syncUrl(state);
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") return;
+      if (!request.isCurrent() || (error instanceof Error && error.name === "AbortError")) return;
       setError(BENEFITS_FLOW_COPY.requestFailed);
     } finally {
-      setLoading(false);
+      if (request.isCurrent()) setLoading(false);
+      if (ownsRequest) request.finish();
     }
   }, [syncUrl]);
 
@@ -276,30 +310,60 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   }, [includeNationwide, includeUnknown, maxPages, pageSize, query, run, scanAll, selectedTopics, sigungu, sido]);
 
   const openDetail = useCallback(async (item: BenefitItem) => {
+    const request = detailRequestsRef.current!.start();
     setSelected(item);
     setDetail(null);
     setDetailLoading(true);
     try {
-      const res = await fetch(`/api/public/benefits/item?serviceId=${encodeURIComponent(item.id)}`, { cache: "no-store" });
+      const res = await fetch(`/api/public/benefits/item?serviceId=${encodeURIComponent(item.id)}`, {
+        cache: "no-store",
+        signal: request.signal,
+      });
       const json = await res.json();
+      if (!request.isCurrent()) return;
       if (json?.ok) {
         setDetail({ conditions: Array.isArray(json.data?.conditions) ? json.data.conditions : [] });
       } else {
         setDetail({ conditions: [] });
       }
-    } catch {
+    } catch (error) {
+      if (!request.isCurrent() || (error instanceof Error && error.name === "AbortError")) return;
       setDetail({ conditions: [] });
     } finally {
-      setDetailLoading(false);
+      if (request.isCurrent()) setDetailLoading(false);
+      request.finish();
     }
   }, []);
 
+  const closeDetail = useCallback(() => {
+    detailRequestsRef.current?.cancel();
+    setDetailLoading(false);
+    setSelected(null);
+  }, []);
+
   const refreshSnapshot = useCallback(async () => {
+    const request = searchRequestsRef.current!.start();
+    setLoading(true);
     try {
-      await fetch("/api/dev/benefits/snapshot/refresh", { method: "POST" });
-      await run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll: true, pageSize, maxPages }, { cursor: 0, includeFacets: true });
-    } catch {
+      await runBenefitsRefreshAction({
+        request,
+        refresh: async (signal) => {
+          await fetch("/api/dev/benefits/snapshot/refresh", { method: "POST", signal });
+        },
+        search: async (ownedRequest) => {
+          await run(
+            { query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll: true, pageSize, maxPages },
+            { cursor: 0, includeFacets: true },
+            ownedRequest,
+          );
+        },
+      });
+    } catch (error) {
+      if (!request.isCurrent() || (error instanceof Error && error.name === "AbortError")) return;
       // no-op
+    } finally {
+      if (request.isCurrent()) setLoading(false);
+      request.finish();
     }
   }, [includeNationwide, includeUnknown, maxPages, pageSize, query, run, selectedTopics, sigungu, sido]);
 
@@ -358,7 +422,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
     return () => {
       active = false;
-      requestControllerRef.current?.abort();
+      searchRequestsRef.current?.cancel();
     };
   }, [initialQuery, run, searchParams]);
 
@@ -611,17 +675,22 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       </div>
 
       {selected ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
-          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <AccessibleDialog
+          labelledBy="benefit-detail-title"
+          onClose={closeDetail}
+          overlayClassName="bg-slate-900/45 backdrop-blur-sm p-4 md:p-8"
+          panelClassName="w-full max-w-2xl max-h-[90vh]"
+        >
+          <Card className="w-full max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="bg-surface-muted/80 p-8 md:p-10 border-b border-slate-100 flex items-start justify-between">
               <div className="space-y-2">
                 <span className="rounded-lg bg-primary/10 text-navy px-2.5 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm">
                   {selected.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[selected.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : "지원 혜택"}
                 </span>
-                <h3 className="text-2xl md:text-3xl font-black text-navy tracking-tight leading-tight">{selected.title}</h3>
+                <h3 id="benefit-detail-title" className="text-2xl md:text-3xl font-black text-navy tracking-tight leading-tight">{selected.title}</h3>
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{selected.org}</p>
               </div>
-              <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white shadow-sm" onClick={() => setSelected(null)}>
+              <Button aria-label="혜택 조건 닫기" data-dialog-initial-focus size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white shadow-sm" onClick={closeDetail}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </Button>
             </div>
@@ -684,10 +753,10 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
             <div className="bg-surface-muted/80 p-6 px-10 border-t border-slate-100 flex items-center justify-between">
                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">출처: 보조금24 Open API</p>
-               <Button variant="ghost" className="text-xs font-black text-slate-400" onClick={() => setSelected(null)}>닫기</Button>
+               <Button variant="ghost" className="text-xs font-black text-slate-400" onClick={closeDetail}>닫기</Button>
             </div>
           </Card>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </PageShell>
   );

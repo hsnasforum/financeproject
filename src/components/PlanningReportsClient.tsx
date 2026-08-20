@@ -20,6 +20,7 @@ import {
   bodyDialogActionsClassName,
 } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -826,11 +827,14 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
         </div>
       </div>
       {deleteTargetId ? (
-        <div
-          aria-labelledby="planning-reports-delete-title"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-sm p-4"
-          role="dialog"
+        <AccessibleDialog
+          labelledBy="planning-reports-delete-title"
+          onClose={() => {
+            if (!deleteWorking) closeDeleteDialog();
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 backdrop-blur-sm p-4"
+          panelClassName="w-full max-w-lg"
         >
           <BodyDialogSurface className="max-w-lg rounded-[2.5rem] p-8 shadow-2xl">
             <h3 className="text-xl font-black text-navy tracking-tight" id="planning-reports-delete-title">리포트 삭제 확인</h3>
@@ -867,7 +871,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
               </Button>
             </div>
           </BodyDialogSurface>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </>
   );

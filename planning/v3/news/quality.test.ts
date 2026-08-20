@@ -58,7 +58,10 @@ describe("planning v3 news quality gates", () => {
     ];
 
     const xml = readFixture("sample-rss.xml");
-    const fetchMock: typeof fetch = vi.fn(async () => new Response(xml, { status: 200 })) as unknown as typeof fetch;
+    const fetchMock: typeof fetch = vi.fn(async () => new Response(xml, {
+      status: 200,
+      headers: { "content-type": "application/rss+xml" },
+    })) as unknown as typeof fetch;
 
     const first = await runNewsRefresh({
       rootDir: root,

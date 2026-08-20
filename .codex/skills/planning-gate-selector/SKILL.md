@@ -1,6 +1,6 @@
 ---
 name: planning-gate-selector
-description: Choose the smallest correct verification set for Finance Project changes. Trigger when a task changes planning v2 logic, routes, pages, API handlers, UI text, DART/data-source flows, release scripts, or route SSOT/current-screens behavior and you need to decide which pnpm gates to run.
+description: Choose the smallest correct verification set for Finance Project changes. Trigger when changing planning logic, routes, pages, API/UI behavior, data-source flows, release scripts, route SSOT, or multi-agent role, prompt, config, and skill files.
 ---
 
 # Planning Gate Selector

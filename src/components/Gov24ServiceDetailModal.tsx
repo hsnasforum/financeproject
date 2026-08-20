@@ -7,6 +7,7 @@ import { type EligibilityItem } from "@/lib/gov24/eligibilityNormalize";
 import { safeExternalUrl } from "@/lib/url/safeExternalUrl";
 import { type ApplyLink } from "@/lib/gov24/applyLinks";
 import { cn } from "@/lib/utils";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 
 export type Gov24ServiceDetailData = {
   id: string;
@@ -70,18 +71,22 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm p-4 flex items-center justify-center" onClick={onClose}>
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] bg-white p-8 lg:p-10 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+    <AccessibleDialog
+      labelledBy="gov24-service-detail-title"
+      onClose={onClose}
+      overlayClassName="bg-slate-900/40 backdrop-blur-sm p-4"
+      panelClassName="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] bg-white p-8 lg:p-10 shadow-2xl animate-in zoom-in-95 duration-200"
+    >
         <div className="flex items-start justify-between gap-6">
           <div className="space-y-1">
             <span className="text-[10px] font-black text-primary uppercase tracking-widest">맞춤 혜택 상세 정보</span>
-            <h3 className="text-2xl font-black text-navy tracking-tight leading-tight">{data.title}</h3>
+            <h3 id="gov24-service-detail-title" className="text-2xl font-black text-navy tracking-tight leading-tight">{data.title}</h3>
             <div className="flex items-center gap-3 pt-1">
               <span className="inline-flex rounded-lg bg-surface-muted px-2 py-0.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">Source: {SOURCE_LABEL[data.source]}</span>
               {data.org && <span className="text-[11px] font-bold text-slate-400">기관: {data.org}</span>}
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-2xl bg-surface-muted p-2 text-slate-400 hover:bg-slate-200 transition-colors">
+          <button type="button" aria-label="혜택 상세 닫기" data-dialog-initial-focus onClick={onClose} className="rounded-2xl bg-surface-muted p-2 text-slate-400 hover:bg-slate-200 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
@@ -229,7 +234,6 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
             창 닫기
           </Button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

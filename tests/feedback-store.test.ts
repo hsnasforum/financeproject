@@ -185,14 +185,11 @@ describe("feedback store", () => {
     expect(persisted[0]?.recordKind).toBe("ops-ticket");
   });
 
-  it("resets file when stored json is invalid", () => {
+  it("fails closed without overwriting malformed stored json", () => {
     fs.mkdirSync(path.dirname(TEST_STORE_PATH), { recursive: true });
     fs.writeFileSync(TEST_STORE_PATH, "{ invalid json", "utf-8");
 
-    const rows = listRecent(20);
-    expect(rows).toEqual([]);
-
-    const repaired = JSON.parse(fs.readFileSync(TEST_STORE_PATH, "utf-8")) as unknown;
-    expect(repaired).toEqual([]);
+    expect(() => listRecent(20)).toThrowError("storage json is malformed");
+    expect(fs.readFileSync(TEST_STORE_PATH, "utf-8")).toBe("{ invalid json");
   });
 });

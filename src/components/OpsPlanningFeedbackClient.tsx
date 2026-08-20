@@ -13,6 +13,7 @@ import type {
   PlanningFeedbackStatus,
 } from "@/lib/ops/feedback/planningFeedbackTypes";
 import { Button } from "@/components/ui/Button";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -487,14 +488,16 @@ export function OpsPlanningFeedbackClient() {
         </Card>
       </div>
       {confirmDeleteTarget ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="ops-feedback-delete-title"
+        <AccessibleDialog
+          labelledBy="ops-feedback-delete-title"
+          onClose={() => {
+            if (!deleting) setConfirmDeleteId("");
+          }}
+          closeOnOverlay={false}
+          overlayClassName="bg-slate-900/45 px-4 py-8"
+          panelClassName="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-feedback-delete-title" className="text-base font-black text-navy">피드백 삭제 확인</h3>
+          <h3 id="ops-feedback-delete-title" className="text-base font-black text-navy">피드백 삭제 확인</h3>
             <p className="mt-2 text-sm text-slate-700">
               피드백 항목을 삭제합니다. 계속 진행할까요?
             </p>
@@ -526,8 +529,7 @@ export function OpsPlanningFeedbackClient() {
                 삭제 진행
               </Button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       ) : null}
     </PageShell>
   );

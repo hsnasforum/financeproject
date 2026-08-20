@@ -3,6 +3,7 @@ import { z } from "zod";
 import { type NewsCustomSource, type NewsSettings, type NewsSourceOverride } from "./contracts";
 import { NEWS_SOURCES } from "./sources";
 import { readNewsSettings, writeNewsSettings } from "./settings";
+import { validateFeedUrlSyntax } from "./ingest/fetchFeed";
 
 export const NewsSourceTransferItemSchema = z.object({
   url: z.string().trim().url(),
@@ -48,8 +49,11 @@ export const NewsSourceImportApplyResultSchema = z.object({
 export type NewsSourceImportApplyResult = z.infer<typeof NewsSourceImportApplyResultSchema>;
 
 function canonicalizeUrl(input: string): string | null {
+  const validation = validateFeedUrlSyntax(input);
+  if (!validation.ok) return null;
+
   try {
-    const url = new URL(input.trim());
+    const url = validation.url;
     url.hash = "";
     url.protocol = url.protocol.toLowerCase();
     url.hostname = url.hostname.toLowerCase();
@@ -201,8 +205,10 @@ export function exportNewsSourceList(rootDir?: string): NewsSourceTransferItem[]
   }
   for (const source of custom) {
     if (effectiveDefaults.has(source.id)) continue;
+    const canonicalUrl = canonicalizeUrl(source.feedUrl);
+    if (!canonicalUrl) continue;
     rows.push(NewsSourceTransferItemSchema.parse({
-      url: source.feedUrl,
+      url: canonicalUrl,
       weight: source.weight,
       enabled: source.enabled,
     }));

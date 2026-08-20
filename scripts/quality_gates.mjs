@@ -30,6 +30,18 @@ export const QUALITY_GATES = [
     args: ["--", "--build-preflight"],
   }),
   gate({ id: "deps:audit", tier: "required", scope: ["release"], script: "deps:audit" }),
+  gate({
+    id: "e2e:inventory:check",
+    tier: "required",
+    scope: ["e2e", "release"],
+    script: "e2e:inventory:check",
+  }),
+  gate({
+    id: "e2e:release:contracts",
+    tier: "required",
+    scope: ["e2e", "release"],
+    script: "e2e:release:contracts",
+  }),
   gate({ id: "multi-agent:guard", tier: "required", scope: ["devex"], script: "multi-agent:guard" }),
   gate({ id: "test", tier: "required", scope: ["unit"], script: "test" }),
   gate({ id: "planning:ssot:check", tier: "advisory", scope: ["routes", "docs"], script: "planning:ssot:check" }),
@@ -118,6 +130,7 @@ export const QUALITY_GATE_SUITES = {
     preflightRequired: [
       "cleanup:next-artifacts",
       "deps:audit",
+      "e2e:inventory:check",
     ],
     earlyRequired: [
       "planning:v2:complete",
@@ -130,6 +143,7 @@ export const QUALITY_GATE_SUITES = {
     ],
     lateRequired: [
       "test",
+      "e2e:release:contracts",
     ],
     advisory: [
       "planning:ssot:check",

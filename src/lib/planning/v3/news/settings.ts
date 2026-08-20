@@ -9,10 +9,11 @@ import {
   type NewsSource,
   type NewsTopic,
 } from "./contracts";
-import { NEWS_SOURCES } from "./sources";
+import { NEWS_SOURCES, RETIRED_NEWS_SOURCES } from "./sources";
 import { NEWS_TOPICS, canonicalizeTopicId } from "./taxonomy";
 import { resolveNewsRootDir } from "./rootDir";
 import { parseWithV3Whitelist } from "../security/whitelist";
+import { validateFeedUrlSyntax } from "./ingest/fetchFeed";
 
 const DEFAULT_SETTINGS: NewsSettings = {
   schemaVersion: 1,
@@ -21,6 +22,17 @@ const DEFAULT_SETTINGS: NewsSettings = {
   topics: [],
   customSources: [],
 };
+
+const RETIRED_CUSTOM_SOURCE_REASON = "안전한 HTTPS 피드가 아니어서 비활성화했습니다. HTTPS 주소로 다시 등록해 주세요.";
+
+function quarantineUnsafeCustomSources(settings: NewsSettings): NewsSettings {
+  return {
+    ...settings,
+    customSources: settings.customSources.map((source) => validateFeedUrlSyntax(source.feedUrl).ok
+      ? source
+      : { ...source, enabled: false }),
+  };
+}
 
 function dedupeKeywords(values: string[]): string[] {
   const seen = new Set<string>();
@@ -44,14 +56,14 @@ export function readNewsSettings(rootDir = resolveNewsRootDir()): NewsSettings {
 
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
-    return NewsSettingsSchema.parse(parsed);
+    return quarantineUnsafeCustomSources(NewsSettingsSchema.parse(parsed));
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
 export function writeNewsSettings(input: NewsSettings, rootDir = resolveNewsRootDir()): NewsSettings {
-  const next = parseWithV3Whitelist(NewsSettingsSchema, {
+  const parsed = parseWithV3Whitelist(NewsSettingsSchema, {
     schemaVersion: 1,
     ...input,
     updatedAt: new Date().toISOString(),
@@ -59,6 +71,7 @@ export function writeNewsSettings(input: NewsSettings, rootDir = resolveNewsRoot
     scope: "persistence",
     context: "news.settings",
   });
+  const next = quarantineUnsafeCustomSources(parsed);
 
   fs.mkdirSync(rootDir, { recursive: true });
   fs.writeFileSync(resolveNewsSettingsPath(rootDir), `${JSON.stringify(next, null, 2)}\n`, "utf-8");
@@ -70,11 +83,18 @@ export function mergeSourcesWithOverrides(
   settings: NewsSettings = DEFAULT_SETTINGS,
 ): NewsSource[] {
   const byId = new Map(settings.sources.map((row) => [row.id, row]));
-  const mergedDefaults = defaults.map((source) => {
+  const defaultIds = new Set(defaults.map((source) => source.id));
+  const allDefaults = [
+    ...defaults,
+    ...RETIRED_NEWS_SOURCES.filter((source) => !defaultIds.has(source.id)),
+  ];
+  const mergedDefaults = allDefaults.map((source) => {
     const override = byId.get(source.id);
     return NewsSourceSchema.parse({
       ...source,
-      enabled: typeof override?.enabled === "boolean" ? override.enabled : source.enabled,
+      enabled: source.retiredReason
+        ? false
+        : typeof override?.enabled === "boolean" ? override.enabled : source.enabled,
       weight: Number.isFinite(override?.weight) ? Number(override?.weight) : source.weight,
     });
   });
@@ -87,6 +107,9 @@ export function mergeSourcesWithOverrides(
     if (existingIds.has(custom.id)) continue;
     if (existingUrls.has(custom.feedUrl)) continue;
     const override = byId.get(custom.id);
+    const retiredReason = validateFeedUrlSyntax(custom.feedUrl).ok
+      ? undefined
+      : RETIRED_CUSTOM_SOURCE_REASON;
     customMerged.push(NewsSourceSchema.parse({
       id: custom.id,
       name: custom.name,
@@ -95,7 +118,10 @@ export function mergeSourcesWithOverrides(
       country: custom.country,
       language: custom.language,
       weight: Number.isFinite(override?.weight) ? Number(override?.weight) : custom.weight,
-      enabled: typeof override?.enabled === "boolean" ? override.enabled : custom.enabled,
+      enabled: retiredReason
+        ? false
+        : typeof override?.enabled === "boolean" ? override.enabled : custom.enabled,
+      retiredReason,
     }));
     existingIds.add(custom.id);
     existingUrls.add(custom.feedUrl);

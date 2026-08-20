@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
 import { formatEvidenceInput } from "./shared";
 
@@ -9,19 +10,6 @@ export function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
   const evidenceItem = item ?? null;
   const itemId = evidenceItem?.id ?? "none";
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
 
   if (!evidenceItem) return null;
 
@@ -30,7 +18,6 @@ export function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
       <button
         data-testid={`core-metric-evidence-toggle-${itemId}`}
         onClick={() => setOpen((prev) => !prev)}
-        ref={triggerRef}
         type="button"
         className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-primary/20 hover:text-primary shadow-sm"
       >
@@ -39,23 +26,14 @@ export function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
 
       {open && typeof document !== "undefined"
         ? createPortal(
-          <div
-            className="fixed inset-0 z-[120] overflow-y-auto bg-slate-950/35 px-3 py-6 backdrop-blur-sm sm:px-4 sm:py-8"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) {
-                setOpen(false);
-              }
-            }}
+          <AccessibleDialog
+            labelledBy={`core-metric-evidence-title-${itemId}`}
+            onClose={() => setOpen(false)}
+            testId={`core-metric-evidence-panel-${itemId}`}
+            overlayClassName="z-[120] overflow-y-auto bg-slate-950/35 px-3 py-6 backdrop-blur-sm sm:px-4 sm:py-8"
+            panelClassName="mx-auto w-full max-w-[920px] rounded-[2rem] border border-slate-200 bg-white/95 p-6 shadow-2xl backdrop-blur-md sm:p-7"
           >
-            <div
-              data-testid={`core-metric-evidence-panel-${itemId}`}
-              ref={panelRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby={`core-metric-evidence-title-${itemId}`}
-              className="mx-auto w-full max-w-[920px] rounded-[2rem] border border-slate-200 bg-white/95 p-6 shadow-2xl backdrop-blur-md sm:p-7"
-            >
-              <div className="space-y-4">
+            <div className="space-y-4">
                 <div className="rounded-2xl border border-primary/10 bg-primary/30 px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-primary">계산 공식</p>
                   <p id={`core-metric-evidence-title-${itemId}`} className="mt-1 text-xs font-bold leading-relaxed text-slate-700">{evidenceItem.formula}</p>
@@ -100,8 +78,7 @@ export function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>,
+          </AccessibleDialog>,
           document.body,
         )
         : null}

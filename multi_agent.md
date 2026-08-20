@@ -1,10 +1,22 @@
-# 2026-03-09 Finance Project CLI 멀티 에이전트 지침서
+# 2026-07-11 Finance Project CLI 멀티 에이전트 지침서
 
 ## 목적
 
 - 이 문서는 `Finance Project`를 CLI 멀티 에이전트 방식으로 운영할 때 필요한 역할 기준과 작업 절차를 정의한다.
 - 이 프로젝트는 `개인 재무설계`, `금융상품 추천`, `공공데이터 연동`, `DART 공시 모니터링`을 함께 다루므로, 에이전트는 단일 기능만 보지 말고 사용자 흐름과 데이터 정합성을 함께 봐야 한다.
 - 모든 에이전트는 `정확성`, `안정성`, `설명 가능성`, `운영 보안`, `공식 경로 일관성`을 공통 기준으로 삼는다.
+
+## GPT-5.6 모델·프롬프트 기준
+
+- 기준일은 2026-08-20이다. 공식 모델 가이드에서 `gpt-5.6` 계열의 플래그십은 `gpt-5.6-sol`이며, 현재 Codex 계정에서 별칭 선택이 거부되므로 복합 계획·구현·검증·최종 합성 역할에는 명시적 `gpt-5.6-sol`을 사용한다.
+- `gpt-5.6-terra`는 읽기 중심 탐색, 대형 파일 검토, 테스트 로그 분석, 외부 자료 조사, 문서화처럼 결과를 압축해 메인에 넘기는 역할의 기본값으로 사용한다.
+- native 역할은 `manager / analyzer / planner / developer / reviewer`에 `gpt-5.6-sol`, `researcher / tester / documenter`에 `gpt-5.6-terra`를 사용한다.
+- CLI 역할은 `lead / planner / implementer / reviewer`에 `gpt-5.6-sol`, `researcher / validator / documenter`에 `gpt-5.6-terra`를 사용한다. `CODEX_DEMANDING_MODEL`, `CODEX_READ_HEAVY_MODEL` 환경변수로 재현 가능한 예외를 둘 수 있다.
+- 5.4/5.5에서 옮길 때는 현재 reasoning effort를 기준값으로 보존한다. 대표 작업 평가 없이 effort를 일괄 낮추거나 `max`로 일괄 올리지 않는다.
+- GPT-5.6은 기본 응답이 더 짧을 수 있으므로 전역 `간결하게`, `최소한으로` 지시를 추가하지 않는다. 필수 사실·결정·예외·다음 행동·요청 산출물을 먼저 보존하고, 서론·반복·일반론·상투적 안심 문구부터 줄인다.
+- 공통 규칙은 `AGENTS.md`와 CLI `common.md`에 한 번만 두고 역할 파일에는 역할별 차이만 둔다. 도구와 하위 에이전트도 현재 작업에 필요한 최소 집합만 사용한다.
+- 하위 에이전트에는 분할 기준, 독립 범위, 쓰기 허용 여부, 완료 조건, 반환 형식, 전체 결과 대기 여부를 명시한다. 읽기 중심 작업을 우선 병렬화하고 같은 파일·DB·공유 런타임을 쓰는 작업은 소유권이 분리될 때만 병렬화한다.
+- 공식 근거: [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model), [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md), [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [Build skills](https://learn.chatgpt.com/docs/build-skills). 참고 해설은 [nokryong GPT-5.6 가이드](https://nokryong.github.io/#tab=prompting)를 사용하되 충돌 시 공식 문서를 우선한다.
 
 ## 반복 실행 기본 루프
 
@@ -18,6 +30,45 @@
 - 5단계 기록: 각 라운드가 끝날 때 `work/<현재월>/<현재일>/YYYY-MM-DD-<slug>.md` 에 `무엇을 바꿨는지 / 사용 skill / 실행한 검증 / 미실행 검증 / 남은 리스크 / 다음 라운드 우선순위`를 남긴다. 해당 폴더가 없으면 먼저 생성한다.
   - `사용 skill` 섹션은 항상 남기고, 실제 사용한 skill이 없으면 `- 없음`으로 적는다.
 - 반복 조건: 후속 라운드에서는 먼저 `work/<현재월>/<현재일>/`의 최신 문서와 최신 검증 결과를 읽고, 오늘 문서가 없으면 전날 날짜 폴더의 최신 `/work` 문서를 읽는다. 그다음 남은 리스크 중 가장 높은 우선순위 하나를 다시 `manager` 에이전트로 분해해서 같은 루프를 반복한다.
+
+## 내부 라운드와 GitHub 게시 배치
+
+### 단위 정의
+
+- `로컬 완료 항목`은 하나의 응집된 변경을 구현하고 필요한 로컬 검증과 `/work` 종료 기록까지 마친 상태다.
+- `GitHub 게시 배치`는 같은 목적, 의존성, 검증, 롤백 경계를 공유하는 여러 로컬 완료 항목을 원격에 게시하기 위한 묶음이다.
+- `원격 검증 대기`는 로컬 검증은 끝났지만 GitHub Actions billing, quota, runner, 권한 또는 원격 CI 문제로 외부 검증만 남은 상태다.
+
+### 기본 게시 주기
+
+- 로컬 라운드는 기존처럼 작은 단위로 계속 닫고 각 라운드의 근거를 `/work`에 남긴다.
+- GitHub push와 PR은 로컬 완료 항목 10~15개를 한 게시 배치로 묶는 것을 기본 목표로 한다.
+- 10~15개는 강제 최소·최대가 아니다. 숫자를 채우려고 기능 축, 목적, 검증 또는 롤백 경계가 다른 작업을 합치거나 미완료 항목을 포함하지 않는다.
+- 기본 형태는 `게시 배치 1개 = PR 1개 + 하나 또는 소수의 논리적 commit + merge 완료`다. 큰 단일 commit을 강제하지 않고, 원격 push 횟수는 필요한 수준으로 줄인다.
+- 현재 `.github/workflows/ci.yml`은 push와 pull request에서, `.github/workflows/e2e-smoke.yml`은 pull request에서 실행되므로 내부 항목마다 원격 게시를 반복하지 않는다.
+
+### billing·원격 장애 처리
+
+- GitHub Actions billing, quota, runner, 권한 또는 원격 CI 문제는 로컬 구현, 로컬 검증, 문서화, 다음 안전한 라운드를 멈추는 사유가 아니다.
+- 원격 상태가 바뀌지 않은 동안 push, PR 생성, workflow rerun을 자동으로 반복하지 않는다. 영향받은 외부 단계만 `[GitHub 게시 대기]` 또는 `[원격 검증 대기]`로 남긴다.
+- 사용자 요청의 완료 조건에 실제 push, PR, merge 또는 원격 CI 통과가 포함되면 그 외부 산출물만 `[blocked]`로 보고하고, 완료한 로컬 산출물과 검증은 별도로 인계한다.
+- 이 정책은 명시적인 GitHub 게시 요청이 없을 때 외부 작업 권한을 새로 만들지 않는다. 게시가 명시적으로 요청되면 아래 merge 완료 계약을 따른다.
+
+### merge 완료 계약
+
+- 사용자가 GitHub 게시 배치의 진행을 명시적으로 요청·승인한 경우 commit, push, PR 생성, 필수 checks 확인, 허용된 merge까지 하나의 승인 범위로 보고 단계마다 추가 대화 승인을 요청하지 않는다. 다만 같은 요청에서 `push only`, `draft PR only`, `merge 금지`처럼 범위를 명시적으로 제한하면 그 직접 지시가 우선한다.
+- PR 생성은 완료가 아니다. 메인 또는 lead가 대상 branch, required checks, 요청된 review, 충돌 여부를 확인하고, 현재 변경으로 생긴 실패는 범위 안에서 수정·재검증한 뒤 merge까지 진행해야 게시 배치가 완료된다.
+- 저장소가 허용하는 기본 merge 방식을 사용한다. force push, admin bypass, branch protection 우회, 실패한 required check를 무시한 merge는 별도 명시 요청이 있어도 수행하지 않는다.
+- checks 실패, 충돌, branch protection, 권한, billing, runner 또는 보안 문제로 안전한 merge가 불가능하면 해당 외부 단계를 `[blocked: merge 대기]`로 남기고 로컬 작업은 계속한다.
+- 조건이 해소되면 PR head·base·diff, 요청된 review, required checks가 승인 당시 범위와 같은지 다시 확인한다. 범위가 같거나 승인된 범위 안의 실패 수정만 포함하면 추가 사용자 확인 없이 merge를 재개하고, 대상 branch나 변경 범위가 달라졌으면 새 승인을 받는다.
+- merge 후에는 PR 번호 또는 URL, merge 결과, merge commit, 확인한 checks를 관련 `/work` 기록에 남긴다.
+
+### 예외와 게시·merge 게이트
+
+- 보안 긴급 수정, production 장애, release 또는 rollback 경계, 장기 분기로 인한 충돌 위험, 사용자의 명시적 요청은 10개보다 작은 게시 배치를 허용한다.
+- 하나의 배치가 리뷰하기 어렵거나 통합 검증과 롤백 경계가 불명확해지면 목표 개수에 도달하기 전이라도 나눈다.
+- 게시 후보에는 `배치 목적 / 포함된 /work 경로 / 변경 파일 / 항목별 검증 / 배치 수준 통합 검증 / 남은 원격 검증`을 정리한다.
+- 게시가 승인되면 최종 diff와 통합 검증을 한 번 더 확인한 뒤 배치 단위로 commit, push, PR, 필수 checks 확인, merge까지 진행한다.
 
 ## 프로젝트 기준 요약
 

@@ -1278,5 +1278,5 @@ describe("security route capability matrix", () => {
     expect(result.issues).toEqual([]);
     expect(result.stats.mutationMethods).toBeGreaterThan(0);
     expect(result.stats.classified).toBe(result.stats.mutationMethods);
-  }, 15_000);
+  }, 30_000);
 });

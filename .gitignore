@@ -27,6 +27,13 @@
 # misc
 .DS_Store
 *.pem
+/testfin
+/testfin.pub
+/.ssh/
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
 CLAUDE.md
 
 # debug

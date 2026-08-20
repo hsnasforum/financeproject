@@ -52,8 +52,15 @@ test("planning v3 transactions uploads csv and follows override save through in 
 
   const initialTransferLabel = (await transferButton.textContent())?.trim() ?? "";
   const expectedTransferLabel = initialTransferLabel === "이체로 저장" ? "일반으로 저장" : "이체로 저장";
+  const categorizedResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === "GET"
+      && url.pathname.endsWith("/categorized");
+  }, { timeout: 30_000 });
   await transferButton.click();
 
+  const categorizedResponse = await categorizedResponsePromise;
+  expect(categorizedResponse.status()).toBe(200);
   await expect(page.getByText("이체 판정을 저장했습니다. 아래 카테고리 집계와 캐시플로우는 자동으로 다시 계산됩니다.", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(transferButton).toHaveText(expectedTransferLabel, { timeout: 30_000 });
   await expect(page.getByTestId("v3-cashflow-table")).toBeVisible({ timeout: 30_000 });

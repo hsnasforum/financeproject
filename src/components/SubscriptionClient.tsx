@@ -8,6 +8,7 @@ import { FieldError } from "@/components/forms/FieldError";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { Card } from "@/components/ui/Card";
@@ -445,16 +446,21 @@ export function SubscriptionClient({
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
-          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <AccessibleDialog
+          labelledBy="subscription-detail-title"
+          onClose={() => setSelected(null)}
+          overlayClassName="bg-slate-900/40 backdrop-blur-sm p-4 md:p-8"
+          panelClassName="w-full max-w-2xl max-h-[90vh]"
+        >
+          <Card className="flex h-full w-full flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="bg-surface-muted/80 p-6 md:p-8 border-b border-slate-100 flex items-start justify-between">
               <div className="space-y-2">
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-navy">
                   {selected.region} · {houseTypeLabel(houseType)}
                 </span>
-                <h3 className="text-xl md:text-2xl font-black text-navy tracking-tight leading-snug">{selected.title}</h3>
+                <h3 id="subscription-detail-title" className="text-xl md:text-2xl font-black text-navy tracking-tight leading-snug">{selected.title}</h3>
               </div>
-              <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white" onClick={() => setSelected(null)}>
+              <Button aria-label="상세 닫기" size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white" onClick={() => setSelected(null)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </Button>
             </div>
@@ -544,7 +550,7 @@ export function SubscriptionClient({
                )}
             </div>
           </Card>
-        </div>
+        </AccessibleDialog>
       )}
     </PageShell>
   );

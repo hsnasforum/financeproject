@@ -226,6 +226,14 @@ export function NewsSettingsSourcesSection({ state }: { state: NewsSettingsSourc
                     <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
                       {row.country} · {row.language} · Default {row.defaultWeight}
                     </p>
+                    {row.retiredReason ? (
+                      <p
+                        className="mt-2 text-xs font-semibold leading-relaxed text-amber-700"
+                        id={`${row.id}-retired-reason`}
+                      >
+                        {row.retiredReason}
+                      </p>
+                    ) : null}
                   </div>
                   <label className="flex items-center justify-between gap-3 md:justify-self-end">
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 md:hidden">가중치</span>
@@ -245,7 +253,9 @@ export function NewsSettingsSourcesSection({ state }: { state: NewsSettingsSourc
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                       checked={state.drafts[row.id]?.enabled ?? row.defaultEnabled}
+                      disabled={Boolean(row.retiredReason)}
                       onChange={(event) => state.updateSourceEnabled(row.id, event.target.checked)}
+                      aria-describedby={row.retiredReason ? `${row.id}-retired-reason` : undefined}
                     />
                   </label>
                 </div>

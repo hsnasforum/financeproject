@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeDiagnosticsSnapshot, type DiagnosticsSnapshot } from "../diagnostics/snapshot";
+import {
+  isStorageNotFoundError,
+  storageSchemaCorrupted,
+  toStorageReadError,
+} from "../planning/storage/serverFileRead";
 
 const MAX_FEEDBACK_ITEMS = 200;
 const DEFAULT_FEEDBACK_PATH = path.join(process.cwd(), "tmp", "user_feedback.json");
@@ -231,23 +236,23 @@ function writeAll(items: FeedbackItem[], filePath = resolveFeedbackPath()): void
 
 function readAll(): FeedbackItem[] {
   const filePath = resolveFeedbackPath();
-  if (!fs.existsSync(filePath)) return [];
-
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
-    if (!Array.isArray(parsed)) {
-      writeAll([], filePath);
-      return [];
-    }
-    const normalized = parsed.map((entry) => normalizeItem(entry)).filter((entry): entry is FeedbackItem => entry !== null);
-    if (normalized.length !== parsed.length) {
-      writeAll(normalized, filePath);
+    parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+  } catch (error) {
+    if (isStorageNotFoundError(error)) return [];
+    throw toStorageReadError(error, filePath);
+  }
+  if (!Array.isArray(parsed)) {
+    throw storageSchemaCorrupted(filePath, "feedback storage must contain an array");
+  }
+  return parsed.map((entry, index) => {
+    const normalized = normalizeItem(entry);
+    if (!normalized) {
+      throw storageSchemaCorrupted(filePath, `feedback storage row ${index + 1} is invalid`);
     }
     return normalized;
-  } catch {
-    writeAll([], filePath);
-    return [];
-  }
+  });
 }
 
 export function addFeedback(input: FeedbackInput): FeedbackItem {

@@ -1,4 +1,129 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { expect, test } from "./helpers/e2eTest";
+
+function envFlag(name: string): boolean {
+  return ["1", "true", "yes", "on"].includes((process.env[name] ?? "").trim().toLowerCase());
+}
+
+function planningDataRoot(): string {
+  const root = (process.env.PLANNING_DATA_DIR ?? "").trim();
+  if (!root) throw new Error("PLANNING_DATA_DIR is required for isolated profile draft E2E fixtures.");
+  return path.resolve(root);
+}
+
+function planningFixtureUserId(): string {
+  if (envFlag("PLANNING_SINGLE_USER_MODE")) return "default";
+  return (process.env.PLANNING_E2E_USER_ID || "playwright-local").trim();
+}
+
+function profileDraftFixtureDir(): string {
+  const root = planningDataRoot();
+  if (envFlag("PLANNING_NAMESPACE_ENABLED") || envFlag("PLANNING_SINGLE_USER_MODE")) {
+    return path.join(root, "users", planningFixtureUserId(), "planning-v3", "drafts", "profile");
+  }
+  return path.join(root, "planning-v3", "drafts", "profile");
+}
+
+function profileFixtureDir(): string {
+  const root = planningDataRoot();
+  if (envFlag("PLANNING_NAMESPACE_ENABLED") || envFlag("PLANNING_SINGLE_USER_MODE")) {
+    return path.join(root, "users", planningFixtureUserId(), "vault", "profiles");
+  }
+  const profilesDir = path.resolve((process.env.PLANNING_PROFILES_DIR ?? path.join(root, "profiles")).trim());
+  return path.join(path.dirname(profilesDir), "vault", "profiles");
+}
+
+async function seedProfileDraftFixture(): Promise<void> {
+  const draftDir = profileDraftFixtureDir();
+  const profileDir = path.join(profileFixtureDir(), "profile-base");
+  await Promise.all([
+    fs.mkdir(draftDir, { recursive: true }),
+    fs.mkdir(profileDir, { recursive: true }),
+  ]);
+  await Promise.all([
+    fs.writeFile(path.join(draftDir, "draft-1.json"), `${JSON.stringify({
+      id: "draft-1",
+      batchId: "batch-1",
+      createdAt: "2026-03-03T00:00:00.000Z",
+      draftPatch: {
+        monthlyIncomeNet: 3_250_000,
+        monthlyEssentialExpenses: 850_000,
+        monthlyDiscretionaryExpenses: 500_000,
+        assumptions: ["최근 2개월 기준"],
+        monthsConsidered: 2,
+      },
+      evidence: {
+        monthsUsed: ["2026-01", "2026-02"],
+        ymStats: [
+          {
+            ym: "2026-01",
+            incomeKrw: 3_200_000,
+            expenseKrw: 1_200_000,
+            fixedExpenseKrw: 800_000,
+            variableExpenseKrw: 400_000,
+            debtExpenseKrw: 0,
+            transferKrw: 0,
+          },
+          {
+            ym: "2026-02",
+            incomeKrw: 3_300_000,
+            expenseKrw: 1_500_000,
+            fixedExpenseKrw: 900_000,
+            variableExpenseKrw: 600_000,
+            debtExpenseKrw: 0,
+            transferKrw: 0,
+          },
+        ],
+        byCategoryStats: [
+          { categoryId: "housing", totalKrw: 900_000 },
+          { categoryId: "food", totalKrw: 450_000 },
+        ],
+        medians: {
+          incomeKrw: 3_250_000,
+          expenseKrw: 1_350_000,
+          fixedExpenseKrw: 850_000,
+          variableExpenseKrw: 500_000,
+          debtExpenseKrw: 0,
+        },
+        ruleCoverage: {
+          total: 3,
+          override: 0,
+          rule: 3,
+          default: 0,
+          transfer: 0,
+        },
+      },
+      assumptions: ["최근 2개월 기준"],
+      stats: {
+        months: 2,
+        transfersExcluded: true,
+        unassignedCount: 1,
+      },
+    }, null, 2)}\n`, "utf-8"),
+    fs.writeFile(path.join(profileDir, "profile.json"), `${JSON.stringify({
+      version: 1,
+      schemaVersion: 2,
+      id: "profile-base",
+      name: "기본 프로필",
+      profile: {
+        monthlyIncomeNet: 3_000_000,
+        monthlyEssentialExpenses: 800_000,
+        monthlyDiscretionaryExpenses: 450_000,
+        liquidAssets: 5_000_000,
+        investmentAssets: 2_000_000,
+        debts: [],
+        goals: [],
+      },
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-03T00:00:00.000Z",
+    }, null, 2)}\n`, "utf-8"),
+  ]);
+}
+
+test.beforeEach(async () => {
+  await fs.rm(profileDraftFixtureDir(), { recursive: true, force: true });
+});
 
 test("planning v3 profile draft flow can create, preflight, and apply a saved draft", async ({ page }) => {
   let listGetCount = 0;
@@ -30,6 +155,7 @@ test("planning v3 profile draft flow can create, preflight, and apply a saved dr
     }
 
     if (method === "POST") {
+      await seedProfileDraftFixture();
       await route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -197,8 +323,9 @@ test("planning v3 profile draft flow can create, preflight, and apply a saved dr
   await page.getByLabel("batchId").fill("batch-1");
   await page.getByRole("button", { name: "초안 생성" }).click();
 
-  await expect(page).toHaveURL(/\/planning\/v3\/profile\/drafts\/draft-1$/);
+  await expect(page).toHaveURL(/\/planning\/v3\/profile\/drafts\/draft-1$/, { timeout: 30_000 });
   await expect(page.getByTestId("v3-draft-meta")).toBeVisible();
+  await page.waitForLoadState("networkidle");
   await expect(page.getByTestId("v3-draft-apply-guidance")).toContainText(
     "프리플라이트를 먼저 실행하면 이 기준으로 적용 가능 여부가 정리됩니다.",
   );
@@ -216,6 +343,10 @@ test("planning v3 profile draft flow can create, preflight, and apply a saved dr
 });
 
 test("planning v3 profile drafts list separates load failure from empty guidance", async ({ page }) => {
+  const draftDir = profileDraftFixtureDir();
+  await fs.mkdir(draftDir, { recursive: true });
+  await fs.writeFile(path.join(draftDir, "broken.json"), "{\n", "utf-8");
+
   await page.route(/\/api\/planning\/v3\/profile\/drafts(\?.*)?$/, async (route) => {
     if (route.request().method() !== "GET") {
       await route.fallback();
@@ -246,6 +377,8 @@ test("planning v3 profile drafts list separates load failure from empty guidance
 });
 
 test("planning v3 profile draft detail keeps failure guidance after a failed preflight request", async ({ page }) => {
+  await seedProfileDraftFixture();
+
   await page.route(/\/api\/planning\/v3\/profile\/drafts\/draft-1(\?.*)?$/, async (route) => {
     if (route.request().method() !== "GET") {
       await route.fallback();
@@ -344,6 +477,7 @@ test("planning v3 profile draft detail keeps failure guidance after a failed pre
   await page.goto("/planning/v3/profile/drafts/draft-1");
 
   await expect(page.getByTestId("v3-draft-meta")).toBeVisible();
+  await page.waitForLoadState("networkidle");
   await page.getByTestId("v3-draft-base-profile-picker").selectOption("profile-base");
   await page.getByTestId("v3-draft-run-preflight").click();
 

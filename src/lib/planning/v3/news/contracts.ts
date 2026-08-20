@@ -10,6 +10,7 @@ export const NewsSourceSchema = z.object({
   language: z.string().trim().min(2).max(5),
   weight: z.number().finite(),
   enabled: z.boolean(),
+  retiredReason: z.string().trim().min(1).optional(),
 });
 
 export type NewsSource = z.infer<typeof NewsSourceSchema>;

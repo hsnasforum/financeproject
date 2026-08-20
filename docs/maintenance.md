@@ -40,6 +40,7 @@
 - GitHub Actions의 Playwright Chromium 설치는 `pnpm e2e:install:chromium` wrapper를 사용해 per-attempt timeout과 재시도로 runner/apt transient를 흡수한다.
 - shared `.next` 또는 dev server를 쓰는 최종 게이트(`pnpm build`, `pnpm e2e:rc`, `pnpm release:verify`)는 단일 소유로 순차 실행한다. concurrent repo build가 감지되면 `next_build_safe`는 `.next-build-<pid>` 같은 고유 dist dir로 우회한다.
 - beta targeted Playwright와 `pnpm v3:doctor`/`pnpm v3:support-bundle`/`pnpm v3:restore`/`pnpm v3:migrate` 같은 ops/dev 명령은 stable release final gate에 자동 포함하지 않는다.
+- Playwright source는 `tests/e2e/**/*.spec.ts`와 `e2e/**/*.e2e.ts` 두 root에서만 관리한다. `tmp/` symlink나 복제 spec을 추적하지 않으며 `pnpm e2e:inventory:check`가 orphan 또는 제외 목록 drift를 차단한다.
 - `pnpm planning:v2:ops:run*`, `pnpm planning:v2:ops:safety*`, `pnpm planning:v2:ops:scheduler:health`, `pnpm planning:v2:ops:prune`는 release blocker가 아니라 ops cadence 또는 evidence 명령이다.
 - scheduled cadence 결과는 `docs/planning-v2-scheduler.md` 기준으로 `scheduler.ndjson`과 ops log에 남기고, 수동 change batch에서 실행했다면 `/work`에 요약만 남긴다.
 - stable release closeout은 tracked `/work` note를 source of truth로 삼고, primary/companion final gate, conditional minor guard, advisory record, 미실행 gate, evidence 위치, residual risk를 순서대로 남긴다.

@@ -51,6 +51,7 @@ describe("planning v3 news cli", () => {
       return new Response(xml, {
         status: 200,
         headers: {
+          "content-type": "application/rss+xml",
           etag: 'W/"sample-etag"',
           "last-modified": "Wed, 04 Mar 2026 10:00:00 GMT",
         },
