@@ -5,6 +5,7 @@ import { RecommendResultsPanel } from "../src/components/recommend/RecommendResu
 import {
   attachUnifiedIds,
   buildCardFreshnessMeta,
+  buildDetailInitialOption,
   buildDetailProduct,
   buildPlanningContextStrip,
   buildTrustCues,
@@ -133,7 +134,7 @@ describe("recommend results view model", () => {
     ]);
   });
 
-  it("prioritizes the recommended detail option and keeps the fallback shape", () => {
+  it("keeps detail option order and resolves the recommended option separately", () => {
     const withDetail: RecommendItem = {
       ...baseItem,
       detailProduct: {
@@ -148,7 +149,12 @@ describe("recommend results view model", () => {
       },
     };
 
-    expect(buildDetailProduct(withDetail).options.map((option) => option.save_trm)).toEqual(["12", "6"]);
+    expect(buildDetailProduct(withDetail).options.map((option) => option.save_trm)).toEqual(["6", "12"]);
+    expect(buildDetailInitialOption(withDetail)).toMatchObject({
+      save_trm: "12",
+      intr_rate: 3.1,
+      intr_rate2: 3.5,
+    });
 
     const fallback = buildDetailProduct({
       ...baseItem,
@@ -161,6 +167,22 @@ describe("recommend results view model", () => {
       },
     });
     expect(fallback.options[0]).toMatchObject({ save_trm: "24", intr_rate: 3.5, intr_rate2: 3.5 });
+  });
+
+  it("does not synthesize a 0% fallback when recommendation rate evidence is missing", () => {
+    const fallback = buildDetailProduct({
+      ...baseItem,
+      detailProduct: undefined,
+      selectedOption: {
+        ...baseItem.selectedOption,
+        appliedRate: 0,
+        baseRate: null,
+        maxRate: null,
+        rateSource: "none",
+      },
+    });
+
+    expect(fallback.options[0]).toMatchObject({ intr_rate: null, intr_rate2: null });
   });
 
   it("renders the extracted result panel with the existing action contract", () => {

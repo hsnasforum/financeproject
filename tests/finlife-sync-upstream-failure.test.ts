@@ -46,6 +46,7 @@ describe("FINLIFE snapshot sync upstream failure", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     restoreEnv();
   });
 
@@ -62,6 +63,29 @@ describe("FINLIFE snapshot sync upstream failure", () => {
 
     expect(mocks.fetchLiveFinlife).toHaveBeenCalledTimes(1);
     expect(mocks.saveFinlifeSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("retries typed 429 failures and preserves the upstream status", async () => {
+    vi.useFakeTimers();
+    const error = Object.assign(new Error("외부 API 호출에 실패했습니다."), {
+      status: 429,
+      retryAfterSeconds: 1,
+    });
+    mocks.fetchLiveFinlife.mockRejectedValue(error);
+
+    const pending = collectFinlifeSnapshot("deposit");
+    await vi.advanceTimersByTimeAsync(6_000);
+
+    await expect(pending).resolves.toEqual({
+      ok: false,
+      kind: "deposit",
+      error: {
+        code: "UPSTREAM_FETCH_FAILED",
+        message: "FINLIFE upstream fetch failed",
+        upstreamStatus: 429,
+      },
+    });
+    expect(mocks.fetchLiveFinlife).toHaveBeenCalledTimes(3);
   });
 
   it("marks fail-open mock data without presenting it as live", async () => {

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
@@ -388,12 +389,24 @@ export function syncAttemptFilePath(kind) {
   return path.join(process.cwd(), ".data", `finlife_${kind}_sync_attempt.json`);
 }
 
+function writeJsonAtomically(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.tmp-${process.pid}-${crypto.randomUUID()}`;
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(value), "utf-8");
+    fs.renameSync(tempPath, filePath);
+  } finally {
+    try {
+      fs.rmSync(tempPath, { force: true });
+    } catch {
+      // Cleanup is best-effort and must not mask the write/rename result.
+    }
+  }
+}
+
 export function writeSyncAttempt(kind, attempt) {
   const filePath = syncAttemptFilePath(kind);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(attempt), "utf-8");
-  fs.renameSync(tmp, filePath);
+  writeJsonAtomically(filePath, attempt);
 }
 
 export function readSyncAttempt(kind) {
@@ -415,13 +428,10 @@ export function clearSyncAttempt(kind) {
 
 export function writeSnapshot(kind, payload) {
   const filePath = snapshotFilePath(kind);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   if (payload && Array.isArray(payload.items)) {
     for (const item of payload.items) ensureProductBest(item);
   }
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(payload), "utf-8");
-  fs.renameSync(tmp, filePath);
+  writeJsonAtomically(filePath, payload);
 }
 
 export function readSnapshot(kind) {

@@ -101,7 +101,13 @@ function parseUpstreamError(input: unknown): {
   retryAfterSeconds?: number;
   timeout: boolean;
 } {
-  const parsed = input as { status?: unknown; retryAfterSeconds?: unknown; message?: unknown; name?: unknown } | undefined;
+  const parsed = input as {
+    status?: unknown;
+    retryAfterSeconds?: unknown;
+    timeout?: unknown;
+    message?: unknown;
+    name?: unknown;
+  } | undefined;
   const statusRaw = typeof parsed?.status === "number" ? parsed.status : Number(parsed?.status);
   const message = typeof parsed?.message === "string" ? parsed.message : "";
   const messageStatus = message.match(/\bHTTP\s+(\d{3})\b/i);
@@ -114,7 +120,9 @@ function parseUpstreamError(input: unknown): {
     ? parsed.retryAfterSeconds
     : Number(parsed?.retryAfterSeconds);
   const retryAfterSeconds = Number.isFinite(retryAfterRaw) ? Math.max(1, Math.trunc(retryAfterRaw)) : undefined;
-  const timeout = parsed?.name === "AbortError" || /timeout|timed out|etimedout|econnreset/i.test(message);
+  const timeout = parsed?.timeout === true
+    || parsed?.name === "AbortError"
+    || /timeout|timed out|etimedout|econnreset/i.test(message);
   return { status, retryAfterSeconds, timeout };
 }
 

@@ -57,6 +57,7 @@ const RAW_FIELD_MAP: Record<string, FieldDescriptor> = {
   intr_rate: { label: "기본금리(연)", formatter: formatPercent },
   intr_rate2: { label: "최고금리(연, 우대포함)", formatter: formatPercent },
   intr_rate_type_nm: { label: "이자 방식", help: "단리/복리 등 이자 계산 방식입니다." },
+  rsrv_type_nm: { label: "적립 유형", help: "정액적립식/자유적립식 등 납입 방식입니다." },
   lend_rate_min: { label: "최저금리(연)", formatter: formatPercent },
   lend_rate_max: { label: "최고금리(연)", formatter: formatPercent },
   crdt_grad_avg: { label: "평균금리(연)", formatter: formatPercent },

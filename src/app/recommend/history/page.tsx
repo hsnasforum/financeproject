@@ -1,4 +1,7 @@
 import { RecommendHistoryClient } from "@/components/RecommendHistoryClient";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/recommend/history"];
 
 type HistoryPageSearchParams = {
   open?: string;

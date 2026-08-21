@@ -12,9 +12,19 @@
 ## Degrade 규칙
 - `429/5xx/timeout` 감지 시 source 단위 cooldown을 설정한다.
 - cooldown 기간에는 LIVE 재호출을 생략하고 `CACHE` 또는 `REPLAY`를 우선 사용한다.
+- 호출자가 전달한 `AbortSignal` 취소는 provider timeout이나 장애로 보지 않으며 cooldown을 열지 않는다.
 - API 키 미설정:
   - REPLAY 가능: `ok: true`, `meta.fallback.mode = "REPLAY"`
   - REPLAY 불가: `ok: false`, `error.code = "CONFIG_MISSING"`
+
+## 외부 호출 deadline 계약
+
+- 공통 `fetchExternal.timeoutMs`는 attempt별 시간이 아니라 fetch, 응답 본문 읽기, retry, `Retry-After`/backoff를 모두 포함하는 전체 deadline이다.
+- deadline이 끝나면 `ExternalApiError.timeout=true`, 호출자 취소면 `aborted=true`와 `timeout=false`로 구분한다.
+- 이미 취소된 signal은 network 호출 전에 실패하며, retry 대기 중 취소도 다음 attempt를 시작하지 않는다.
+- HTTP status와 `Retry-After`는 오류 본문 파싱보다 먼저 보존한다. 오류 본문이 잘못된 JSON이어도 status/cooldown 판단을 잃지 않는다.
+- `throwOnHttpError=false` 호출자는 기존처럼 첫 non-2xx 응답을 직접 판정한다. 이 모드에서 공통 wrapper가 provider 호출 횟수를 임의로 늘리지 않는다.
+- FINLIFE live product/company와 OpenDART JSON 호출은 같은 deadline 경계를 사용한다. FINLIFE의 HTTP 200 비-JSON 응답은 정상 상품 데이터로 수용하지 않고 기존 fallback 경계로 전달한다.
 
 ## meta.fallback 계약
 - 주요 API 응답의 `meta`에는 아래 필드를 포함한다.

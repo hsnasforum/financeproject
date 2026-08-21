@@ -1,4 +1,8 @@
 import { type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
+import {
+  parseProductDetailTerm,
+  productDetailOptionKeyAtIndex,
+} from "@/lib/finlife/productDetailOption";
 import { type SelectedOption, type UserRecommendProfile } from "./types";
 
 function asFiniteNumber(value: unknown): number | null {
@@ -11,10 +15,7 @@ function asFiniteNumber(value: unknown): number | null {
 }
 
 function parseTermMonths(value: string | undefined): number | null {
-  if (!value) return null;
-  const n = Number(value.replace(/[^0-9.-]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.trunc(n);
+  return parseProductDetailTerm(value);
 }
 
 function pickRate(option: NormalizedOption, mode: UserRecommendProfile["rateMode"]): {
@@ -71,20 +72,26 @@ export function selectBestOption(product: NormalizedProduct, profile: UserRecomm
 
   const prefTerm = profile.preferredTerm;
   const ranked = product.options
-    .map((option) => {
+    .map((option, optionIndex) => {
       const termMonths = parseTermMonths(option.save_trm);
       const termDiff = termMonths === null ? Number.POSITIVE_INFINITY : Math.abs(termMonths - prefTerm);
       const ratePicked = pickRate(option, profile.rateMode);
+      const detailOptionKey = productDetailOptionKeyAtIndex(product.options, optionIndex) ?? "";
       return {
         option,
+        detailOptionKey,
+        isComplete: termMonths !== null && ratePicked.source !== "none" && Number.isFinite(ratePicked.appliedRate),
         termMonths,
         termDiff,
         ...ratePicked,
       };
     })
     .sort((a, b) => {
+      if (a.isComplete !== b.isComplete) return a.isComplete ? -1 : 1;
       if (a.termDiff !== b.termDiff) return a.termDiff - b.termDiff;
       if (a.appliedRate !== b.appliedRate) return b.appliedRate - a.appliedRate;
+      if (a.detailOptionKey < b.detailOptionKey) return -1;
+      if (a.detailOptionKey > b.detailOptionKey) return 1;
       return 0;
     });
 
@@ -109,6 +116,7 @@ export function selectBestOption(product: NormalizedProduct, profile: UserRecomm
   }
 
   return {
+    detailOptionKey: best.detailOptionKey || undefined,
     saveTrm: best.option.save_trm ?? null,
     termMonths: best.termMonths,
     appliedRate: best.appliedRate,

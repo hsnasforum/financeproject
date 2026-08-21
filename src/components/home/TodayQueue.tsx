@@ -54,7 +54,7 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
                   </span>
                   {actionSummary.quickRuleLabel ? (
                     <span className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
-                      quick rules · {actionSummary.quickRuleLabel}
+                      빠른 점검 · {actionSummary.quickRuleLabel}
                     </span>
                   ) : null}
                 </div>
@@ -103,7 +103,7 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
                 className="bg-hero-gradient-surface relative overflow-hidden rounded-[2rem] p-10 text-white"
               >
                 <div aria-hidden className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-[#00d9a3]/20 blur-3xl" />
-                <p className="relative text-sm font-black uppercase tracking-widest text-[#00d9a3]">Daily Action</p>
+                <p className="relative text-sm font-black uppercase tracking-widest text-[#00d9a3]">오늘의 실행</p>
                 <h2 className="relative mt-6 text-3xl font-black leading-tight tracking-tight text-white">
                   내 상황에 필요한 흐름만
                   <br />
@@ -132,7 +132,7 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
                     <p className="text-sm font-black tracking-tight text-navy group-hover:text-primary transition-colors">{panel.title}</p>
                     <p className="mt-4 text-xs font-medium leading-relaxed text-muted">{panel.description}</p>
                     <div className="mt-10 flex justify-end">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-primary transition-colors">Start →</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-primary transition-colors">시작하기 →</span>
                     </div>
                   </Link>
                 ))}

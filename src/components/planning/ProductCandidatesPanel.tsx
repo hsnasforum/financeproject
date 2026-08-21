@@ -5,7 +5,7 @@ import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
 import { BodyEmptyState, BodyTableFrame, bodyChoiceRowClassName, bodyCompactFieldClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
-import { type NormalizedProduct } from "@/lib/finlife/types";
+import { type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
 import { formatKrw, formatPct } from "@/lib/planning/i18n/format";
 import { buildCandidatesEvidence } from "@/lib/planning/candidates/buildCandidatesEvidence";
 import {
@@ -66,14 +66,17 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
     deposit: "",
     saving: "",
   });
-  const [drawerProduct, setDrawerProduct] = useState<NormalizedProduct | null>(null);
+  const [drawerSelection, setDrawerSelection] = useState<{
+    product: NormalizedProduct;
+    option: NormalizedOption;
+  } | null>(null);
   const [pageByKind, setPageByKind] = useState<Record<CandidateKind, number>>({
     deposit: 1,
     saving: 1,
   });
 
   useEffect(() => {
-    setDrawerProduct(null);
+    setDrawerSelection(null);
   }, [tab]);
 
   useEffect(() => {
@@ -255,9 +258,13 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
             type="checkbox"
             onChange={(event) => setUsePrimeRate(event.target.checked)}
           />
-          최고금리 우선 사용 (`intr_rate2`)
+          최고금리 기준으로만 계산 (`intr_rate2`, 없으면 제외)
         </label>
       </div>
+
+      <p className="text-xs text-slate-500">
+        체크를 해제하면 기본금리(`intr_rate`)가 있는 상품만 계산합니다. 선택한 금리·기간·이자 방식 정보가 없으면 후보에서 제외됩니다.
+      </p>
 
       {isLoading ? <p className="text-sm text-slate-600">상품 후보를 불러오는 중입니다.</p> : null}
       {!isLoading && error ? <p className="text-sm text-rose-700">{error}</p> : null}
@@ -296,7 +303,7 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
                       <button
                         className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-surface-muted"
                         type="button"
-                        onClick={() => setDrawerProduct(row.product)}
+                        onClick={() => setDrawerSelection({ product: row.product, option: row.selectedOption })}
                       >
                         자세히
                       </button>
@@ -337,7 +344,7 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
       ) : null}
 
       <p className="text-xs text-slate-600">
-        세후 이자/만기금액은 단순 추정치(세율/금리/복리 여부는 설정값). 실제 조건은 상품 약관/우대조건에 따라 달라집니다.
+        세후 이자와 만기금액은 추정치입니다. 세율·금리 기준은 설정값이며, 단리·복리는 상품 옵션 공시값을 사용합니다. 실제 결과는 상품 약관과 우대조건에 따라 달라질 수 있습니다.
       </p>
 
       <details className="rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-xs text-slate-700">
@@ -366,15 +373,16 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
         </div>
       </details>
 
-      {drawerProduct ? (
+      {drawerSelection ? (
         <ProductDetailDrawer
           amountWonDefault={tab === "deposit" ? depositPrincipalWon : savingMonthlyPaymentWon}
+          initialOption={drawerSelection.option}
           kind={tab}
           onOpenChange={(open) => {
-            if (!open) setDrawerProduct(null);
+            if (!open) setDrawerSelection(null);
           }}
-          open={drawerProduct !== null}
-          product={drawerProduct}
+          open={drawerSelection !== null}
+          product={drawerSelection.product}
         />
       ) : null}
     </Card>

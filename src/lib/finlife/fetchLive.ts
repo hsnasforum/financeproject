@@ -1,4 +1,5 @@
 import { type FinlifeKind, type FinlifeParams } from "@/lib/finlife/types";
+import { ExternalApiError, fetchExternal, type FetchExternalResult } from "@/lib/http/fetchExternal";
 
 const ENDPOINTS: Record<FinlifeKind, string> = {
   deposit: "depositProductsSearch.json",
@@ -12,6 +13,17 @@ const ENDPOINTS: Record<FinlifeKind, string> = {
 function maskKey(value: string): string {
   if (value.length <= 4) return "****";
   return `${value.slice(0, 2)}****${value.slice(-2)}`;
+}
+
+function requireJsonBody(fetched: FetchExternalResult): unknown {
+  if (fetched.kind === "json") return fetched.body;
+  throw new ExternalApiError(
+    { code: "UPSTREAM", message: "FINLIFE 응답 형식이 올바르지 않습니다." },
+    {
+      status: fetched.status,
+      retryAfterSeconds: fetched.retryAfterSeconds,
+    },
+  );
 }
 
 export async function fetchLiveFinlife(kind: FinlifeKind, params: Required<FinlifeParams>): Promise<unknown> {
@@ -39,19 +51,18 @@ export async function fetchLiveFinlifeDetailed(
 
   try {
     const startedAt = Date.now();
-    const res = await fetch(url, {
+    const fetched = await fetchExternal(url.toString(), {
       headers: { Accept: "application/json" },
       cache: "no-store",
+      retries: 0,
+      sourceKey: "finlife",
+      timeoutMs: 10_000,
     });
     const elapsedMs = Math.max(0, Date.now() - startedAt);
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
     return {
-      raw: await res.json(),
-      status: res.status,
+      raw: requireJsonBody(fetched),
+      status: fetched.status,
       elapsedMs,
       cacheKey: safeUrl.toString(),
     };
@@ -82,16 +93,14 @@ export async function fetchLiveFinlifeCompany(params: Required<FinlifeParams>): 
   url.searchParams.set("pageNo", String(params.pageNo));
 
   try {
-    const res = await fetch(url, {
+    const fetched = await fetchExternal(url.toString(), {
       headers: { Accept: "application/json" },
       cache: "no-store",
+      retries: 0,
+      sourceKey: "finlife-company",
+      timeoutMs: 10_000,
     });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    return await res.json();
+    return requireJsonBody(fetched);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[finlife-live-company] request failed", {

@@ -28,7 +28,7 @@ export function LandingReportPreview({
       <Container className="px-4 sm:px-6 lg:px-8">
         <div className="grid gap-8 xl:grid-cols-[1fr_0.78fr]">
           <div className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-[var(--shadow-card)] md:p-10">
-            <p className="text-sm font-black uppercase tracking-[0.2em] text-primary">Preview</p>
+            <p className="text-sm font-black uppercase tracking-[0.2em] text-primary">미리보기</p>
             <h2 className="mt-5 text-3xl font-black tracking-tight text-navy md:text-4xl">{preview.headline}</h2>
             <p className="mt-4 max-w-2xl text-sm font-medium leading-relaxed text-muted">{preview.description}</p>
 
@@ -66,7 +66,7 @@ export function LandingReportPreview({
           </div>
 
           <aside className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-[var(--shadow-card)] md:p-10">
-            <p className="text-sm font-black uppercase tracking-[0.2em] text-primary">Data Notice</p>
+            <p className="text-sm font-black uppercase tracking-[0.2em] text-primary">데이터 안내</p>
             <h3 className="mt-5 text-2xl font-black tracking-tight text-navy">출처와 기준 시점을 같이 봅니다</h3>
             <ul className="mt-6 space-y-4 text-sm font-medium leading-relaxed text-muted">
               {trustNotes.map((note) => (

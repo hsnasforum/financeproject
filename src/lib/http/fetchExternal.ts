@@ -9,6 +9,7 @@ type FetchRetryContext = {
 };
 
 export type FetchExternalOptions = Omit<RequestInit, "signal"> & {
+  /** fetch, response body read, retry, and backoff를 모두 포함하는 전체 제한 시간 */
   timeoutMs?: number;
   retries?: number;
   sourceKey?: string;
@@ -36,7 +37,9 @@ export class ExternalApiError extends Error {
 
   readonly retryAfterSeconds?: number;
 
-  readonly timeout?: boolean;
+  readonly timeout: boolean;
+
+  readonly aborted: boolean;
 
   constructor(
     detail: PublicApiError,
@@ -44,13 +47,16 @@ export class ExternalApiError extends Error {
       status?: number;
       retryAfterSeconds?: number;
       timeout?: boolean;
+      aborted?: boolean;
+      cause?: unknown;
     },
   ) {
-    super(detail.message);
+    super(detail.message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.detail = detail;
     this.status = options?.status;
     this.retryAfterSeconds = options?.retryAfterSeconds;
-    this.timeout = options?.timeout;
+    this.timeout = options?.timeout === true;
+    this.aborted = options?.aborted === true;
   }
 }
 
@@ -98,16 +104,22 @@ function parsePositiveInt(value: unknown, fallback: number, max: number): number
   return Math.min(max, clamped);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function backoffMs(attempt: number, retryAfterSeconds?: number): number {
   if (Number.isFinite(retryAfterSeconds)) {
     const clamped = Math.max(0, Math.min(60, Math.trunc(retryAfterSeconds ?? 0)));
     return clamped * 1000;
   }
   return Math.min(10_000, 500 * 2 ** Math.max(0, attempt - 1));
+}
+
+function monotonicNowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+function deadlineExpired(deadlineAt: number): boolean {
+  return monotonicNowMs() >= deadlineAt;
 }
 
 function parseResponseBody(text: string, contentType: string): { kind: "json" | "xml" | "text"; body: unknown } {
@@ -155,6 +167,132 @@ function externalAbortReason(signal: AbortSignal | null | undefined): unknown {
   return undefined;
 }
 
+type FetchControlFailureKind = "external-abort" | "timeout";
+
+class FetchControlFailure extends Error {
+  readonly kind: FetchControlFailureKind;
+
+  constructor(kind: FetchControlFailureKind) {
+    super(kind);
+    this.kind = kind;
+  }
+}
+
+function toExternalFailure(
+  kind: FetchControlFailureKind,
+  metadata: { status?: number; retryAfterSeconds?: number } = {},
+  cause?: unknown,
+): ExternalApiError {
+  return new ExternalApiError(
+    { code: "UPSTREAM", message: "외부 API 호출에 실패했습니다." },
+    {
+      ...metadata,
+      aborted: kind === "external-abort",
+      timeout: kind === "timeout",
+      cause,
+    },
+  );
+}
+
+async function releaseResponseBody(
+  response: Response,
+  control: { deadlineAt: number; signal?: AbortSignal | null },
+): Promise<void> {
+  const body = response.body;
+  if (!body) return;
+  if (control.signal?.aborted) {
+    throw new FetchControlFailure("external-abort");
+  }
+
+  const remainingMs = Math.max(0, control.deadlineAt - monotonicNowMs());
+  if (remainingMs <= 0) {
+    throw new FetchControlFailure("timeout");
+  }
+
+  const cancellation = Promise.resolve()
+    .then(() => body.cancel())
+    .catch(() => undefined);
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      control.signal?.removeEventListener("abort", onExternalAbort);
+      callback();
+    };
+    const onExternalAbort = () => {
+      finish(() => reject(new FetchControlFailure("external-abort")));
+    };
+    const timeoutId = setTimeout(() => {
+      finish(() => reject(new FetchControlFailure("timeout")));
+    }, remainingMs);
+
+    cancellation.then(() => finish(resolve));
+    control.signal?.addEventListener("abort", onExternalAbort, { once: true });
+    if (control.signal?.aborted) onExternalAbort();
+  });
+}
+
+function waitForRetry(input: {
+  delayMs: number;
+  deadlineAt: number;
+  signal?: AbortSignal | null;
+}): Promise<void> {
+  const { delayMs, deadlineAt, signal } = input;
+  if (signal?.aborted) {
+    return Promise.reject(new FetchControlFailure("external-abort"));
+  }
+
+  const remainingMs = Math.max(0, deadlineAt - monotonicNowMs());
+  if (remainingMs <= 0) {
+    return Promise.reject(new FetchControlFailure("timeout"));
+  }
+
+  const hitsDeadline = delayMs >= remainingMs;
+  const waitMs = Math.min(delayMs, remainingMs);
+
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal?.removeEventListener("abort", onExternalAbort);
+    const onExternalAbort = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(new FetchControlFailure("external-abort"));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      if (hitsDeadline) {
+        reject(new FetchControlFailure("timeout"));
+        return;
+      }
+      resolve();
+    }, waitMs);
+
+    signal?.addEventListener("abort", onExternalAbort, { once: true });
+    if (signal?.aborted) onExternalAbort();
+  });
+}
+
+async function waitForRetryOrThrow(input: {
+  delayMs: number;
+  deadlineAt: number;
+  signal?: AbortSignal | null;
+}): Promise<void> {
+  try {
+    await waitForRetry(input);
+  } catch (error) {
+    if (error instanceof FetchControlFailure) {
+      throw toExternalFailure(
+        error.kind,
+        {},
+        error.kind === "external-abort" ? externalAbortReason(input.signal) : error,
+      );
+    }
+    throw error;
+  }
+}
+
 export async function fetchExternal(
   url: string,
   optionsOrTimeout?: FetchExternalOptions | number,
@@ -173,34 +311,60 @@ export async function fetchExternal(
   void retryOn;
 
   const maxAttempts = retries + 1;
+  const deadlineAt = monotonicNowMs() + timeoutMs;
+
+  if (signal?.aborted) {
+    throw toExternalFailure("external-abort", {}, externalAbortReason(signal));
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const remainingMs = Math.max(0, deadlineAt - monotonicNowMs());
+    if (remainingMs <= 0) {
+      throw toExternalFailure("timeout");
+    }
+
     const controller = new AbortController();
-    let timedOut = false;
+    let controlFailure: FetchControlFailureKind | null = null;
+    let responseStatus: number | undefined;
+    let responseRetryAfterSeconds: number | undefined;
+    let responseWasHttpError = false;
+    const observedControlFailure = (): FetchControlFailureKind | null => {
+      return controlFailure ?? (deadlineExpired(deadlineAt) ? "timeout" : null);
+    };
+    const throwIfControlFailed = () => {
+      const failure = observedControlFailure();
+      if (failure) throw new FetchControlFailure(failure);
+    };
     const timeoutId = setTimeout(() => {
-      timedOut = true;
+      if (controlFailure) return;
+      controlFailure = "timeout";
       controller.abort();
-    }, timeoutMs);
+    }, remainingMs);
 
     const externalAbortHandler = () => {
+      if (controlFailure) return;
+      controlFailure = deadlineExpired(deadlineAt) ? "timeout" : "external-abort";
       controller.abort(externalAbortReason(signal));
     };
     signal?.addEventListener("abort", externalAbortHandler, { once: true });
+    if (signal?.aborted) externalAbortHandler();
 
     try {
+      throwIfControlFailed();
       const response = await fetch(url, {
         ...requestInit,
         signal: controller.signal,
         cache: requestInit.cache ?? "no-store",
       });
+      throwIfControlFailed();
 
-      const text = await response.text();
-      const contentType = response.headers.get("content-type") ?? "";
-      const parsed = parseResponseBody(text, contentType);
       const retryAfterSeconds = parseRetryAfterSeconds(response.headers.get("retry-after"));
+      responseStatus = response.status;
+      responseRetryAfterSeconds = retryAfterSeconds;
+      responseWasHttpError = !response.ok;
 
-      if (!response.ok && throwOnHttpError) {
-        const retryable = attempt < maxAttempts && resolveShouldRetry(
+      if (!response.ok) {
+        const retryable = throwOnHttpError && attempt < maxAttempts && resolveShouldRetry(
           options,
           {
             status: response.status,
@@ -212,23 +376,53 @@ export async function fetchExternal(
         );
 
         if (retryable) {
-          await sleep(backoffMs(attempt, response.status === 429 ? retryAfterSeconds : undefined));
+          await releaseResponseBody(response, { deadlineAt, signal });
+          throwIfControlFailed();
+          await waitForRetry({
+            delayMs: backoffMs(attempt, response.status === 429 ? retryAfterSeconds : undefined),
+            deadlineAt,
+            signal,
+          });
           continue;
         }
 
-        console.error("[external] upstream status", {
-          sourceKey,
-          status: response.status,
-          url: maskUrl(url),
-        });
-        throw new ExternalApiError(
-          { code: "UPSTREAM", message: "외부 API 호출에 실패했습니다." },
-          {
+        if (throwOnHttpError) {
+          await releaseResponseBody(response, { deadlineAt, signal });
+          throwIfControlFailed();
+          console.error("[external] upstream status", {
+            sourceKey,
+            status: response.status,
+            url: maskUrl(url),
+          });
+          throw new ExternalApiError(
+            { code: "UPSTREAM", message: "외부 API 호출에 실패했습니다." },
+            {
+              status: response.status,
+              retryAfterSeconds,
+            },
+          );
+        }
+      }
+
+      const text = await response.text();
+      throwIfControlFailed();
+      const contentType = response.headers.get("content-type") ?? "";
+      let parsed: ReturnType<typeof parseResponseBody>;
+      try {
+        parsed = parseResponseBody(text, contentType);
+      } catch (error) {
+        if (!response.ok && error instanceof ExternalApiError) {
+          parsed = { kind: "text", body: text };
+        } else if (error instanceof ExternalApiError) {
+          throw new ExternalApiError(error.detail, {
             status: response.status,
             retryAfterSeconds,
-          },
-        );
+          });
+        } else {
+          throw error;
+        }
       }
+      throwIfControlFailed();
 
       return {
         ok: response.ok,
@@ -242,9 +436,43 @@ export async function fetchExternal(
         attempts: attempt,
       };
     } catch (error) {
+      const failureKind = observedControlFailure()
+        ?? (error instanceof FetchControlFailure ? error.kind : null);
+      if (failureKind === "external-abort") {
+        throw toExternalFailure("external-abort", {
+          status: responseStatus,
+          retryAfterSeconds: responseRetryAfterSeconds,
+        }, externalAbortReason(signal));
+      }
+
+      const timeout = failureKind === "timeout"
+        || (error instanceof Error && error.name === "AbortError");
+      if (timeout) {
+        console.error("[external] fetch failed", {
+          sourceKey,
+          url: maskUrl(url),
+          reason: error instanceof Error ? error.message : "unknown",
+          timeout: true,
+        });
+        throw toExternalFailure("timeout", {
+          status: responseStatus,
+          retryAfterSeconds: responseRetryAfterSeconds,
+        }, error);
+      }
+
       if (error instanceof ExternalApiError) throw error;
 
-      const timeout = timedOut || (error instanceof Error && error.name === "AbortError");
+      if (responseWasHttpError && !throwOnHttpError) {
+        throw new ExternalApiError(
+          { code: "UPSTREAM", message: "외부 API 응답 본문을 읽지 못했습니다." },
+          {
+            status: responseStatus,
+            retryAfterSeconds: responseRetryAfterSeconds,
+            cause: error,
+          },
+        );
+      }
+
       const retryable = attempt < maxAttempts && resolveShouldRetry(
         options,
         {
@@ -252,10 +480,10 @@ export async function fetchExternal(
           attempt,
           maxAttempts,
         },
-        timeout,
+        false,
       );
       if (retryable) {
-        await sleep(backoffMs(attempt));
+        await waitForRetryOrThrow({ delayMs: backoffMs(attempt), deadlineAt, signal });
         continue;
       }
 
@@ -263,11 +491,15 @@ export async function fetchExternal(
         sourceKey,
         url: maskUrl(url),
         reason: error instanceof Error ? error.message : "unknown",
-        timeout,
+        timeout: false,
       });
       throw new ExternalApiError(
         { code: "UPSTREAM", message: "외부 API 호출에 실패했습니다." },
-        { timeout },
+        {
+          aborted: false,
+          status: responseStatus,
+          retryAfterSeconds: responseRetryAfterSeconds,
+        },
       );
     } finally {
       clearTimeout(timeoutId);
@@ -278,7 +510,7 @@ export async function fetchExternal(
   throw new ExternalApiError({
     code: "UPSTREAM",
     message: "외부 API 호출에 실패했습니다.",
-  });
+  }, { timeout: deadlineExpired(deadlineAt) });
 }
 
 function maskUrl(input: string): string {

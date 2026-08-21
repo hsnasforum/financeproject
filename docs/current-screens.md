@@ -164,6 +164,7 @@
 - `/api/dev/*`는 production에서 공통 차단(404)된다.
 - 현재 코드에는 production 예외가 없다. `/api/dev/unlock`도 development local-ops에서만 사용하며 packaged production에서는 404를 유지한다.
 - exact `POST /api/feedback`은 public 피드백 접수 경로이며 same-origin 요청만 허용하고 성공 시 `{ ok: true }`만 반환한다.
+- standalone `/api/diagnostics/snapshot` GET은 공개·로컬 공통으로 제공하지 않는다. `/feedback`은 이 route를 fetch·cache하거나 진단 번들을 다운로드하지 않으며, `POST /api/feedback`은 client-supplied snapshot과 `x-page-url`·`x-local-state-summary`를 신뢰하지 않고 서버 내부의 최소 진단 정보만 선택적으로 저장한다. 진단 생성 실패는 피드백 본문 저장을 막지 않으며, 피드백 관리 API의 권한과 admin DTO 경계는 그대로 유지한다.
 - `/api/feedback/list`, `/api/feedback/recent`, `/api/feedback/[id]`는 피드백 관리 API다. development 로컬 직접 연결과 Dev unlock capability를 요구하며 production에서는 404를 반환한다.
 - `/api/gov24/sync`와 `/api/sync/smoke`는 HTTP job 실행을 지원하지 않는다. development/test는 로컬 운영 명령 안내와 함께 403, production은 404를 반환하며 실제 실행은 문서화된 CLI/scheduler 경계만 사용한다.
 - `/api/auth/*`는 Auth.js 로그인/콜백/session route로 취급한다. 이 phase의 provider는 GitHub/Google OAuth만 활성화하며, Credentials/Email provider는 후속 phase로 둔다. `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` 또는 `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` 묶음이 없으면 해당 provider는 비활성화된다. Prisma adapter는 Auth.js 테이블 마이그레이션 후 `AUTH_PRISMA_ADAPTER_ENABLED=true`에서만 활성화한다.

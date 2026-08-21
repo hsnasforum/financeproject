@@ -1,4 +1,6 @@
-import type { NormalizedProduct } from "@/lib/finlife/types";
+import type { NormalizedOption, NormalizedProduct } from "@/lib/finlife/types";
+import { FINLIFE_FIELD_CONFIG } from "@/lib/finlife/fieldConfig";
+import { buildProductDetailOptionRows } from "@/lib/finlife/productDetailOption";
 import type {
   CandidatePool,
   CandidateSource,
@@ -19,6 +21,7 @@ export type RecommendItem = {
   productName: string;
   finalScore: number;
   selectedOption: {
+    detailOptionKey?: string;
     saveTrm: string | null;
     termMonths: number | null;
     appliedRate: number;
@@ -486,24 +489,14 @@ function preferredOptionIndex(
   return 0;
 }
 
-function prioritizeRecommendedOption(
-  options: Array<{ save_trm?: string; intr_rate?: number | null; intr_rate2?: number | null; raw: Record<string, unknown> }>,
-  selected: RecommendItem["selectedOption"],
-): Array<{ save_trm?: string; intr_rate?: number | null; intr_rate2?: number | null; raw: Record<string, unknown> }> {
-  const index = preferredOptionIndex(options, selected);
-  if (index <= 0) return options;
-  return [options[index], ...options.slice(0, index), ...options.slice(index + 1)];
-}
-
 export function buildDetailProduct(item: RecommendItem): NormalizedProduct {
   if (item.detailProduct) {
-    const mappedOptions = (item.detailProduct.options ?? []).map((option) => ({
+    const options = (item.detailProduct.options ?? []).map((option) => ({
       save_trm: option.save_trm,
       intr_rate: option.intr_rate ?? null,
       intr_rate2: option.intr_rate2 ?? null,
       raw: option.raw ?? {},
     }));
-    const options = prioritizeRecommendedOption(mappedOptions, item.selectedOption);
 
     return {
       fin_prdt_cd: item.detailProduct.fin_prdt_cd,
@@ -519,10 +512,13 @@ export function buildDetailProduct(item: RecommendItem): NormalizedProduct {
           }
         : undefined,
       raw: item.detailProduct.raw ?? {},
+      sourceUpdatedAt: item.detailProduct.sourceUpdatedAt,
     };
   }
 
-  const fallbackRate = Number.isFinite(item.selectedOption.appliedRate) ? item.selectedOption.appliedRate : 0;
+  const fallbackRate = item.selectedOption.rateSource !== "none" && Number.isFinite(item.selectedOption.appliedRate)
+    ? item.selectedOption.appliedRate
+    : Number.NaN;
   const baseRate = normalizeRate(item.selectedOption.baseRate, fallbackRate);
   const maxRate = normalizeRate(item.selectedOption.maxRate, fallbackRate);
   const saveTerm = optionTerm(item.selectedOption.saveTrm, item.selectedOption.termMonths);
@@ -546,4 +542,20 @@ export function buildDetailProduct(item: RecommendItem): NormalizedProduct {
     },
     raw: {},
   };
+}
+
+export function buildDetailInitialOption(item: RecommendItem): NormalizedOption | null {
+  const product = buildDetailProduct(item);
+  if (product.options.length === 0) return null;
+  if (item.selectedOption.detailOptionKey) {
+    const keyedRows = buildProductDetailOptionRows({
+      kind: item.kind,
+      options: product.options,
+      optionFields: FINLIFE_FIELD_CONFIG[item.kind]?.optionFields,
+    });
+    const keyed = keyedRows.find((row) => row.key === item.selectedOption.detailOptionKey);
+    if (keyed) return keyed.option;
+  }
+  const index = preferredOptionIndex(product.options, item.selectedOption);
+  return product.options[index >= 0 ? index : 0] ?? null;
 }

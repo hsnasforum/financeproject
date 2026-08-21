@@ -46,6 +46,7 @@ export type NormalizedProduct = {
     intr_rate?: number | null;
   };
   raw: Record<string, unknown>;
+  sourceUpdatedAt?: string;
 };
 
 export type FinlifeSourceResult = {

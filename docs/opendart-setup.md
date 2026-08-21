@@ -58,6 +58,9 @@ pnpm dart:ensure-corpindex
   - 키가 등록되지 않았거나 유효하지 않음
 - `RATE_LIMIT` (`020`)
   - 요청 제한 초과. 잠시 후 재시도
+- OpenDART HTTP 호출은 fetch, 본문 읽기, retry/backoff를 포함한 전체 deadline을 사용합니다.
+- HTTP 오류는 본문 파싱보다 먼저 `upstreamStatus`와 `retryAfterSeconds`를 보존하므로, 오류 본문이 잘못된 JSON이어도 요청 제한과 제공처 장애를 구분할 수 있습니다.
+- 호출자 취소는 `aborted=true`, deadline 초과는 `timeout=true`로 구분하며 호출자 취소를 제공처 장애로 집계하지 않습니다.
 
 추가 매핑:
 

@@ -143,6 +143,7 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMet
         onOpenChange={setOpen}
         kind={kind}
         product={row.product}
+        initialOption={row.option}
         amountWonDefault={amountWonDefault}
       />
     </>

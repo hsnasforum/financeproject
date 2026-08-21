@@ -29,19 +29,23 @@
   - 기타: `Button`, `Card`, `Badge`, `SegmentedTabs` 등 표준 컴포넌트를 우선 사용합니다.
 
 ## 3. Design Tokens (기본 테마)
+- **SSOT**: 실제 semantic token 값은 [`src/app/globals.css`](../src/app/globals.css)의 `:root`가 소유합니다. 같은 파일의 `@theme inline`은 `bg-primary`, `text-primary-foreground`, `ring-focus-ring` 같은 Tailwind alias를 연결하며 별도 값 owner가 아닙니다. 문서와 runtime이 다르면 runtime을 우선하고 token 변경과 문서 갱신을 같은 change에서 처리합니다.
 - **Color Palette**:
-  - `Primary`: `#059669` (Emerald 600) - 최고금리, 핵심 수치, 주요 액션 강조에 통일하여 사용
-  - `Background`: `#f8fafc` (Slate 50) 바탕 / `Surface`: `#ffffff` (White)
-  - `Text`: `Foreground` (`#0f172a`), `Secondary` (`#475569`), `Muted` (`#94a3b8`)
+  - `Primary`: `#1e3a8a` (Trust Blue) / `Primary Hover`: `#1d4ed8` - 선택, 최고금리, 핵심 수치, 주요 CTA에 사용
+  - `Focus Ring`: `#2563eb` - 키보드 focus indicator에 사용하며 action hover와 역할을 분리
+  - `Background`: `#f5f7fa` (Soft Gray) / `Surface`: `#ffffff` (White)
+  - `Text`: `Foreground` (`#0f172a`), `Muted` (`#64748b`) / `Border`: `#e2e8f0`
+  - `Accent`: `#00d9a3` (Electric Mint) / `Success`: `#10b981` - accent와 성공 상태는 primary 선택·CTA와 구분
+  - `Warning`: `#f59e0b` / `Danger`: `#ef4444` - 위험도와 상태 의미에만 사용
 - **Background Rules**:
-  - 전역 배경은 `Slate 50` 계열의 단색 또는 매우 약한 gradient까지만 허용합니다.
+  - 전역 배경은 `background` token 계열의 단색 또는 매우 약한 gradient까지만 허용합니다.
   - 바둑판, 격자, 노트지, 체크 패턴, 반복 텍스처 배경은 사용하지 않습니다.
-  - 시각적 리듬은 배경 장식이 아니라 카드 깊이, 타이포그래피, 여백, Emerald/Slate 강조, 작은 시각화로 해결합니다.
-- **Typography**: 시스템 폰트(geist-sans 계열) 기반으로 자신감 있고 읽기 쉬운 텍스트 구성
+  - 시각적 리듬은 배경 장식이 아니라 카드 깊이, 타이포그래피, 여백, Trust Blue primary와 semantic status 강조, 작은 시각화로 해결합니다.
+- **Typography**: `:root`의 `--font-geist-sans`가 소유하는 Pretendard-first 시스템 font chain을 사용합니다. `@theme inline`의 `--font-sans`는 이 값을 연결하는 alias입니다.
 - **Spacing & Layout**: 답답하고 촘촘한 레이아웃을 피하고, 넉넉하고 정돈된 여백(Spacing scale) 리듬 유지
 - **Radius & Shadow**:
-  - **Base Radius**: `rounded-[2rem]` (32px) - 대형 카드, 모달, 컨테이너용
-  - **Small Radius**: `rounded-xl` (12px) - 버튼(대), 스켈레톤, 리스트 아이템용
+  - **Token Radius**: `--radius: 1.25rem`, `--radius-sm: 0.75rem` - Tailwind의 `rounded-2xl`, `rounded-xl` alias 기준
+  - **Large Surface Pattern**: `rounded-[2rem]` (32px) - 대형 카드, 모달, 컨테이너에서 명시적으로 사용하는 확장 pattern이며 base token 값과 구분
   - **Pill Radius**: `rounded-full` - 배지, 탭, 검색바, 소형 버튼용
   - 표면감과 그림자는 절제되고 일관된 규칙(기본 `--card-shadow`, 호버 시 `--card-shadow-hover`) 적용
 
@@ -64,13 +68,13 @@
 - **Calculators & Visualizations**:
   - **Ratio Progress Bar**: 수치의 임계값(Threshold)에 따라 색상(Emerald/Amber/Rose)을 가변적으로 적용하여 위험도를 직관적으로 표현합니다.
   - **Stacked Bar**: 전체(Total) 대비 각 항목의 점유율을 한 줄의 막대에 겹쳐서 표시하며, 하단에 범례(Legend)를 함께 제공하여 비전문가의 이해를 돕습니다. (`HousingAffordClient.tsx` 참고)
-  - **Score Bar**: 추천이나 매칭 결과의 점수를 0-100% 사이의 부드러운 애니메이션 바(`transition-all duration-1000`)로 표현합니다. 배경은 `slate-100`, 채움은 `emerald-500`을 기본으로 합니다. (`recommend/page.tsx` 참고)
+  - **Score Bar**: 추천이나 매칭 결과의 점수를 0-100% 사이의 부드러운 애니메이션 바(`transition-all duration-500`)로 표현합니다. 공용 구현은 `src/components/ui/CspSafeProgressBar.tsx`, 추천 결과 소비자는 `src/components/recommend/RecommendResultsPanel.tsx`이며 배경은 `surface-muted`, 채움은 `primary` token을 기본으로 합니다.
 - **Quality & Readiness Indicators**:
   - **Quality Badge**: 정보의 충실도나 준비 상태를 `HIGH`(Emerald), `MED`(Blue), `LOW`(Slate) 단계별로 구분하여 카드 상단에 배치합니다.
   - **Status Strip**: 여러 데이터 소스나 단계별 상태를 요약하여 보여줄 때, 상단에 슬림한 가로형 카드를 배치하여 현재 정합성을 한눈에 파악하게 합니다. (`Gov24Client.tsx`, `data-sources/page.tsx` 참고)
 - **공통 상태 분리**:
-  - **Hero Layout**: 홈 화면 상단은 `bg-slate-100` 배경과 `emerald-600` 기반의 강력한 Primary CTA를 배치하여 첫인상을 세련되게 전달합니다.
-  - **Portal Consistency**: 대시보드와 홈 포털 카드는 `bg-slate-50`과 `White` 서피스를 교차 활용하여 정보 밀도를 유지하면서도 쾌적한 여백을 제공합니다. 모든 진입 카드에는 `rounded-[2rem]` 또는 `rounded-[2.5rem]`을 적용합니다.
+  - **Hero Layout**: 홈 화면 상단은 `bg-surface-muted` 배경과 `bg-primary hover:bg-primary-hover` 기반의 강력한 Primary CTA를 배치하여 첫인상을 세련되게 전달합니다.
+  - **Portal Consistency**: 대시보드와 홈 포털 카드는 `bg-background`와 `bg-surface`를 교차 활용하여 정보 밀도를 유지하면서도 쾌적한 여백을 제공합니다. 모든 진입 카드에는 `rounded-[2rem]` 또는 `rounded-[2.5rem]`을 적용합니다.
 - **Background Discipline**:
   - 진입면, 탐색면, 리포트, 설정 화면을 포함한 사용자 표면 전반에서 체크패턴/격자 배경을 재도입하지 않습니다.
   - 페이지의 존재감은 배경 무늬가 아니라 제목, 요약 블록, 카드 위계, 상태 스트립, 소형 시각화로 만듭니다.

@@ -4,6 +4,9 @@ import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/products"];
 
 const CATALOG_PRESET_CARDS = [
   {

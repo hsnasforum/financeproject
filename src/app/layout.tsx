@@ -1,9 +1,9 @@
-import type { Metadata, Viewport } from "next";
+import type { Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { MobileBottomNav } from "@/components/ui/MobileBottomNav";
-import { uiTextKo } from "@/lib/uiText.ko";
+import { ROOT_PUBLIC_METADATA } from "@/lib/navigation/publicMetadata";
 import "./globals.css";
 
 const pretendard = localFont({
@@ -12,10 +12,7 @@ const pretendard = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: uiTextKo.app.title,
-  description: uiTextKo.app.description,
-};
+export const metadata = ROOT_PUBLIC_METADATA;
 
 export const viewport: Viewport = {
   width: "device-width",

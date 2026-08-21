@@ -97,4 +97,33 @@ describe("recommend unified vs legacy", () => {
     expect(legacy.items[0]?.selectedOption.saveTrm).toBe(unified.items[0]?.selectedOption.saveTrm);
     expect(Math.abs((legacy.items[0]?.finalScore ?? 0) - (unified.items[0]?.finalScore ?? 0))).toBeLessThanOrEqual(0.25);
   });
+
+  it("excludes candidates with missing term or rate instead of scoring preferred-term 0% fallbacks", () => {
+    const candidates: RecommendCandidate[] = [
+      ...legacyCandidates().slice(0, 1),
+      {
+        sourceId: "finlife",
+        product: {
+          fin_prdt_cd: "MISSING-RATE",
+          fin_prdt_nm: "금리 미확인 상품",
+          raw: {},
+          options: [{ save_trm: "12", intr_rate: null, intr_rate2: null, raw: {} }],
+        },
+      },
+      {
+        sourceId: "finlife",
+        product: {
+          fin_prdt_cd: "MISSING-TERM",
+          fin_prdt_nm: "기간 미확인 상품",
+          raw: {},
+          options: [{ intr_rate: 3, intr_rate2: 3.5, raw: {} }],
+        },
+      },
+    ];
+
+    const result = recommendCandidates({ kind: "deposit", profile: PROFILE, candidates });
+
+    expect(result.items.map((item) => item.finPrdtCd)).toEqual(["FIN-A"]);
+    expect(JSON.stringify(result.items)).not.toContain("0.00%");
+  });
 });

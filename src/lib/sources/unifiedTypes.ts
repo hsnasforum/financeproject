@@ -26,6 +26,19 @@ export type UnifiedProductView = {
     kdbMatched?: boolean;
   };
   options?: UnifiedOptionView[];
+  /** Internal-only recommendation projection. Public unified routes never request this field. */
+  recommendDetail?: {
+    finPrdtCd: string;
+    finCoNo?: string;
+    productRaw: Record<string, unknown>;
+    options: Array<{
+      saveTrm?: string;
+      intrRate: number | null;
+      intrRate2: number | null;
+      raw: Record<string, unknown>;
+    }>;
+    sourceUpdatedAt: string;
+  };
   match?: {
     method: string;
     confidence: number;
@@ -75,6 +88,8 @@ export type UnifiedProductsInput = {
   onlyNew: boolean;
   changedSince: string | null;
   includeTimestamps: boolean;
+  /** Server-internal flag used only by the recommendation pipeline. */
+  includeRecommendDetail?: boolean;
   limit: number;
   sort: "recent" | "name";
   qMode: QueryMode;

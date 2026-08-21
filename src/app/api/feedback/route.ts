@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import { addPublicFeedback, type FeedbackCategory } from "@/lib/feedback/feedbackStore";
 import { toFeedbackPublicReceipt } from "@/lib/feedback/feedbackContracts";
-import {
-  buildDiagnosticsSnapshot,
-  normalizeDiagnosticsSnapshot,
-  parseDiagnosticsPageInfoFromRequest,
-} from "@/lib/diagnostics/snapshot";
+import { buildDiagnosticsSnapshot } from "@/lib/diagnostics/snapshot";
 import { guardFeedbackMutationOrigin } from "./_lib/trustedOriginGuard";
 
 type FeedbackRequestBody = {
   category?: unknown;
   message?: unknown;
-  snapshot?: unknown;
 };
 
 const VALID_CATEGORIES: FeedbackCategory[] = ["bug", "improve", "question"];
@@ -25,6 +20,21 @@ function toHeaderString(value: string | null): string | null {
 
 function isValidCategory(value: string): value is FeedbackCategory {
   return VALID_CATEGORIES.includes(value as FeedbackCategory);
+}
+
+function buildFeedbackDiagnosticsSnapshot(request: Request) {
+  try {
+    return buildDiagnosticsSnapshot({
+      req: request,
+      pageInfo: {
+        url: request.url,
+        userAgent: request.headers.get("user-agent"),
+        localStateSummary: null,
+      },
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 export async function POST(request: Request) {
@@ -58,8 +68,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const pageInfo = parseDiagnosticsPageInfoFromRequest(request);
-    const snapshot = normalizeDiagnosticsSnapshot(body.snapshot) ?? buildDiagnosticsSnapshot({ req: request, pageInfo });
+    const snapshot = buildFeedbackDiagnosticsSnapshot(request);
     addPublicFeedback({
       category: categoryText,
       message,
@@ -67,7 +76,7 @@ export async function POST(request: Request) {
       userAgent: toHeaderString(request.headers.get("user-agent")),
       url: toHeaderString(request.headers.get("referer")),
       appVersion: toHeaderString(APP_VERSION),
-      snapshot,
+      ...(snapshot ? { snapshot } : {}),
     });
     return NextResponse.json(toFeedbackPublicReceipt());
   } catch {

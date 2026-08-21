@@ -83,22 +83,39 @@ export function unifiedProductsToRecommendCandidates(input: {
 
   for (const item of input.items) {
     if (item.sourceId !== "finlife" && item.sourceId !== "datago_kdb") continue;
-    const picked = pickUnifiedSelectedOption(item.options, input.profile);
+    const detailOptions: NormalizedOption[] = (item.recommendDetail?.options ?? []).map((option) => ({
+      save_trm: option.saveTrm,
+      intr_rate: normalizeRate(option.intrRate),
+      intr_rate2: normalizeRate(option.intrRate2),
+      raw: option.raw,
+    }));
+    const selectionOptions: UnifiedOption[] | undefined = detailOptions.length > 0
+      ? item.recommendDetail?.options.map((option) => ({
+          sourceId: "finlife",
+          termMonths: parseTermMonths(option.saveTrm),
+          saveTrm: option.saveTrm,
+          intrRate: normalizeRate(option.intrRate),
+          intrRate2: normalizeRate(option.intrRate2),
+        }))
+      : item.options;
+    const picked = pickUnifiedSelectedOption(selectionOptions, input.profile);
 
     const finPrdtCd = (item.stableId || item.externalKey || "").trim();
     if (!finPrdtCd) continue;
 
     const product: NormalizedProduct = {
       fin_prdt_cd: finPrdtCd,
+      fin_co_no: item.recommendDetail?.finCoNo,
       fin_prdt_nm: item.productName || finPrdtCd,
       kor_co_nm: item.providerName || "",
-      options: picked.option ? [picked.option] : [],
-      raw: {
-        source: "unified_merged",
-        stableId: item.stableId,
-        externalKey: item.externalKey,
-        sourceIds: item.sourceIds ?? [item.sourceId],
-      },
+      options: detailOptions.length > 0 ? detailOptions : picked.option ? [picked.option] : [],
+      raw: item.recommendDetail?.productRaw ?? {
+          source: "unified_merged",
+          stableId: item.stableId,
+          externalKey: item.externalKey,
+          sourceIds: item.sourceIds ?? [item.sourceId],
+        },
+      sourceUpdatedAt: item.recommendDetail?.sourceUpdatedAt ?? item.updatedAt,
     };
     ensureProductBest(product);
 
