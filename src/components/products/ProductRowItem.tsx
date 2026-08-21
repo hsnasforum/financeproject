@@ -199,6 +199,7 @@ export function ProductRowItem({
         onOpenChange={setOpen}
         kind={kind}
         product={product}
+        initialOption={product.best}
         amountWonDefault={amountWonDefault}
       />
     </>

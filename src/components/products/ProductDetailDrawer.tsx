@@ -1,14 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { calcDeposit, calcSaving } from "@/lib/planning/calc";
 import { FINLIFE_FIELD_CONFIG } from "@/lib/finlife/fieldConfig";
 import { buildConsumerNotes, formatGlossaryValue, getKindSummary } from "@/lib/finlife/glossary";
-import { presentBySpecs, presentOptionFallback } from "@/lib/finlife/present";
+import { presentBySpecs } from "@/lib/finlife/present";
 import { formatKrwWithEok } from "@/lib/format/krw";
-import { type FinlifeKind, type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
+import { type FinlifeKind, type NormalizedProduct } from "@/lib/finlife/types";
+import {
+  buildProductDetailOptionRows,
+  buildProductDetailOptionSelectionLabels,
+  pickProductDetailRate,
+  resolveProductDetailOptionKey,
+  type ProductDetailOptionSelection,
+} from "@/lib/finlife/productDetailOption";
 import { cn } from "@/lib/utils";
 import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 
@@ -18,22 +25,10 @@ type Props = {
   kind: FinlifeKind;
   product: NormalizedProduct;
   amountWonDefault: number;
+  initialOption?: ProductDetailOptionSelection | null;
 };
 
-function parseTerm(option: NormalizedOption): number {
-  const value = Number(String(option.save_trm ?? "").replace(/[^0-9]/g, ""));
-  return Number.isFinite(value) && value > 0 ? value : 12;
-}
-
-function pickRate(option: NormalizedOption, usePrime: boolean): number {
-  if (usePrime && typeof option.intr_rate2 === "number") return option.intr_rate2;
-  if (typeof option.intr_rate === "number") return option.intr_rate;
-  if (typeof option.intr_rate2 === "number") return option.intr_rate2;
-  return 0;
-}
-
-export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountWonDefault }: Props) {
-  const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
+export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountWonDefault, initialOption }: Props) {
   const [usePrimeRate, setUsePrimeRate] = useState(true);
   const [taxRate, setTaxRate] = useState(15.4);
   const [amountWon, setAmountWon] = useState(amountWonDefault > 0 ? amountWonDefault : 10_000_000);
@@ -42,19 +37,52 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
   const config = FINLIFE_FIELD_CONFIG[kind];
   const notes = buildConsumerNotes(product.raw);
   const summary = getKindSummary(kind);
-  const selectedOption = product.options[selectedOptionIndex] ?? product.options[0];
 
   const optionRows = useMemo(() => {
-    return product.options.map((option) => {
-      const bySpec = presentBySpecs(kind, option.raw, config?.optionFields);
-      return bySpec.length ? bySpec : presentOptionFallback(kind, option.raw, 8);
+    return buildProductDetailOptionRows({
+      kind,
+      options: product.options,
+      optionFields: config?.optionFields,
     });
   }, [config?.optionFields, kind, product.options]);
+  const initialOptionKey = useMemo(
+    () => resolveProductDetailOptionKey(optionRows, initialOption),
+    [initialOption, optionRows],
+  );
+  const [selectedOptionKey, setSelectedOptionKey] = useState<string | null>(() => initialOptionKey);
+  const optionSelectionLabels = useMemo(
+    () => buildProductDetailOptionSelectionLabels(optionRows),
+    [optionRows],
+  );
+
+  useEffect(() => {
+    setSelectedOptionKey(initialOptionKey);
+  }, [initialOptionKey]);
+
+  const selectedOptionRow = optionRows.find((row) => row.key === selectedOptionKey) ?? optionRows[0];
+  const selectedRateBasis = selectedOptionRow
+    ? usePrimeRate && selectedOptionRow.primeRatePct !== null
+      ? "prime"
+      : !usePrimeRate && selectedOptionRow.baseRatePct !== null
+        ? "base"
+        : selectedOptionRow.primeRatePct !== null
+          ? "prime"
+          : selectedOptionRow.baseRatePct !== null
+            ? "base"
+            : null
+    : null;
 
   const calc = useMemo(() => {
-    if (!selectedOption) return null;
-    const months = parseTerm(selectedOption);
-    const annualRatePct = pickRate(selectedOption, usePrimeRate);
+    if (
+      !selectedOptionRow
+      || !selectedOptionRow.isCalculable
+      || selectedOptionRow.termMonths === null
+      || selectedOptionRow.interestType === null
+      || selectedRateBasis === null
+    ) return null;
+    const months = selectedOptionRow.termMonths;
+    const annualRatePct = pickProductDetailRate(selectedOptionRow, selectedRateBasis);
+    if (annualRatePct === null) return null;
 
     if (kind === "deposit") {
       return calcDeposit({
@@ -62,7 +90,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
         months,
         annualRatePct,
         taxRatePct: taxRate,
-        interestType: "simple",
+        interestType: selectedOptionRow.interestType,
       });
     }
 
@@ -72,12 +100,12 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
         months,
         annualRatePct,
         taxRatePct: taxRate,
-        interestType: "compound",
+        interestType: selectedOptionRow.interestType,
       });
     }
 
     return null;
-  }, [amountWon, kind, savingMonthlyWon, selectedOption, taxRate, usePrimeRate]);
+  }, [amountWon, kind, savingMonthlyWon, selectedOptionRow, selectedRateBasis, taxRate]);
 
   if (!open) return null;
 
@@ -137,67 +165,143 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
 
           <section className="space-y-6">
             <SubSectionHeader title="금리 및 기간 옵션" description="현재 비교 중인 후보의 기간별 공시 옵션입니다." />
-            <div className="flex flex-wrap gap-2">
-              {product.options.map((option, index) => (
-                <button
-                  key={`${product.fin_prdt_cd}-opt-chip-${index}`}
-                  type="button"
-                  onClick={() => setSelectedOptionIndex(index)}
-                  className={cn(
-                    "rounded-full border px-4 py-2 text-xs font-black transition-all shadow-sm",
-                    selectedOptionIndex === index
-                      ? "border-primary/20 bg-primary text-white shadow-primary/10"
-                      : "border-slate-200 bg-white text-slate-500 hover:bg-surface-muted"
-                  )}
-                >
-                  {option.save_trm ? formatGlossaryValue("save_trm", option.save_trm) : `옵션 ${index + 1}`}
-                </button>
-              ))}
-            </div>
+            {optionRows.length === 0 ? (
+              <p className="rounded-2xl border border-slate-200 bg-surface-muted/50 px-5 py-6 text-center text-sm font-bold text-slate-500">
+                현재 공시 옵션을 확인하지 못했습니다.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {optionRows.map((row, index) => (
+                    <button
+                      key={`${product.fin_prdt_cd}-opt-chip-${row.key}`}
+                      type="button"
+                      aria-pressed={selectedOptionRow?.key === row.key}
+                      data-option-key={row.key}
+                      onClick={() => setSelectedOptionKey(row.key)}
+                      className={cn(
+                        "rounded-full border px-4 py-2 text-xs font-black transition-all shadow-sm",
+                        selectedOptionRow?.key === row.key
+                          ? "border-primary/20 bg-primary text-white shadow-primary/10"
+                          : "border-slate-200 bg-white text-slate-500 hover:bg-surface-muted"
+                      )}
+                    >
+                      {optionSelectionLabels[index]}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="rounded-[2rem] border border-slate-100 bg-white p-2 overflow-hidden shadow-inner">
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm border-separate border-spacing-y-1">
-                  <thead>
-                    <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <th className="px-4 py-2">기간</th>
-                      <th className="px-4 py-2">상세 옵션 정보</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {product.options.map((option, index) => {
-                      const shown = optionRows[index] ?? [];
-                      return (
-                        <tr key={`${product.fin_prdt_cd}-opt-row-${index}`} className={cn("group transition-colors", selectedOptionIndex === index ? "bg-primary/30" : "hover:bg-surface-muted/50")}>
-                          <td className="px-4 py-4 font-black text-navy tabular-nums">
-                            {option.save_trm ? formatGlossaryValue("save_trm", option.save_trm) : `옵션 ${index + 1}`}
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex flex-wrap gap-2">
-                              {shown.map((entry) => (
-                                <span key={`${index}-${entry.label}`} className="inline-flex rounded-lg bg-white border border-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 shadow-sm">
-                                  <span className="opacity-50 mr-1.5">{entry.label}</span>
-                                  {entry.valueText}
-                                </span>
-                              ))}
+                <div className="space-y-3 md:hidden" data-option-mobile-list>
+                  {optionRows.map((row, index) => (
+                    <article
+                      key={`${product.fin_prdt_cd}-opt-mobile-${row.key}`}
+                      className={cn(
+                        "min-w-0 overflow-hidden rounded-2xl border p-4",
+                        selectedOptionRow?.key === row.key
+                          ? "border-primary/20 bg-primary/10"
+                          : "border-slate-200 bg-white",
+                      )}
+                      data-option-mobile-card
+                      data-selected={selectedOptionRow?.key === row.key ? "true" : "false"}
+                    >
+                      <p className="text-sm font-black text-navy tabular-nums">
+                        {optionSelectionLabels[index]}
+                      </p>
+                      {row.detailEntries.length === 0 ? (
+                        <p className="mt-3 text-xs font-medium leading-relaxed text-slate-500">상세 옵션 정보를 확인하지 못했습니다.</p>
+                      ) : (
+                        <dl className="mt-3 space-y-2">
+                          {row.detailEntries.map((entry) => (
+                            <div
+                              className="grid min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-3"
+                              data-option-field={entry.label}
+                              data-option-value={entry.valueText}
+                              key={`${row.key}-mobile-${entry.label}`}
+                            >
+                              <dt className="min-w-0 break-words text-[11px] font-bold text-slate-400">{entry.label}</dt>
+                              <dd className="min-w-0 break-words text-xs font-bold text-slate-700">{entry.valueText}</dd>
                             </div>
-                          </td>
+                          ))}
+                        </dl>
+                      )}
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden rounded-[2rem] border border-slate-100 bg-white p-2 shadow-inner md:block" data-option-desktop-table>
+                  <div className="overflow-x-auto" data-option-desktop-scroll>
+                    <table className="min-w-full text-left text-sm border-separate border-spacing-y-1">
+                      <thead>
+                        <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          <th className="px-4 py-2">기간</th>
+                          <th className="px-4 py-2">상세 옵션 정보</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      </thead>
+                      <tbody>
+                        {optionRows.map((row, index) => (
+                          <tr
+                            key={`${product.fin_prdt_cd}-opt-row-${row.key}`}
+                            className={cn("group transition-colors", selectedOptionRow?.key === row.key ? "bg-primary/30" : "hover:bg-surface-muted/50")}
+                            data-selected={selectedOptionRow?.key === row.key ? "true" : "false"}
+                          >
+                            <td className="px-4 py-4 font-black text-navy tabular-nums">
+                              {optionSelectionLabels[index]}
+                            </td>
+                            <td className="min-w-0 px-4 py-4">
+                              {row.detailEntries.length === 0 ? (
+                                <p className="text-xs font-medium text-slate-500">상세 옵션 정보를 확인하지 못했습니다.</p>
+                              ) : (
+                                <div className="flex min-w-0 flex-wrap gap-2">
+                                  {row.detailEntries.map((entry) => (
+                                    <span
+                                      key={`${row.key}-${entry.label}`}
+                                      className="inline-flex min-w-0 max-w-full rounded-lg bg-white border border-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 shadow-sm"
+                                      data-option-field={entry.label}
+                                      data-option-value={entry.valueText}
+                                    >
+                                      <span className="mr-1.5 shrink-0 opacity-50">{entry.label}</span>
+                                      <span className="min-w-0 break-words">{entry.valueText}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </section>
 
-          {(kind === "deposit" || kind === "saving") && selectedOption && (
-            <section className="space-y-6 rounded-[2.5rem] bg-surface-muted border border-slate-100 p-8 lg:p-10 shadow-sm">
+          {(kind === "deposit" || kind === "saving") && selectedOptionRow && (
+            <section
+              className="space-y-6 rounded-[2.5rem] bg-surface-muted border border-slate-100 p-8 lg:p-10 shadow-sm"
+              data-selected-option-key={selectedOptionRow.key}
+              data-selected-option-rate={selectedRateBasis ? pickProductDetailRate(selectedOptionRow, selectedRateBasis) ?? "missing" : "missing"}
+              data-selected-option-term={selectedOptionRow.termMonths ?? "missing"}
+              data-selected-option-interest-type={selectedOptionRow.interestType ?? "missing"}
+            >
               <SubSectionHeader
                 title="금리 계산기"
-                description="입력한 금액과 세율 가정으로 보는 단순 비교값입니다."
+                description="입력한 금액과 세율 가정에 공시된 이자 계산 방식을 반영한 비교값입니다."
               />
 
+              {!selectedOptionRow.isCalculable ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5" role="status">
+                  <p className="text-sm font-black text-amber-900">계산 기준을 확인하지 못했습니다.</p>
+                  <p className="mt-1 text-xs font-medium leading-relaxed text-amber-800">
+                    {selectedOptionRow.missing.map((missing) => {
+                      if (missing === "term") return "기간 정보";
+                      if (missing === "rate") return "적용 가능한 금리 정보";
+                      return "이자 계산 방식";
+                    }).join(" · ")}가 없어 예상 금액을 계산하지 않았습니다. 상품 공시나 금융사 안내에서 기준을 다시 확인해 주세요.
+                  </p>
+                </div>
+              ) : (
+                <>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
@@ -218,7 +322,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">기간</label>
-                  <input className="h-11 w-full rounded-xl bg-surface-muted/50 border border-slate-100 px-4 text-sm font-black text-slate-400 outline-none tabular-nums" value={formatGlossaryValue("save_trm", String(parseTerm(selectedOption)))} readOnly />
+                  <input className="h-11 w-full rounded-xl bg-surface-muted/50 border border-slate-100 px-4 text-sm font-black text-slate-400 outline-none tabular-nums" value={formatGlossaryValue("save_trm", String(selectedOptionRow.termMonths))} readOnly />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">세율(%)</label>
@@ -226,9 +330,9 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">금리 기준</label>
-                  <select className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-primary transition-all shadow-sm" value={usePrimeRate ? "prime" : "base"} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
-                    <option value="base">기본금리</option>
-                    <option value="prime">최고금리</option>
+                  <select className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-primary transition-all shadow-sm" value={selectedRateBasis ?? ""} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
+                    {selectedOptionRow.baseRatePct !== null ? <option value="base">기본금리</option> : null}
+                    {selectedOptionRow.primeRatePct !== null ? <option value="prime">최고금리</option> : null}
                   </select>
                 </div>
               </div>
@@ -252,6 +356,8 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                     <p className="mt-1 text-xl font-black tabular-nums text-white">{formatKrwWithEok(calc.maturityWon)}</p>
                   </div>
                 </div>
+              )}
+                </>
               )}
             </section>
           )}

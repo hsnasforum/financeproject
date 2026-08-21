@@ -55,4 +55,37 @@ describe("recommend unified adapter", () => {
     const selected = pickUnifiedSelectedOption(item.options, { preferredTerm: 24, rateMode: "base" });
     expect(selected.option?.intr_rate).toBe(2.7);
   });
+
+  it("preserves all internal detail options and actual freshness for recommendation", () => {
+    const item = baseItem({
+      updatedAt: "2026-07-12T00:00:00.000Z",
+      options: [
+        { sourceId: "finlife", termMonths: 12, saveTrm: "12", intrRate: 3.1, intrRate2: 3.5 },
+      ],
+      recommendDetail: {
+        finPrdtCd: "FIN-001",
+        finCoNo: "001",
+        productRaw: { join_way: "비대면" },
+        options: [
+          { saveTrm: "12", intrRate: 3.1, intrRate2: 3.5, raw: { intr_rate_type_nm: "단리" } },
+          { saveTrm: "12", intrRate: 3.1, intrRate2: 3.5, raw: { intr_rate_type_nm: "복리" } },
+          { saveTrm: "24", intrRate: 3.2, intrRate2: 3.7, raw: {} },
+        ],
+        sourceUpdatedAt: "2026-07-11T00:00:00.000Z",
+      },
+    });
+
+    const candidates = unifiedProductsToRecommendCandidates({
+      items: [item],
+      profile: { preferredTerm: 24, rateMode: "max" },
+    });
+
+    expect(candidates[0].product.options).toHaveLength(3);
+    expect(candidates[0].product.options.slice(0, 2).map((option) => option.raw.intr_rate_type_nm)).toEqual(["단리", "복리"]);
+    expect(candidates[0].product.raw).toEqual({ join_way: "비대면" });
+    expect(candidates[0].product).toMatchObject({
+      fin_co_no: "001",
+      sourceUpdatedAt: "2026-07-11T00:00:00.000Z",
+    });
+  });
 });

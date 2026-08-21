@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { readFinlifeCompletionEvidence } from "@/lib/finlife/completionEvidence";
+import { FINLIFE_FIELD_CONFIG, type FinlifeFieldSpec } from "@/lib/finlife/fieldConfig";
+import { PRODUCT_DETAIL_OPTION_IDENTITY_RAW_KEYS } from "@/lib/finlife/productDetailOption";
 import { runFinlifePersistentSync } from "@/lib/finlife/persistentSync";
 import { loadFinlifeSnapshot, loadFinlifeSyncAttempt } from "@/lib/finlife/snapshot";
 import { shouldRunFinlifeSync } from "@/lib/finlife/syncPolicy";
@@ -32,6 +34,7 @@ export type SourceQuery = {
   onlyNew: boolean;
   changedSince: string | null;
   includeTimestamps: boolean;
+  includeRecommendDetail?: boolean;
   limit: number;
   sort: "recent" | "name";
   qMode: QueryMode;
@@ -92,6 +95,48 @@ export function buildFinlifeOptions(
       intrRate2: normalizeRate(option.intrRate2),
     })),
   );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+const PRODUCT_DETAIL_NOTE_RAW_KEYS = ["join_deny", "spcl_cnd", "etc_note", "mtrt_int"] as const;
+const RECOMMEND_DETAIL_MAX_STRING_LENGTH = 2_000;
+
+function sanitizeAllowedDetailValue(value: unknown, maxLength: number): string | number | boolean | undefined {
+  if (typeof value === "string") {
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean") return value;
+  return undefined;
+}
+
+function pickAllowedDetailRaw(
+  rawValue: unknown,
+  specs: FinlifeFieldSpec[] | undefined,
+  extraKeys: readonly string[] = [],
+): Record<string, unknown> {
+  const raw = asRecord(rawValue);
+  const allowed = new Map<string, number>();
+  for (const spec of specs ?? []) {
+    const maxLength = Math.max(1, Math.min(RECOMMEND_DETAIL_MAX_STRING_LENGTH, spec.maxLen ?? RECOMMEND_DETAIL_MAX_STRING_LENGTH));
+    for (const key of spec.keys) allowed.set(key, maxLength);
+  }
+  for (const key of extraKeys) {
+    if (!allowed.has(key)) allowed.set(key, RECOMMEND_DETAIL_MAX_STRING_LENGTH);
+  }
+
+  return Object.fromEntries(Object.entries(raw).flatMap(([key, value]) => {
+    const maxLength = allowed.get(key);
+    if (maxLength === undefined) return [];
+    const sanitized = sanitizeAllowedDetailValue(value, maxLength);
+    return sanitized === undefined ? [] : [[key, sanitized]];
+  }));
 }
 
 export function buildKdbOptions(rawJson: unknown): UnifiedOptionView[] {
@@ -374,6 +419,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
           saveTrm: true,
           intrRate: true,
           intrRate2: true,
+          raw: input.includeRecommendDetail === true,
         },
         orderBy: [
           { saveTrm: "asc" },
@@ -397,6 +443,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
 
   const items: UnifiedProductView[] = picked.map((row) => {
     const raw = (row.raw as Record<string, unknown> | null) ?? null;
+    const detailConfig = FINLIFE_FIELD_CONFIG[input.kind];
     const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
     const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
     return {
@@ -413,6 +460,24 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
       lastSeenAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
       updatedAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
       options: buildFinlifeOptions(row.options),
+      ...(input.includeRecommendDetail
+        ? { recommendDetail: {
+            finPrdtCd: row.finPrdtCd,
+            finCoNo: typeof raw?.fin_co_no === "string" ? raw.fin_co_no : undefined,
+            productRaw: pickAllowedDetailRaw(raw, detailConfig?.productFields, PRODUCT_DETAIL_NOTE_RAW_KEYS),
+            options: row.options.map((option) => ({
+              saveTrm: option.saveTrm ?? undefined,
+              intrRate: normalizeRate(option.intrRate),
+              intrRate2: normalizeRate(option.intrRate2),
+              raw: pickAllowedDetailRaw(
+                (option as typeof option & { raw?: unknown }).raw,
+                detailConfig?.optionFields,
+                PRODUCT_DETAIL_OPTION_IDENTITY_RAW_KEYS,
+              ),
+            })),
+            sourceUpdatedAt: row.updatedAt.toISOString(),
+          } }
+        : {}),
       signals: {
         depositProtection: "unknown",
       },

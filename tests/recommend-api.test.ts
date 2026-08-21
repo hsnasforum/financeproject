@@ -112,6 +112,7 @@ type RecommendApiJson = {
       stageInference?: string;
       inferenceSource?: string;
     };
+    fallback?: { reason?: string };
   };
   items?: Array<{ finalScore?: number; breakdown?: unknown[] }>;
   debug?: { candidateCount?: number };
@@ -425,6 +426,10 @@ describe("POST /api/recommend", () => {
     expect(json).not.toHaveProperty("engine");
     expect(json).not.toHaveProperty("stage");
     expect(json).not.toHaveProperty("stageDecision");
+    expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
+      includeRecommendDetail: true,
+      includeTimestamps: true,
+    }));
 
     if ((json.items?.length ?? 0) > 0) {
       expect(typeof json.items?.[0]?.finalScore).toBe("number");
@@ -473,6 +478,53 @@ describe("POST /api/recommend", () => {
     expect(json.message).toBe("현재 조건에 맞는 상품 후보를 찾지 못했습니다. 조건을 넓히거나 잠시 후 다시 조회해 주세요.");
     expect(json.message ?? "").not.toMatch(/pnpm|\/api\/dev|Run /i);
     expect(JSON.stringify(json.meta?.debug ?? {})).not.toMatch(/pnpm|\/api\/dev|Run /i);
+    expect(json.debug?.candidateCount).toBe(0);
+  });
+
+  it("uses the no-candidates contract when scoring filters every loaded candidate", async () => {
+    mocked.getUnifiedProducts.mockResolvedValue({
+      kind: "deposit",
+      sources: { finlife: { count: 1 } },
+      merged: [],
+      items: [{
+        stableId: "finlife:P-FILTERED",
+        sourceId: "finlife",
+        kind: "deposit",
+        externalKey: "P-FILTERED",
+        providerName: "테스트은행",
+        productName: "금리 결측 예금",
+        options: [],
+      }],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1000, sourceId: "finlife" },
+    });
+    mocked.recommendCandidates.mockReturnValue({
+      items: [],
+      debug: { candidateCount: 0, rateMin: 0, rateMax: 0 },
+      weights: { rate: 0.55, term: 0.3, liquidity: 0.15 },
+      assumptions: {
+        rateSelectionPolicy: "금리 선택 정책: 최고금리 우선",
+        liquidityPolicy: "유동성은 기간 기반 휴리스틱으로 반영",
+        normalizationPolicy: "금리 점수는 후보군 min/max로 0..1 정규화",
+      },
+    });
+    mocked.applyDepositProtectionPolicy.mockReturnValue([]);
+
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+    });
+
+    expect(status).toBe(200);
+    expect(json.items).toEqual([]);
+    expect(json.meta).toMatchObject({
+      diagnosticId: "recommend.no_candidates",
+      fallback: { reason: "compute_no_candidates" },
+    });
+    expect(json.message).toBe("현재 조건에 맞는 상품 후보를 찾지 못했습니다. 조건을 넓히거나 잠시 후 다시 조회해 주세요.");
     expect(json.debug?.candidateCount).toBe(0);
   });
 

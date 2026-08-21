@@ -48,6 +48,7 @@ export const FINLIFE_FIELD_CONFIG: Partial<Record<FinlifeKind, FinlifeFieldConfi
     optionFields: [
       { label: "기간", keys: ["save_trm"] },
       { label: "이자 방식", keys: ["intr_rate_type_nm"] },
+      { label: "적립 유형", keys: ["rsrv_type_nm"], help: "정액적립식/자유적립식 등 납입 방식입니다." },
       { label: "기본금리(연)", keys: ["intr_rate"] },
       { label: "최고금리(연, 우대포함)", keys: ["intr_rate2"] },
     ],

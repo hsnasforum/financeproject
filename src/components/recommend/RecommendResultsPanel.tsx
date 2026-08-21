@@ -9,6 +9,7 @@ import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import {
   buildActionReasonContext,
   buildCardFreshnessMeta,
+  buildDetailInitialOption,
   buildDetailProduct,
   buildPlanningContextStrip,
   buildSourceStatusKey,
@@ -144,6 +145,7 @@ export function RecommendResultsPanel({
         {(result.items ?? []).map((item, index) => {
           const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
           const detailProduct = buildDetailProduct(item);
+          const detailInitialOption = buildDetailInitialOption(item);
           const scorePct = Math.min(100, Math.max(0, item.finalScore));
           const freshnessMeta = buildCardFreshnessMeta({
             item,
@@ -325,6 +327,7 @@ export function RecommendResultsPanel({
                 onOpenChange={(next) => onOpenDetailKeyChange(next ? itemKey : null)}
                 kind={item.kind}
                 product={detailProduct}
+                initialOption={detailInitialOption}
                 amountWonDefault={item.kind === "saving" ? 500_000 : 10_000_000}
               />
             </Card>

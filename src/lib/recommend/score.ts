@@ -481,6 +481,7 @@ function buildDetailProduct(product: NormalizedProduct): RecommendDetailProduct 
         }
       : undefined,
     raw: product.raw ?? {},
+    sourceUpdatedAt: product.sourceUpdatedAt,
   };
 }
 
@@ -491,17 +492,23 @@ export function recommendCandidates(input: {
 }): { items: RecommendedItem[]; debug: RecommendDebug; weights: RecommendWeights; assumptions: RecommendationAssumptions } {
   const { kind, candidates: rawCandidates, profile } = input;
   const weights = mergeWeights(profile.weights);
-  const candidates = rawCandidates.map((candidate) => ({
-    ...candidate,
-    selected: selectBestOption(candidate.product, profile),
-  }));
+  const candidates = rawCandidates
+    .map((candidate) => ({
+      ...candidate,
+      selected: selectBestOption(candidate.product, profile),
+    }))
+    .filter((candidate) => (
+      candidate.selected.termMonths !== null
+      && candidate.selected.rateSource !== "none"
+      && Number.isFinite(candidate.selected.appliedRate)
+    ));
 
   const rates = candidates.map((entry) => entry.selected.appliedRate);
   const rateMin = rates.length ? Math.min(...rates) : 0;
   const rateMax = rates.length ? Math.max(...rates) : 0;
 
   const scored = candidates.map(({ sourceId, product, badges, extraReasons, selected }) => {
-    const termMonths = selected.termMonths ?? profile.preferredTerm;
+    const termMonths = selected.termMonths as number;
     const rateScore = normalizeRate(selected.appliedRate, rateMin, rateMax);
     const termFit = clamp01(1 - Math.abs(termMonths - profile.preferredTerm) / 36);
     const liqPenalty = liquidityPenalty(selected.termMonths, profile.liquidityPref);

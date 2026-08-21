@@ -104,7 +104,8 @@ async function loadUnifiedCandidates(input: {
     refresh: false,
     onlyNew: false,
     changedSince: null,
-    includeTimestamps: false,
+    includeTimestamps: true,
+    includeRecommendDetail: true,
     limit: 1000,
     sort: "name",
     qMode: "contains",
@@ -210,7 +211,7 @@ export async function POST(request: Request) {
       pushTiming(timings, candidateResult.timing);
       const candidateBundle = candidateResult.value;
 
-      if (candidateBundle.candidates.length === 0) {
+      const noCandidatesResponse = () => {
         const diagnosticCode = "RECOMMEND_NO_CANDIDATES";
         const diagnosticMeta = buildPublicDiagnosticMeta(diagnosticCode, { traceId, debug: debugTimingsEnabled });
         logPublicApiDiagnostic({
@@ -264,7 +265,9 @@ export async function POST(request: Request) {
             rateMax: 0,
           },
         }));
-      }
+      };
+
+      if (candidateBundle.candidates.length === 0) return noCandidatesResponse();
 
       const recommendResult = await withTiming("recommend.score", async () => recommendCandidates({
         kind: profile.kind,
@@ -282,6 +285,8 @@ export async function POST(request: Request) {
       })
         .sort((a, b) => b.finalScore - a.finalScore)
         .slice(0, Math.max(1, Math.min(50, profile.topN)));
+
+      if (itemsWithProtection.length === 0) return noCandidatesResponse();
 
       return withTrace(jsonOk({
         meta: {

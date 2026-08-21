@@ -31,7 +31,28 @@ async function expectNoCspConsoleErrors(page: Page, routePath: string) {
   expect(violations).toEqual([]);
 }
 
-async function mockRecommendResult(page: Page) {
+type RecommendDetailOptionFixture = {
+  save_trm: string;
+  intr_rate: number;
+  intr_rate2: number;
+  raw: Record<string, unknown>;
+};
+
+type RecommendResultFixture = {
+  selectedOption?: {
+    detailOptionKey?: string;
+    saveTrm: string;
+    termMonths: number;
+    appliedRate: number;
+    baseRate: number;
+    maxRate: number;
+    rateSource: "intr_rate2" | "intr_rate";
+    reasons: string[];
+  };
+  detailOptions?: RecommendDetailOptionFixture[];
+};
+
+async function mockRecommendResult(page: Page, fixture: RecommendResultFixture = {}) {
   await page.route("**/api/recommend**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -65,7 +86,7 @@ async function mockRecommendResult(page: Page) {
             providerName: "검증은행",
             productName: "결과 패널 검증 예금",
             finalScore: 82.5,
-            selectedOption: {
+            selectedOption: fixture.selectedOption ?? {
               saveTrm: "12",
               termMonths: 12,
               appliedRate: 3.5,
@@ -73,6 +94,27 @@ async function mockRecommendResult(page: Page) {
               maxRate: 3.5,
               rateSource: "intr_rate2",
               reasons: [],
+            },
+            detailProduct: {
+              fin_prdt_cd: "E2E-D001",
+              kor_co_nm: "검증은행",
+              fin_prdt_nm: "결과 패널 검증 예금",
+              options: fixture.detailOptions ?? [
+                {
+                  save_trm: "6",
+                  intr_rate: 2.7,
+                  intr_rate2: 3,
+                  raw: { intr_rate_type_nm: "단리" },
+                },
+                {
+                  save_trm: "12",
+                  intr_rate: 3.1,
+                  intr_rate2: 3.5,
+                  raw: { intr_rate_type_nm: "복리" },
+                },
+              ],
+              raw: { join_way: "비대면-LONGOPTIONIDENTITYWITHOUTBREAKS0123456789012345678901234567890123456789" },
+              sourceUpdatedAt: "2026-07-11T00:00:00.000Z",
             },
             breakdown: [],
             reasons: ["현재 비교 조건과 맞는 기간입니다."],
@@ -94,6 +136,17 @@ async function mockRecommendResult(page: Page) {
 test("dashboard renders", async ({ page }) => {
   await page.goto("/dashboard");
   await expect(page.getByTestId("dashboard-root")).toBeVisible();
+});
+
+test("public page titles resolve through the active Next.js metadata hierarchy", async ({ page }) => {
+  for (const [pathname, title] of [
+    ["/", "개인 재무진단과 금융상품 비교 | MMD"],
+    ["/dashboard", "재무 대시보드 | MMD"],
+    ["/recommend/history", "추천 비교 기록 | MMD"],
+  ] as const) {
+    await page.goto(pathname);
+    await expect(page).toHaveTitle(title);
+  }
 });
 
 test("planning page renders", async ({ page }) => {
@@ -202,6 +255,131 @@ test("recommend result panel keeps the submit-to-detail flow", async ({ page }) 
   await expect(page.getByRole("dialog")).toBeHidden();
 });
 
+test("I-026 same-term options expose distinct names and calculation bases", async ({ page }) => {
+  await mockRecommendResult(page, {
+    selectedOption: {
+      detailOptionKey: JSON.stringify({
+        term: "12",
+        baseRate: 3,
+        primeRate: 3.4,
+        identity: [["intr_rate_type_nm", "복리"]],
+      }),
+      saveTrm: "12",
+      termMonths: 12,
+      appliedRate: 3.4,
+      baseRate: 3,
+      maxRate: 3.4,
+      rateSource: "intr_rate2",
+      reasons: [],
+    },
+    detailOptions: [
+      { save_trm: "12", intr_rate: 2.8, intr_rate2: 3.1, raw: { intr_rate_type_nm: "단리" } },
+      { save_trm: "12", intr_rate: 3, intr_rate2: 3.4, raw: { intr_rate_type_nm: "복리" } },
+    ],
+  });
+  await page.goto("/recommend");
+  await page.waitForLoadState("networkidle");
+  await page.getByTestId("recommend-submit").click();
+  await page.getByRole("button", { name: "상세 분석" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "결과 패널 검증 예금" });
+  const simple = dialog.getByRole("button", {
+    name: "12개월 · 단리 · 최고금리(연, 우대포함) 3.1%",
+    exact: true,
+  });
+  const compound = dialog.getByRole("button", {
+    name: "12개월 · 복리 · 최고금리(연, 우대포함) 3.4%",
+    exact: true,
+  });
+  const calculator = dialog.locator("[data-selected-option-rate]");
+
+  await expect(compound).toHaveAttribute("aria-pressed", "true");
+  await expect(calculator).toHaveAttribute("data-selected-option-rate", "3.4");
+  await simple.click();
+  await expect(simple).toHaveAttribute("aria-pressed", "true");
+  await expect(calculator).toHaveAttribute("data-selected-option-rate", "3.1");
+});
+
+test("I-026 recommendation detail keeps selected option identity and calculation fidelity", async ({ page }) => {
+  await mockRecommendResult(page);
+  await page.goto("/recommend");
+  await page.waitForLoadState("networkidle");
+  await page.getByTestId("recommend-submit").click();
+  await page.getByRole("button", { name: "상세 분석" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "결과 패널 검증 예금" });
+  const sixMonths = dialog.getByRole("button", { name: "6개월", exact: true });
+  const twelveMonths = dialog.getByRole("button", { name: "12개월", exact: true });
+  const calculator = dialog.locator("[data-selected-option-term]");
+
+  await expect(sixMonths).toHaveAttribute("aria-pressed", "false");
+  await expect(twelveMonths).toHaveAttribute("aria-pressed", "true");
+  await expect(calculator).toHaveAttribute("data-selected-option-term", "12");
+  await expect(calculator).toHaveAttribute("data-selected-option-rate", "3.5");
+  const twelveMonthMaturity = await dialog.getByText("예상 수령액", { exact: true }).locator("..").innerText();
+
+  await sixMonths.click();
+  await expect(sixMonths).toHaveAttribute("aria-pressed", "true");
+  await expect(twelveMonths).toHaveAttribute("aria-pressed", "false");
+  await expect(calculator).toHaveAttribute("data-selected-option-term", "6");
+  await expect(calculator).toHaveAttribute("data-selected-option-rate", "3");
+  const sixMonthMaturity = await dialog.getByText("예상 수령액", { exact: true }).locator("..").innerText();
+  expect(sixMonthMaturity).not.toBe(twelveMonthMaturity);
+});
+
+test("I-021 product detail keeps mobile cards and desktop table in responsive parity", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await mockRecommendResult(page);
+  await page.goto("/recommend");
+  await page.waitForLoadState("networkidle");
+  await page.getByTestId("recommend-submit").click();
+  await page.getByRole("button", { name: "상세 분석" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "결과 패널 검증 예금" });
+  const mobileList = dialog.locator("[data-option-mobile-list]");
+  const mobileCards = dialog.locator("[data-option-mobile-card]");
+  const desktopTable = dialog.locator("[data-option-desktop-table]");
+  const desktopScroll = dialog.locator("[data-option-desktop-scroll]");
+  const expectedFieldOrder = [
+    "기간", "이자 방식", "기본금리(연)", "최고금리(연, 우대포함)",
+    "기간", "이자 방식", "기본금리(연)", "최고금리(연, 우대포함)",
+  ];
+
+  await expect(dialog.locator('[data-option-mobile-card][data-selected="true"]')).toContainText("12개월");
+  const mobileFieldPairs = await mobileList.locator("[data-option-field]").evaluateAll((fields) => fields.map((field) => ({
+    label: field.getAttribute("data-option-field"),
+    value: field.getAttribute("data-option-value"),
+  })));
+  expect(mobileFieldPairs.map(({ label }) => label)).toEqual(expectedFieldOrder);
+
+  await dialog.getByRole("button", { name: "6개월", exact: true }).click();
+  await expect(dialog.locator('[data-option-mobile-card][data-selected="true"]')).toContainText("6개월");
+  await expect(dialog.locator("[data-selected-option-term]")).toHaveAttribute("data-selected-option-term", "6");
+  await expect(dialog.locator("[data-selected-option-term]")).toHaveAttribute("data-selected-option-rate", "3");
+
+  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await expect(mobileList).toBeVisible();
+    await expect(desktopTable).toBeHidden();
+    await expect(mobileCards).toHaveCount(2);
+    expect(await mobileCards.evaluateAll((cards) => cards.every((card) => card.scrollWidth <= card.clientWidth + 1))).toBe(true);
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  }
+
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(viewport);
+    await expect(mobileList).toBeHidden();
+    await expect(desktopTable).toBeVisible();
+    await expect(desktopTable.locator('tbody tr[data-selected="true"]')).toContainText("6개월");
+    const desktopFieldPairs = await desktopTable.locator("[data-option-field]").evaluateAll((fields) => fields.map((field) => ({
+      label: field.getAttribute("data-option-field"),
+      value: field.getAttribute("data-option-value"),
+    })));
+    expect(desktopFieldPairs).toEqual(mobileFieldPairs);
+    expect(await desktopScroll.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  }
+});
+
 test("recommend autorun reuses the saved history run for the same signature", async ({ page }) => {
   await mockRecommendResult(page);
   const autorunUrl = "/recommend?purpose=emergency&kind=deposit&preferredTerm=3&liquidityPref=high&rateMode=max&pool=unified&autorun=1&save=1&go=history";
@@ -248,19 +426,41 @@ test("production CSP routes hydrate without CSP console violations", async ({ pa
   }
 });
 
+test("standalone diagnostics endpoint stays unavailable", async ({ request }) => {
+  const requestHeaders: Array<Record<string, string>> = [
+    {},
+    { cookie: "authjs.session-token=invalid-test-session" },
+  ];
+  for (const headers of requestHeaders) {
+    const response = await request.get("/api/diagnostics/snapshot", { headers });
+    const body = await response.text();
+
+    expect(response.status()).toBe(404);
+    expect(body).not.toContain("recentErrors");
+    expect(body).not.toContain("dartArtifacts");
+  }
+});
+
 test("production hides dev and debug surfaces", async ({ request }) => {
   test.skip(
     (process.env.E2E_WEB_SERVER_MODE ?? "development").trim().toLowerCase() !== "production",
     "production runtime only",
   );
 
-  for (const routePath of ["/api/dev/errors/recent", "/dev/data", "/debug/unified", "/dashboard/artifacts"]) {
+  for (const routePath of [
+    "/api/dev/errors/recent",
+    "/api/diagnostics/snapshot",
+    "/dev/data",
+    "/debug/unified",
+    "/dashboard/artifacts",
+  ]) {
     const response = await request.get(routePath);
     expect(response.status(), routePath).toBe(404);
   }
 });
 
 test("main landmark stays singular across representative route shells", async ({ page }) => {
+  test.slow();
   for (const pathname of [
     "/",
     "/planning",

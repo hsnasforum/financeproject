@@ -63,6 +63,7 @@ export type ScoreBreakdownItem = {
 };
 
 export type SelectedOption = {
+  detailOptionKey?: string;
   saveTrm: string | null;
   termMonths: number | null;
   appliedRate: number;
@@ -95,6 +96,7 @@ export type RecommendDetailProduct = {
     intr_rate?: number | null;
   };
   raw: Record<string, unknown>;
+  sourceUpdatedAt?: string;
 };
 
 export type RecommendedItem = {
