@@ -23,6 +23,14 @@ export type DartCompany = {
 
 export type DartApiErrorCode = "CONFIG" | "INPUT" | "AUTH" | "FORBIDDEN" | "NO_DATA" | "RATE_LIMIT" | "MAINTENANCE" | "UPSTREAM" | "INTERNAL";
 
-export type DartApiResult<T> = { ok: true; data: T } | { ok: false; error: { code: DartApiErrorCode; message: string; debug?: Record<string, unknown> } };
+export type DartApiError = {
+  code: DartApiErrorCode;
+  message: string;
+  debug?: Record<string, unknown>;
+  upstreamStatus?: number;
+  retryAfterSeconds?: number;
+  timeout?: boolean;
+  aborted?: boolean;
+};
 
-export type DartApiError = Extract<DartApiResult<unknown>, { ok: false }>["error"];
+export type DartApiResult<T> = { ok: true; data: T } | { ok: false; error: DartApiError };

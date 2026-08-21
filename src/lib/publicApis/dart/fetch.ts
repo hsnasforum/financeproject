@@ -1,5 +1,6 @@
 import { type DartApiError } from "@/lib/publicApis/dart/types";
 import { resolveDartBaseUrl } from "@/lib/publicApis/dart/baseUrl";
+import { ExternalApiError, fetchExternal } from "@/lib/http/fetchExternal";
 
 export class DartError extends Error {
   readonly info: DartApiError;
@@ -11,7 +12,7 @@ export class DartError extends Error {
 }
 
 export function getDartApiKey(): string {
-  const key = process.env.OPENDART_API_KEY;
+  const key = (process.env.OPENDART_API_KEY ?? "").trim();
   if (!key) {
     throw new DartError({
       code: "CONFIG",
@@ -25,7 +26,27 @@ function getDartBaseUrl(): string {
   return `${resolveDartBaseUrl()}/api`;
 }
 
-export async function fetchDartJson(path: string, params: Record<string, string>, timeoutMs = 10_000): Promise<unknown> {
+export type DartFetchJsonResult = {
+  body: unknown;
+  upstreamStatus: number;
+  retryAfterSeconds?: number;
+};
+
+export async function fetchDartJson(
+  path: string,
+  params: Record<string, string>,
+  timeoutMs = 10_000,
+  signal?: AbortSignal | null,
+): Promise<unknown> {
+  return (await fetchDartJsonDetailed(path, params, timeoutMs, signal)).body;
+}
+
+export async function fetchDartJsonDetailed(
+  path: string,
+  params: Record<string, string>,
+  timeoutMs = 10_000,
+  signal?: AbortSignal | null,
+): Promise<DartFetchJsonResult> {
   const apiKey = getDartApiKey();
 
   const query = new URLSearchParams({
@@ -34,23 +55,44 @@ export async function fetchDartJson(path: string, params: Record<string, string>
   });
   const url = `${getDartBaseUrl()}/${path}?${query.toString()}`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const response = await fetch(url, { method: "GET", signal: controller.signal, cache: "no-store" });
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json") && !contentType.includes("text/json")) {
+    const fetched = await fetchExternal(url, {
+      method: "GET",
+      cache: "no-store",
+      retries: 0,
+      signal,
+      sourceKey: "opendart",
+      timeoutMs,
+    });
+    if (fetched.kind !== "json") {
       throw new DartError({
         code: "UPSTREAM",
-        message: `OpenDART 응답 형식이 올바르지 않습니다. status=${response.status}`,
+        message: `OpenDART 응답 형식이 올바르지 않습니다. status=${fetched.status}`,
+        upstreamStatus: fetched.status,
+        retryAfterSeconds: fetched.retryAfterSeconds,
       });
     }
 
-    const payload = await response.json();
-    return payload;
+    return {
+      body: fetched.body,
+      upstreamStatus: fetched.status,
+      retryAfterSeconds: fetched.retryAfterSeconds,
+    };
   } catch (error) {
     if (error instanceof DartError) throw error;
+
+    if (error instanceof ExternalApiError) {
+      throw new DartError({
+        code: error.status === 429 ? "RATE_LIMIT" : "UPSTREAM",
+        message: error.status === 429
+          ? "OpenDART 요청 제한"
+          : "OpenDART 호출에 실패했습니다. 잠시 후 다시 시도하세요.",
+        upstreamStatus: error.status,
+        retryAfterSeconds: error.retryAfterSeconds,
+        timeout: error.timeout,
+        aborted: error.aborted,
+      });
+    }
 
     const reason = error instanceof Error ? error.message : "unknown";
     console.error("[dart] fetch failed", {
@@ -63,7 +105,5 @@ export async function fetchDartJson(path: string, params: Record<string, string>
       code: "UPSTREAM",
       message: "OpenDART 호출에 실패했습니다. 잠시 후 다시 시도하세요.",
     });
-  } finally {
-    clearTimeout(timer);
   }
 }

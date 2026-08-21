@@ -32,6 +32,7 @@ function toProviderError(error: unknown): ProviderErrorShape {
         upstreamStatus: error.status,
         retryAfterSeconds: error.retryAfterSeconds,
         timeout: error.timeout,
+        aborted: error.aborted,
       },
     };
   }
@@ -97,7 +98,8 @@ function buildMeta(input: {
   };
 }
 
-function shouldSetCooldown(code: string): boolean {
+function shouldSetCooldown(code: string, debug?: Record<string, unknown>): boolean {
+  if (debug?.aborted === true) return false;
   return UPSTREAM_ERROR_CODES.has(code);
 }
 
@@ -271,7 +273,7 @@ export async function runProvider<TReq, TData, TRaw = unknown>(
 
       let cooldownNextRetryAt: string | undefined;
       const retryAfterSeconds = getRetryAfterSeconds(normalized.error.debug);
-      if (shouldSetCooldown(normalized.error.code)) {
+      if (shouldSetCooldown(normalized.error.code, normalized.error.debug)) {
         cooldownNextRetryAt = setCooldown(sourceKey, retryAfterSeconds ?? options?.cooldownSeconds ?? DEFAULT_COOLDOWN_SECONDS).nextRetryAt;
       }
 
@@ -301,7 +303,7 @@ export async function runProvider<TReq, TData, TRaw = unknown>(
       const parsed = toProviderError(error);
       let cooldownNextRetryAt: string | undefined;
       const retryAfterSeconds = getRetryAfterSeconds(parsed.debug);
-      if (shouldSetCooldown(parsed.code)) {
+      if (shouldSetCooldown(parsed.code, parsed.debug)) {
         cooldownNextRetryAt = setCooldown(sourceKey, retryAfterSeconds ?? options?.cooldownSeconds ?? DEFAULT_COOLDOWN_SECONDS).nextRetryAt;
       }
       return {

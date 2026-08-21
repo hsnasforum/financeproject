@@ -1,4 +1,4 @@
-import { type DartApiErrorCode } from "./types";
+import { type DartApiError, type DartApiErrorCode } from "./types";
 
 type Mapped = {
   httpStatus: number;
@@ -47,6 +47,17 @@ export function mapDartErrorToHttp(error: { code: string }): number {
   if (error.code === "MAINTENANCE") return 503;
   if (error.code === "UPSTREAM" || error.code === "INTERNAL") return 502;
   return 502;
+}
+
+export function toPublicDartError(error: DartApiError) {
+  return {
+    code: error.code,
+    message: error.message,
+    ...(typeof error.upstreamStatus === "number" ? { upstreamStatus: error.upstreamStatus } : {}),
+    ...(typeof error.retryAfterSeconds === "number" ? { retryAfterSeconds: error.retryAfterSeconds } : {}),
+    ...(typeof error.timeout === "boolean" ? { timeout: error.timeout } : {}),
+    ...(typeof error.aborted === "boolean" ? { aborted: error.aborted } : {}),
+  };
 }
 
 export function toDartApiError(status: string | undefined, message: string | undefined, context: "list" | "company"): { code: DartApiErrorCode; message: string } {

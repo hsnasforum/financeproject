@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getCachePolicy } from "../dataSources/cachePolicy";
+import { writeJsonFileAtomically } from "../storage/atomicJsonFile";
 import { type BenefitCandidate } from "./contracts/types";
 
 type SnapshotMeta = {
@@ -144,10 +145,7 @@ export function getSnapshotOrNull(params?: { filePath?: string; ttlMs?: number }
 }
 
 export function saveSnapshot(filePath: string, snapshot: BenefitsSnapshot): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(snapshot), "utf-8");
-  fs.renameSync(tempPath, filePath);
+  writeJsonFileAtomically(filePath, snapshot);
   const identity = readSnapshotFileIdentity(filePath);
   if (identity) memoryCache.set(filePath, { identity, snapshot });
   else memoryCache.delete(filePath);

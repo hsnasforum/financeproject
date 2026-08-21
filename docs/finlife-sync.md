@@ -14,6 +14,13 @@ FINLIFE 동기화에는 파일 snapshot과 Prisma 상품 DB라는 두 저장 경
 
 ## kind별 persistence 계약
 
+### 파일 snapshot 재검증과 atomic write
+
+- Benefits와 FINLIFE snapshot reader는 매 read 전에 canonical 파일 identity가 바뀌었는지 확인하며, 프로세스 메모리는 현재 disk identity와 일치할 때만 재사용합니다.
+- 외부 atomic replace, delete, 안정적인 invalid JSON/shape, read 중 identity 변경은 이전 메모리 snapshot으로 조용히 복구하지 않고 기존 missing/fallback 경계로 전달합니다. 유효하지만 오래된 snapshot은 기존처럼 stale provenance를 유지합니다.
+- runtime Benefits snapshot, runtime FINLIFE snapshot·sync-attempt, CLI FINLIFE snapshot·sync-attempt의 다섯 write operation은 canonical 파일과 같은 디렉터리에 `pid+randomUUID`가 포함된 operation-owned temp를 만들고 성공 시 rename합니다. 실패 시 해당 operation의 temp만 정리하며 canonical JSON path와 schema는 바뀌지 않습니다.
+- unique temp는 writer 간 temp 충돌을 막지만 cross-process mutex, generation ordering, sync-attempt owner-safe compare-and-clear를 제공하지 않습니다. 동시에 성공한 유효 writer의 최종 순서와 중단된 marker 복구는 별도 운영 경계입니다.
+
 - upstream 수집이 실패하면 DB와 snapshot을 갱신하지 않습니다. CLI는 non-zero로 종료하고 runtime refresh는 기존 query 결과를 유지합니다.
 - runtime 수집이 mock/fallback이면 Prisma 상품과 snapshot에 반영하지 않습니다. mock은 fixture/테스트 경계에서만 사용하고 live 완료 증거로 승격하지 않습니다.
 - persistence 시작 전에 `.data/finlife_<kind>_sync_attempt.json`을 atomic write합니다. process 중단이나 부분실패 시 marker를 남기고 성공한 뒤에만 제거합니다.

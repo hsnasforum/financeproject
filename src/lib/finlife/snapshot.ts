@@ -1,5 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  getFileIdentity,
+  readStableTextFile,
+  sameFileIdentity,
+  writeJsonFileAtomically,
+  type FileIdentity,
+} from "../storage/atomicJsonFile";
 import { ensureProductBest } from "./best";
 import { type FinlifeKind, type NormalizedProduct } from "./types";
 
@@ -35,7 +42,7 @@ export type FinlifeSyncAttempt = {
   errorCode?: "DB_SYNC_FAILED" | "SNAPSHOT_WRITE_FAILED" | "COMPLETION_WRITE_FAILED";
 };
 
-const memoryCache = new Map<string, FinlifeSnapshot>();
+const memoryCache = new Map<string, { identity: FileIdentity; snapshot: FinlifeSnapshot }>();
 
 function snapshotPath(kind: FinlifeSnapshotKind): string {
   return path.join(process.cwd(), ".data", `finlife_${kind}_snapshot.json`);
@@ -72,10 +79,7 @@ export function saveFinlifeSyncAttempt(
   attempt: FinlifeSyncAttempt,
 ): void {
   const filePath = syncAttemptPath(kind);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(attempt), "utf-8");
-  fs.renameSync(tempPath, filePath);
+  writeJsonFileAtomically(filePath, attempt);
 }
 
 export function clearFinlifeSyncAttempt(kind: FinlifeSnapshotKind): void {
@@ -84,17 +88,34 @@ export function clearFinlifeSyncAttempt(kind: FinlifeSnapshotKind): void {
 
 export function loadFinlifeSnapshot(kind: FinlifeSnapshotKind): FinlifeSnapshot | null {
   const filePath = snapshotPath(kind);
+  const currentIdentity = getFileIdentity(filePath);
+  if (!currentIdentity) {
+    memoryCache.delete(filePath);
+    return null;
+  }
   const cached = memoryCache.get(filePath);
-  if (cached) return cached;
+  if (cached && sameFileIdentity(cached.identity, currentIdentity)) return cached.snapshot;
+  const stable = readStableTextFile(filePath, currentIdentity);
+  if (!stable) {
+    memoryCache.delete(filePath);
+    return null;
+  }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as FinlifeSnapshot;
-    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.items)) return null;
-    if (!parsed.meta || typeof parsed.meta.generatedAt !== "string") return null;
+    const parsed = JSON.parse(stable.raw) as FinlifeSnapshot;
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.items)) {
+      memoryCache.delete(filePath);
+      return null;
+    }
+    if (!parsed.meta || typeof parsed.meta.generatedAt !== "string") {
+      memoryCache.delete(filePath);
+      return null;
+    }
     for (const item of parsed.items) ensureProductBest(item);
-    memoryCache.set(filePath, parsed);
+    memoryCache.set(filePath, { identity: stable.identity, snapshot: parsed });
     return parsed;
   } catch {
+    memoryCache.delete(filePath);
     return null;
   }
 }
@@ -102,11 +123,8 @@ export function loadFinlifeSnapshot(kind: FinlifeSnapshotKind): FinlifeSnapshot 
 export function saveFinlifeSnapshot(kind: FinlifeSnapshotKind, snapshot: FinlifeSnapshot): void {
   const filePath = snapshotPath(kind);
   for (const item of snapshot.items) ensureProductBest(item);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(snapshot), "utf-8");
-  fs.renameSync(tempPath, filePath);
-  memoryCache.set(filePath, snapshot);
+  writeJsonFileAtomically(filePath, snapshot);
+  memoryCache.delete(filePath);
 }
 
 export function isSnapshotFresh(meta: { generatedAt?: string; ttlMs?: number; completionRate?: number } | null | undefined, nowMs: number, ttlMs: number): boolean {

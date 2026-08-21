@@ -1,6 +1,6 @@
 import { mapOpenDartStatus } from "@/lib/publicApis/dart/opendartErrors";
-import { resolveDartBaseUrl } from "@/lib/publicApis/dart/baseUrl";
-import { type DartApiErrorCode, type DartApiResult, type DartCompany } from "@/lib/publicApis/dart/types";
+import { DartError, fetchDartJsonDetailed } from "@/lib/publicApis/dart/fetch";
+import { type DartApiError, type DartApiErrorCode, type DartApiResult, type DartCompany } from "@/lib/publicApis/dart/types";
 
 function isCorpCode(value: string): boolean {
   return /^\d{8}$/.test(value);
@@ -16,15 +16,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function getBaseUrl(): string {
-  return resolveDartBaseUrl();
+function toError(
+  code: DartApiErrorCode,
+  message: string,
+  details: Pick<DartApiError, "upstreamStatus" | "retryAfterSeconds" | "timeout" | "aborted"> = {},
+): DartApiResult<DartCompany> {
+  return { ok: false, error: { code, message, ...details } };
 }
 
-function toError(code: DartApiErrorCode, message: string): DartApiResult<DartCompany> {
-  return { ok: false, error: { code, message } };
-}
-
-export async function getDartCompany(corpCode: string): Promise<DartApiResult<DartCompany>> {
+export async function getDartCompany(
+  corpCode: string,
+  signal?: AbortSignal | null,
+): Promise<DartApiResult<DartCompany>> {
   if (!isCorpCode(corpCode)) {
     return toError("INPUT", "corpCode는 숫자 8자리여야 합니다.");
   }
@@ -34,45 +37,28 @@ export async function getDartCompany(corpCode: string): Promise<DartApiResult<Da
     return toError("CONFIG", "OPENDART_API_KEY 필요");
   }
 
-  const query = new URLSearchParams({
-    crtfc_key: apiKey,
-    corp_code: corpCode,
-  });
-
-  const endpoint = `${getBaseUrl()}/api/company.json?${query.toString()}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
-
-  let response: Response;
+  let fetched: Awaited<ReturnType<typeof fetchDartJsonDetailed>>;
   try {
-    response = await fetch(endpoint, {
-      method: "GET",
-      signal: controller.signal,
-      cache: "no-store",
-    });
+    fetched = await fetchDartJsonDetailed("company.json", { corp_code: corpCode }, 10_000, signal);
   } catch (error) {
+    if (error instanceof DartError) {
+      return { ok: false, error: error.info };
+    }
     console.error("[dart] company fetch failed", {
       corpCode,
       reason: error instanceof Error ? error.message : "unknown",
     });
     return toError("UPSTREAM", "OpenDART 호출 실패");
-  } finally {
-    clearTimeout(timer);
   }
 
-  if (!response.ok) {
-    return toError("UPSTREAM", "OpenDART 호출 실패");
-  }
-
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    return toError("UPSTREAM", "OpenDART 응답 형식이 올바르지 않습니다.");
-  }
+  const payload = fetched.body;
+  const upstreamDetails = {
+    upstreamStatus: fetched.upstreamStatus,
+    retryAfterSeconds: fetched.retryAfterSeconds,
+  };
 
   if (!isRecord(payload)) {
-    return toError("UPSTREAM", "OpenDART 응답 형식이 올바르지 않습니다.");
+    return toError("UPSTREAM", "OpenDART 응답 형식이 올바르지 않습니다.", upstreamDetails);
   }
 
   const status = asOptionalString(payload.status) ?? "";
@@ -99,13 +85,13 @@ export async function getDartCompany(corpCode: string): Promise<DartApiResult<Da
   }
 
   if (status === "013") {
-    return toError("NO_DATA", "조회된 데이터가 없습니다.");
+    return toError("NO_DATA", "조회된 데이터가 없습니다.", upstreamDetails);
   }
 
   if (status === "020") {
-    return toError("RATE_LIMIT", "요청 제한");
+    return toError("RATE_LIMIT", "요청 제한", upstreamDetails);
   }
 
   const mapped = mapOpenDartStatus(status, message, "company");
-  return toError((mapped.code || "UPSTREAM") as DartApiErrorCode, mapped.message);
+  return toError((mapped.code || "UPSTREAM") as DartApiErrorCode, mapped.message, upstreamDetails);
 }

@@ -41,6 +41,10 @@ function parsePositiveInt(value: string | undefined, fallback: number, min: numb
 }
 
 function parseHttpStatus(error: unknown): number | null {
+  const statusValue = (error as { status?: unknown } | null | undefined)?.status;
+  const typedStatus = typeof statusValue === "number" ? statusValue : Number(statusValue);
+  if (Number.isFinite(typedStatus)) return Math.trunc(typedStatus);
+
   const message = error instanceof Error ? error.message : String(error);
   const match = message.match(/HTTP\s*(\d{3})/i);
   if (!match?.[1]) return null;

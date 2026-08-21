@@ -1,4 +1,4 @@
-import { DartError, fetchDartJson } from "./fetch";
+import { DartError, fetchDartJsonDetailed } from "./fetch";
 import { mapOpenDartStatus, toDartApiError } from "./opendartErrors";
 import { type DartApiResult } from "./types";
 
@@ -112,11 +112,15 @@ export function normalizeListQuery(input: URLSearchParams): { params: DartListQu
   return { params, assumptions };
 }
 
-export async function getDartDisclosureList(input: URLSearchParams): Promise<DartApiResult<DartDisclosureList>> {
+export async function getDartDisclosureList(
+  input: URLSearchParams,
+  signal?: AbortSignal | null,
+): Promise<DartApiResult<DartDisclosureList>> {
   const { params, assumptions } = normalizeListQuery(input);
 
   try {
-    const raw = (await fetchDartJson("list.json", toStringParams(params))) as RawListResponse;
+    const fetched = await fetchDartJsonDetailed("list.json", toStringParams(params), 10_000, signal);
+    const raw = fetched.body as RawListResponse;
     const status = String(raw.status ?? "");
 
     if (status !== "000") {
@@ -137,7 +141,11 @@ export async function getDartDisclosureList(input: URLSearchParams): Promise<Dar
 
       return {
         ok: false,
-        error: toDartApiError(status, typeof raw.message === "string" ? raw.message : undefined, "list"),
+        error: {
+          ...toDartApiError(status, typeof raw.message === "string" ? raw.message : undefined, "list"),
+          upstreamStatus: fetched.upstreamStatus,
+          retryAfterSeconds: fetched.retryAfterSeconds,
+        },
       };
     }
 

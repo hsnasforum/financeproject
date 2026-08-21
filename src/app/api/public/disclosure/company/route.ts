@@ -6,7 +6,7 @@ import {
   normalizeCorpCode,
   toDartCompanyRouteData,
 } from "@/lib/publicApis/dart/companyRoute";
-import { mapDartErrorToHttp } from "@/lib/publicApis/dart/opendartErrors";
+import { mapDartErrorToHttp, toPublicDartError } from "@/lib/publicApis/dart/opendartErrors";
 
 export const runtime = "nodejs";
 
@@ -35,9 +35,12 @@ export async function GET(request: Request) {
     }
   }
 
-  const result = await getDartCompany(corpCode);
+  const result = await getDartCompany(corpCode, request.signal);
   if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error }, { status: mapDartErrorToHttp(result.error) });
+    return NextResponse.json(
+      { ok: false, error: toPublicDartError(result.error) },
+      { status: mapDartErrorToHttp(result.error) },
+    );
   }
 
   return NextResponse.json({

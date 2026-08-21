@@ -59,4 +59,79 @@ describe("fetchExternal timeout/retry", () => {
     expect(typed.detail.code).toBe("UPSTREAM");
     expect(typed.timeout).toBe(true);
   });
+
+  it("preserves status and Retry-After when an error response has malformed JSON", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{not-json", {
+      status: 429,
+      headers: {
+        "content-type": "application/json",
+        "retry-after": "13",
+      },
+    })));
+
+    const returned = await fetchExternal("https://example.com/rate-limited", {
+      retries: 0,
+      sourceKey: "malformed-rate-limit",
+      throwOnHttpError: false,
+    });
+    expect(returned).toMatchObject({
+      body: "{not-json",
+      kind: "text",
+      ok: false,
+      retryAfterSeconds: 13,
+      status: 429,
+    });
+
+    const error = await fetchExternal("https://example.com/rate-limited", {
+      retries: 0,
+      sourceKey: "malformed-rate-limit",
+    }).then(() => null, (caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ExternalApiError);
+    expect(error).toMatchObject({
+      retryAfterSeconds: 13,
+      status: 429,
+    });
+  });
+
+  it("does not add retries when the caller handles non-2xx responses", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchExternal("https://example.com/caller-owned-error", {
+      retries: 1,
+      retryOn: () => true,
+      throwOnHttpError: false,
+    });
+
+    expect(result.status).toBe(503);
+    expect(result.attempts).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels a non-2xx response body before retrying", async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream({ cancel });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(body, {
+        status: 429,
+        headers: { "retry-after": "0" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchExternal("https://example.com/release-before-retry", {
+      retries: 1,
+      timeoutMs: 1_000,
+    })).resolves.toMatchObject({ status: 200, attempts: 2 });
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
 });
