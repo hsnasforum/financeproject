@@ -5,6 +5,9 @@ import { getPlanningFeatureFlags } from "@/lib/planning/config";
 import { resolvePlanningLocale } from "@/lib/planning/i18n";
 import { normalizeProfileId } from "@/lib/planning/profileScope";
 import { loadPlanningWorkspaceInitialProfile } from "@/lib/planning/server/pages/planningRscLoaders";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/planning"];
 
 type PlanningPageProps = {
   searchParams?: Promise<{

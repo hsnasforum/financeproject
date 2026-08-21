@@ -14,8 +14,8 @@ type Tile = {
 
 const categoryTiles: Tile[] = [
   {
-    title: "예적금",
-    description: "금리 비교 후 바로 플랜에 연결",
+    title: "적금",
+    description: "적금 금리 비교 후 바로 플랜에 연결",
     href: "/products/catalog?kind=saving",
     accent: "bg-[linear-gradient(145deg,#e0ecff_0%,#c7d6ff_100%)]",
     Icon: PiggyBank,
@@ -52,7 +52,7 @@ export function QuickTiles() {
     <section className="bg-white py-14">
       <Container className="px-4 sm:px-6 lg:px-8">
         <div className="text-center">
-          <p className="text-sm font-black uppercase tracking-[0.2em] text-primary">MMD Core Features</p>
+          <p className="text-sm font-black uppercase tracking-[0.2em] text-primary">MMD 핵심 기능</p>
         </div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
@@ -68,7 +68,7 @@ export function QuickTiles() {
               </div>
               <h3 className="mt-6 text-xl font-black tracking-tight text-navy">{item.title}</h3>
               <p className="mt-3 text-sm font-medium leading-relaxed text-muted">{item.description}</p>
-              <p className="mt-8 text-sm font-black text-primary uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Explore →</p>
+              <p className="mt-8 text-sm font-black text-primary uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">살펴보기 →</p>
             </Link>
           ))}
         </div>

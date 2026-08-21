@@ -24,7 +24,8 @@ describe("home quick rules status", () => {
       />,
     );
 
-    expect(html).toContain("quick rules · 고정의무 압박");
+    expect(html).toContain("빠른 점검 · 고정의무 압박");
+    expect(html).not.toContain("quick rules");
     expect(html).toContain("상태 읽기:");
   });
 

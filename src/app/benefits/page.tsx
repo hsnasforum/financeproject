@@ -1,4 +1,7 @@
 import { BenefitsClient } from "@/components/BenefitsClient";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/benefits"];
 
 export default async function BenefitsPage({
   searchParams,

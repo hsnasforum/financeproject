@@ -15,7 +15,6 @@ import {
 
 const siteHeaderPath = fileURLToPath(new URL("../src/components/SiteHeader.tsx", import.meta.url));
 const mobileBottomNavPath = fileURLToPath(new URL("../src/components/ui/MobileBottomNav.tsx", import.meta.url));
-const serviceLinksPath = fileURLToPath(new URL("../src/components/home/ServiceLinks.tsx", import.meta.url));
 
 describe("navigation route registry", () => {
   it("feeds desktop and mobile public nav from the same route source", () => {
@@ -157,12 +156,10 @@ describe("navigation route registry", () => {
   it("keeps nav consumers on the shared registry instead of local item arrays", () => {
     const siteHeader = fs.readFileSync(siteHeaderPath, "utf8");
     const mobileBottomNav = fs.readFileSync(mobileBottomNavPath, "utf8");
-    const serviceLinks = fs.readFileSync(serviceLinksPath, "utf8");
 
     expect(siteHeader).toContain("getPublicDesktopNavItems");
     expect(siteHeader).not.toMatch(/const publicNavItems\s*[:=]\s*\[/);
     expect(mobileBottomNav).toContain("getPublicBottomNavItems");
     expect(mobileBottomNav).not.toMatch(/const navItems\s*[:=]\s*\[/);
-    expect(serviceLinks).toContain("getPublicDesktopNavItems");
   });
 });

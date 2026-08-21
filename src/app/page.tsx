@@ -7,6 +7,9 @@ import {
   landingReportPreview,
   landingTrustNotes,
 } from "@/app/_lib/landingContent";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/"];
 
 export default function Home() {
   return (

@@ -3,10 +3,12 @@ import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { isPlanningAuthError, requireCurrentPlanningUser } from "@/lib/planning/auth/currentUser";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
 import { RecommendOwnerProvider } from "@/lib/recommend/RecommendOwnerContext";
 import { recommendOwnerId } from "@/lib/recommend/ownerNamespace";
 
 export const dynamic = "force-dynamic";
+export const metadata = PUBLIC_PAGE_METADATA["/recommend"];
 
 function requestFromHeaders(incoming: Headers): Request {
   return new Request("https://recommend.invalid/recommend", { headers: incoming });

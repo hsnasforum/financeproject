@@ -1,26 +1,29 @@
 # UI Reference (예시 이미지 기반) — Chip/Tab/Filter/List 패턴
 
 이 프로젝트의 “상품 탐색 UI(/products/*)”는 아래 레이아웃/컴포넌트 패턴을 기본으로 한다.
-목표: 예시 이미지처럼 **라이트그레이 배경 + 화이트 카드 + 둥근 칩/탭 + 그린 포인트**.
+목표: 예시 이미지처럼 **라이트그레이 배경 + 화이트 카드 + 둥근 칩/탭 + Trust Blue primary 포인트**. Green은 성공·준비 상태처럼 의미가 있는 status에 사용한다.
 
 ---
 
 ## 1) Visual Tone / Tokens
-- Background: 매우 연한 회색(예: `bg-slate-50`/`bg-gray-50`)
-- Surface(Card): `bg-white`
+- Token 값의 SSOT는 [`src/app/globals.css`](../../src/app/globals.css)의 `:root`이며 `@theme inline`은 Tailwind alias다. 문서와 runtime이 다르면 runtime을 우선하고 token 변경 시 이 문서를 함께 갱신한다.
+- 공용 primary Button의 실제 소비 방식은 [`src/components/ui/Button.tsx`](../../src/components/ui/Button.tsx)를 참고한다. 이 variant는 foreground·hover·disabled text 4.5:1 이상, 일반 밝은 surface/background 위 focus indicator 3:1 이상, forced-colors의 2px outline 계약을 유지한다. 이 문서는 어두운·gradient 배경, non-primary Button과 모든 control이 같은 focus 접근성 계약을 충족한다고 확대하지 않는다.
+- Background: `bg-background` (`#f5f7fa`)
+- Surface(Card): `bg-surface` (`#ffffff`)
 - Border: 얇고 은은한 보더(예: `border-slate-200/70`)
 - Radius: 크게(예: `rounded-2xl` ~ `rounded-3xl`)
 - Shadow: 아주 약하게(예: `shadow-sm`)
-- Primary Accent: **그린(emerald)** (선택/강조/수치 강조)
-  - 텍스트/보더 강조: `text-emerald-600`, `border-emerald-500`
-  - 숫자 강조(최고 금리 등): `text-emerald-600 font-semibold`
+- Primary: **Trust Blue** (`#1e3a8a`) (선택/강조/수치 강조/주요 CTA)
+  - 텍스트/보더 강조: `text-primary`, `border-primary`
+  - 숫자 강조(최고 금리 등): `text-primary font-semibold`
+- Semantic Status: 성공·준비 상태는 `text-success` 또는 의미에 맞는 Emerald 계열, 경고·위험은 warning/danger 역할을 사용한다.
 - Text:
   - Title: `text-slate-900 font-semibold`
   - Body: `text-slate-700`
   - Muted: `text-slate-500`
 - Interaction:
   - hover: `hover:bg-slate-50`
-  - focus: `focus-visible:ring-2 focus-visible:ring-emerald-400`
+  - keyboard focus: `focus-visible:ring-2 focus-visible:ring-focus-ring`
 
 > 주의: 외부 트래킹/외부 로고 다운로드 금지. 금융사 아이콘은 기본 `Bank`/`Building2` 같은 아이콘 또는 이니셜(원형 배지)로 표현.
 
@@ -61,13 +64,13 @@
 - 각 Provider 칩:
   - 카드형 작은 타일: `min-w-[76px] rounded-xl border bg-white`
   - 상단 아이콘(원형) + 하단 라벨
-  - 선택 시: `border-emerald-500 text-emerald-700`
+  - 선택 시: `border-primary text-primary`
 - 좌/우 스크롤 버튼은 데스크톱에서만 표시해도 됨(선택)
 
 ### 3.4 Filter Chips Row
 - 필터 칩 형태: `rounded-full border px-3 py-1 text-sm`
 - 선택/활성 강조:
-  - 예시처럼 필터 텍스트가 초록색으로 바뀌거나(활성 상태), “상품유형 1”처럼 선택 개수 표기
+  - 필터 텍스트와 border를 primary token으로 바꾸고, “상품유형 1”처럼 선택 개수를 표기
 - 클릭 시:
   - 모바일: Sheet/Popover
   - 데스크톱: Popover/인라인 확장 영역
@@ -75,7 +78,7 @@
 ### 3.5 Filter Grid (3열)
 - 3열 그리드 셀:
   - 셀 border로 구획, 내부에 라벨 + 우측 상단 작은 “+”
-  - 선택된 경우 “체크” 또는 라벨이 초록색 + 체크 아이콘
+  - 선택된 경우 “체크” 또는 primary 색상 라벨 + 체크 아이콘
 - 하단에 주석 텍스트(`text-xs text-slate-400`) 가능(예: “*신협 상품에는 적용되지 않습니다”)
 
 ### 3.6 Applied Filter Chips + Reset
@@ -87,7 +90,7 @@
 
 ## 4) Result List Pattern
 ### 4.1 List Header
-- 좌: 결과 개수 “191개”에서 숫자는 초록색 강조
+- 좌: 결과 개수 “191개”에서 숫자는 primary 색상으로 강조
 - 우: 정렬 드롭다운(예: 최고금리순)
 
 ### 4.2 Product List Item (Row)
@@ -97,7 +100,7 @@
   - 금융사명(보조)
   - 가입조건 태그(작은 회색 배지/칩)
 - 우측:
-  - 최고 금리: 초록색, 크게
+  - 최고 금리: primary 색상, 크게
   - 최저/기본 금리: 회색, 작게
 - divider: 아주 옅은 구분선(행간 넓게)
 

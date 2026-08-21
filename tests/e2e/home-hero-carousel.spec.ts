@@ -49,3 +49,47 @@ test("home hero carousel remains still when reduced motion is requested", async 
   await page.waitForTimeout(4_800);
   await expect(activeSlide).toHaveAttribute("data-slide-id", "landing-diagnosis-preview");
 });
+
+test("home savings entry keeps its label, query, active tab, and responsive width aligned", async ({ page }) => {
+  await page.route("**/api/products/unified?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: { items: [], pageInfo: { hasMore: false, nextCursor: null } },
+      }),
+    });
+  });
+  await page.goto("/");
+
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const savingsEntry = page.getByRole("link", {
+      name: "적금 적금 금리 비교 후 바로 플랜에 연결 살펴보기 →",
+      exact: true,
+    });
+    await expect(savingsEntry).toBeVisible();
+    expect(await savingsEntry.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+  }
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const savingsEntry = page.getByRole("link", {
+    name: "적금 적금 금리 비교 후 바로 플랜에 연결 살펴보기 →",
+    exact: true,
+  });
+  await savingsEntry.hover();
+  await expect(savingsEntry.getByText("살펴보기 →", { exact: true })).toBeVisible();
+
+  await savingsEntry.click();
+  await expect(page).toHaveURL(/\/products\/catalog\?kind=saving/, { timeout: 30_000 });
+  expect(new URL(page.url()).searchParams.get("kind")).toBe("saving");
+  await expect(page.getByRole("heading", { name: "통합 상품 탐색" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "정기적금", exact: true }).locator('span[aria-hidden="true"]')).toHaveCount(1);
+});
