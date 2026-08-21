@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as unlockPOST } from "../src/app/api/dev/unlock/route";
 import { GET as feedbackDetailGET, PATCH as feedbackPatch } from "../src/app/api/feedback/[id]/route";
 import { GET as feedbackListGET } from "../src/app/api/feedback/list/route";
@@ -160,16 +160,58 @@ describe("feedback public and local-ops access matrix", () => {
         category: "bug",
         message: "피드백 저장 route guard 성공 케이스입니다.",
         snapshot: {
-          generatedAt: "2026-07-12T00:00:00.000Z",
-          page: { url: "/private", userAgent: "secret-agent" },
+          generatedAt: "2000-01-01T00:00:00.000Z",
+          appVersion: "client-controlled-snapshot",
+          recentErrors: [],
         },
+      },
+      headers: {
+        "x-page-url": "https://attacker.example/private?token=secret",
+        "x-local-state-summary": encodeURIComponent(JSON.stringify({ injected: { exists: true, savedAt: null } })),
       },
     }));
     const payload = await response.json();
 
     expect(response.status).toBe(200);
     expect(payload).toEqual({ ok: true });
-    expect(listRecent(10)).toHaveLength(1);
+    const recent = listRecent(10);
+    expect(recent).toHaveLength(1);
+    const storedSnapshot = getFeedbackById(recent[0]!.id)?.snapshot;
+    expect(storedSnapshot?.generatedAt).toEqual(expect.any(String));
+    expect(storedSnapshot?.generatedAt).not.toBe("2000-01-01T00:00:00.000Z");
+    expect(storedSnapshot?.appVersion).not.toBe("client-controlled-snapshot");
+    expect(storedSnapshot?.page.url).toBe("http://localhost:3000/api/feedback");
+    expect(storedSnapshot?.localStateSummary).toBeNull();
+  });
+
+  it("stores feedback even when server diagnostics cannot be generated", async () => {
+    const originalExistsSync = fs.existsSync;
+    const existsSyncSpy = vi.spyOn(fs, "existsSync").mockImplementation((target) => {
+      const normalized = String(target).replaceAll("\\", "/");
+      if (normalized.endsWith("/tmp/dart")) {
+        throw new Error("diagnostics unavailable");
+      }
+      return originalExistsSync(target);
+    });
+
+    try {
+      const response = await feedbackPost(request("/api/feedback", {
+        method: "POST",
+        body: {
+          category: "question",
+          message: "진단 생성 실패 시에도 저장되는 피드백입니다.",
+        },
+      }));
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload).toEqual({ ok: true });
+      const recent = listRecent(10);
+      expect(recent).toHaveLength(1);
+      expect(getFeedbackById(recent[0]!.id)?.snapshot).toBeUndefined();
+    } finally {
+      existsSyncSpy.mockRestore();
+    }
   });
 
   it("keeps origin protection on public submission", async () => {

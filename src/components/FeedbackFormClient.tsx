@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import { downloadText } from "@/lib/browser/download";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -18,119 +17,20 @@ type SubmitPayload = {
   };
 };
 
-type LocalStateSummary = Record<string, { exists: boolean; savedAt: string | null }>;
-
-type DiagnosticsSnapshot = {
-  generatedAt: string;
-  appVersion: string | null;
-  page: {
-    url: string | null;
-    userAgent: string | null;
-  };
-  recentErrors: Array<{
-    time: string;
-    traceId: string;
-    route: string;
-    source: string;
-    code: string;
-    message: string;
-    status: number;
-    elapsedMs: number;
-  }>;
-  dailyRefresh: {
-    generatedAt: string | null;
-    ok: boolean;
-    steps: Array<{ name: string; status: "ok" | "skipped" | "failed"; tookMs: number }>;
-  } | null;
-  dartArtifacts: {
-    dirExists: boolean;
-    items: Array<{ name: string; exists: boolean; updatedAt: string | null }>;
-  };
-  localStateSummary: LocalStateSummary | null;
-};
-
-type SnapshotPayload = {
-  ok?: boolean;
-  data?: DiagnosticsSnapshot;
-};
-
 const CATEGORY_OPTIONS: Array<{ value: FeedbackCategory; label: string }> = [
   { value: "bug", label: "버그" },
   { value: "improve", label: "개선 제안" },
   { value: "question", label: "질문" },
 ];
 
-const LOCAL_STATE_KEYS = [
-  "planner_last_snapshot_v1",
-] as const;
-
-function parseSavedAtFromJson(value: string): string | null {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const savedAt = (parsed as Record<string, unknown>).savedAt;
-    if (typeof savedAt !== "string") return null;
-    const time = Date.parse(savedAt);
-    if (!Number.isFinite(time)) return null;
-    return new Date(time).toISOString();
-  } catch {
-    return null;
-  }
-}
-
-function collectLocalStateSummary(): LocalStateSummary | null {
-  if (typeof window === "undefined") return null;
-  const out: LocalStateSummary = {};
-  try {
-    for (const key of LOCAL_STATE_KEYS) {
-      const raw = window.localStorage.getItem(key);
-      if (raw === null) {
-        out[key] = { exists: false, savedAt: null };
-        continue;
-      }
-      out[key] = {
-        exists: true,
-        savedAt: parseSavedAtFromJson(raw),
-      };
-    }
-  } catch {
-    for (const key of LOCAL_STATE_KEYS) {
-      out[key] = { exists: false, savedAt: null };
-    }
-  }
-  return out;
-}
-
 export function FeedbackFormClient() {
   const [category, setCategory] = useState<FeedbackCategory>("improve");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [snapshotCache, setSnapshotCache] = useState<DiagnosticsSnapshot | null>(null);
 
   const messageLength = useMemo(() => message.trim().length, [message]);
-
-  async function fetchDiagnosticsSnapshot(): Promise<DiagnosticsSnapshot | null> {
-    try {
-      const localStateSummary = collectLocalStateSummary();
-      const localStateHeader = localStateSummary ? encodeURIComponent(JSON.stringify(localStateSummary)) : "";
-      const response = await fetch("/api/diagnostics/snapshot", {
-        method: "GET",
-        headers: {
-          "x-page-url": window.location.href,
-          ...(localStateHeader ? { "x-local-state-summary": localStateHeader } : {}),
-        },
-      });
-      const payload = (await response.json().catch(() => null)) as SnapshotPayload | null;
-      if (!response.ok || !payload?.ok || !payload.data) return null;
-      setSnapshotCache(payload.data);
-      return payload.data;
-    } catch {
-      return null;
-    }
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,7 +45,6 @@ export function FeedbackFormClient() {
 
     setSubmitting(true);
     try {
-      const snapshot = await fetchDiagnosticsSnapshot();
       const response = await fetch("/api/feedback", {
         method: "POST",
         headers: {
@@ -154,7 +53,6 @@ export function FeedbackFormClient() {
         body: JSON.stringify({
           category,
           message: normalized,
-          ...(snapshot ? { snapshot } : {}),
         }),
       });
       const payload = (await response.json().catch(() => null)) as SubmitPayload | null;
@@ -168,25 +66,6 @@ export function FeedbackFormClient() {
       setError("네트워크 오류로 저장하지 못했습니다.");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function onDownloadBundle() {
-    setNotice("");
-    setError("");
-    setDownloading(true);
-    try {
-      const snapshot = snapshotCache ?? await fetchDiagnosticsSnapshot();
-      if (!snapshot) {
-        setError("진단 스냅샷을 생성하지 못했습니다.");
-        return;
-      }
-      downloadText("diagnostics_bundle.json", JSON.stringify(snapshot, null, 2), "application/json;charset=utf-8");
-      setNotice("진단 번들을 다운로드했습니다. 오류 재현이나 지원 대응에 직접 공유가 필요할 때만 함께 전달해 주세요.");
-    } catch {
-      setError("진단 번들 다운로드 중 오류가 발생했습니다.");
-    } finally {
-      setDownloading(false);
     }
   }
 
@@ -210,7 +89,7 @@ export function FeedbackFormClient() {
               이 화면은 즉시 답변을 받는 곳이 아니라, 문제 상황과 개선 아이디어를 운영자에게 전달하는 support entry 화면입니다.
             </p>
             <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">
-              제출 응답에는 운영 메모나 첨부 진단 정보가 포함되지 않습니다. 진단 번들은 오류 재현이나 지원 대응에 직접 공유가 필요할 때만 내려받으세요.
+              제출 응답에는 운영 메모나 첨부 진단 정보가 포함되지 않습니다. 오류 재현에 필요한 기본 진단 정보는 서버에서 함께 기록됩니다.
             </p>
           </div>
 
@@ -254,10 +133,7 @@ export function FeedbackFormClient() {
             <Button type="submit" variant="primary" className="h-11 px-8 rounded-2xl font-black shadow-md" disabled={submitting}>
               {submitting ? "저장 중..." : "내용 저장하기"}
             </Button>
-            <Button type="button" variant="outline" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={() => void onDownloadBundle()} disabled={downloading || submitting}>
-              {downloading ? "생성 중..." : "공유용 진단 번들"}
-            </Button>
-            <p className="ml-2 text-xs font-bold text-slate-400">진단 번들은 직접 공유가 필요할 때만 내려받고, 민감정보(비밀번호, 계좌번호 전체 등)는 남기지 마세요.</p>
+            <p className="ml-2 text-xs font-bold text-slate-400">비밀번호, 인증번호, 계좌번호 전체 등 민감정보는 메시지에 남기지 마세요.</p>
           </div>
         </form>
       </Card>
