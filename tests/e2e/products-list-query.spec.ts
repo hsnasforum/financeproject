@@ -110,6 +110,62 @@ test("catalog explains source and provider-facet partial results without a false
   await expect(page.getByText("저장된 상품 수가 많아 조회를 중단했습니다.")).toHaveCount(0);
 });
 
+test("catalog refuses to append a page with different snapshot provenance", async ({ page }) => {
+  await page.route("**/api/products/unified?**", async (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    const version = cursor ? "version-b" : "version-a";
+    const product = cursor
+      ? { stableId: "PAGE-B", externalKey: "PAGE-B", productName: "섞이면 안 되는 상품" }
+      : { stableId: "PAGE-A", externalKey: "PAGE-A", productName: "첫 snapshot 상품" };
+    const freshness = {
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      overall: "fresh",
+      sources: [],
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [{
+            ...product,
+            sourceId: "finlife",
+            kind: "deposit",
+            providerName: "기준은행",
+            options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+          }],
+          facets: {
+            providers: ["기준은행"],
+            providerStatus: { state: "complete", issues: [] },
+          },
+          pageInfo: {
+            hasMore: !cursor,
+            nextCursor: cursor ? null : "next-page",
+            limit: 60,
+          },
+          provenance: {
+            policy: "pinned_snapshot",
+            capturedAt: "2026-09-01T00:00:00.000Z",
+            versionFingerprint: version,
+            freshness,
+          },
+        },
+        meta: { freshness },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit&termMonths=12");
+  await expect(page.getByRole("heading", { name: "첫 snapshot 상품" })).toBeVisible();
+  await page.getByRole("button", { name: "비교 후보 더 보기" }).click();
+
+  await expect(page.getByText(/CURSOR_PROVENANCE_MISMATCH/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "첫 snapshot 상품" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "섞이면 안 되는 상품" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "비교 후보 더 보기" })).toHaveCount(0);
+});
+
 test("specialized product list applies the pure result pipeline to query filters", async ({ page }) => {
   await page.route("**/api/finlife/pension?**", async (route) => {
     await route.fulfill({

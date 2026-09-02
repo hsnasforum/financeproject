@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getUnifiedCatalogSnapshotStoreStats,
   getUnifiedProductsWithLoaders,
+  resetUnifiedCatalogSnapshotStoreForTests,
+  type UnifiedCatalogSnapshot,
   type UnifiedProductView,
+  type UnifiedSnapshotProvenance,
 } from "../src/lib/sources/unified";
+import { BoundedCatalogSnapshotStore } from "../src/lib/sources/unifiedCatalogSnapshotStore";
 import {
   type UnifiedSourceLoader,
   type UnifiedSourceLoaderMap,
@@ -62,6 +67,10 @@ function baseInput(overrides: Partial<Parameters<typeof getUnifiedProductsWithLo
 }
 
 describe("unified source loaders", () => {
+  beforeEach(() => {
+    resetUnifiedCatalogSnapshotStoreForTests();
+  });
+
   it("merges fake loader pages without DB/network and preserves deposit protection policy", async () => {
     const finlife = createLoader("finlife", {
       count: 1,
@@ -249,6 +258,240 @@ describe("unified source loaders", () => {
     }, { finlife });
     expect(second.items.map((item) => item.stableId)).toEqual(["F2"]);
     expect(finlife.query).toHaveBeenCalledTimes(3);
+  });
+
+  it("reuses the same filtered snapshot for an identical signature within its TTL", async () => {
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "REUSE-1",
+          sourceId: "finlife",
+          externalKey: "REUSE-1",
+          providerName: "재사용은행",
+          options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+        }),
+        product({
+          stableId: "REUSE-2",
+          sourceId: "finlife",
+          externalKey: "REUSE-2",
+          providerName: "재사용은행",
+          options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const input = baseInput({
+      includeSources: ["finlife"],
+      provider: "재사용은행",
+      limit: 1,
+    });
+
+    const first = await getUnifiedProductsWithLoaders(input, { finlife });
+    const repeated = await getUnifiedProductsWithLoaders(input, { finlife });
+
+    expect(first.items.map((item) => item.stableId)).toEqual(["REUSE-1"]);
+    expect(repeated.items.map((item) => item.stableId)).toEqual(["REUSE-1"]);
+    expect(repeated.pageInfo.nextCursor).toBe(first.pageInfo.nextCursor);
+    expect(finlife.query).toHaveBeenCalledTimes(1);
+  });
+
+  it("pins the first-page provenance to every page of the same snapshot", async () => {
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "PIN-1",
+          sourceId: "finlife",
+          externalKey: "PIN-1",
+          providerName: "고정은행",
+          options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+        }),
+        product({
+          stableId: "PIN-2",
+          sourceId: "finlife",
+          externalKey: "PIN-2",
+          providerName: "고정은행",
+          options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const pinned: UnifiedSnapshotProvenance = {
+      policy: "pinned_snapshot",
+      capturedAt: "2026-09-01T00:00:00.000Z",
+      versionFingerprint: "version-a",
+      freshness: {
+        checkedAt: "2026-09-01T00:00:00.000Z",
+        overall: "fresh",
+        sources: [],
+      },
+    };
+    const captureCatalogProvenance = vi.fn(async () => pinned);
+    const input = baseInput({
+      includeSources: ["finlife"],
+      provider: "고정은행",
+      limit: 1,
+    });
+
+    const first = await getUnifiedProductsWithLoaders(input, { finlife }, { captureCatalogProvenance });
+    const second = await getUnifiedProductsWithLoaders({
+      ...input,
+      cursor: first.pageInfo.nextCursor,
+    }, { finlife }, { captureCatalogProvenance });
+
+    expect(first.provenance).toEqual(pinned);
+    expect(second.provenance).toEqual(pinned);
+    expect(captureCatalogProvenance).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects tampered, cross-signature, and evicted catalog cursors explicitly", async () => {
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "CURSOR-1",
+          sourceId: "finlife",
+          externalKey: "CURSOR-1",
+          providerName: "커서은행",
+          options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+        }),
+        product({
+          stableId: "CURSOR-2",
+          sourceId: "finlife",
+          externalKey: "CURSOR-2",
+          providerName: "커서은행",
+          options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const input = baseInput({
+      includeSources: ["finlife"],
+      provider: "커서은행",
+      limit: 1,
+    });
+    const first = await getUnifiedProductsWithLoaders(input, { finlife });
+    const cursor = first.pageInfo.nextCursor;
+    if (!cursor) throw new Error("expected catalog cursor");
+    const [payload, mac] = cursor.split(".");
+    const tampered = `${payload}.${mac.startsWith("a") ? "b" : "a"}${mac.slice(1)}`;
+
+    await expect(getUnifiedProductsWithLoaders({ ...input, cursor: tampered }, { finlife }))
+      .rejects.toMatchObject({ code: "CURSOR_INVALID" });
+    await expect(getUnifiedProductsWithLoaders({
+      ...input,
+      provider: "다른은행",
+      cursor,
+    }, { finlife })).rejects.toMatchObject({ code: "CURSOR_MISMATCH" });
+
+    resetUnifiedCatalogSnapshotStoreForTests();
+    await expect(getUnifiedProductsWithLoaders({ ...input, cursor }, { finlife }))
+      .rejects.toMatchObject({ code: "CURSOR_EXPIRED" });
+  });
+
+  it("returns an explicit partial first page without a cursor when one snapshot exceeds the row budget", async () => {
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "LIMIT-1",
+          sourceId: "finlife",
+          externalKey: "LIMIT-1",
+          providerName: "한도은행",
+        }),
+        product({
+          stableId: "LIMIT-2",
+          sourceId: "finlife",
+          externalKey: "LIMIT-2",
+          providerName: "한도은행",
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const boundedStore = new BoundedCatalogSnapshotStore<UnifiedCatalogSnapshot>({
+      ttlMs: 1_000,
+      sweepIntervalMs: 100,
+      maxSnapshots: 4,
+      maxRetainedRows: 1,
+      maxEstimatedBytes: 100_000,
+    });
+
+    try {
+      const result = await getUnifiedProductsWithLoaders(baseInput({
+        includeSources: ["finlife"],
+        provider: "한도은행",
+        limit: 1,
+      }), { finlife }, { catalogSnapshotStore: boundedStore });
+
+      expect(result.items.map((item) => item.stableId)).toEqual(["LIMIT-1"]);
+      expect(result.pageInfo).toEqual(expect.objectContaining({
+        hasMore: false,
+        nextCursor: null,
+        partial: true,
+      }));
+      expect(result.pageInfo.partialReasons).toContainEqual(expect.objectContaining({
+        code: "CURSOR_UNAVAILABLE_RESOURCE_LIMIT",
+        resource: expect.objectContaining({ retainedRows: 2 }),
+      }));
+      expect(boundedStore.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        retainedRows: 0,
+      }));
+    } finally {
+      boundedStore.dispose();
+    }
+  });
+
+  it("reports a TTL-expired snapshot cursor explicitly", async () => {
+    let now = 0;
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "TTL-1",
+          sourceId: "finlife",
+          externalKey: "TTL-1",
+          providerName: "만료은행",
+        }),
+        product({
+          stableId: "TTL-2",
+          sourceId: "finlife",
+          externalKey: "TTL-2",
+          providerName: "만료은행",
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const expiringStore = new BoundedCatalogSnapshotStore<UnifiedCatalogSnapshot>({
+      ttlMs: 100,
+      sweepIntervalMs: 100,
+      maxSnapshots: 4,
+      maxRetainedRows: 100,
+      maxEstimatedBytes: 100_000,
+      now: () => now,
+    });
+    const input = baseInput({
+      includeSources: ["finlife"],
+      provider: "만료은행",
+      limit: 1,
+    });
+
+    try {
+      const first = await getUnifiedProductsWithLoaders(input, { finlife }, {
+        catalogSnapshotStore: expiringStore,
+      });
+      expect(first.pageInfo.nextCursor).toBeTruthy();
+
+      now = 101;
+      await expect(getUnifiedProductsWithLoaders({
+        ...input,
+        cursor: first.pageInfo.nextCursor,
+      }, { finlife }, { catalogSnapshotStore: expiringStore }))
+        .rejects.toMatchObject({ code: "CURSOR_EXPIRED" });
+    } finally {
+      expiringStore.dispose();
+    }
   });
 
   it("marks an endless filtered fallback partial at the page boundary", async () => {
@@ -600,6 +843,10 @@ describe("unified source loaders", () => {
       .toEqual(["NEWEST", "TIE-A", "TIE-B"]);
     expect(finlife.query).toHaveBeenCalledTimes(1);
     expect(kdb.query).toHaveBeenCalledTimes(1);
+    expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+      snapshotCount: 1,
+      retainedCursorCount: 0,
+    }));
     expect(first.items[0]?.firstSeenAt).toBeUndefined();
     expect(first.items[0]?.lastSeenAt).toBeUndefined();
     expect(first.items[0]?.updatedAt).toBeUndefined();

@@ -55,13 +55,19 @@ export default function ProductsCatalogPage() {
     providerNames: [],
     partialReasons: [],
     providerStatus: { state: "complete", issues: [] },
+    provenanceFingerprint: null,
   });
+  const catalogStateRef = useRef(catalogState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [compareNotice, setCompareNotice] = useState("");
   const catalogRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
   if (catalogRequestsRef.current == null) catalogRequestsRef.current = createLatestRequestCoordinator();
   const effectiveIncludeSamplebank = samplebankVisible && includeSamplebank;
+
+  useEffect(() => {
+    catalogStateRef.current = catalogState;
+  }, [catalogState]);
   const catalogQueryKey = useMemo(
     () => buildCatalogQueryKey({
       kind: urlState.kind,
@@ -145,6 +151,14 @@ export default function ProductsCatalogPage() {
       if (!res.ok || !json.ok) {
         const code = json.error?.code ?? "UPSTREAM";
         const message = json.error?.message ?? "통합 카탈로그 조회에 실패했습니다.";
+        if (append && (code === "CURSOR_INVALID" || code === "CURSOR_EXPIRED" || code === "CURSOR_MISMATCH")) {
+          const previous = catalogStateRef.current;
+          if (previous.queryKey === catalogQueryKey) {
+            const stopped = { ...previous, hasMore: false, nextCursor: null };
+            catalogStateRef.current = stopped;
+            setCatalogState(stopped);
+          }
+        }
         setError(`${code}: ${message}`);
         return;
       }
@@ -157,17 +171,34 @@ export default function ProductsCatalogPage() {
         providerNames: responseProviderNames,
         partialReasons: responsePartialReasons,
         providerStatus: responseProviderStatus,
+        provenance: responseProvenance,
       } = parseCatalogResponse(json);
-      setCatalogState((prev) => ({
+      const previous = catalogStateRef.current;
+      const responseFingerprint = responseProvenance?.versionFingerprint ?? null;
+      if (
+        append
+        && previous.queryKey === catalogQueryKey
+        && previous.provenanceFingerprint !== responseFingerprint
+      ) {
+        const stopped = { ...previous, hasMore: false, nextCursor: null };
+        catalogStateRef.current = stopped;
+        setCatalogState(stopped);
+        setError("CURSOR_PROVENANCE_MISMATCH: 이전 페이지와 데이터 기준이 달라 결과를 합치지 않았습니다. 첫 페이지부터 다시 조회해 주세요.");
+        return;
+      }
+      const nextState: CatalogState = {
         queryKey: catalogQueryKey,
-        rows: append && prev.queryKey === catalogQueryKey ? [...prev.rows, ...pageItems] : pageItems,
+        rows: append && previous.queryKey === catalogQueryKey ? [...previous.rows, ...pageItems] : pageItems,
         hasMore: responseHasMore,
         nextCursor: responseNextCursor,
         freshness: responseFreshness,
         providerNames: responseProviderNames,
         partialReasons: responsePartialReasons,
         providerStatus: responseProviderStatus,
-      }));
+        provenanceFingerprint: responseFingerprint,
+      };
+      catalogStateRef.current = nextState;
+      setCatalogState(nextState);
       setCompareNotice("");
     } catch (fetchError) {
       if (!request.isCurrent() || (fetchError instanceof Error && fetchError.name === "AbortError")) return;
@@ -364,8 +395,10 @@ export default function ProductsCatalogPage() {
           <p className="text-sm font-black text-amber-900">일부 상품 정보에 확인이 필요합니다.</p>
           <ul className="mt-3 space-y-3">
             {partialReasons.map((reason, index) => (
-              <li key={`${reason.code}-${reason.sourceId}-${index}`} className="text-xs font-medium leading-relaxed text-amber-800">
-                <p><strong>{formatCatalogSourceName(reason.sourceId)}</strong> · {reason.message}</p>
+              <li key={`${reason.code}-${"sourceId" in reason ? reason.sourceId : "snapshot"}-${index}`} className="text-xs font-medium leading-relaxed text-amber-800">
+                <p>
+                  <strong>{"sourceId" in reason ? formatCatalogSourceName(reason.sourceId) : "페이지 이어보기"}</strong> · {reason.message}
+                </p>
                 <p className="mt-1">다음 단계: {reason.recovery}</p>
               </li>
             ))}

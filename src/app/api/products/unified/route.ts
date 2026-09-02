@@ -1,6 +1,7 @@
 import {
   getUnifiedProducts,
   UnifiedInputError,
+  type UnifiedCursorErrorReason,
   type UnifiedMode,
   type UnifiedRequestInterruptionReason,
 } from "@/lib/sources/unified";
@@ -290,7 +291,7 @@ export async function GET(request: Request) {
     };
 
     const generatedAt = new Date().toISOString();
-    const freshness = applyProductSourceIssues(await getProductFreshnessSummary({
+    const freshness = data.provenance?.freshness ?? applyProductSourceIssues(await getProductFreshnessSummary({
       kind,
       sourceIds: sourceId ? [sourceId] : includeSources,
       checkedAt: generatedAt,
@@ -329,6 +330,20 @@ export async function GET(request: Request) {
       }));
     }
     if (error instanceof UnifiedInputError) {
+      if (error.code === "CURSOR_INVALID" || error.code === "CURSOR_EXPIRED" || error.code === "CURSOR_MISMATCH") {
+        const reason: UnifiedCursorErrorReason = {
+          code: error.code,
+          message: error.message,
+          recovery: "현재 조회 조건으로 첫 페이지부터 다시 조회해 주세요.",
+        };
+        const status = error.code === "CURSOR_EXPIRED" ? 410 : 400;
+        recordError(reason.code, reason.message, status);
+        return withTrace(jsonError(reason.code, reason.message, {
+          status,
+          details: { reason },
+          meta: traceMeta(),
+        }));
+      }
       const status = statusFromCode("INPUT");
       recordError("INPUT", error.message, status);
       return withTrace(jsonError("INPUT", error.message, {

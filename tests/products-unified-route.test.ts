@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
   getUnifiedProducts: vi.fn(),
-  UnifiedInputError: class UnifiedInputError extends Error {},
+  UnifiedInputError: class UnifiedInputError extends Error {
+    constructor(message: string, readonly code = "INPUT") {
+      super(message);
+    }
+  },
   getProductFreshnessSummary: vi.fn(),
 }));
 
@@ -51,6 +55,16 @@ type UnifiedRouteJson = {
       providerStatus?: {
         state?: string;
         issues?: Array<{ code?: string; sourceId?: string }>;
+      };
+    };
+    provenance?: {
+      policy?: string;
+      capturedAt?: string;
+      versionFingerprint?: string;
+      freshness?: {
+        checkedAt?: string;
+        overall?: string;
+        sources?: Array<{ sourceAsOf?: string | null }>;
       };
     };
   };
@@ -359,6 +373,58 @@ describe("GET /api/products/unified", () => {
         reason: expect.objectContaining({
           code: "REQUEST_ABORTED",
           recovery: expect.any(String),
+        }),
+      },
+    }));
+  });
+
+  it("uses snapshot-pinned freshness instead of recomputing current provenance", async () => {
+    const pinnedFreshness = {
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      overall: "fresh" as const,
+      sources: [{
+        sourceId: "finlife" as const,
+        kind: "deposit" as const,
+        sourceAsOf: "2026-08-31T23:00:00.000Z",
+        checkedAt: "2026-09-01T00:00:00.000Z",
+        ttlMs: 43_200_000,
+        ageMs: 3_600_000,
+        freshness: "fresh" as const,
+        fallbackUsed: false,
+        message: "snapshot fresh",
+      }],
+    };
+    mocked.getUnifiedProducts.mockResolvedValueOnce({
+      ...sampleUnified,
+      provenance: {
+        policy: "pinned_snapshot",
+        capturedAt: "2026-09-01T00:00:00.000Z",
+        versionFingerprint: "snapshot-version-a",
+        freshness: pinnedFreshness,
+      },
+    });
+
+    const { status, json } = await callUnified("?kind=deposit&termMonths=12");
+
+    expect(status).toBe(200);
+    expect(json.meta?.freshness).toEqual(pinnedFreshness);
+    expect(mocked.getProductFreshnessSummary).not.toHaveBeenCalled();
+  });
+
+  it("returns an explicit cursor-expired response with first-page recovery", async () => {
+    mocked.getUnifiedProducts.mockRejectedValueOnce(
+      new mocked.UnifiedInputError("snapshot expired", "CURSOR_EXPIRED"),
+    );
+
+    const { status, json } = await callUnified("?kind=deposit&termMonths=12&cursor=expired");
+
+    expect(status).toBe(410);
+    expect(json.error).toEqual(expect.objectContaining({
+      code: "CURSOR_EXPIRED",
+      details: {
+        reason: expect.objectContaining({
+          code: "CURSOR_EXPIRED",
+          recovery: expect.stringContaining("첫 페이지"),
         }),
       },
     }));

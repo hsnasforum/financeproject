@@ -4,6 +4,7 @@ import type {
   UnifiedDataPartialReason,
   UnifiedProviderFacetIssue,
   UnifiedProviderFacetStatus,
+  UnifiedSnapshotProvenance,
 } from "@/lib/sources/unifiedTypes";
 
 export type CatalogKind = "deposit" | "saving";
@@ -45,6 +46,7 @@ export type UnifiedResponse = {
       providers?: string[];
       providerStatus?: UnifiedProviderFacetStatus;
     };
+    provenance?: UnifiedSnapshotProvenance;
   };
   meta?: {
     generatedAt?: string;
@@ -65,6 +67,7 @@ export type CatalogState = {
   providerNames: string[];
   partialReasons: UnifiedDataPartialReason[];
   providerStatus: UnifiedProviderFacetStatus;
+  provenanceFingerprint: string | null;
 };
 
 export type CatalogUrlState = {
@@ -177,39 +180,65 @@ const DATA_PARTIAL_CODES = new Set<UnifiedDataPartialReason["code"]>([
   "SOURCE_REFRESH_FALLBACK",
   "SCAN_PAGE_CAP",
   "SCAN_ROW_CAP",
+  "CURSOR_UNAVAILABLE_RESOURCE_LIMIT",
 ]);
+
+type UnifiedSourceDataPartialReason = Extract<UnifiedDataPartialReason, { sourceId: string }>;
 
 function parseDataPartialReasons(value: unknown): UnifiedDataPartialReason[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((entry) => {
-    if (!isRecord(entry)) return [];
+  const reasons: UnifiedDataPartialReason[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
     const code = entry.code;
-    const sourceId = entry.sourceId;
     const message = entry.message;
     const recovery = entry.recovery;
     if (
       typeof code !== "string"
       || !DATA_PARTIAL_CODES.has(code as UnifiedDataPartialReason["code"])
-      || (sourceId !== "finlife" && sourceId !== "datago_kdb" && sourceId !== "samplebank")
       || typeof message !== "string"
       || typeof recovery !== "string"
     ) {
-      return [];
+      continue;
     }
-    const cap: UnifiedDataPartialReason["cap"] = isRecord(entry.cap)
+    if (code === "CURSOR_UNAVAILABLE_RESOURCE_LIMIT") {
+      if (
+        !isRecord(entry.resource)
+        || typeof entry.resource.retainedRows !== "number"
+        || !Number.isFinite(entry.resource.retainedRows)
+        || (entry.resource.estimatedBytes !== null
+          && (typeof entry.resource.estimatedBytes !== "number" || !Number.isFinite(entry.resource.estimatedBytes)))
+      ) {
+        continue;
+      }
+      reasons.push({
+        code,
+        message,
+        recovery,
+        resource: {
+          retainedRows: entry.resource.retainedRows,
+          estimatedBytes: entry.resource.estimatedBytes,
+        },
+      });
+      continue;
+    }
+    const sourceId = entry.sourceId;
+    if (sourceId !== "finlife" && sourceId !== "datago_kdb" && sourceId !== "samplebank") continue;
+    const cap: UnifiedSourceDataPartialReason["cap"] = isRecord(entry.cap)
       && (entry.cap.unit === "pages" || entry.cap.unit === "rows")
       && typeof entry.cap.limit === "number"
       && Number.isFinite(entry.cap.limit)
       ? { unit: entry.cap.unit as "pages" | "rows", limit: entry.cap.limit }
       : undefined;
-    return [{
-      code: code as UnifiedDataPartialReason["code"],
+    reasons.push({
+      code: code as UnifiedSourceDataPartialReason["code"],
       sourceId,
       message,
       recovery,
       ...(cap ? { cap } : {}),
-    }];
-  });
+    });
+  }
+  return reasons;
 }
 
 function parseProviderFacetStatus(value: unknown): UnifiedProviderFacetStatus {
@@ -238,6 +267,25 @@ function parseProviderFacetStatus(value: unknown): UnifiedProviderFacetStatus {
   return { state: value.state, issues };
 }
 
+function parseSnapshotProvenance(value: unknown): UnifiedSnapshotProvenance | null {
+  if (
+    !isRecord(value)
+    || value.policy !== "pinned_snapshot"
+    || typeof value.capturedAt !== "string"
+    || typeof value.versionFingerprint !== "string"
+    || !isRecord(value.freshness)
+    || typeof value.freshness.checkedAt !== "string"
+    || !Array.isArray(value.freshness.sources)
+    || (value.freshness.overall !== "fresh"
+      && value.freshness.overall !== "stale"
+      && value.freshness.overall !== "partial"
+      && value.freshness.overall !== "unavailable")
+  ) {
+    return null;
+  }
+  return value as unknown as UnifiedSnapshotProvenance;
+}
+
 export function parseCatalogResponse(json: UnifiedResponse): {
   pageItems: UnifiedItem[];
   hasMore: boolean;
@@ -247,6 +295,7 @@ export function parseCatalogResponse(json: UnifiedResponse): {
   partial: boolean;
   partialReasons: UnifiedDataPartialReason[];
   providerStatus: UnifiedProviderFacetStatus;
+  provenance: UnifiedSnapshotProvenance | null;
 } {
   const pageItems = Array.isArray(json.data?.items)
     ? json.data.items
@@ -262,6 +311,7 @@ export function parseCatalogResponse(json: UnifiedResponse): {
     partial: json.data?.pageInfo?.partial === true,
     partialReasons: parseDataPartialReasons(json.data?.pageInfo?.partialReasons),
     providerStatus: parseProviderFacetStatus(json.data?.facets?.providerStatus),
+    provenance: parseSnapshotProvenance(json.data?.provenance),
   };
 }
 

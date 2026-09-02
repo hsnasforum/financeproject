@@ -107,6 +107,16 @@ describe("catalog explorer helpers", () => {
             recovery: "잠시 후 다시 조회해 주세요.",
           }],
         },
+        provenance: {
+          policy: "pinned_snapshot",
+          capturedAt: "2026-09-01T00:00:00.000Z",
+          versionFingerprint: "version-a",
+          freshness: {
+            checkedAt: "2026-09-01T00:00:00.000Z",
+            overall: "fresh",
+            sources: [],
+          },
+        },
       },
     } as unknown as Parameters<typeof parseCatalogResponse>[0]);
 
@@ -128,6 +138,7 @@ describe("catalog explorer helpers", () => {
       state: "partial",
       issues: [expect.objectContaining({ code: "PROVIDER_FACET_FAILED", sourceId: "datago_kdb" })],
     });
+    expect(parsed.provenance?.versionFingerprint).toBe("version-a");
     expect(vm.providers.map((entry) => entry.id)).toEqual(["all", "A은행", "B은행", "뒤페이지은행"]);
     expect(vm.filteredRows.map((entry) => entry.stableId)).toEqual(["finlife:A"]);
   });

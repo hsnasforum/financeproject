@@ -1,23 +1,40 @@
 import type { QueryMode } from "@/lib/sources/search";
-import type { ProductSourceIssue, UnifiedSourceId } from "@/lib/sources/types";
+import type { ProductFreshnessSummary, ProductSourceIssue, UnifiedSourceId } from "@/lib/sources/types";
 import type { DepositProtectionMode, UnifiedOptionView } from "@/lib/sources/unifiedEnrichPolicy";
 
-export class UnifiedInputError extends Error {}
+export type UnifiedInputErrorCode = "INPUT" | "CURSOR_INVALID" | "CURSOR_EXPIRED" | "CURSOR_MISMATCH";
+
+export class UnifiedInputError extends Error {
+  constructor(message: string, readonly code: UnifiedInputErrorCode = "INPUT") {
+    super(message);
+    this.name = "UnifiedInputError";
+  }
+}
 
 export type EnrichSourceId = "datago_kdb";
 
 export type UnifiedMode = "merged" | "integrated";
 
-export type UnifiedDataPartialReason = {
-  code: "SOURCE_QUERY_FAILED" | "SOURCE_REFRESH_FALLBACK" | "SCAN_PAGE_CAP" | "SCAN_ROW_CAP";
-  sourceId: UnifiedSourceId;
-  message: string;
-  recovery: string;
-  cap?: {
-    unit: "pages" | "rows";
-    limit: number;
-  };
-};
+export type UnifiedDataPartialReason =
+  | {
+      code: "SOURCE_QUERY_FAILED" | "SOURCE_REFRESH_FALLBACK" | "SCAN_PAGE_CAP" | "SCAN_ROW_CAP";
+      sourceId: UnifiedSourceId;
+      message: string;
+      recovery: string;
+      cap?: {
+        unit: "pages" | "rows";
+        limit: number;
+      };
+    }
+  | {
+      code: "CURSOR_UNAVAILABLE_RESOURCE_LIMIT";
+      message: string;
+      recovery: string;
+      resource: {
+        retainedRows: number;
+        estimatedBytes: number | null;
+      };
+    };
 
 export type UnifiedProviderFacetIssue = {
   code: "PROVIDER_FACET_FAILED";
@@ -35,6 +52,19 @@ export type UnifiedRequestInterruptionReason = {
   code: "REQUEST_ABORTED";
   message: string;
   recovery: string;
+};
+
+export type UnifiedCursorErrorReason = {
+  code: "CURSOR_INVALID" | "CURSOR_EXPIRED" | "CURSOR_MISMATCH";
+  message: string;
+  recovery: string;
+};
+
+export type UnifiedSnapshotProvenance = {
+  policy: "pinned_snapshot";
+  capturedAt: string;
+  versionFingerprint: string;
+  freshness: ProductFreshnessSummary;
 };
 
 export type UnifiedProductView = {
@@ -112,6 +142,7 @@ export type UnifiedResult = {
   };
   pageInfo: UnifiedPageInfo;
   sourceIssues?: ProductSourceIssue[];
+  provenance?: UnifiedSnapshotProvenance;
 };
 
 export type UnifiedProductsInput = {

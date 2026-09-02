@@ -1,6 +1,14 @@
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
+import { applyProductSourceIssues, getProductFreshnessSummary } from "@/lib/sources/productFreshness";
 import { buildNormFilter, normalizeSearchQuery, type QueryMode } from "@/lib/sources/search";
 import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedCursor";
+import {
+  BoundedCatalogSnapshotStore,
+  decodeUnifiedCatalogPageCursor,
+  encodeUnifiedCatalogPageCursor,
+  type CatalogSnapshotStoreStats,
+} from "@/lib/sources/unifiedCatalogSnapshotStore";
 import { normalizeProviderName } from "@/lib/sources/providerName";
 import { type ProductSourceIssue, type UnifiedSourceId } from "@/lib/sources/types";
 import {
@@ -31,6 +39,7 @@ import {
   type UnifiedProviderFacetIssue,
   type UnifiedProviderFacetStatus,
   type UnifiedResult,
+  type UnifiedSnapshotProvenance,
 } from "@/lib/sources/unifiedTypes";
 
 export { UnifiedInputError } from "@/lib/sources/unifiedTypes";
@@ -40,19 +49,26 @@ export type {
   UnifiedPageInfo,
   UnifiedProductView,
   UnifiedProductsInput,
+  UnifiedCursorErrorReason,
   UnifiedRequestInterruptionReason,
   UnifiedResult,
+  UnifiedSnapshotProvenance,
 } from "@/lib/sources/unifiedTypes";
 
 const MATCH_CONFIDENCE_THRESHOLD = 0.92;
 const CATALOG_SCAN_MAX_PAGES = 20;
 const CATALOG_SCAN_MAX_ROWS = 20_000;
-const CATALOG_CURSOR_TTL_MS = 2 * 60 * 1000;
-const CATALOG_CURSOR_MAX_ENTRIES = 128;
+const CATALOG_SNAPSHOT_TTL_MS = 2 * 60 * 1000;
+const CATALOG_SNAPSHOT_SWEEP_INTERVAL_MS = 30 * 1000;
+// Count bounds empty/small-signature churn; aggregate payload remains capped to one worst-case two-source scan.
+const CATALOG_SNAPSHOT_MAX_COUNT = 16;
+// One two-source catalog can reach 2 × 20,000 scan rows; do not retain more rows than that process-wide.
+const CATALOG_SNAPSHOT_MAX_RETAINED_ROWS = CATALOG_SCAN_MAX_ROWS * 2;
+// Serialized size is only an estimate; 48 MiB leaves room for JS object overhead while bounding retained payloads.
+const CATALOG_SNAPSHOT_MAX_ESTIMATED_BYTES = 48 * 1024 * 1024;
 
-type CatalogSnapshot = {
+export type UnifiedCatalogSnapshot = {
   signature: string;
-  createdAt: number;
   kind: "deposit" | "saving";
   sources: Record<string, { count: number }>;
   items: UnifiedProductView[];
@@ -60,16 +76,38 @@ type CatalogSnapshot = {
   partialReasons: UnifiedDataPartialReason[];
   providerStatus: UnifiedProviderFacetStatus;
   sourceIssues?: ProductSourceIssue[];
+  provenance?: UnifiedSnapshotProvenance;
 };
 
-type CatalogCursorState = {
-  snapshot: CatalogSnapshot;
-  offset: number;
-  nextCursor: string | null;
+export type CatalogProvenanceCaptureInput = {
+  kind: "deposit" | "saving";
+  sourceIds: UnifiedSourceId[];
+  sourceCounts: Record<string, { count: number }>;
+  sourceIssues: ProductSourceIssue[];
 };
 
-const catalogCursorStates = new Map<number, CatalogCursorState>();
-let nextCatalogCursorId = 1;
+export type UnifiedProductsRuntimeOptions = {
+  captureCatalogProvenance?: (
+    input: CatalogProvenanceCaptureInput,
+  ) => Promise<UnifiedSnapshotProvenance>;
+  catalogSnapshotStore?: BoundedCatalogSnapshotStore<UnifiedCatalogSnapshot>;
+};
+
+const catalogSnapshotStore = new BoundedCatalogSnapshotStore<UnifiedCatalogSnapshot>({
+  ttlMs: CATALOG_SNAPSHOT_TTL_MS,
+  sweepIntervalMs: CATALOG_SNAPSHOT_SWEEP_INTERVAL_MS,
+  maxSnapshots: CATALOG_SNAPSHOT_MAX_COUNT,
+  maxRetainedRows: CATALOG_SNAPSHOT_MAX_RETAINED_ROWS,
+  maxEstimatedBytes: CATALOG_SNAPSHOT_MAX_ESTIMATED_BYTES,
+});
+
+export function resetUnifiedCatalogSnapshotStoreForTests(): void {
+  catalogSnapshotStore.clear();
+}
+
+export function getUnifiedCatalogSnapshotStoreStats(): CatalogSnapshotStoreStats {
+  return catalogSnapshotStore.stats();
+}
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
@@ -79,26 +117,6 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
     throw new DOMException("The operation was aborted.", "AbortError");
   }
-}
-
-function pruneCatalogCursorStates(now = Date.now()): void {
-  for (const [id, state] of catalogCursorStates) {
-    if (now - state.snapshot.createdAt > CATALOG_CURSOR_TTL_MS) catalogCursorStates.delete(id);
-  }
-  while (catalogCursorStates.size >= CATALOG_CURSOR_MAX_ENTRIES) {
-    const oldestId = catalogCursorStates.keys().next().value as number | undefined;
-    if (oldestId === undefined) break;
-    catalogCursorStates.delete(oldestId);
-  }
-}
-
-function allocateCatalogCursor(state: Omit<CatalogCursorState, "nextCursor">): string {
-  pruneCatalogCursorStates();
-  while (catalogCursorStates.has(nextCatalogCursorId)) nextCatalogCursorId += 1;
-  const id = nextCatalogCursorId;
-  nextCatalogCursorId = nextCatalogCursorId >= Number.MAX_SAFE_INTEGER ? 1 : nextCatalogCursorId + 1;
-  catalogCursorStates.set(id, { ...state, nextCursor: null });
-  return encodeUnifiedCursor({ id });
 }
 
 function catalogSnapshotSignature(input: UnifiedProductsInput, normalizedLimit: number): string {
@@ -122,21 +140,19 @@ function catalogSnapshotSignature(input: UnifiedProductsInput, normalizedLimit: 
 }
 
 function catalogPageFromSnapshot(input: {
-  snapshot: CatalogSnapshot;
+  snapshotId: string;
+  snapshot: UnifiedCatalogSnapshot;
   offset: number;
   limit: number;
-  state?: CatalogCursorState;
 }): UnifiedResult {
   const items = input.snapshot.items.slice(input.offset, input.offset + input.limit);
   const hasMore = input.offset + input.limit < input.snapshot.items.length;
-  let nextCursor: string | null = null;
-  if (hasMore) {
-    nextCursor = input.state?.nextCursor ?? allocateCatalogCursor({
-      snapshot: input.snapshot,
-      offset: input.offset + input.limit,
-    });
-    if (input.state && input.state.nextCursor === null) input.state.nextCursor = nextCursor;
-  }
+  const nextCursor = hasMore
+    ? encodeUnifiedCatalogPageCursor({
+        snapshotId: input.snapshotId,
+        offset: input.offset + input.limit,
+      })
+    : null;
 
   return {
     kind: input.snapshot.kind,
@@ -159,6 +175,35 @@ function catalogPageFromSnapshot(input: {
         : {}),
     },
     ...(input.snapshot.sourceIssues ? { sourceIssues: input.snapshot.sourceIssues } : {}),
+    ...(input.snapshot.provenance ? { provenance: input.snapshot.provenance } : {}),
+  };
+}
+
+function catalogPageWithoutCursor(input: {
+  snapshot: UnifiedCatalogSnapshot;
+  limit: number;
+  resourceReason: UnifiedDataPartialReason;
+}): UnifiedResult {
+  const items = input.snapshot.items.slice(0, input.limit);
+  const partialReasons = [...input.snapshot.partialReasons, input.resourceReason];
+  return {
+    kind: input.snapshot.kind,
+    sources: input.snapshot.sources,
+    merged: items,
+    items,
+    facets: {
+      providers: input.snapshot.providers,
+      providerStatus: input.snapshot.providerStatus,
+    },
+    pageInfo: {
+      hasMore: false,
+      nextCursor: null,
+      limit: input.limit,
+      partial: true,
+      partialReasons,
+    },
+    ...(input.snapshot.sourceIssues ? { sourceIssues: input.snapshot.sourceIssues } : {}),
+    ...(input.snapshot.provenance ? { provenance: input.snapshot.provenance } : {}),
   };
 }
 
@@ -528,6 +573,50 @@ function uniqueIncludedSources(includeSources: UnifiedSourceId[]): UnifiedSource
   return [...new Set(includeSources)];
 }
 
+async function captureDefaultCatalogProvenance(
+  input: CatalogProvenanceCaptureInput,
+): Promise<UnifiedSnapshotProvenance> {
+  const capturedAt = new Date().toISOString();
+  const freshness = applyProductSourceIssues(await getProductFreshnessSummary({
+    kind: input.kind,
+    sourceIds: input.sourceIds,
+    checkedAt: capturedAt,
+  }), input.sourceIssues);
+  const versionShape = {
+    sources: [...freshness.sources]
+      .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
+      .map((source) => ({
+        sourceId: source.sourceId,
+        kind: source.kind,
+        sourceAsOf: source.sourceAsOf,
+        freshness: source.freshness,
+        fallbackUsed: source.fallbackUsed,
+        count: input.sourceCounts[source.sourceId]?.count ?? 0,
+      })),
+  };
+  return {
+    policy: "pinned_snapshot",
+    capturedAt,
+    versionFingerprint: createHash("sha256").update(JSON.stringify(versionShape)).digest("hex"),
+    freshness,
+  };
+}
+
+function snapshotResourceReason(input: {
+  retainedRows: number;
+  estimatedBytes: number;
+}): UnifiedDataPartialReason {
+  return {
+    code: "CURSOR_UNAVAILABLE_RESOURCE_LIMIT",
+    message: "조회 결과가 snapshot 보관 한도를 넘어 다음 페이지 cursor를 만들지 않았습니다.",
+    recovery: "기관, 기간 또는 금리 조건을 더 좁혀 처음부터 다시 조회해 주세요.",
+    resource: {
+      retainedRows: input.retainedRows,
+      estimatedBytes: Number.isFinite(input.estimatedBytes) ? input.estimatedBytes : null,
+    },
+  };
+}
+
 function sourceResultFromPage(kind: "deposit" | "saving", page: UnifiedSourcePage): UnifiedResult {
   return {
     kind,
@@ -741,6 +830,7 @@ async function refreshSourceSafely(input: {
 export async function getUnifiedProductsWithLoaders(
   input: UnifiedProductsInput,
   loaders: UnifiedSourceLoaderMap = DEFAULT_UNIFIED_SOURCE_LOADERS,
+  runtime: UnifiedProductsRuntimeOptions = {},
 ): Promise<UnifiedResult> {
   const {
     kind,
@@ -786,21 +876,42 @@ export async function getUnifiedProductsWithLoaders(
     signal: input.signal,
   };
   const catalogSignature = catalogSnapshotSignature(input, normalizedLimit);
+  const snapshotStore = runtime.catalogSnapshotStore ?? catalogSnapshotStore;
 
   if (catalogFiltersActive && cursor) {
     throwIfAborted(input.signal);
-    pruneCatalogCursorStates();
-    const decoded = decodeUnifiedCursor(cursor);
-    const state = decoded ? catalogCursorStates.get(decoded.id) : undefined;
-    if (!state || state.snapshot.signature !== catalogSignature) {
-      throw new UnifiedInputError("상품 필터 cursor가 만료되었거나 현재 조건과 일치하지 않습니다.");
+    const decoded = decodeUnifiedCatalogPageCursor(cursor);
+    if (!decoded) {
+      throw new UnifiedInputError("상품 필터 cursor 형식 또는 서명이 올바르지 않습니다.", "CURSOR_INVALID");
+    }
+    const entry = snapshotStore.getById(decoded.snapshotId);
+    if (!entry) {
+      throw new UnifiedInputError("상품 필터 cursor의 snapshot이 만료되었거나 제거되었습니다.", "CURSOR_EXPIRED");
+    }
+    if (entry.value.signature !== catalogSignature) {
+      throw new UnifiedInputError("상품 필터 cursor가 현재 조회 조건과 일치하지 않습니다.", "CURSOR_MISMATCH");
+    }
+    if (decoded.offset >= entry.value.items.length) {
+      throw new UnifiedInputError("상품 필터 cursor의 위치가 snapshot 범위를 벗어났습니다.", "CURSOR_INVALID");
     }
     return catalogPageFromSnapshot({
-      snapshot: state.snapshot,
-      offset: state.offset,
+      snapshotId: entry.id,
+      snapshot: entry.value,
+      offset: decoded.offset,
       limit: normalizedLimit,
-      state,
     });
+  }
+
+  if (catalogFiltersActive) {
+    const cached = snapshotStore.getBySignature(catalogSignature);
+    if (cached) {
+      return catalogPageFromSnapshot({
+        snapshotId: cached.id,
+        snapshot: cached.value,
+        offset: 0,
+        limit: normalizedLimit,
+      });
+    }
   }
 
   if (mode === "integrated") {
@@ -1049,9 +1160,16 @@ export async function getUnifiedProductsWithLoaders(
     ? { state: "partial", issues: providerFacetIssues }
     : { state: "complete", issues: [] };
   if (catalogFiltersActive) {
-    const snapshot: CatalogSnapshot = {
+    const provenance = runtime.captureCatalogProvenance
+      ? await runtime.captureCatalogProvenance({
+          kind,
+          sourceIds: uniqueIncludedSources(includeSources),
+          sourceCounts: sourceMap,
+          sourceIssues,
+        })
+      : undefined;
+    const snapshot: UnifiedCatalogSnapshot = {
       signature: catalogSignature,
-      createdAt: Date.now(),
       kind,
       sources: sourceMap,
       items: filteredItems,
@@ -1059,11 +1177,21 @@ export async function getUnifiedProductsWithLoaders(
       partialReasons,
       providerStatus,
       ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
+      ...(provenance ? { provenance } : {}),
     };
-    return catalogPageFromSnapshot({
+    const stored = snapshotStore.put(snapshot);
+    if (stored.stored) {
+      return catalogPageFromSnapshot({
+        snapshotId: stored.entry.id,
+        snapshot: stored.entry.value,
+        offset: 0,
+        limit: normalizedLimit,
+      });
+    }
+    return catalogPageWithoutCursor({
       snapshot,
-      offset: 0,
       limit: normalizedLimit,
+      resourceReason: snapshotResourceReason(stored),
     });
   }
 
@@ -1094,7 +1222,9 @@ export async function getUnifiedProductsWithLoaders(
 }
 
 export async function getUnifiedProducts(input: UnifiedProductsInput): Promise<UnifiedResult> {
-  const result = await getUnifiedProductsWithLoaders(input);
+  const result = await getUnifiedProductsWithLoaders(input, DEFAULT_UNIFIED_SOURCE_LOADERS, {
+    captureCatalogProvenance: captureDefaultCatalogProvenance,
+  });
   const stripItems = (items: UnifiedProductView[] | undefined): UnifiedProductView[] | undefined =>
     items?.map((item) => stripUnifiedRecentSortAt(item));
   return {
