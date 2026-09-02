@@ -28,8 +28,14 @@ describe("BackupClient browser settings flow", () => {
 
   it("keeps normal missing values as null and downloads only UI settings", () => {
     const download = vi.fn();
+    const financialChecklist = JSON.stringify({
+      "R_DEBT_01-월 상환액 재산정": true,
+      "R_INSURANCE_01-보장 공백 확인": true,
+      "R_EMERGENCY_01-비상금 자동이체": false,
+    });
     const result = downloadBrowserSettingsBackup({
       getItem(key: string) {
+        if (key === "finlife_planner_checklist_checked_v1") return financialChecklist;
         return key === "products_shelf_v1" ? "[]" : null;
       },
     }, download);
@@ -46,8 +52,10 @@ describe("BackupClient browser settings flow", () => {
       products_shelf_v1: "[]",
       products_compare_ids_v1: null,
       finlife_planner_link_open_mode_v1: null,
-      finlife_planner_checklist_checked_v1: null,
     });
+    expect(content).not.toContain("R_DEBT_01-월 상환액 재산정");
+    expect(content).not.toContain("R_INSURANCE_01-보장 공백 확인");
+    expect(content).not.toContain("R_EMERGENCY_01-비상금 자동이체");
     expect(content).not.toContain("planner:last");
     expect(content).not.toContain("monthlyIncomeNet");
     expect(content).not.toContain("recommend");

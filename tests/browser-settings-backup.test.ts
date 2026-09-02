@@ -26,7 +26,6 @@ describe("plain browser settings backup", () => {
     expect(prepared.values).toEqual({
       products_shelf_v1: "[\"p1\"]",
       finlife_planner_link_open_mode_v1: null,
-      finlife_planner_checklist_checked_v1: null,
     });
     expect(prepared.values).not.toHaveProperty("products_compare_ids_v1");
     expect(prepared.error).toContain("다운로드하지 않았습니다");
@@ -45,9 +44,8 @@ describe("plain browser settings backup", () => {
       products_shelf_v1: "[]",
       products_compare_ids_v1: null,
       finlife_planner_link_open_mode_v1: null,
-      finlife_planner_checklist_checked_v1: null,
     });
-    expect(prepared.notice).toContain("저장값 1개, 비어 있음 3개");
+    expect(prepared.notice).toContain("저장값 1개, 비어 있음 2개");
   });
 
   it("exports only non-financial UI settings", () => {
@@ -58,6 +56,11 @@ describe("plain browser settings backup", () => {
       finlife_planner_snapshots_v1: "{\"debts\":[]}",
       "finance:recommend:v2:alice:profile": "{\"purpose\":\"seed-money\"}",
       recommend_last_result_v1: "{\"items\":[]}",
+      finlife_planner_checklist_checked_v1: JSON.stringify({
+        "R_DEBT_01-월 상환액 재산정": true,
+        "R_INSURANCE_01-보장 공백 확인": true,
+        "R_EMERGENCY_01-비상금 자동이체": false,
+      }),
     });
     const bundle = buildBundle({ serverFilesMap: {}, clientStorageMap: selected });
 
@@ -65,7 +68,6 @@ describe("plain browser settings backup", () => {
       "products_shelf_v1",
       "products_compare_ids_v1",
       "finlife_planner_link_open_mode_v1",
-      "finlife_planner_checklist_checked_v1",
     ]);
     expect(bundle.clientStorage).toEqual({
       products_shelf_v1: "[]",
@@ -97,5 +99,35 @@ describe("plain browser settings backup", () => {
     expect(result).toEqual({ applied: 1, removed: 1, ignored: 2, failed: 1 });
     expect(written.get("products_shelf_v1")).toBe("[\"p1\"]");
     expect(removed).toEqual(["finlife_planner_link_open_mode_v1"]);
+  });
+
+  it("ignores a legacy financial checklist without changing the current stored value", () => {
+    const financialChecklistKey = "finlife_planner_checklist_checked_v1";
+    const currentChecklist = JSON.stringify({ "R_DEBT_01-월 상환액 재산정": true });
+    const legacyChecklist = JSON.stringify({
+      "R_INSURANCE_01-보장 공백 확인": true,
+      "R_EMERGENCY_01-비상금 자동이체": false,
+    });
+    const values = new Map<string, string>([[financialChecklistKey, currentChecklist]]);
+    const writes: string[] = [];
+    const removals: string[] = [];
+
+    const result = restoreBrowserSettingsStorage({
+      setItem(key: string, value: string) {
+        writes.push(key);
+        values.set(key, value);
+      },
+      removeItem(key: string) {
+        removals.push(key);
+        values.delete(key);
+      },
+    }, {
+      [financialChecklistKey]: legacyChecklist,
+    });
+
+    expect(result).toEqual({ applied: 0, removed: 0, ignored: 1, failed: 0 });
+    expect(values.get(financialChecklistKey)).toBe(currentChecklist);
+    expect(writes).toEqual([]);
+    expect(removals).toEqual([]);
   });
 });

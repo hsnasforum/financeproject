@@ -57,6 +57,8 @@ type RestorePointStatusPayload = {
 };
 
 type ImportSummary = {
+  serverProcessed: boolean;
+  clientProcessed: boolean;
   localApplied: number;
   localRemoved: number;
   localIgnored: number;
@@ -304,6 +306,8 @@ export function BackupClient(_props: { ownerId?: string | null }) {
 
         if (!response.ok || !serverPayload?.ok) {
           setImportSummary({
+            serverProcessed: true,
+            clientProcessed: false,
             localApplied: 0,
             localRemoved: 0,
             localIgnored: 0,
@@ -335,6 +339,8 @@ export function BackupClient(_props: { ownerId?: string | null }) {
         ? restoreBrowserSettingsStorage(window.localStorage, pendingBundle.clientStorage)
         : { applied: 0, removed: 0, ignored: 0, failed: 0 };
       const summary: ImportSummary = {
+        serverProcessed: applyServerFiles,
+        clientProcessed: applyClientStorage,
         localApplied: local.applied,
         localRemoved: local.removed,
         localIgnored: local.ignored,
@@ -354,13 +360,22 @@ export function BackupClient(_props: { ownerId?: string | null }) {
       setImportSummary(summary);
       const localMessage = formatBrowserSettingsRestoreResult(local);
       if (localMessage.error) {
-        setNotice(localMessage.notice);
+        setNotice(applyServerFiles ? "서버 파일 복원은 완료되었습니다." : localMessage.notice);
         setError(localMessage.error);
       } else {
-        const completionMessage = payload.validated
-          ? "서버 파일 검증과 브라우저 설정 복원이 완료되었습니다."
-          : "브라우저 설정 복원이 완료되었습니다.";
-        setNotice(`${completionMessage} ${localMessage.notice.replace(/^브라우저 설정을 복원했습니다\.\s*/, "")}`);
+        const localSummary = localMessage.notice.replace(/^브라우저 설정을 복원했습니다\.\s*/, "");
+        if (applyServerFiles && applyClientStorage) {
+          const completionMessage = payload.validated
+            ? "서버 파일 검증과 브라우저 설정 복원이 완료되었습니다."
+            : "서버 파일과 브라우저 설정 복원이 완료되었습니다.";
+          setNotice(`${completionMessage} ${localSummary}`);
+        } else if (applyServerFiles) {
+          setNotice(payload.validated
+            ? "서버 파일 검증과 복원이 완료되었습니다."
+            : "서버 파일 복원이 완료되었습니다.");
+        } else {
+          setNotice(`브라우저 설정 복원이 완료되었습니다. ${localSummary}`);
+        }
       }
       if (applyServerFiles) {
         await refreshRestorePoint();
@@ -388,6 +403,8 @@ export function BackupClient(_props: { ownerId?: string | null }) {
         return;
       }
       setImportSummary({
+        serverProcessed: true,
+        clientProcessed: false,
         localApplied: 0,
         localRemoved: 0,
         localIgnored: 0,
@@ -430,6 +447,17 @@ export function BackupClient(_props: { ownerId?: string | null }) {
     }
     setSelectedServerPaths([]);
   }
+
+  const restoreProgressLabel = applyServerFiles
+    ? applyClientStorage
+      ? "서버 파일·브라우저 설정 복원 중..."
+      : "서버 파일 복원 중..."
+    : "브라우저 설정 복원 중...";
+  const restoreButtonLabel = applyServerFiles
+    ? applyClientStorage
+      ? "서버 파일·브라우저 설정 복원 실행 (서버 파일 Restore Point 자동 생성)"
+      : "서버 파일 복원 실행 (Restore Point 자동 생성)"
+    : "브라우저 설정 복원 실행";
 
   return (
     <PageShell>
@@ -608,15 +636,28 @@ export function BackupClient(_props: { ownerId?: string | null }) {
           </div>
 
           <div className="mt-10 flex justify-center border-t border-slate-50 pt-8">
-            <Button
-              type="button"
-              variant="primary"
-              className="h-14 px-12 rounded-2xl font-black shadow-xl shadow-primary/10 transition-all hover:-translate-y-0.5 active:scale-95"
-              disabled={importing || rollingBack}
-              onClick={() => void handleImportApply()}
-            >
-              {importing ? "복원 진행 중..." : "선택 항목 복원 실행 (Restore Point 자동 생성)"}
-            </Button>
+            <div className="flex flex-col items-center gap-3">
+              {applyServerFiles ? (
+                <p className="text-xs font-bold text-slate-500">
+                  {applyClientStorage
+                    ? "Restore Point는 선택한 서버 파일에만 적용됩니다. 브라우저 설정은 포함되지 않습니다."
+                    : "Restore Point는 선택한 서버 파일에만 적용됩니다."}
+                </p>
+              ) : applyClientStorage ? (
+                <p className="text-xs font-bold text-slate-500">
+                  브라우저 설정은 복원 전 상태를 자동 보관하지 않습니다.
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                variant="primary"
+                className="h-14 px-12 rounded-2xl font-black shadow-xl shadow-primary/10 transition-all hover:-translate-y-0.5 active:scale-95"
+                disabled={importing || rollingBack}
+                onClick={() => void handleImportApply()}
+              >
+                {importing ? restoreProgressLabel : restoreButtonLabel}
+              </Button>
+            </div>
           </div>
         </Card>
       ) : null}
@@ -626,32 +667,40 @@ export function BackupClient(_props: { ownerId?: string | null }) {
           <SubSectionHeader 
             title="복원 결과 요약" 
             className="mb-6"
-            description={importSummary.localFailed > 0
+            description={importSummary.clientProcessed && importSummary.localFailed > 0
               ? "일부 브라우저 설정을 복원하지 못했습니다."
-              : importSummary.validated
+              : importSummary.serverProcessed && importSummary.validated
                 ? "검증 통과 및 복원이 완료되었습니다."
                 : "복원 처리가 완료되었습니다."}
           />
           
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">localStorage</p>
-              <p className="text-base font-black tabular-nums mt-1 text-navy">
-                적용 {importSummary.localApplied} · 제거 {importSummary.localRemoved} · 무시 {importSummary.localIgnored} · 실패 {importSummary.localFailed}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Server Files</p>
-              <p className="text-base font-black tabular-nums mt-1 text-navy">Written {importSummary.serverWritten.length}</p>
-            </div>
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
-              <p className="text-base font-black mt-1 text-navy">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
-            </div>
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rollback Status</p>
-              <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-primary")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
-            </div>
+            {importSummary.clientProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">localStorage</p>
+                <p className="text-base font-black tabular-nums mt-1 text-navy">
+                  적용 {importSummary.localApplied} · 제거 {importSummary.localRemoved} · 무시 {importSummary.localIgnored} · 실패 {importSummary.localFailed}
+                </p>
+              </div>
+            ) : null}
+            {importSummary.serverProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Server Files</p>
+                <p className="text-base font-black tabular-nums mt-1 text-navy">Written {importSummary.serverWritten.length}</p>
+              </div>
+            ) : null}
+            {importSummary.serverProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
+                <p className="text-base font-black mt-1 text-navy">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
+              </div>
+            ) : null}
+            {importSummary.serverProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rollback Status</p>
+                <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-primary")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
+              </div>
+            ) : null}
           </div>
 
           {importSummary.issues.length > 0 && (

@@ -66,7 +66,6 @@ export const BROWSER_SETTINGS_STORAGE_WHITELIST = [
   "products_shelf_v1",
   "products_compare_ids_v1",
   "finlife_planner_link_open_mode_v1",
-  "finlife_planner_checklist_checked_v1",
 ] as const;
 
 export type BrowserSettingsRestoreResult = {
