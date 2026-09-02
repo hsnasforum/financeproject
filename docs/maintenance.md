@@ -30,7 +30,8 @@
 - dev 서버가 살아 있어도 오래된 `.next-build*` 정리는 계속 수행하지만, 공유 runtime 산출물(`.next-host*`, `.next-e2e*`) 정리는 active runtime이 비면 다시 실행하는 편이 안전하다.
 - build/release preflight용 `standalone/.data` 정리는 active build/prod/playwright runtime이 없을 때만 수행한다.
 - `release:verify`와 `planning:v2:complete`의 gate 목록은 `scripts/quality_gates.mjs` registry를 기준으로 관리한다. CI는 `pnpm release:verify`를 primary registry suite로 실행하고, registry에 포함된 planning guard/regress를 별도 step에서 중복 실행하지 않는다.
-- `release:verify`는 registry 순서에 따라 먼저 `pnpm cleanup:next-artifacts -- --build-preflight`와 `pnpm deps:audit`를 실행한 뒤 `pnpm planning:v2:complete`, `pnpm multi-agent:guard`를 실행하고, 스크립트가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`, `pnpm planning:postgres:readiness`를 확인한 다음 `pnpm test`를 필수로 실행한다.
+- `release:verify`는 registry 순서에 따라 먼저 `pnpm cleanup:next-artifacts -- --build-preflight`, `pnpm deps:audit`, `pnpm freshness:release`, `pnpm e2e:inventory:check`를 실행한 뒤 `pnpm planning:v2:complete`, `pnpm multi-agent:guard`를 실행하고, 스크립트가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`, `pnpm planning:postgres:readiness`를 확인한 다음 `pnpm test`를 필수로 실행한다.
+- Production/desktop 설치본 smoke는 `release:verify`에 넣지 않고 tag release workflow가 `release:verify → artifact build/install → production smoke → desktop smoke` 순서로 실행한다.
 - `release:verify`의 planning e2e 하위 게이트는 전용 포트·고유 dist dir를 사용하고, `planning:v2:regress`는 임시 planning e2e data dir까지 분리해 shared runtime/data false negative를 줄인다.
 - React Hooks lint는 `eslint-config-next`가 해석하는 최신 compatible plugin을 따르며, `react-hooks/set-state-in-effect`는 별도 React Compiler migration batch에서 줄인다.
 - 사용자 경로/셀렉터 영향이 있으면 `pnpm e2e:rc`를 추가하고, 범위가 넓으면 `pnpm e2e`까지 넓힌다.

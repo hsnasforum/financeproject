@@ -32,6 +32,8 @@
 - companion: `pnpm build`
 - 사용자 흐름 영향이 있으면 같은 소유자가 `pnpm e2e:rc`를 이어서 실행합니다.
 - `release:verify` 구성은 `scripts/quality_gates.mjs`의 `QUALITY_GATE_SUITES["release:verify"]`를 기준으로 합니다.
+- required preflight는 `cleanup:next-artifacts → deps:audit → freshness:release → e2e:inventory:check` 순서입니다.
+- 설치본 release 단계는 `release:verify → artifact build/install → production smoke → desktop smoke` 순서이며, 두 smoke는 `release:verify` 내부 gate가 아닙니다.
 - `pnpm planning:postgres:readiness`는 release suite의 optional gate이며, PostgreSQL target schema readiness evidence만 만들고 운영 DB migration을 실행하지 않습니다.
 
 ## 수동 운영·데이터 명령
