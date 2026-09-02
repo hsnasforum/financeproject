@@ -38,6 +38,21 @@ type UnifiedRouteJson = {
   ok?: boolean;
   data?: {
     items?: Array<{ badges?: string[] }>;
+    pageInfo?: {
+      partial?: boolean;
+      partialReasons?: Array<{
+        code?: string;
+        sourceId?: string;
+        message?: string;
+        recovery?: string;
+      }>;
+    };
+    facets?: {
+      providerStatus?: {
+        state?: string;
+        issues?: Array<{ code?: string; sourceId?: string }>;
+      };
+    };
   };
   coverage?: {
     totalProducts?: number;
@@ -63,6 +78,17 @@ type UnifiedRouteJson = {
     freshness?: {
       checkedAt?: string;
       sources?: Array<{ sourceAsOf?: string | null }>;
+    };
+  };
+  error?: {
+    code?: string;
+    message?: string;
+    details?: {
+      reason?: {
+        code?: string;
+        message?: string;
+        recovery?: string;
+      };
     };
   };
 };
@@ -279,5 +305,62 @@ describe("GET /api/products/unified", () => {
       matched: 1,
       unknown: 2,
     });
+  });
+
+  it("preserves structured data and provider-facet partial status in the public route", async () => {
+    mocked.getUnifiedProducts.mockResolvedValueOnce({
+      ...sampleUnified,
+      pageInfo: {
+        ...sampleUnified.pageInfo,
+        partial: true,
+        partialReasons: [{
+          code: "SOURCE_QUERY_FAILED",
+          sourceId: "datago_kdb",
+          message: "상품 후보가 누락되었습니다.",
+          recovery: "잠시 후 다시 조회해 주세요.",
+        }],
+      },
+      facets: {
+        providers: ["테스트은행"],
+        providerStatus: {
+          state: "partial",
+          issues: [{
+            code: "PROVIDER_FACET_FAILED",
+            sourceId: "datago_kdb",
+            message: "전체 기관 목록을 불러오지 못했습니다.",
+            recovery: "잠시 후 다시 조회해 주세요.",
+          }],
+        },
+      },
+    });
+
+    const { status, json } = await callUnified("?kind=deposit");
+
+    expect(status).toBe(200);
+    expect(json.data?.pageInfo?.partial).toBe(true);
+    expect(json.data?.pageInfo?.partialReasons).toEqual([
+      expect.objectContaining({ code: "SOURCE_QUERY_FAILED", sourceId: "datago_kdb" }),
+    ]);
+    expect(json.data?.facets?.providerStatus).toEqual({
+      state: "partial",
+      issues: [expect.objectContaining({ code: "PROVIDER_FACET_FAILED", sourceId: "datago_kdb" })],
+    });
+  });
+
+  it("keeps an aborted request distinct from an upstream failure", async () => {
+    mocked.getUnifiedProducts.mockRejectedValueOnce(new DOMException("request cancelled", "AbortError"));
+
+    const { status, json } = await callUnified("?kind=deposit&provider=%EA%B5%AD%EB%AF%BC%EC%9D%80%ED%96%89");
+
+    expect(status).toBe(499);
+    expect(json.error).toEqual(expect.objectContaining({
+      code: "REQUEST_ABORTED",
+      details: {
+        reason: expect.objectContaining({
+          code: "REQUEST_ABORTED",
+          recovery: expect.any(String),
+        }),
+      },
+    }));
   });
 });

@@ -62,8 +62,8 @@ describe("product source freshness", () => {
     });
 
     const result = applyProductSourceIssues(base, [
-      { sourceId: "finlife", phase: "refresh", code: "SOURCE_REFRESH_FAILED", fallbackUsed: true, message: "이전 저장 데이터" },
-      { sourceId: "datago_kdb", phase: "query", code: "SOURCE_QUERY_FAILED", fallbackUsed: false, message: "조회 실패" },
+      { sourceId: "finlife", phase: "refresh", code: "SOURCE_REFRESH_FAILED", fallbackUsed: true, message: "이전 저장 데이터", recovery: "최신 공시 확인" },
+      { sourceId: "datago_kdb", phase: "query", code: "SOURCE_QUERY_FAILED", fallbackUsed: false, message: "조회 실패", recovery: "다시 조회" },
     ]);
 
     expect(result.overall).toBe("partial");

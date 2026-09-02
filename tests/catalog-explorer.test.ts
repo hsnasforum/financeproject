@@ -84,10 +84,31 @@ describe("catalog explorer helpers", () => {
             options: [{ termMonths: 6, intrRate: 1.1, intrRate2: 1.5 }],
           },
         ],
-        facets: { providers: ["A은행", "B은행", "뒤페이지은행"] },
-        pageInfo: { hasMore: true, nextCursor: "next", partial: true },
+        facets: {
+          providers: ["A은행", "B은행", "뒤페이지은행"],
+          providerStatus: {
+            state: "partial",
+            issues: [{
+              code: "PROVIDER_FACET_FAILED",
+              sourceId: "datago_kdb",
+              message: "전체 기관 목록을 불러오지 못했습니다.",
+              recovery: "잠시 후 다시 조회해 주세요.",
+            }],
+          },
+        },
+        pageInfo: {
+          hasMore: true,
+          nextCursor: "next",
+          partial: true,
+          partialReasons: [{
+            code: "SOURCE_QUERY_FAILED",
+            sourceId: "datago_kdb",
+            message: "이 원천의 상품 후보가 누락되었습니다.",
+            recovery: "잠시 후 다시 조회해 주세요.",
+          }],
+        },
       },
-    });
+    } as unknown as Parameters<typeof parseCatalogResponse>[0]);
 
     const vm = buildCatalogViewModel({
       rows: parsed.pageItems,
@@ -100,6 +121,13 @@ describe("catalog explorer helpers", () => {
     expect(parsed.hasMore).toBe(true);
     expect(parsed.nextCursor).toBe("next");
     expect(parsed.partial).toBe(true);
+    expect(parsed.partialReasons).toEqual([
+      expect.objectContaining({ code: "SOURCE_QUERY_FAILED", sourceId: "datago_kdb" }),
+    ]);
+    expect(parsed.providerStatus).toEqual({
+      state: "partial",
+      issues: [expect.objectContaining({ code: "PROVIDER_FACET_FAILED", sourceId: "datago_kdb" })],
+    });
     expect(vm.providers.map((entry) => entry.id)).toEqual(["all", "A은행", "B은행", "뒤페이지은행"]);
     expect(vm.filteredRows.map((entry) => entry.stableId)).toEqual(["finlife:A"]);
   });

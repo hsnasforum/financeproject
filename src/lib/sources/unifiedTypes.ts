@@ -8,6 +8,35 @@ export type EnrichSourceId = "datago_kdb";
 
 export type UnifiedMode = "merged" | "integrated";
 
+export type UnifiedDataPartialReason = {
+  code: "SOURCE_QUERY_FAILED" | "SOURCE_REFRESH_FALLBACK" | "SCAN_PAGE_CAP" | "SCAN_ROW_CAP";
+  sourceId: UnifiedSourceId;
+  message: string;
+  recovery: string;
+  cap?: {
+    unit: "pages" | "rows";
+    limit: number;
+  };
+};
+
+export type UnifiedProviderFacetIssue = {
+  code: "PROVIDER_FACET_FAILED";
+  sourceId: UnifiedSourceId;
+  message: string;
+  recovery: string;
+};
+
+export type UnifiedProviderFacetStatus = {
+  state: "complete" | "partial";
+  issues: UnifiedProviderFacetIssue[];
+};
+
+export type UnifiedRequestInterruptionReason = {
+  code: "REQUEST_ABORTED";
+  message: string;
+  recovery: string;
+};
+
 export type UnifiedProductView = {
   stableId: string;
   sourceId: UnifiedSourceId;
@@ -53,8 +82,9 @@ export type UnifiedPageInfo = {
   nextCursor: string | null;
   limit: number;
   sourceId?: UnifiedSourceId;
-  /** True when a bounded fallback stopped before exhausting every stored row. */
+  /** True when one or more requested data paths could not return a complete result. */
   partial?: boolean;
+  partialReasons?: UnifiedDataPartialReason[];
 };
 
 export type UnifiedResult = {
@@ -78,6 +108,7 @@ export type UnifiedResult = {
   };
   facets?: {
     providers: string[];
+    providerStatus: UnifiedProviderFacetStatus;
   };
   pageInfo: UnifiedPageInfo;
   sourceIssues?: ProductSourceIssue[];

@@ -281,7 +281,102 @@ describe("unified source loaders", () => {
 
     expect(finlife.query).toHaveBeenCalledTimes(20);
     expect(result.pageInfo.partial).toBe(true);
+    expect(result.pageInfo.partialReasons).toEqual([
+      expect.objectContaining({
+        code: "SCAN_PAGE_CAP",
+        sourceId: "finlife",
+        cap: { unit: "pages", limit: 20 },
+        message: expect.stringContaining("20페이지"),
+        recovery: expect.any(String),
+      }),
+    ]);
     expect(result.items).toHaveLength(20);
+  });
+
+  it("reports the row cap separately when the bounded scan fills before exhaustion", async () => {
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [],
+      pageInfo: { hasMore: true, nextCursor: "unused", limit: 1000, sourceId: "finlife" },
+    });
+    vi.mocked(finlife.query).mockImplementation(async (query) => {
+      const pageIndex = vi.mocked(finlife.query).mock.calls.length;
+      const items = Array.from({ length: 1000 }, (_, rowIndex) => {
+        const id = `${pageIndex}-${rowIndex}`;
+        return product({
+          stableId: `ROW-${id}`,
+          sourceId: "finlife",
+          externalKey: `ROW-${id}`,
+          productName: `행 상한 상품 ${id}`,
+          options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+        });
+      });
+      return {
+        sourceId: "finlife",
+        count: items.length,
+        items,
+        pageInfo: {
+          hasMore: true,
+          nextCursor: `row-page-${pageIndex}`,
+          limit: query.limit,
+          sourceId: "finlife",
+        },
+      };
+    });
+
+    const result = await getUnifiedProductsWithLoaders(baseInput({
+      includeSources: ["finlife"],
+      termMonths: 12,
+      limit: 10,
+    }), { finlife });
+
+    expect(finlife.query).toHaveBeenCalledTimes(20);
+    expect(result.pageInfo.partialReasons).toEqual([
+      expect.objectContaining({
+        code: "SCAN_ROW_CAP",
+        sourceId: "finlife",
+        cap: { unit: "rows", limit: 20_000 },
+        message: expect.stringContaining("20,000개 행"),
+      }),
+    ]);
+  });
+
+  it("keeps provider-facet failure separate from complete row data", async () => {
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({
+        stableId: "F1",
+        sourceId: "finlife",
+        externalKey: "F1",
+        providerName: "현재은행",
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 20, sourceId: "finlife" },
+    });
+    finlife.listProviderNames = vi.fn(async () => {
+      throw new Error("facet storage unavailable");
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const result = await getUnifiedProductsWithLoaders(baseInput({
+      includeSources: ["finlife"],
+    }), { finlife });
+
+    expect(result.items.map((item) => item.stableId)).toEqual(["F1"]);
+    expect(result.pageInfo.partial).not.toBe(true);
+    expect(result.pageInfo.partialReasons ?? []).toEqual([]);
+    expect(result.facets).toEqual({
+      providers: ["현재은행"],
+      providerStatus: {
+        state: "partial",
+        issues: [expect.objectContaining({
+          code: "PROVIDER_FACET_FAILED",
+          sourceId: "finlife",
+          message: expect.any(String),
+          recovery: expect.any(String),
+        })],
+      },
+    });
+    consoleError.mockRestore();
   });
 
   it("stops requesting additional source pages after the request is aborted", async () => {
@@ -373,7 +468,38 @@ describe("unified source loaders", () => {
       phase: "refresh",
       fallbackUsed: true,
     })]);
+    expect(result.pageInfo.partial).toBe(true);
+    expect(result.pageInfo.partialReasons).toEqual([
+      expect.objectContaining({
+        code: "SOURCE_REFRESH_FALLBACK",
+        sourceId: "datago_kdb",
+        message: expect.stringContaining("이전에 저장된 상품"),
+        recovery: expect.any(String),
+      }),
+    ]);
     consoleError.mockRestore();
+  });
+
+  it("marks a refresh fallback reported without throwing while keeping stored rows", async () => {
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({ stableId: "F1", sourceId: "finlife", externalKey: "F1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 20, sourceId: "finlife" },
+    });
+    vi.mocked(finlife.refreshIfNeeded).mockResolvedValueOnce({ fallbackUsed: true });
+
+    const result = await getUnifiedProductsWithLoaders(baseInput({
+      includeSources: ["finlife"],
+      refresh: true,
+    }), { finlife });
+
+    expect(result.items.map((item) => item.stableId)).toEqual(["F1"]);
+    expect(result.pageInfo.partialReasons).toEqual([
+      expect.objectContaining({
+        code: "SOURCE_REFRESH_FALLBACK",
+        sourceId: "finlife",
+      }),
+    ]);
   });
 
   it("returns the healthy source when another source query fails", async () => {
@@ -399,7 +525,85 @@ describe("unified source loaders", () => {
       phase: "query",
       fallbackUsed: false,
     })]);
+    expect(result.pageInfo.partial).toBe(true);
+    expect(result.pageInfo.partialReasons).toEqual([
+      expect.objectContaining({
+        code: "SOURCE_QUERY_FAILED",
+        sourceId: "datago_kdb",
+        message: expect.stringContaining("후보가 누락"),
+        recovery: expect.any(String),
+      }),
+    ]);
     consoleError.mockRestore();
+  });
+
+  it("uses the private recent key for global multi-source order and deterministic snapshot pages", async () => {
+    const recentKey = Symbol.for("finance.unified.recentSortAt");
+    const withRecentKey = (item: UnifiedProductView, recentAt: string): UnifiedProductView => Object.assign(
+      item,
+      { [recentKey]: recentAt },
+    );
+    const option = { sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 };
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        withRecentKey(product({
+          stableId: "TIE-B",
+          sourceId: "finlife",
+          externalKey: "TIE-B",
+          providerName: "나은행",
+          productName: "동시 상품",
+          options: [option],
+        }), "2026-08-31T00:00:00.000Z"),
+        withRecentKey(product({
+          stableId: "TIE-A",
+          sourceId: "finlife",
+          externalKey: "TIE-A",
+          providerName: "가은행",
+          productName: "동시 상품",
+          options: [option],
+        }), "2026-08-31T00:00:00.000Z"),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const kdb = createLoader("datago_kdb", {
+      count: 1,
+      items: [withRecentKey(product({
+        stableId: "NEWEST",
+        sourceId: "datago_kdb",
+        externalKey: "NEWEST",
+        providerName: "하은행",
+        productName: "최신 상품",
+        options: [{ ...option, sourceId: "datago_kdb" }],
+      }), "2026-09-01T00:00:00.000Z")],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "datago_kdb" },
+    });
+    const input = baseInput({
+      includeSources: ["finlife", "datago_kdb"],
+      includeTimestamps: false,
+      termMonths: 12,
+      limit: 1,
+      sort: "recent",
+    });
+
+    const first = await getUnifiedProductsWithLoaders(input, { finlife, datago_kdb: kdb });
+    const second = await getUnifiedProductsWithLoaders({
+      ...input,
+      cursor: first.pageInfo.nextCursor,
+    }, { finlife, datago_kdb: kdb });
+    const third = await getUnifiedProductsWithLoaders({
+      ...input,
+      cursor: second.pageInfo.nextCursor,
+    }, { finlife, datago_kdb: kdb });
+
+    expect([first.items[0]?.stableId, second.items[0]?.stableId, third.items[0]?.stableId])
+      .toEqual(["NEWEST", "TIE-A", "TIE-B"]);
+    expect(finlife.query).toHaveBeenCalledTimes(1);
+    expect(kdb.query).toHaveBeenCalledTimes(1);
+    expect(first.items[0]?.firstSeenAt).toBeUndefined();
+    expect(first.items[0]?.lastSeenAt).toBeUndefined();
+    expect(first.items[0]?.updatedAt).toBeUndefined();
+    expect(JSON.stringify(first)).not.toContain("finance.unified.recentSortAt");
   });
 
   it("fails closed when every requested source query fails", async () => {

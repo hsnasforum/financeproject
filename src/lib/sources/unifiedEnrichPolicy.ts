@@ -28,6 +28,8 @@ export type UnifiedOptionView = {
   intrRate2: number | null;
 };
 
+export const UNIFIED_RECENT_SORT_AT = Symbol.for("finance.unified.recentSortAt");
+
 export type UnifiedMergeItem = {
   stableId: string;
   sourceId: string;
@@ -45,6 +47,7 @@ export type UnifiedMergeItem = {
   };
   options?: UnifiedOptionView[];
   sourceIds?: string[];
+  [UNIFIED_RECENT_SORT_AT]?: string;
 };
 
 type UnifiedSortMode = "recent" | "name";
@@ -61,12 +64,30 @@ function toTimestamp(value?: string): number {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+function recentSortAt(item: UnifiedMergeItem): string | undefined {
+  return item[UNIFIED_RECENT_SORT_AT] ?? item.lastSeenAt ?? item.updatedAt ?? item.firstSeenAt;
+}
+
+export function withUnifiedRecentSortAt<T extends object>(item: T, value: string | undefined): T {
+  if (!value || !Number.isFinite(Date.parse(value))) return item;
+  return {
+    ...item,
+    [UNIFIED_RECENT_SORT_AT]: value,
+  };
+}
+
+export function stripUnifiedRecentSortAt<T extends object>(item: T): T {
+  const publicItem = { ...item } as T & { [UNIFIED_RECENT_SORT_AT]?: string };
+  Reflect.deleteProperty(publicItem, UNIFIED_RECENT_SORT_AT);
+  return publicItem as T;
+}
+
 function compareWinnerPriority(a: UnifiedMergeItem, b: UnifiedMergeItem): number {
   const sourceGap = sourcePriority(a.sourceId) - sourcePriority(b.sourceId);
   if (sourceGap !== 0) return sourceGap;
 
-  const aTs = toTimestamp(a.lastSeenAt ?? a.updatedAt ?? a.firstSeenAt);
-  const bTs = toTimestamp(b.lastSeenAt ?? b.updatedAt ?? b.firstSeenAt);
+  const aTs = toTimestamp(recentSortAt(a));
+  const bTs = toTimestamp(recentSortAt(b));
   if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return bTs - aTs;
 
   const providerGap = (a.providerName ?? "").localeCompare(b.providerName ?? "");
@@ -155,6 +176,13 @@ function pickTimestampIso(input: {
   return input.mode === "min" ? sorted[0] : sorted[sorted.length - 1];
 }
 
+function pickRecentSortAt(items: UnifiedMergeItem[]): string | undefined {
+  return items
+    .map((item) => recentSortAt(item))
+    .filter((value): value is string => typeof value === "string" && Number.isFinite(Date.parse(value)))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+}
+
 function mergeSignals(items: UnifiedMergeItem[], winner: UnifiedMergeItem): UnifiedMergeItem["signals"] {
   const hasMatchedDeposit = items.some((item) => item.signals?.depositProtection === "matched");
   const hasKdbMatched = items.some((item) => item.signals?.kdbMatched);
@@ -189,8 +217,8 @@ export function buildStableUnifiedId(input: {
 
 function compareMergedItems(a: UnifiedMergeItem, b: UnifiedMergeItem, sort: UnifiedSortMode): number {
   if (sort === "recent") {
-    const aTs = toTimestamp(a.lastSeenAt ?? a.updatedAt ?? a.firstSeenAt);
-    const bTs = toTimestamp(b.lastSeenAt ?? b.updatedAt ?? b.firstSeenAt);
+    const aTs = toTimestamp(recentSortAt(a));
+    const bTs = toTimestamp(recentSortAt(b));
     if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return bTs - aTs;
   }
 
@@ -219,6 +247,7 @@ export function mergeUnifiedCatalogRows(input: {
   for (const [stableId, bucket] of grouped.entries()) {
     const sortedByWinner = [...bucket].sort(compareWinnerPriority);
     const winner = sortedByWinner[0];
+    const mergedRecentSortAt = pickRecentSortAt(bucket);
 
     const sourceIds = [...new Set(bucket.map((item) => item.sourceId))]
       .sort((a, b) => {
@@ -230,6 +259,9 @@ export function mergeUnifiedCatalogRows(input: {
     merged.push({
       ...winner,
       stableId,
+      ...(mergedRecentSortAt
+        ? { [UNIFIED_RECENT_SORT_AT]: mergedRecentSortAt }
+        : {}),
       summary: pickSummary(bucket, winner),
       firstSeenAt: pickTimestampIso({ items: bucket, field: "firstSeenAt", mode: "min" }),
       lastSeenAt: pickTimestampIso({ items: bucket, field: "lastSeenAt", mode: "max" }),

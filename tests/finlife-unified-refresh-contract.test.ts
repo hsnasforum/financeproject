@@ -147,7 +147,7 @@ describe("unified FINLIFE refresh persistence boundary", () => {
     });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await expect(refreshFinlifeSnapshotIfStale("deposit", true)).resolves.toBeUndefined();
+    await expect(refreshFinlifeSnapshotIfStale("deposit", true)).resolves.toEqual({ fallbackUsed: true });
 
     expect(mocks.runFinlifePersistentSync).toHaveBeenCalledWith("deposit");
     expect(consoleError).toHaveBeenCalledWith("[unified] finlife refresh failed", {
@@ -175,7 +175,7 @@ describe("unified FINLIFE refresh persistence boundary", () => {
     mocks.runFinlifePersistentSync.mockRejectedValue(new Error("unexpected runner failure"));
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await expect(refreshFinlifeSnapshotIfStale("saving", true)).resolves.toBeUndefined();
+    await expect(refreshFinlifeSnapshotIfStale("saving", true)).resolves.toEqual({ fallbackUsed: true });
 
     expect(consoleError).toHaveBeenCalledWith("[unified] finlife refresh failed", {
       kind: "saving",

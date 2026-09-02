@@ -2,6 +2,7 @@ import {
   getUnifiedProducts,
   UnifiedInputError,
   type UnifiedMode,
+  type UnifiedRequestInterruptionReason,
 } from "@/lib/sources/unified";
 import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { singleflight } from "../../../../lib/cache/singleflight";
@@ -62,6 +63,10 @@ function hasSamplebankSource(input: {
   sourceId: UnifiedSourceId | null;
 }): boolean {
   return input.sourceId === "samplebank" || input.includeSources.includes("samplebank");
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 export async function GET(request: Request) {
@@ -310,6 +315,19 @@ export async function GET(request: Request) {
       fetchedAt: generatedAt,
     }));
   } catch (error) {
+    if (isAbortError(error)) {
+      const reason: UnifiedRequestInterruptionReason = {
+        code: "REQUEST_ABORTED",
+        message: "상품 조회 요청이 완료되기 전에 취소되었습니다.",
+        recovery: "현재 조건으로 다시 조회해 주세요.",
+      };
+      recordError(reason.code, reason.message, 499);
+      return withTrace(jsonError(reason.code, reason.message, {
+        status: 499,
+        details: { reason },
+        meta: traceMeta(),
+      }));
+    }
     if (error instanceof UnifiedInputError) {
       const status = statusFromCode("INPUT");
       recordError("INPUT", error.message, status);

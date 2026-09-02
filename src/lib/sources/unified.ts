@@ -18,14 +18,18 @@ import {
   buildStableUnifiedId,
   integrateCanonicalWithMatches,
   mergeUnifiedCatalogRows,
+  stripUnifiedRecentSortAt,
   type DepositProtectionMode,
   type UnifiedMergeItem,
 } from "@/lib/sources/unifiedEnrichPolicy";
 import {
   UnifiedInputError,
+  type UnifiedDataPartialReason,
   type EnrichSourceId,
   type UnifiedProductView,
   type UnifiedProductsInput,
+  type UnifiedProviderFacetIssue,
+  type UnifiedProviderFacetStatus,
   type UnifiedResult,
 } from "@/lib/sources/unifiedTypes";
 
@@ -36,6 +40,7 @@ export type {
   UnifiedPageInfo,
   UnifiedProductView,
   UnifiedProductsInput,
+  UnifiedRequestInterruptionReason,
   UnifiedResult,
 } from "@/lib/sources/unifiedTypes";
 
@@ -52,7 +57,8 @@ type CatalogSnapshot = {
   sources: Record<string, { count: number }>;
   items: UnifiedProductView[];
   providers: string[];
-  partial: boolean;
+  partialReasons: UnifiedDataPartialReason[];
+  providerStatus: UnifiedProviderFacetStatus;
   sourceIssues?: ProductSourceIssue[];
 };
 
@@ -137,12 +143,20 @@ function catalogPageFromSnapshot(input: {
     sources: input.snapshot.sources,
     merged: items,
     items,
-    facets: { providers: input.snapshot.providers },
+    facets: {
+      providers: input.snapshot.providers,
+      providerStatus: input.snapshot.providerStatus,
+    },
     pageInfo: {
       hasMore,
       nextCursor,
       limit: input.limit,
-      ...(input.snapshot.partial ? { partial: true } : {}),
+      ...(input.snapshot.partialReasons.length > 0
+        ? {
+            partial: true,
+            partialReasons: input.snapshot.partialReasons,
+          }
+        : {}),
     },
     ...(input.snapshot.sourceIssues ? { sourceIssues: input.snapshot.sourceIssues } : {}),
   };
@@ -524,6 +538,23 @@ function sourceResultFromPage(kind: "deposit" | "saving", page: UnifiedSourcePag
   };
 }
 
+function scanCapReason(input: {
+  sourceId: UnifiedSourceId;
+  unit: "pages" | "rows";
+  limit: number;
+}): UnifiedDataPartialReason {
+  const countLabel = input.unit === "pages"
+    ? `${input.limit.toLocaleString("ko-KR")}페이지`
+    : `${input.limit.toLocaleString("ko-KR")}개 행`;
+  return {
+    code: input.unit === "pages" ? "SCAN_PAGE_CAP" : "SCAN_ROW_CAP",
+    sourceId: input.sourceId,
+    cap: { unit: input.unit, limit: input.limit },
+    message: `조회 안전을 위해 이 원천은 ${countLabel}까지 확인하고 중단했습니다. 이후 상품은 결과에 포함되지 않았습니다.`,
+    recovery: "기관, 기간 또는 금리 조건을 더 좁혀 다시 조회해 주세요.",
+  };
+}
+
 async function queryAllSourcePages(
   loader: UnifiedSourceLoader,
   query: Parameters<UnifiedSourceLoader["query"]>[0],
@@ -545,6 +576,9 @@ async function queryAllSourcePages(
     const rowsTruncated = page.items.length > availableRows;
     const rowLimitReached = rowsTruncated || (items.length >= CATALOG_SCAN_MAX_ROWS && page.pageInfo.hasMore);
     if (!page.pageInfo.hasMore) {
+      const partialReasons = rowsTruncated
+        ? [scanCapReason({ sourceId: page.sourceId, unit: "rows", limit: CATALOG_SCAN_MAX_ROWS })]
+        : [];
       return {
         sourceId: page.sourceId,
         count,
@@ -554,12 +588,22 @@ async function queryAllSourcePages(
           nextCursor: null,
           limit: query.limit,
           sourceId: page.sourceId,
-          ...(rowsTruncated ? { partial: true } : {}),
+          ...(partialReasons.length > 0
+            ? {
+                partial: true,
+                partialReasons,
+              }
+            : {}),
         },
       };
     }
 
     if (rowLimitReached || pageIndex + 1 >= CATALOG_SCAN_MAX_PAGES) {
+      const partialReason = scanCapReason({
+        sourceId: page.sourceId,
+        unit: rowLimitReached ? "rows" : "pages",
+        limit: rowLimitReached ? CATALOG_SCAN_MAX_ROWS : CATALOG_SCAN_MAX_PAGES,
+      });
       return {
         sourceId: page.sourceId,
         count,
@@ -570,6 +614,7 @@ async function queryAllSourcePages(
           limit: query.limit,
           sourceId: page.sourceId,
           partial: true,
+          partialReasons: [partialReason],
         },
       };
     }
@@ -592,6 +637,11 @@ async function queryAllSourcePages(
       limit: query.limit,
       sourceId: lastSourceId,
       partial: true,
+      partialReasons: [scanCapReason({
+        sourceId: lastSourceId,
+        unit: "pages",
+        limit: CATALOG_SCAN_MAX_PAGES,
+      })],
     },
   };
 }
@@ -600,19 +650,23 @@ function sourceIssue(input: {
   sourceId: UnifiedSourceId;
   phase: ProductSourceIssue["phase"];
   error: unknown;
+  log?: boolean;
 }): ProductSourceIssue {
-  console.error("[unified] product source unavailable", {
-    sourceId: input.sourceId,
-    phase: input.phase,
-    message: input.error instanceof Error ? input.error.message : "unknown",
-  });
+  if (input.log !== false) {
+    console.error("[unified] product source unavailable", {
+      sourceId: input.sourceId,
+      phase: input.phase,
+      message: input.error instanceof Error ? input.error.message : "unknown",
+    });
+  }
   if (input.phase === "refresh") {
     return {
       sourceId: input.sourceId,
       phase: input.phase,
       code: "SOURCE_REFRESH_FAILED",
       fallbackUsed: true,
-      message: "최신 데이터 갱신에 실패해 이전에 저장된 상품을 표시합니다. 가입 전 최신 공시를 다시 확인해 주세요.",
+      message: "최신 데이터 갱신에 실패해 이전에 저장된 상품을 표시합니다.",
+      recovery: "가입 전 금융회사 공시에서 최신 금리와 조건을 다시 확인해 주세요.",
     };
   }
   return {
@@ -620,7 +674,39 @@ function sourceIssue(input: {
     phase: input.phase,
     code: "SOURCE_QUERY_FAILED",
     fallbackUsed: false,
-    message: "이 원천의 상품 데이터를 불러오지 못했습니다. 다른 원천의 결과만 표시합니다.",
+    message: "이 원천의 상품 데이터를 불러오지 못해 후보가 누락되었습니다. 다른 원천의 결과만 표시합니다.",
+    recovery: "잠시 후 다시 조회하거나 원천 상태를 확인해 주세요.",
+  };
+}
+
+function sourcePartialReason(issue: ProductSourceIssue): UnifiedDataPartialReason {
+  return {
+    code: issue.phase === "refresh" ? "SOURCE_REFRESH_FALLBACK" : "SOURCE_QUERY_FAILED",
+    sourceId: issue.sourceId,
+    message: issue.message,
+    recovery: issue.recovery,
+  };
+}
+
+function providerFacetIssue(sourceId: UnifiedSourceId): UnifiedProviderFacetIssue {
+  return {
+    code: "PROVIDER_FACET_FAILED",
+    sourceId,
+    message: "전체 제공 기관 목록을 불러오지 못해 현재 조회된 상품의 기관만 표시합니다.",
+    recovery: "잠시 후 다시 조회해 전체 기관 목록을 확인해 주세요.",
+  };
+}
+
+function withPartialReasons(
+  pageInfo: UnifiedResult["pageInfo"],
+  reasons: UnifiedDataPartialReason[],
+): UnifiedResult["pageInfo"] {
+  const combined = [...(pageInfo.partialReasons ?? []), ...reasons];
+  if (combined.length === 0) return pageInfo;
+  return {
+    ...pageInfo,
+    partial: true,
+    partialReasons: combined,
   };
 }
 
@@ -630,12 +716,25 @@ async function refreshSourceSafely(input: {
   kind: "deposit" | "saving";
   refresh: boolean;
   issues: ProductSourceIssue[];
+  partialReasons: UnifiedDataPartialReason[];
 }): Promise<void> {
   if (!input.loader) throw new UnifiedInputError(`지원하지 않는 sourceId입니다: ${input.sourceId}`);
   try {
-    await input.loader.refreshIfNeeded({ kind: input.kind, refresh: input.refresh });
+    const outcome = await input.loader.refreshIfNeeded({ kind: input.kind, refresh: input.refresh });
+    if (outcome?.fallbackUsed) {
+      const issue = sourceIssue({
+        sourceId: input.sourceId,
+        phase: "refresh",
+        error: null,
+        log: false,
+      });
+      input.issues.push(issue);
+      input.partialReasons.push(sourcePartialReason(issue));
+    }
   } catch (error) {
-    input.issues.push(sourceIssue({ sourceId: input.sourceId, phase: "refresh", error }));
+    const issue = sourceIssue({ sourceId: input.sourceId, phase: "refresh", error });
+    input.issues.push(issue);
+    input.partialReasons.push(sourcePartialReason(issue));
   }
 }
 
@@ -713,11 +812,26 @@ export async function getUnifiedProductsWithLoaders(
     }
 
     const sourceIssues: ProductSourceIssue[] = [];
+    const partialReasons: UnifiedDataPartialReason[] = [];
     const finlifeLoader = getUnifiedSourceLoader(loaders, "finlife");
-    await refreshSourceSafely({ loader: finlifeLoader, sourceId: "finlife", kind, refresh, issues: sourceIssues });
+    await refreshSourceSafely({
+      loader: finlifeLoader,
+      sourceId: "finlife",
+      kind,
+      refresh,
+      issues: sourceIssues,
+      partialReasons,
+    });
     if (includeSources.includes("datago_kdb")) {
       const kdbLoader = getUnifiedSourceLoader(loaders, "datago_kdb");
-      await refreshSourceSafely({ loader: kdbLoader, sourceId: "datago_kdb", kind, refresh, issues: sourceIssues });
+      await refreshSourceSafely({
+        loader: kdbLoader,
+        sourceId: "datago_kdb",
+        kind,
+        refresh,
+        issues: sourceIssues,
+        partialReasons,
+      });
     }
 
     const canonicalPage = await finlifeLoader.query({
@@ -735,6 +849,12 @@ export async function getUnifiedProductsWithLoaders(
           hasMore: false,
           nextCursor: null,
           limit,
+          ...(partialReasons.length > 0
+            ? {
+                partial: true,
+                partialReasons,
+              }
+            : {}),
         },
       };
     }
@@ -755,7 +875,9 @@ export async function getUnifiedProductsWithLoaders(
       });
     } catch (error) {
       if (!includeSources.includes("datago_kdb")) throw error;
-      sourceIssues.push(sourceIssue({ sourceId: "datago_kdb", phase: "query", error }));
+      const issue = sourceIssue({ sourceId: "datago_kdb", phase: "query", error });
+      sourceIssues.push(issue);
+      partialReasons.push(sourcePartialReason(issue));
       enriched = { items: canonical.items };
     }
 
@@ -777,6 +899,12 @@ export async function getUnifiedProductsWithLoaders(
         hasMore: false,
         nextCursor: null,
         limit,
+        ...(partialReasons.length > 0
+          ? {
+              partial: true,
+              partialReasons,
+            }
+          : {}),
       },
     };
   }
@@ -792,7 +920,15 @@ export async function getUnifiedProductsWithLoaders(
     }
     const loader = getUnifiedSourceLoader(loaders, sourceId);
     const sourceIssues: ProductSourceIssue[] = [];
-    await refreshSourceSafely({ loader, sourceId, kind, refresh, issues: sourceIssues });
+    const partialReasons: UnifiedDataPartialReason[] = [];
+    await refreshSourceSafely({
+      loader,
+      sourceId,
+      kind,
+      refresh,
+      issues: sourceIssues,
+      partialReasons,
+    });
     const page = await loader.query({
       ...sourceQuery,
       cursor,
@@ -818,23 +954,35 @@ export async function getUnifiedProductsWithLoaders(
         extras: enriched.extras,
         diagnostics: enriched.diagnostics,
         ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
+        pageInfo: withPartialReasons(base.pageInfo, partialReasons),
       };
     }
 
-    const result = applyDepositProtectionToResult(base, depositProtection);
+    const result = applyDepositProtectionToResult({
+      ...base,
+      pageInfo: withPartialReasons(base.pageInfo, partialReasons),
+    }, depositProtection);
     return sourceIssues.length > 0 ? { ...result, sourceIssues } : result;
   }
 
   const sourceMap: Record<string, { count: number }> = {};
   const merged: UnifiedProductView[] = [];
   const sourceIssues: ProductSourceIssue[] = [];
+  const partialReasons: UnifiedDataPartialReason[] = [];
+  const providerFacetIssues: UnifiedProviderFacetIssue[] = [];
   const providerNames = new Set<string>();
   let loadedSources = 0;
-  let catalogPartial = false;
   for (const includedSourceId of uniqueIncludedSources(includeSources)) {
     throwIfAborted(input.signal);
     const loader = getUnifiedSourceLoader(loaders, includedSourceId);
-    await refreshSourceSafely({ loader, sourceId: includedSourceId, kind, refresh, issues: sourceIssues });
+    await refreshSourceSafely({
+      loader,
+      sourceId: includedSourceId,
+      kind,
+      refresh,
+      issues: sourceIssues,
+      partialReasons,
+    });
     let sourceItems: UnifiedProductView[] = [];
     try {
       const page = catalogFiltersActive
@@ -851,12 +999,14 @@ export async function getUnifiedProductsWithLoaders(
       sourceMap[page.sourceId] = { count: page.count };
       merged.push(...page.items);
       sourceItems = page.items;
-      catalogPartial ||= page.pageInfo.partial === true;
+      partialReasons.push(...(page.pageInfo.partialReasons ?? []));
       loadedSources += 1;
     } catch (error) {
       if (input.signal?.aborted || isAbortError(error)) throw error;
       sourceMap[includedSourceId] = { count: 0 };
-      sourceIssues.push(sourceIssue({ sourceId: includedSourceId, phase: "query", error }));
+      const issue = sourceIssue({ sourceId: includedSourceId, phase: "query", error });
+      sourceIssues.push(issue);
+      partialReasons.push(sourcePartialReason(issue));
     }
 
     try {
@@ -869,7 +1019,7 @@ export async function getUnifiedProductsWithLoaders(
       }
     } catch (error) {
       if (input.signal?.aborted || isAbortError(error)) throw error;
-      catalogPartial = true;
+      providerFacetIssues.push(providerFacetIssue(includedSourceId));
       console.error("[unified] provider facet unavailable", {
         sourceId: includedSourceId,
         message: error instanceof Error ? error.message : "unknown",
@@ -895,6 +1045,9 @@ export async function getUnifiedProductsWithLoaders(
   const filteredItems = filterCatalogItems(protectedItems, { provider, termMonths, minRate });
 
   const sortedProviders = [...providerNames].sort((left, right) => left.localeCompare(right, "ko"));
+  const providerStatus: UnifiedProviderFacetStatus = providerFacetIssues.length > 0
+    ? { state: "partial", issues: providerFacetIssues }
+    : { state: "complete", issues: [] };
   if (catalogFiltersActive) {
     const snapshot: CatalogSnapshot = {
       signature: catalogSignature,
@@ -903,7 +1056,8 @@ export async function getUnifiedProductsWithLoaders(
       sources: sourceMap,
       items: filteredItems,
       providers: sortedProviders,
-      partial: catalogPartial,
+      partialReasons,
+      providerStatus,
       ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
     };
     return catalogPageFromSnapshot({
@@ -923,19 +1077,41 @@ export async function getUnifiedProductsWithLoaders(
     sources: sourceMap,
     merged: sliced,
     items: sliced,
-    facets: { providers: sortedProviders },
+    facets: { providers: sortedProviders, providerStatus },
     pageInfo: {
       hasMore,
       nextCursor,
       limit,
-      ...(catalogPartial ? { partial: true } : {}),
+      ...(partialReasons.length > 0
+        ? {
+            partial: true,
+            partialReasons,
+          }
+        : {}),
     },
     ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
   };
 }
 
 export async function getUnifiedProducts(input: UnifiedProductsInput): Promise<UnifiedResult> {
-  return getUnifiedProductsWithLoaders(input);
+  const result = await getUnifiedProductsWithLoaders(input);
+  const stripItems = (items: UnifiedProductView[] | undefined): UnifiedProductView[] | undefined =>
+    items?.map((item) => stripUnifiedRecentSortAt(item));
+  return {
+    ...result,
+    items: stripItems(result.items) ?? [],
+    merged: stripItems(result.merged) ?? [],
+    ...(result.extras
+      ? {
+          extras: {
+            ...result.extras,
+            ...(result.extras.kdbOnly
+              ? { kdbOnly: stripItems(result.extras.kdbOnly) }
+              : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 type UnifiedLookupTarget = {

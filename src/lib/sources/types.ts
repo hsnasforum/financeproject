@@ -78,6 +78,7 @@ export type ProductSourceIssue = {
   code: "SOURCE_REFRESH_FAILED" | "SOURCE_QUERY_FAILED";
   fallbackUsed: boolean;
   message: string;
+  recovery: string;
 };
 
 export type SyncSourceOption = "kdb" | "all";

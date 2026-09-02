@@ -53,7 +53,8 @@ export default function ProductsCatalogPage() {
     hasMore: false,
     freshness: null,
     providerNames: [],
-    partial: false,
+    partialReasons: [],
+    providerStatus: { state: "complete", issues: [] },
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -80,10 +81,21 @@ export default function ProductsCatalogPage() {
       hasMore: isCurrent && catalogState.hasMore,
       freshness: isCurrent ? catalogState.freshness : null,
       providerNames: isCurrent ? catalogState.providerNames : [],
-      partial: isCurrent && catalogState.partial,
+      partialReasons: isCurrent ? catalogState.partialReasons : [],
+      providerStatus: isCurrent
+        ? catalogState.providerStatus
+        : { state: "complete" as const, issues: [] },
     };
-  }, [catalogQueryKey, catalogState.freshness, catalogState.hasMore, catalogState.nextCursor, catalogState.partial, catalogState.providerNames, catalogState.queryKey, catalogState.rows]);
-  const { rows, nextCursor, hasMore, freshness, providerNames, partial } = currentCatalog;
+  }, [catalogQueryKey, catalogState.freshness, catalogState.hasMore, catalogState.nextCursor, catalogState.partialReasons, catalogState.providerNames, catalogState.providerStatus, catalogState.queryKey, catalogState.rows]);
+  const {
+    rows,
+    nextCursor,
+    hasMore,
+    freshness,
+    providerNames,
+    partialReasons,
+    providerStatus,
+  } = currentCatalog;
 
   useEffect(() => {
     setKind(urlState.kind);
@@ -143,7 +155,8 @@ export default function ProductsCatalogPage() {
         nextCursor: responseNextCursor,
         freshness: responseFreshness,
         providerNames: responseProviderNames,
-        partial: responsePartial,
+        partialReasons: responsePartialReasons,
+        providerStatus: responseProviderStatus,
       } = parseCatalogResponse(json);
       setCatalogState((prev) => ({
         queryKey: catalogQueryKey,
@@ -152,7 +165,8 @@ export default function ProductsCatalogPage() {
         nextCursor: responseNextCursor,
         freshness: responseFreshness,
         providerNames: responseProviderNames,
-        partial: responsePartial,
+        partialReasons: responsePartialReasons,
+        providerStatus: responseProviderStatus,
       }));
       setCompareNotice("");
     } catch (fetchError) {
@@ -341,16 +355,39 @@ export default function ProductsCatalogPage() {
         </section>
       ) : null}
 
-      {partial ? (
+      {partialReasons.length > 0 ? (
         <section
           className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4"
           role="alert"
           data-testid="catalog-partial-results"
         >
-          <p className="text-sm font-black text-amber-900">조회 안전 한도 안에서 찾은 일부 결과입니다.</p>
-          <p className="mt-1 text-xs font-medium leading-relaxed text-amber-800">
-            저장된 상품 수가 많아 조회를 중단했습니다. 기관이나 기간 조건을 더 좁혀 다시 확인해 주세요.
-          </p>
+          <p className="text-sm font-black text-amber-900">일부 상품 정보에 확인이 필요합니다.</p>
+          <ul className="mt-3 space-y-3">
+            {partialReasons.map((reason, index) => (
+              <li key={`${reason.code}-${reason.sourceId}-${index}`} className="text-xs font-medium leading-relaxed text-amber-800">
+                <p><strong>{formatCatalogSourceName(reason.sourceId)}</strong> · {reason.message}</p>
+                <p className="mt-1">다음 단계: {reason.recovery}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {providerStatus.state === "partial" && providerStatus.issues.length > 0 ? (
+        <section
+          className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4"
+          role="alert"
+          data-testid="catalog-provider-facet-partial"
+        >
+          <p className="text-sm font-black text-amber-900">제공 기관 목록 일부를 확인하지 못했습니다.</p>
+          <ul className="mt-3 space-y-3">
+            {providerStatus.issues.map((issue, index) => (
+              <li key={`${issue.code}-${issue.sourceId}-${index}`} className="text-xs font-medium leading-relaxed text-amber-800">
+                <p><strong>{formatCatalogSourceName(issue.sourceId)}</strong> · {issue.message}</p>
+                <p className="mt-1">다음 단계: {issue.recovery}</p>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

@@ -1,5 +1,10 @@
 import { isSamplebankPublicAccessAllowed } from "@/lib/products/samplebankPolicy";
 import type { ProductFreshnessSummary } from "@/lib/sources/types";
+import type {
+  UnifiedDataPartialReason,
+  UnifiedProviderFacetIssue,
+  UnifiedProviderFacetStatus,
+} from "@/lib/sources/unifiedTypes";
 
 export type CatalogKind = "deposit" | "saving";
 
@@ -34,9 +39,11 @@ export type UnifiedResponse = {
       nextCursor?: string | null;
       limit?: number;
       partial?: boolean;
+      partialReasons?: UnifiedDataPartialReason[];
     };
     facets?: {
       providers?: string[];
+      providerStatus?: UnifiedProviderFacetStatus;
     };
   };
   meta?: {
@@ -56,7 +63,8 @@ export type CatalogState = {
   hasMore: boolean;
   freshness: ProductFreshnessSummary | null;
   providerNames: string[];
-  partial: boolean;
+  partialReasons: UnifiedDataPartialReason[];
+  providerStatus: UnifiedProviderFacetStatus;
 };
 
 export type CatalogUrlState = {
@@ -160,6 +168,76 @@ export function buildCatalogRequestParams(input: {
   return params;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+const DATA_PARTIAL_CODES = new Set<UnifiedDataPartialReason["code"]>([
+  "SOURCE_QUERY_FAILED",
+  "SOURCE_REFRESH_FALLBACK",
+  "SCAN_PAGE_CAP",
+  "SCAN_ROW_CAP",
+]);
+
+function parseDataPartialReasons(value: unknown): UnifiedDataPartialReason[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const code = entry.code;
+    const sourceId = entry.sourceId;
+    const message = entry.message;
+    const recovery = entry.recovery;
+    if (
+      typeof code !== "string"
+      || !DATA_PARTIAL_CODES.has(code as UnifiedDataPartialReason["code"])
+      || (sourceId !== "finlife" && sourceId !== "datago_kdb" && sourceId !== "samplebank")
+      || typeof message !== "string"
+      || typeof recovery !== "string"
+    ) {
+      return [];
+    }
+    const cap: UnifiedDataPartialReason["cap"] = isRecord(entry.cap)
+      && (entry.cap.unit === "pages" || entry.cap.unit === "rows")
+      && typeof entry.cap.limit === "number"
+      && Number.isFinite(entry.cap.limit)
+      ? { unit: entry.cap.unit as "pages" | "rows", limit: entry.cap.limit }
+      : undefined;
+    return [{
+      code: code as UnifiedDataPartialReason["code"],
+      sourceId,
+      message,
+      recovery,
+      ...(cap ? { cap } : {}),
+    }];
+  });
+}
+
+function parseProviderFacetStatus(value: unknown): UnifiedProviderFacetStatus {
+  if (!isRecord(value) || (value.state !== "complete" && value.state !== "partial")) {
+    return { state: "complete", issues: [] };
+  }
+  const issues: UnifiedProviderFacetIssue[] = Array.isArray(value.issues)
+    ? value.issues.flatMap((entry) => {
+        if (
+          !isRecord(entry)
+          || entry.code !== "PROVIDER_FACET_FAILED"
+          || (entry.sourceId !== "finlife" && entry.sourceId !== "datago_kdb" && entry.sourceId !== "samplebank")
+          || typeof entry.message !== "string"
+          || typeof entry.recovery !== "string"
+        ) {
+          return [];
+        }
+        return [{
+          code: "PROVIDER_FACET_FAILED" as const,
+          sourceId: entry.sourceId,
+          message: entry.message,
+          recovery: entry.recovery,
+        }];
+      })
+    : [];
+  return { state: value.state, issues };
+}
+
 export function parseCatalogResponse(json: UnifiedResponse): {
   pageItems: UnifiedItem[];
   hasMore: boolean;
@@ -167,6 +245,8 @@ export function parseCatalogResponse(json: UnifiedResponse): {
   freshness: ProductFreshnessSummary | null;
   providerNames: string[];
   partial: boolean;
+  partialReasons: UnifiedDataPartialReason[];
+  providerStatus: UnifiedProviderFacetStatus;
 } {
   const pageItems = Array.isArray(json.data?.items)
     ? json.data.items
@@ -180,6 +260,8 @@ export function parseCatalogResponse(json: UnifiedResponse): {
       ? json.data.facets.providers.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
       : [],
     partial: json.data?.pageInfo?.partial === true,
+    partialReasons: parseDataPartialReasons(json.data?.pageInfo?.partialReasons),
+    providerStatus: parseProviderFacetStatus(json.data?.facets?.providerStatus),
   };
 }
 

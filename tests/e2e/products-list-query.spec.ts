@@ -52,6 +52,64 @@ test("catalog keeps keyword edits as draft until one explicit search request", a
   await expect(page).toHaveURL(/\/products\/catalog\?kind=deposit&q=%EA%B5%AD%EB%AF%BC/);
 });
 
+test("catalog explains source and provider-facet partial results without a false scan-cap message", async ({ page }) => {
+  await page.route("**/api/products/unified?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [{
+            stableId: "finlife:HEALTHY",
+            sourceId: "finlife",
+            kind: "deposit",
+            externalKey: "HEALTHY",
+            providerName: "정상은행",
+            productName: "정상 원천 상품",
+            options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+          }],
+          facets: {
+            providers: ["정상은행"],
+            providerStatus: {
+              state: "partial",
+              issues: [{
+                code: "PROVIDER_FACET_FAILED",
+                sourceId: "datago_kdb",
+                message: "전체 제공 기관 목록을 불러오지 못해 현재 상품의 기관만 표시합니다.",
+                recovery: "잠시 후 다시 조회해 전체 기관 목록을 확인해 주세요.",
+              }],
+            },
+          },
+          pageInfo: {
+            hasMore: false,
+            nextCursor: null,
+            limit: 60,
+            partial: true,
+            partialReasons: [{
+              code: "SOURCE_QUERY_FAILED",
+              sourceId: "datago_kdb",
+              message: "이 원천의 상품 데이터를 불러오지 못해 후보가 누락되었습니다.",
+              recovery: "잠시 후 다시 조회하거나 원천 상태를 확인해 주세요.",
+            }],
+          },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit");
+
+  await expect(page.getByRole("heading", { name: "정상 원천 상품" })).toBeVisible();
+  const dataPartial = page.getByTestId("catalog-partial-results");
+  await expect(dataPartial).toContainText("공공데이터 예금상품");
+  await expect(dataPartial).toContainText("후보가 누락되었습니다");
+  await expect(dataPartial).toContainText("잠시 후 다시 조회하거나 원천 상태를 확인해 주세요");
+  const facetPartial = page.getByTestId("catalog-provider-facet-partial");
+  await expect(facetPartial).toContainText("전체 제공 기관 목록");
+  await expect(page.getByText("저장된 상품 수가 많아 조회를 중단했습니다.")).toHaveCount(0);
+});
+
 test("specialized product list applies the pure result pipeline to query filters", async ({ page }) => {
   await page.route("**/api/finlife/pension?**", async (route) => {
     await route.fulfill({

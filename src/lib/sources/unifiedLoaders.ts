@@ -15,6 +15,7 @@ import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedC
 import {
   buildStableUnifiedId,
   sortUnifiedOptions,
+  withUnifiedRecentSortAt,
   type UnifiedOptionView,
 } from "@/lib/sources/unifiedEnrichPolicy";
 import {
@@ -26,6 +27,10 @@ import {
 export type RefreshInput = {
   kind: "deposit" | "saving";
   refresh: boolean;
+};
+
+export type UnifiedSourceRefreshResult = {
+  fallbackUsed: boolean;
 };
 
 export type SourceQuery = {
@@ -60,7 +65,7 @@ export type UnifiedSourcePage = {
 
 export type UnifiedSourceLoader = {
   sourceId: UnifiedSourceId;
-  refreshIfNeeded(input: RefreshInput): Promise<void>;
+  refreshIfNeeded(input: RefreshInput): Promise<UnifiedSourceRefreshResult | void>;
   query(input: SourceQuery): Promise<UnifiedSourcePage>;
   listProviderNames?(input: SourceProviderFacetQuery): Promise<string[]>;
 };
@@ -277,7 +282,7 @@ export async function getSamplebankMergedItems(input: {
       input.qMode,
     ));
 
-  const merged = filtered.map((item) => ({
+  const merged = filtered.map((item) => withUnifiedRecentSortAt({
     stableId: item.stableId || `samplebank:${item.externalKey}`,
     sourceId: "samplebank" as const,
     kind: item.kind,
@@ -289,7 +294,7 @@ export async function getSamplebankMergedItems(input: {
     lastSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
     updatedAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
     badges: ["SAMPLEBANK"],
-  }));
+  }, executed.meta.generatedAt));
   return {
     items: merged,
     count: merged.length,
@@ -319,8 +324,11 @@ function toFinlifeRefreshEvidenceMeta(input: {
   };
 }
 
-export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", refresh: boolean): Promise<void> {
-  if (!refresh) return;
+export async function refreshFinlifeSnapshotIfStale(
+  kind: "deposit" | "saving",
+  refresh: boolean,
+): Promise<UnifiedSourceRefreshResult> {
+  if (!refresh) return { fallbackUsed: false };
 
   const incompleteAttempt = loadFinlifeSyncAttempt(kind);
   if (incompleteAttempt) {
@@ -330,7 +338,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
       phase: incompleteAttempt.phase,
       errorCode: incompleteAttempt.errorCode ?? null,
     });
-    return;
+    return { fallbackUsed: true };
   }
 
   const evidence = await readFinlifeCompletionEvidence(kind);
@@ -339,7 +347,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
       kind,
       message: evidence.error instanceof Error ? evidence.error.message : "unknown",
     });
-    return;
+    return { fallbackUsed: true };
   }
 
   const snapshot = loadFinlifeSnapshot(kind);
@@ -350,7 +358,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
     ? toFinlifeRefreshEvidenceMeta(evidence)
     : snapshot?.meta ?? null;
   const decision = shouldRunFinlifeSync(policyMeta, Date.now(), { ttlMs, minCompletionRate: 0.95 });
-  if (!decision.shouldRun) return;
+  if (!decision.shouldRun) return { fallbackUsed: false };
 
   let result: Awaited<ReturnType<typeof runFinlifePersistentSync>>;
   try {
@@ -362,9 +370,9 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
       message: error instanceof Error ? error.message : "Unexpected FINLIFE refresh error",
       upstreamStatus: null,
     });
-    return;
+    return { fallbackUsed: true };
   }
-  if (result.ok) return;
+  if (result.ok) return { fallbackUsed: false };
 
   console.error("[unified] finlife refresh failed", {
     kind,
@@ -372,6 +380,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
     message: result.error.message,
     upstreamStatus: result.error.upstreamStatus ?? null,
   });
+  return { fallbackUsed: true };
 }
 
 async function getOnlyNewSinceBySource(kind: "deposit" | "saving", sourceIds: string[]): Promise<Map<string, Date>> {
@@ -514,7 +523,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
     const detailConfig = FINLIFE_FIELD_CONFIG[input.kind];
     const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
     const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
-    return {
+    return withUnifiedRecentSortAt({
       stableId: buildStableUnifiedId({
         sourceId,
         externalKey: row.finPrdtCd,
@@ -549,7 +558,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
       signals: {
         depositProtection: "unknown",
       },
-    };
+    }, row.updatedAt.toISOString());
   });
 
   return pageResult({
@@ -625,7 +634,7 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
   const picked = hasMore ? rows.slice(0, limit) : rows;
   const nextCursor = hasMore ? encodeUnifiedCursor({ id: picked[picked.length - 1].id }) : null;
 
-  const items = picked.map<UnifiedProductView>((row) => ({
+  const items = picked.map<UnifiedProductView>((row) => withUnifiedRecentSortAt({
     stableId: buildStableUnifiedId({
       sourceId,
       externalKey: row.externalKey,
@@ -653,7 +662,7 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
           evidence: (row.matches[0].evidenceJson as Record<string, unknown>) ?? undefined,
         }
       : undefined,
-  })).filter((item) => matchesCatalogFilters(item, input));
+  }, row.lastSeenAt.toISOString())).filter((item) => matchesCatalogFilters(item, input));
 
   return pageResult({
     sourceId,
@@ -748,6 +757,7 @@ export const datagoKdbUnifiedSourceLoader: UnifiedSourceLoader = {
   sourceId: "datago_kdb",
   async refreshIfNeeded(input) {
     await refreshSourceIfStale("datago_kdb", input.kind, input.refresh);
+    return { fallbackUsed: false };
   },
   query: queryDatagoKdb,
   listProviderNames: listDatagoKdbProviderNames,
@@ -756,7 +766,7 @@ export const datagoKdbUnifiedSourceLoader: UnifiedSourceLoader = {
 export const samplebankUnifiedSourceLoader: UnifiedSourceLoader = {
   sourceId: "samplebank",
   async refreshIfNeeded() {
-    return undefined;
+    return { fallbackUsed: false };
   },
   query: querySamplebank,
   listProviderNames: listSamplebankProviderNames,
