@@ -71,6 +71,19 @@ describe("housing afford calculators", () => {
     expect(result.assessment).toEqual({ level: "attention", label: "주의" });
     expect(result.warnings.join(" ")).toContain("30% 이상");
   });
+
+  it.each([0, -1])("limits percentage calculations for non-positive income %s", (incomeNetMonthly) => {
+    const result = housingBurden({
+      incomeNetMonthly,
+      nonHousingOutflowMonthly: 200_000,
+      mode: "rent",
+      rent: { deposit: 0, monthlyRent: 300_000, opportunityAprPct: 0 },
+    });
+
+    expect(result.housingRatioPct).toBeNull();
+    expect(result.assessment).toEqual({ level: "unavailable", label: "계산 제한" });
+    expect(result.residualCashFlow).toBe(-500_000);
+  });
 });
 
 describe("parseAffordInit", () => {

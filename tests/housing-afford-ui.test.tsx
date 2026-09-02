@@ -22,4 +22,46 @@ describe("HousingAffordClient burden policy", () => {
     expect(html).not.toContain("안전");
     expect(html).not.toContain("위험");
   });
+
+  it("renders normalized positive-income composition percentages", () => {
+    const html = renderToStaticMarkup(
+      <HousingAffordClient
+        initialIncomeNet={1_000_000}
+        initialOutflow={200_000}
+        initialMode="rent"
+        initialDeposit={0}
+        initialMonthlyRent={300_000}
+        initialOpportunityAprPct={0}
+      />,
+    );
+
+    expect(html).toContain("월 소득 기준 1,000,000원");
+    expect(html).toContain("기타 지출 (20%)");
+    expect(html).toContain("주거비 (30%)");
+    expect(html).toContain("잔여 50%");
+    expect(html).toContain('aria-label="월 현금흐름 구성"');
+  });
+
+  it.each([0, -100])("suppresses composition percentages for invalid income %s", (initialIncomeNet) => {
+    const html = renderToStaticMarkup(
+      <HousingAffordClient
+        initialIncomeNet={initialIncomeNet}
+        initialOutflow={200_000}
+        initialMode="rent"
+        initialDeposit={0}
+        initialMonthlyRent={300_000}
+        initialOpportunityAprPct={0}
+      />,
+    );
+
+    expect(html).toContain("계산 제한");
+    expect(html).toContain("월 소득 기준 0원");
+    expect(html).toContain("기타 지출 (-)");
+    expect(html).toContain("주거비 (-)");
+    expect(html).toContain("잔여 -");
+    expect(html).toContain("-500,000원");
+    expect(html).toContain('aria-label="월 현금흐름 구성 비율 계산 불가"');
+    expect(html).not.toContain("180000000%");
+    expect(html).not.toContain("95000000%");
+  });
 });
