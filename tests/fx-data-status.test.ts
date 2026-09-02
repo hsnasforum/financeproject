@@ -35,4 +35,33 @@ describe("FX user-facing data status", () => {
       label: "사용 가능한 환율 없음",
     });
   });
+
+  it("canonicalizes compact quote dates before evaluating freshness", () => {
+    expect(buildFxDataStatus({
+      rowCount: 1,
+      meta: { provenance: { mode: "live", asOf: "20260829" }, cache: "miss" },
+      now: NOW,
+    })).toMatchObject({
+      mode: "live",
+      asOf: "2026-08-29",
+      isStale: true,
+      freshnessLabel: "기준 시점 오래됨",
+    });
+  });
+
+  it.each([undefined, "not-a-date", "2026-02-30"])(
+    "fails closed when the quote date cannot be verified: %s",
+    (asOf) => {
+      expect(buildFxDataStatus({
+        rowCount: 1,
+        meta: { provenance: { mode: "live", ...(asOf ? { asOf } : {}) }, cache: "miss" },
+        now: NOW,
+      })).toMatchObject({
+        mode: "unavailable",
+        asOf: null,
+        isStale: true,
+        freshnessLabel: asOf ? "기준 시점 확인 불가" : "기준 시점 확인 필요",
+      });
+    },
+  );
 });

@@ -21,7 +21,7 @@ test("FX labels mock and old data without presenting it as current", async ({ pa
           cache: "miss",
           provenance: {
             mode: "mock",
-            asOf: "2026-06-22",
+            asOf: "20260622",
             degraded: true,
           },
         },
@@ -39,6 +39,41 @@ test("FX labels mock and old data without presenting it as current", async ({ pa
 
   await expect(page.getByText("예시 데이터", { exact: true })).toBeVisible();
   await expect(page.getByText("기준 시점 오래됨", { exact: true })).toBeVisible();
+  await expect(page.getByText("출처 기준일 2026-06-22", { exact: true })).toBeVisible();
   await expect(page.getByText(/한국수출입은행 최신 원문 환율/)).toBeVisible();
   await expect(page.getByText("현재 기준 환산 결과", { exact: true })).toHaveCount(0);
+});
+
+test("FX does not present an invalid quote date as confirmed", async ({ page }) => {
+  await page.route(/\/api\/public\/fx(?:\?|$)/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [{
+            currency: "USD",
+            amount: 1000,
+            rate: 1350,
+            asOfDate: "2026-02-30",
+            krw: 1_350_000,
+          }],
+          totalKrw: 1_350_000,
+        },
+        meta: {
+          cache: "miss",
+          provenance: { mode: "live", asOf: "2026-02-30", degraded: false },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/tools/fx");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "원화로 환산하기" }).click();
+
+  await expect(page.getByText("출처 확인 필요", { exact: true })).toBeVisible();
+  await expect(page.getByText("기준 시점 확인 불가", { exact: true })).toBeVisible();
+  await expect(page.getByText("기준 시점 확인됨", { exact: true })).toHaveCount(0);
 });

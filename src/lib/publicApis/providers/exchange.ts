@@ -1,8 +1,12 @@
 import { ExternalApiError, fetchExternal } from "../../http/fetchExternal";
 import { type PublicApiResult } from "../contracts/types";
 import { buildSchemaMismatchError, safeEndpoint } from "../schemaDrift";
-import { normalizeExchangeCurrencyUnit, parseExchangeRate } from "./exchangeNormalization";
-import { formatKstCompactDate, formatKstIsoDate } from "../../format/kstCalendarDate";
+import {
+  normalizeExchangeCurrencyUnit,
+  normalizeExchangeQuoteDate,
+  parseExchangeRate,
+} from "./exchangeNormalization";
+import { formatKstCompactDate } from "../../format/kstCalendarDate";
 
 type NormalizedExchange = {
   asOf: string;
@@ -45,16 +49,6 @@ export function resolveExchangeBaseUrl(raw: string):
   }
 }
 
-function normalizeDate(raw: unknown): string {
-  const value = typeof raw === "string" ? raw : "";
-  const digits = value.replace(/[^0-9]/g, "");
-  if (/^\d{8}$/.test(digits)) {
-    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return formatKstIsoDate();
-}
-
 export function getKstTodayYYYYMMDD(now = new Date()): string {
   return formatKstCompactDate(now);
 }
@@ -80,20 +74,23 @@ export function normalizeEximExchange(raw: unknown, baseUrl = ""): NormalizedExc
             : "";
     if (!currencyRaw) continue;
     const currency = normalizeExchangeCurrencyUnit(currencyRaw);
+    if (!currency) continue;
 
     const rate = parseExchangeRate(rec.deal_bas_r ?? rec.dealBasR ?? rec.kftcDealBasR ?? rec.rate ?? rec.baseRate ?? rec.tts ?? rec.ttb);
     if (rate === null) continue;
+    const rowAsOf = normalizeExchangeQuoteDate(rec.deal_bas_dt ?? rec.dealBasDt ?? rec.asOf);
+    if (!rowAsOf) continue;
 
     rates[currency.code] = rate / currency.scale;
     if (!asOf) {
-      asOf = normalizeDate(rec.deal_bas_dt ?? rec.dealBasDt ?? rec.asOf);
+      asOf = rowAsOf;
     }
   }
 
   if (Object.keys(rates).length === 0) return null;
 
   return {
-    asOf: asOf || formatKstIsoDate(),
+    asOf,
     base: "KRW",
     rates,
     rawMeta: { source: "EXIM", baseUrl },

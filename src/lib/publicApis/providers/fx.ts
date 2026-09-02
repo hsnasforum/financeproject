@@ -1,8 +1,11 @@
 import fxMock from "@/data/public/fx.mock.json";
 import { ExternalApiError, fetchExternal, requireServerEnv } from "../../http/fetchExternal";
 import { type DataProvenance, type ExchangeRateQuote, type PublicApiResult } from "@/lib/publicApis/contracts/types";
-import { formatKstIsoDate } from "@/lib/format/kstCalendarDate";
-import { normalizeExchangeCurrencyUnit, parseExchangeRate } from "./exchangeNormalization";
+import {
+  normalizeExchangeCurrencyUnit,
+  normalizeExchangeQuoteDate,
+  parseExchangeRate,
+} from "./exchangeNormalization";
 
 const FX_SOURCE_LABEL = "한국수출입은행";
 
@@ -23,13 +26,13 @@ function normalizeKeximJson(raw: unknown, wanted: Set<string>): ExchangeRateQuot
     const rec = row as Record<string, unknown>;
     const currencyRaw = typeof rec.cur_unit === "string" ? rec.cur_unit : typeof rec.currency === "string" ? rec.currency : "";
     const currency = normalizeExchangeCurrencyUnit(currencyRaw);
-    if (!currency.code || (wanted.size > 0 && !wanted.has(currency.code))) continue;
+    if (!currency || (wanted.size > 0 && !wanted.has(currency.code))) continue;
 
     const rawRate = parseExchangeRate(rec.deal_bas_r ?? rec.rate ?? rec.baseRate);
     if (rawRate === null) continue;
+    const asOfDate = normalizeExchangeQuoteDate(rec.deal_bas_dt);
+    if (!asOfDate) continue;
     const rate = rawRate / currency.scale;
-
-    const asOfDate = typeof rec.deal_bas_dt === "string" ? rec.deal_bas_dt : formatKstIsoDate();
 
     out.push({
       asOfDate,
@@ -74,15 +77,16 @@ function mockMeta(degradedReason: string, extra?: { upstreamStatus?: number | un
   };
 }
 
-function liveMeta(quotes: ExchangeRateQuote[], fallbackAsOf: string): { provenance: DataProvenance } {
+function liveMeta(quotes: ExchangeRateQuote[]): { provenance: DataProvenance } {
+  const provenance: DataProvenance = {
+    mode: "live",
+    degraded: false,
+    fetchedAt: nowIso(),
+    source: FX_SOURCE_LABEL,
+  };
+  if (quotes[0]?.asOfDate) provenance.asOf = quotes[0].asOfDate;
   return {
-    provenance: {
-      mode: "live",
-      degraded: false,
-      asOf: quotes[0]?.asOfDate ?? fallbackAsOf,
-      fetchedAt: nowIso(),
-      source: FX_SOURCE_LABEL,
-    },
+    provenance,
   };
 }
 
@@ -130,7 +134,7 @@ export async function getExchangeQuotes(date: string, currencies: string[]): Pro
     }
 
     const quotes = normalizeKeximJson(fetched.body, wanted);
-    return { ok: true, data: quotes, meta: liveMeta(quotes, date) };
+    return { ok: true, data: quotes, meta: liveMeta(quotes) };
   } catch (error) {
     if (fallbackToMock) {
       return {

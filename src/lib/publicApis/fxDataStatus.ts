@@ -1,3 +1,5 @@
+import { normalizeExchangeQuoteDate } from "@/lib/publicApis/providers/exchangeNormalization";
+
 export type FxDataStatusMode = "live" | "cache" | "mock" | "unavailable";
 
 export type FxResponseMeta = {
@@ -32,9 +34,10 @@ export function buildFxDataStatus(input: {
   now?: Date;
 }): FxDataStatus {
   const now = input.now ?? new Date();
-  const asOf = readText(input.meta?.provenance?.asOf);
+  const rawAsOf = readText(input.meta?.provenance?.asOf);
+  const asOf = normalizeExchangeQuoteDate(rawAsOf);
   const asOfMs = asOf ? Date.parse(asOf) : Number.NaN;
-  const isStale = Number.isFinite(asOfMs) && now.getTime() - asOfMs > MAX_AGE_MS;
+  const isStale = !Number.isFinite(asOfMs) || now.getTime() - asOfMs > MAX_AGE_MS;
   const cacheHit = readText(input.meta?.cache)?.toLowerCase() === "hit";
   const provenanceMode = readText(input.meta?.provenance?.mode)?.toLowerCase();
 
@@ -43,6 +46,9 @@ export function buildFxDataStatus(input: {
   if (input.rowCount <= 0) {
     mode = "unavailable";
     label = "사용 가능한 환율 없음";
+  } else if (!asOf) {
+    mode = "unavailable";
+    label = "출처 확인 필요";
   } else if (provenanceMode === "mock") {
     mode = "mock";
     label = "예시 데이터";
@@ -57,9 +63,11 @@ export function buildFxDataStatus(input: {
     label = "출처 확인 필요";
   }
 
-  const freshnessLabel = !asOf
+  const freshnessLabel = !rawAsOf
     ? "기준 시점 확인 필요"
-    : isStale
+    : !asOf
+      ? "기준 시점 확인 불가"
+      : isStale
       ? "기준 시점 오래됨"
       : "기준 시점 확인됨";
   const prefix = mode === "mock"

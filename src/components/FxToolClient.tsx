@@ -48,7 +48,7 @@ export function FxToolClient() {
       setRows(nextRows);
       setTotalKrw(typeof json.data?.totalKrw === "number" ? json.data.totalKrw : 0);
       setDataStatus(buildFxDataStatus({
-        rowCount: nextRows.length,
+        rowCount: nextRows.filter((row) => typeof row.rate === "number" && Number.isFinite(row.rate)).length,
         meta: typeof json.meta === "object" && json.meta ? json.meta as FxResponseMeta : null,
       }));
     } catch (err) {
