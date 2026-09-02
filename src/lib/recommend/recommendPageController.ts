@@ -98,6 +98,16 @@ export function buildRecommendHistoryHref(runId: string): string {
   return `/recommend/history?open=${encodeURIComponent(runId)}`;
 }
 
+export function isRecommendResultProfileStale(
+  currentProfile: RecommendProfileNormalized,
+  resultProfile: RecommendProfileNormalized,
+): boolean {
+  const current = parseRecommendProfile(currentProfile);
+  const result = parseRecommendProfile(resultProfile);
+  if (!current.ok || !result.ok) return true;
+  return JSON.stringify(current.value) !== JSON.stringify(result.value);
+}
+
 export function resolveRecommendAutorunContinuation(input: {
   signature: string;
   previous: { sig: string; runId: string | null } | null;

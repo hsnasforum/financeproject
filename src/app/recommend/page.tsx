@@ -27,6 +27,7 @@ import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compar
 import {
   buildRecommendHistoryHref,
   buildRecommendInitialProfileState,
+  isRecommendResultProfileStale,
   resolveRecommendAutorunContinuation,
 } from "@/lib/recommend/recommendPageController";
 import {
@@ -78,6 +79,10 @@ import { type SourceStatusRow } from "@/lib/sources/types";
 
 type StoredProfile = RecommendProfileNormalized;
 type StoredRecommendResult = StoredRecommendResultV2<StoredProfile, RecommendResponse["meta"]>;
+type RecommendResultSnapshot = Readonly<{
+  profile: StoredProfile;
+  response: RecommendResponse;
+}>;
 
 type StatusApiResponse = {
   ok: boolean;
@@ -111,11 +116,10 @@ function toSavedRunProfile(profile: StoredProfile): SavedRunProfile {
 
 function buildExportRun(
   ownerId: RecommendOwnerId,
-  profile: StoredProfile,
-  response: RecommendResponse,
+  snapshot: RecommendResultSnapshot,
 ): SavedRecommendRun | null {
-  if (!Array.isArray(response.items)) return null;
-  return buildRunFromRecommend(ownerId, toSavedRunProfile(profile), response, {
+  if (!Array.isArray(snapshot.response.items)) return null;
+  return buildRunFromRecommend(ownerId, toSavedRunProfile(snapshot.profile), snapshot.response, {
     runId: `adhoc_${Date.now()}`,
     savedAt: new Date().toISOString(),
   });
@@ -128,7 +132,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [result, setResult] = useState<RecommendResponse | null>(null);
+  const [resultSnapshot, setResultSnapshot] = useState<RecommendResultSnapshot | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [lastStored, setLastStored] = useState<StoredRecommendResult | null>(null);
   const [readyToPersist, setReadyToPersist] = useState(false);
@@ -141,6 +145,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   const autoRunTriggeredRef = useRef(false);
   const sourceStatusAbortRef = useRef<AbortController | null>(null);
   const [requestCoordinator] = useState(() => createLatestRequestCoordinator());
+  const result = resultSnapshot?.response ?? null;
 
   const showValidationIssues = useCallback((
     issues: Issue[],
@@ -174,7 +179,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
     setWeightNormalizationNotice(formatRecommendWeightNormalizationNotice(parsedProfile.weightNormalization));
     if (!parsedProfile.ok) {
       setLoading(false);
-      setResult(null);
+      setResultSnapshot(null);
       showValidationIssues(parsedProfile.issues, lease.isCurrent);
       return;
     }
@@ -196,7 +201,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
       if (!lease.isCurrent()) return;
       if (!res.ok || !rawJson.ok) {
         const apiIssues = parseStringIssues(rawJson.error?.issues ?? []);
-        setResult(null);
+        setResultSnapshot(null);
         if (apiIssues.length > 0) {
           keepLeaseForValidationFocus = true;
           showValidationIssues(apiIssues, lease.isCurrent);
@@ -208,27 +213,28 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
         return;
       }
       if (!isRecommendOwner(ownerId, rawJson.meta?.userId)) {
-        setResult(null);
+        setResultSnapshot(null);
         setError("현재 로그인 사용자와 추천 결과의 소유자가 일치하지 않아 결과를 저장하지 않았습니다.");
         announce("추천 결과의 사용자 정보를 확인하지 못해 결과를 저장하지 않았습니다.");
         return;
       }
       const json = attachUnifiedIds(rawJson);
+      const resultProfile = parseRecommendProfile(requestProfile).value;
 
       const currStored = buildStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>({
         ownerId,
-        profile: requestProfile,
+        profile: resultProfile,
         meta: json.meta,
         items: json.items,
       });
       localStorage.setItem(recommendResultStorageKey(ownerId), JSON.stringify(currStored));
       setLastStored(currStored);
       lastStoredRef.current = currStored;
-      setResult(json);
+      setResultSnapshot({ profile: resultProfile, response: json });
       setFormIssues([]);
 
       if (options?.autoSave) {
-        const sig = options.autorunSig ?? buildRecommendAutorunSignature(requestProfile);
+        const sig = options.autorunSig ?? buildRecommendAutorunSignature(resultProfile);
         const previous = readRecommendAutorunSessionPayload(ownerId);
         const continuation = resolveRecommendAutorunContinuation({
           signature: sig,
@@ -238,7 +244,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
         if (continuation.kind === "reuse") {
           if (continuation.historyHref) router.push(continuation.historyHref);
         } else {
-          const runId = saveRunFromRecommend(ownerId, toSavedRunProfile(requestProfile), json);
+          const runId = saveRunFromRecommend(ownerId, toSavedRunProfile(resultProfile), json);
           writeRecommendAutorunSessionPayload(ownerId, { sig: continuation.signature, runId });
           if (continuation.goHistory) router.push(buildRecommendHistoryHref(runId));
         }
@@ -402,6 +408,12 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
     () => readPlanningActionContext(searchParams),
     [searchParams],
   );
+  const resultIsStale = useMemo(
+    () => resultSnapshot
+      ? isRecommendResultProfileStale(profile, resultSnapshot.profile)
+      : false,
+    [profile, resultSnapshot],
+  );
 
   async function submit() {
     if (loading) return;
@@ -409,17 +421,17 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   }
 
   function saveCurrentRun() {
-    if (!result) return;
-    if (!isRecommendOwner(ownerId, result.meta?.userId)) return;
-    saveRunFromRecommend(ownerId, toSavedRunProfile(profile), result);
+    if (!resultSnapshot || resultIsStale) return;
+    if (!isRecommendOwner(ownerId, resultSnapshot.response.meta?.userId)) return;
+    saveRunFromRecommend(ownerId, toSavedRunProfile(resultSnapshot.profile), resultSnapshot.response);
     setFeedback("결과가 히스토리에 저장되었습니다.");
     setTimeout(() => setFeedback(""), 3000);
   }
 
   function exportCurrentRunJson() {
-    if (!result) return;
-    if (!isRecommendOwner(ownerId, result.meta?.userId)) return;
-    const run = buildExportRun(ownerId, profile, result);
+    if (!resultSnapshot || resultIsStale) return;
+    if (!isRecommendOwner(ownerId, resultSnapshot.response.meta?.userId)) return;
+    const run = buildExportRun(ownerId, resultSnapshot);
     if (!run) return;
     const content = exportRunJson(ownerId, run);
     downloadText(`recommend-run-${run.savedAt.slice(0, 10)}.json`, content, "application/json;charset=utf-8");
@@ -428,9 +440,9 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   }
 
   function exportCurrentRunCsv() {
-    if (!result) return;
-    if (!isRecommendOwner(ownerId, result.meta?.userId)) return;
-    const run = buildExportRun(ownerId, profile, result);
+    if (!resultSnapshot || resultIsStale) return;
+    if (!isRecommendOwner(ownerId, resultSnapshot.response.meta?.userId)) return;
+    const run = buildExportRun(ownerId, resultSnapshot);
     if (!run) return;
     const content = exportRunCsv(ownerId, run);
     downloadText(`recommend-run-${run.savedAt.slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
@@ -669,11 +681,12 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
         <ErrorState message={error} className="mb-8" />
       )}
 
-      {result && (
+      {resultSnapshot && (
         <RecommendResultsPanel
-          result={result}
+          result={resultSnapshot.response}
+          resultProfile={resultSnapshot.profile}
+          isStale={resultIsStale}
           feedback={feedback}
-          storedProfile={lastStored?.profile ?? null}
           planningActionContext={planningActionContext}
           sourceStatusRows={sourceStatusRows}
           sourceStatusReady={sourceStatusReady}
@@ -685,7 +698,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
           onAddCompare={addItemToCompare}
         />
       )}
-      {!loading && !result && (
+      {!loading && !resultSnapshot && (
         <div className="py-20">
           <EmptyState
             title="아직 추천 결과가 없습니다"

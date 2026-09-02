@@ -189,8 +189,9 @@ describe("recommend results view model", () => {
     const html = renderToStaticMarkup(
       <RecommendResultsPanel
         result={{ ok: true, meta: baseMeta, items: [attachUnifiedIds({ ok: true, items: [baseItem] }).items![0]] }}
+        resultProfile={recommendProfileDefaults()}
+        isStale={false}
         feedback=""
-        storedProfile={recommendProfileDefaults()}
         planningActionContext={null}
         sourceStatusRows={[]}
         sourceStatusReady={false}
@@ -209,5 +210,30 @@ describe("recommend results view model", () => {
     expect(html).toContain("상세 분석");
     expect(html).toContain("비교 담기");
     expect(html).toContain("예금자 보호 신호 확인");
+    expect(html).toContain("조회 가중치 · 금리 55% · 기간 30% · 유동성 15%");
+    expect(html).not.toContain("조건이 변경되어 이 결과는 이전 조회 기준입니다.");
+  });
+
+  it("renders stale guidance and disables save and export actions", () => {
+    const html = renderToStaticMarkup(
+      <RecommendResultsPanel
+        result={{ ok: true, meta: baseMeta, items: [] }}
+        resultProfile={recommendProfileDefaults()}
+        isStale
+        feedback=""
+        planningActionContext={null}
+        sourceStatusRows={[]}
+        sourceStatusReady={false}
+        openDetailKey={null}
+        onOpenDetailKeyChange={vi.fn()}
+        onSave={vi.fn()}
+        onExportJson={vi.fn()}
+        onExportCsv={vi.fn()}
+        onAddCompare={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("조건이 변경되어 이 결과는 이전 조회 기준입니다.");
+    expect(html.match(/disabled=""/g)).toHaveLength(3);
   });
 });

@@ -25,8 +25,9 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   result: RecommendResponse;
+  resultProfile: RecommendProfileNormalized;
+  isStale: boolean;
   feedback: string;
-  storedProfile: RecommendProfileNormalized | null;
   planningActionContext: PlanningActionContext | null;
   sourceStatusRows: SourceStatusRow[];
   sourceStatusReady: boolean;
@@ -40,8 +41,9 @@ type Props = {
 
 export function RecommendResultsPanel({
   result,
+  resultProfile,
+  isStale,
   feedback,
-  storedProfile,
   planningActionContext,
   sourceStatusRows,
   sourceStatusReady,
@@ -53,8 +55,8 @@ export function RecommendResultsPanel({
   onAddCompare,
 }: Props) {
   const planningContextStrip = useMemo(
-    () => buildPlanningContextStrip(storedProfile, result, planningActionContext),
-    [planningActionContext, result, storedProfile],
+    () => buildPlanningContextStrip(resultProfile, result, planningActionContext),
+    [planningActionContext, result, resultProfile],
   );
   const actionReasonContext = useMemo(
     () => buildActionReasonContext(planningActionContext),
@@ -77,7 +79,10 @@ export function RecommendResultsPanel({
             추천 결과 <span className="ml-1 text-primary">{result.items?.length}</span>
           </h2>
           <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
-            점수는 현재 선택한 조건과 가중치 기준 비교값입니다. 우열 확정이 아니라 비교 참고용으로 읽고, 가입 전 실제 금리와 조건은 다시 확인해 주세요.
+            점수는 이 결과를 조회할 때 사용한 조건과 가중치 기준 비교값입니다. 우열 확정이 아니라 비교 참고용으로 읽고, 가입 전 실제 금리와 조건은 다시 확인해 주세요.
+          </p>
+          <p className="mt-1 text-xs font-bold text-slate-600" data-testid="recommend-result-profile">
+            조회 가중치 · 금리 {Math.round(resultProfile.weights.rate * 100)}% · 기간 {Math.round(resultProfile.weights.term * 100)}% · 유동성 {Math.round(resultProfile.weights.liquidity * 100)}%
           </p>
         </div>
         <div className="flex items-start gap-3">
@@ -86,9 +91,9 @@ export function RecommendResultsPanel({
           )}
           <div className="space-y-2">
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={onSave}>결과 저장</Button>
-              <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={onExportJson}>JSON</Button>
-              <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={onExportCsv}>CSV</Button>
+              <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={onSave} disabled={isStale}>결과 저장</Button>
+              <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={onExportJson} disabled={isStale}>JSON</Button>
+              <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={onExportCsv} disabled={isStale}>CSV</Button>
             </div>
             <p className="max-w-[22rem] text-[11px] font-medium leading-relaxed text-slate-500 md:text-right">
               결과 저장은 이 비교를 나중에 다시 보기 위한 기록용이고, JSON·CSV는 필요할 때만 내려받는 보조 기능입니다.
@@ -96,6 +101,12 @@ export function RecommendResultsPanel({
           </div>
         </div>
       </div>
+
+      {isStale ? (
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800" role="status" aria-live="polite">
+          조건이 변경되어 이 결과는 이전 조회 기준입니다. 다시 조회한 뒤 저장하거나 내보내 주세요.
+        </p>
+      ) : null}
 
       {planningContextStrip && (
         <Card className="rounded-[2.5rem] border border-primary/10 bg-primary/10 p-6 shadow-sm">

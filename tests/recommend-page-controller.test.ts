@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRecommendHistoryHref,
   buildRecommendInitialProfileState,
+  isRecommendResultProfileStale,
   parseRecommendQueryOverrides,
   resolveRecommendAutorunContinuation,
 } from "../src/lib/recommend/recommendPageController";
@@ -108,5 +109,19 @@ describe("recommend page controller", () => {
       previous: { sig: "same", runId: null },
       goHistory: false,
     })).toEqual({ kind: "save", signature: "same", goHistory: false });
+  });
+
+  it("compares the current canonical profile with the submitted result snapshot", () => {
+    const resultProfile = {
+      ...recommendProfileDefaults(),
+      weights: { rate: 0.7, term: 0.2, liquidity: 0.1 },
+    };
+
+    expect(isRecommendResultProfileStale(resultProfile, resultProfile)).toBe(false);
+    expect(isRecommendResultProfileStale({
+      ...resultProfile,
+      weights: { ...resultProfile.weights, rate: 0.6 },
+    }, resultProfile)).toBe(true);
+    expect(isRecommendResultProfileStale(recommendProfileDefaults(), resultProfile)).toBe(true);
   });
 });
