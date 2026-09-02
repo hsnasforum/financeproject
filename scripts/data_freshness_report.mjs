@@ -4,6 +4,9 @@ import path from "node:path";
 const cwd = process.cwd();
 const dataDir = path.join(cwd, ".data");
 const reportPath = path.join(cwd, "docs", "data-freshness-report.md");
+const cliArgs = process.argv.slice(2);
+const checkOnly = cliArgs.includes("--check-only");
+const logPrefix = checkOnly ? "[freshness:check]" : "[freshness:report]";
 
 const SOURCE_RULES = [
   { source: "finlife", pattern: /^finlife_.*_snapshot\.json$/i, maxAgeDays: 3 },
@@ -169,7 +172,7 @@ function buildReportMarkdown(input) {
 }
 
 function main() {
-  const args = process.argv.slice(2);
+  const args = cliArgs;
   const strict = args.includes("--strict");
   const now = parseNow(args);
   const exceptions = parseExceptions(args, now);
@@ -234,25 +237,29 @@ function main() {
     appliedExceptions,
   });
 
-  ensureDir(reportPath);
-  fs.writeFileSync(reportPath, report, "utf-8");
-
-  console.log("[freshness:report] generated docs/data-freshness-report.md");
+  if (!checkOnly) {
+    ensureDir(reportPath);
+    fs.writeFileSync(reportPath, report, "utf-8");
+    console.log(`${logPrefix} generated docs/data-freshness-report.md`);
+  }
   console.log(
-    `[freshness:report] total=${rows.length} fresh=${summary.fresh} stale=${summary.stale} exceptions=${summary.staleException} missing=${summary.missingTimestamp} invalid=${summary.invalidTimestamp}`,
+    `${logPrefix} total=${rows.length} fresh=${summary.fresh} stale=${summary.stale} exceptions=${summary.staleException} missing=${summary.missingTimestamp} invalid=${summary.invalidTimestamp}`,
   );
 
   const blockingIssueCount = summary.stale + summary.missingTimestamp + summary.invalidTimestamp;
 
   if (summary.missingTimestamp > 0) {
-    console.warn("[freshness:report] some snapshots do not expose meta.generatedAt or generatedAt");
+    console.warn(`${logPrefix} some snapshots do not expose meta.generatedAt or generatedAt`);
   }
   if (summary.invalidTimestamp > 0) {
-    console.warn("[freshness:report] some snapshots have invalid generatedAt timestamp");
+    console.warn(`${logPrefix} some snapshots have invalid generatedAt timestamp`);
   }
   if (strict && blockingIssueCount > 0) {
-    console.error("[freshness:report] snapshot freshness issues found in strict mode");
+    console.error(`${logPrefix} snapshot freshness issues found in strict mode`);
     process.exit(1);
+  }
+  if (checkOnly) {
+    console.log(`${logPrefix} validation passed`);
   }
 }
 
@@ -260,6 +267,6 @@ try {
   main();
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`[freshness:report] failed: ${message}`);
+  console.error(`${logPrefix} failed: ${message}`);
   process.exit(1);
 }
