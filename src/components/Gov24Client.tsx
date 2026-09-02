@@ -39,8 +39,15 @@ import {
 } from "@/lib/publicApis/benefitsFlowContract";
 import { cn } from "@/lib/utils";
 import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
-
-type SyncState = "ready" | "syncing" | "needs_sync";
+import {
+  GOV24_STATUS_CHECK_COPY,
+  GOV24_STATUS_MAX_AUTO_POLLS,
+  GOV24_STATUS_POLL_DELAYS_MS,
+  GOV24_STATUS_RETRY_DELAYS_MS,
+  parseGov24StatusPayload,
+  type Gov24StatusCheckState,
+  type Gov24StatusSyncState,
+} from "@/lib/gov24/statusLifecycle";
 
 type ResultItem = BenefitCandidate & {
   orgType?: Exclude<Gov24OrgType, "all">;
@@ -53,32 +60,6 @@ type ResultItem = BenefitCandidate & {
     summary: string;
     lines: Array<{ label: string; value: string }>;
     link?: { label: "타사이트 이동"; href: string };
-  };
-};
-
-type Gov24SearchStatusResponse = {
-  ok: boolean;
-  meta?: {
-    snapshot?: {
-      totalItems?: number;
-      completionRate?: number;
-      generatedAt?: string;
-      hardCapPages?: number;
-      neededPagesEstimate?: number;
-      effectiveMaxPages?: number;
-      pagesFetched?: number;
-      uniqueCount?: number;
-      truncatedByHardCap?: boolean;
-      isStale?: boolean;
-    } | null;
-    sync?: {
-      state?: SyncState;
-    };
-    fallback?: {
-      mode?: string;
-      reason?: string;
-    };
-    message?: string;
   };
 };
 
@@ -123,8 +104,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [syncState, setSyncState] = useState<SyncState>("needs_sync");
-  const [syncing, setSyncing] = useState(false);
+  const [syncState, setSyncState] = useState<Gov24StatusSyncState | "unknown">("unknown");
+  const [statusCheckState, setStatusCheckState] = useState<Gov24StatusCheckState>("checking");
+  const [statusRetryDelayMs, setStatusRetryDelayMs] = useState<number | null>(null);
   const [syncUniqueCount, setSyncUniqueCount] = useState<number | null>(null);
   const [snapshotGeneratedAt, setSnapshotGeneratedAt] = useState<string>("");
   const [snapshotTotal, setSnapshotTotal] = useState<number | null>(null);
@@ -137,8 +119,14 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const searchRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
   const statusRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  const statusTimerRef = useRef<number | null>(null);
+  const statusPollCountRef = useRef(0);
+  const statusRetryCountRef = useRef(0);
+  const statusMountedRef = useRef(false);
+  const checkSnapshotStatusRef = useRef<(options?: { resetAttempts?: boolean }) => Promise<void>>(async () => undefined);
   if (searchRequestsRef.current === null) searchRequestsRef.current = createLatestRequestCoordinator();
   if (statusRequestsRef.current === null) statusRequestsRef.current = createLatestRequestCoordinator();
+  const syncing = syncState === "syncing";
 
   const selectedSido = useMemo(() => getSidoByCode(selectedSidoCode), [selectedSidoCode]);
   const sigunguOptions = useMemo(() => SIGUNGU_BY_SIDO_CODE_2025[selectedSidoCode] ?? [], [selectedSidoCode]);
@@ -151,10 +139,10 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       uniqueCount: syncUniqueCount ?? undefined,
       isStale: snapshotIsStale,
     },
-    sync: { state: syncing ? "syncing" : syncState },
+    sync: { state: syncState },
     sourceMode: snapshotSourceMode,
     message: syncMetaNote || undefined,
-  }), [completionRate, snapshotGeneratedAt, snapshotIsStale, snapshotSourceMode, snapshotTotal, syncMetaNote, syncState, syncing, syncUniqueCount]);
+  }), [completionRate, snapshotGeneratedAt, snapshotIsStale, snapshotSourceMode, snapshotTotal, syncMetaNote, syncState, syncUniqueCount]);
 
   const summaryLine = useMemo(() => {
     const incomeLabel = INCOME_OPTIONS.find((entry) => entry.value === incomeBracket)?.label ?? incomeBracket;
@@ -175,56 +163,94 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     return () => window.cancelAnimationFrame(id);
   }, [items.length, step]);
 
-  const checkSnapshotStatus = useCallback(async () => {
+  const clearStatusTimer = useCallback(() => {
+    if (statusTimerRef.current === null) return;
+    window.clearTimeout(statusTimerRef.current);
+    statusTimerRef.current = null;
+  }, []);
+
+  const scheduleStatusCheck = useCallback((delayMs: number) => {
+    clearStatusTimer();
+    if (!statusMountedRef.current || document.visibilityState !== "visible") return;
+    statusTimerRef.current = window.setTimeout(() => {
+      statusTimerRef.current = null;
+      void checkSnapshotStatusRef.current();
+    }, delayMs);
+  }, [clearStatusTimer]);
+
+  const checkSnapshotStatus = useCallback(async (options?: { resetAttempts?: boolean }) => {
+    if (!statusMountedRef.current || document.visibilityState !== "visible") return;
+    clearStatusTimer();
+    if (options?.resetAttempts) {
+      statusPollCountRef.current = 0;
+      statusRetryCountRef.current = 0;
+    }
+    setStatusCheckState("checking");
+    setStatusRetryDelayMs(null);
     const request = statusRequestsRef.current!.start();
     try {
       const statusRes = await fetch("/api/gov24/search?q=&cursor=0&pageSize=1", {
         cache: "no-store",
         signal: request.signal,
       });
-      const statusJson = await statusRes.json() as Gov24SearchStatusResponse;
+      if (!statusRes.ok) throw new Error(`Gov24 status HTTP ${statusRes.status}`);
+
+      const statusPayload: unknown = await statusRes.json();
+      const parsed = parseGov24StatusPayload(statusPayload);
+      if (!parsed.valid) throw new Error(`Gov24 status contract ${parsed.reason}`);
       if (!request.isCurrent()) return;
-      const snapshot = statusJson.meta?.snapshot ?? null;
-      const nextStatus = buildBenefitsSnapshotStatus({
-        snapshot: {
-          totalItems: snapshot?.totalItems,
-          completionRate: snapshot?.completionRate,
-          generatedAt: snapshot?.generatedAt,
-          uniqueCount: snapshot?.uniqueCount,
-          truncatedByHardCap: snapshot?.truncatedByHardCap,
-          isStale: snapshot?.isStale,
-        },
-        sync: statusJson.meta?.sync,
-        message: statusJson.meta?.message,
-        fallback: statusJson.meta?.fallback,
-      });
-      const nextSyncState = statusJson.meta?.sync?.state ?? "needs_sync";
+
+      const snapshot = parsed.meta.snapshot;
+      const nextStatus = buildBenefitsSnapshotStatus(parsed.meta);
+      statusRetryCountRef.current = 0;
+      setStatusCheckState("idle");
+      setStatusRetryDelayMs(null);
       setSnapshotTotal(snapshot?.totalItems ?? null);
-      setCompletionRate(typeof snapshot?.completionRate === "number" ? snapshot.completionRate : null);
-      setSnapshotGeneratedAt(typeof snapshot?.generatedAt === "string" ? snapshot.generatedAt : "");
-      setSyncUniqueCount(typeof snapshot?.uniqueCount === "number" ? snapshot.uniqueCount : null);
-      setSyncState(nextSyncState);
-      setSyncing(nextSyncState === "syncing");
+      setCompletionRate(snapshot?.completionRate ?? null);
+      setSnapshotGeneratedAt(snapshot?.generatedAt ?? "");
+      setSyncUniqueCount(snapshot?.uniqueCount ?? null);
+      setSyncState(parsed.meta.sync.state);
       setSnapshotIsStale(nextStatus.isStale);
       setSnapshotSourceMode(nextStatus.sourceMode);
       setSyncMetaNote(nextStatus.notice ?? "");
+      if (parsed.meta.sync.state === "syncing") {
+        statusPollCountRef.current += 1;
+        if (statusPollCountRef.current >= GOV24_STATUS_MAX_AUTO_POLLS) {
+          setStatusCheckState("paused");
+        } else {
+          const pollDelay = GOV24_STATUS_POLL_DELAYS_MS[Math.min(
+            statusPollCountRef.current - 1,
+            GOV24_STATUS_POLL_DELAYS_MS.length - 1,
+          )];
+          scheduleStatusCheck(pollDelay);
+        }
+      } else {
+        statusPollCountRef.current = 0;
+      }
     } catch (statusError) {
-      if (request.isCurrent() && !(statusError instanceof Error && statusError.name === "AbortError")) {
-        setSyncState("needs_sync");
-        setSyncing(false);
-        setSnapshotSourceMode("unavailable");
+      if (!request.isCurrent() || (statusError instanceof Error && statusError.name === "AbortError")) return;
+      const retryIndex = statusRetryCountRef.current;
+      const retryDelay = GOV24_STATUS_RETRY_DELAYS_MS[retryIndex];
+      if (retryDelay !== undefined) {
+        statusRetryCountRef.current = retryIndex + 1;
+        setStatusCheckState("retrying");
+        setStatusRetryDelayMs(retryDelay);
+        scheduleStatusCheck(retryDelay);
+      } else {
+        setStatusCheckState("failed");
+        setStatusRetryDelayMs(null);
       }
     } finally {
       request.finish();
     }
-  }, []);
+  }, [clearStatusTimer, scheduleStatusCheck]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void checkSnapshotStatus();
-    }, 0);
+    checkSnapshotStatusRef.current = checkSnapshotStatus;
+  }, [checkSnapshotStatus]);
 
-    return () => window.clearTimeout(timer);
+  const retrySnapshotStatus = useCallback(() => {
+    void checkSnapshotStatus({ resetAttempts: true });
   }, [checkSnapshotStatus]);
 
   const buildInput = useCallback((): Gov24SimpleFindInput => {
@@ -305,40 +331,28 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   }, []);
 
   useEffect(() => {
-    if (!syncing) return;
-    let intervalId: number | null = null;
-    const stopPolling = () => {
-      if (intervalId === null) return;
-      window.clearInterval(intervalId);
-      intervalId = null;
-    };
-    const startPolling = () => {
-      if (document.visibilityState !== "visible" || intervalId !== null) return;
-      intervalId = window.setInterval(() => {
-        void checkSnapshotStatus();
-      }, 10_000);
-    };
+    statusMountedRef.current = true;
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") {
-        stopPolling();
+        clearStatusTimer();
         statusRequestsRef.current?.cancel();
         return;
       }
-      void checkSnapshotStatus();
-      startPolling();
+      void checkSnapshotStatusRef.current({ resetAttempts: true });
     };
 
-    startPolling();
+    scheduleStatusCheck(0);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
+      statusMountedRef.current = false;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      stopPolling();
+      clearStatusTimer();
+      statusRequestsRef.current?.cancel();
     };
-  }, [checkSnapshotStatus, syncing]);
+  }, [clearStatusTimer, scheduleStatusCheck]);
 
   useEffect(() => () => {
     searchRequestsRef.current?.cancel();
-    statusRequestsRef.current?.cancel();
   }, []);
 
   return (
@@ -384,6 +398,39 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
           </div>
           {syncMetaNote ? (
             <p className="mt-3 text-[10px] font-bold text-amber-600 bg-amber-50/50 p-2 rounded-lg">{syncMetaNote}</p>
+          ) : null}
+          {statusCheckState === "retrying" && statusRetryDelayMs !== null ? (
+            <p
+              className="mt-3 rounded-lg bg-amber-50/50 p-2 text-[10px] font-bold text-amber-700"
+              role="status"
+              data-testid="gov24-status-retrying"
+            >
+              {GOV24_STATUS_CHECK_COPY.retrying(statusRetryDelayMs)}
+            </p>
+          ) : null}
+          {statusCheckState === "failed" ? (
+            <div
+              className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-rose-50 p-2 text-[10px] font-bold text-rose-700"
+              role="alert"
+              data-testid="gov24-status-failed"
+            >
+              <p>{GOV24_STATUS_CHECK_COPY.failed}</p>
+              <Button type="button" variant="outline" size="sm" onClick={retrySnapshotStatus}>
+                상태 다시 확인
+              </Button>
+            </div>
+          ) : null}
+          {statusCheckState === "paused" ? (
+            <div
+              className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50/50 p-2 text-[10px] font-bold text-amber-700"
+              role="status"
+              data-testid="gov24-status-paused"
+            >
+              <p>{GOV24_STATUS_CHECK_COPY.paused}</p>
+              <Button type="button" variant="outline" size="sm" onClick={retrySnapshotStatus}>
+                상태 다시 확인
+              </Button>
+            </div>
           ) : null}
           <p className="mt-3 text-[10px] font-medium text-slate-400">
             실제 신청 전에는 정부 원문의 최신 지원 조건과 신청 방법을 다시 확인하세요.

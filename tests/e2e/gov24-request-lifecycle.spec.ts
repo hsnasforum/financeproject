@@ -32,40 +32,42 @@ function gov24Status(state: "ready" | "syncing" | "needs_sync", totalItems = 1) 
   };
 }
 
-async function installControlledGov24Interval(page: Page) {
+async function installControlledGov24Timer(page: Page) {
   await page.addInitScript(() => {
     const lifecycleWindow = window as typeof window & {
-      __gov24RunIntervals?: () => void;
-      __gov24IntervalCount?: () => number;
+      __gov24RunTimers?: () => void;
+      __gov24TimerCount?: () => number;
       __gov24SetVisibility?: (state: DocumentVisibilityState) => void;
     };
-    const nativeSetInterval = window.setInterval.bind(window);
-    const nativeClearInterval = window.clearInterval.bind(window);
+    const nativeSetTimeout = window.setTimeout.bind(window);
+    const nativeClearTimeout = window.clearTimeout.bind(window);
     const callbacks = new Map<number, () => void>();
     let nextId = 1_000_000;
     let visibilityState: DocumentVisibilityState = "visible";
+    const controlledDelays = new Set([1_000, 2_000, 4_000, 8_000, 10_000, 20_000, 30_000, 60_000]);
 
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       get: () => visibilityState,
     });
-    window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
-      if (timeout !== 10_000) return nativeSetInterval(handler, timeout, ...args);
+    window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+      if (!controlledDelays.has(timeout ?? 0)) return nativeSetTimeout(handler, timeout, ...args);
       const id = nextId;
       nextId += 1;
       callbacks.set(id, () => {
+        callbacks.delete(id);
         if (typeof handler === "function") handler(...args);
       });
       return id;
-    }) as typeof window.setInterval;
-    window.clearInterval = ((id?: number) => {
+    }) as typeof window.setTimeout;
+    window.clearTimeout = ((id?: number) => {
       if (typeof id === "number" && callbacks.delete(id)) return;
-      nativeClearInterval(id);
-    }) as typeof window.clearInterval;
-    lifecycleWindow.__gov24RunIntervals = () => {
+      nativeClearTimeout(id);
+    }) as typeof window.clearTimeout;
+    lifecycleWindow.__gov24RunTimers = () => {
       for (const callback of [...callbacks.values()]) callback();
     };
-    lifecycleWindow.__gov24IntervalCount = () => callbacks.size;
+    lifecycleWindow.__gov24TimerCount = () => callbacks.size;
     lifecycleWindow.__gov24SetVisibility = (state) => {
       visibilityState = state;
       document.dispatchEvent(new Event("visibilitychange"));
@@ -73,16 +75,16 @@ async function installControlledGov24Interval(page: Page) {
   });
 }
 
-async function runGov24Intervals(page: Page): Promise<void> {
+async function runGov24Timers(page: Page): Promise<void> {
   await page.evaluate(() => {
-    (window as typeof window & { __gov24RunIntervals: () => void }).__gov24RunIntervals();
+    (window as typeof window & { __gov24RunTimers: () => void }).__gov24RunTimers();
   });
 }
 
-async function gov24IntervalCount(page: Page): Promise<number> {
+async function gov24TimerCount(page: Page): Promise<number> {
   return page.evaluate(() => (
-    window as typeof window & { __gov24IntervalCount: () => number }
-  ).__gov24IntervalCount());
+    window as typeof window & { __gov24TimerCount: () => number }
+  ).__gov24TimerCount());
 }
 
 async function completeGov24Form(page: Page) {
@@ -133,8 +135,167 @@ test("Gov24 runs the initial simple-find request only once", async ({ page }) =>
   expect(searchRequests).toBe(1);
 });
 
+test("Gov24 retries an initial HTTP failure through syncing until the snapshot is ready", async ({ page }) => {
+  await installControlledGov24Timer(page);
+  let statusRequests = 0;
+  await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
+    statusRequests += 1;
+    if (statusRequests === 1) {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, error: { code: "INTERNAL" } }),
+      });
+      return;
+    }
+    const payload = statusRequests === 2 ? gov24Status("syncing", 2) : gov24Status("ready", 3);
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+  });
+
+  await page.goto("/gov24");
+  await expect.poll(() => statusRequests).toBe(1);
+  await expect(page.getByText(/혜택 기준 데이터 상태를 잠시 확인하지 못했습니다/)).toBeVisible();
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
+
+  await runGov24Timers(page);
+  await expect.poll(() => statusRequests).toBe(2);
+  await expect(page.getByText("기준 데이터 갱신 중", { exact: true })).toBeVisible();
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
+
+  await runGov24Timers(page);
+  await expect.poll(() => statusRequests).toBe(3);
+  await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
+  await expect(page.getByText(/혜택 기준 데이터 상태를 잠시 확인하지 못했습니다/)).toHaveCount(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+});
+
+test("Gov24 recovers from invalid JSON, ok=false, and missing status metadata", async ({ page }) => {
+  await installControlledGov24Timer(page);
+  let statusRequests = 0;
+  await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
+    statusRequests += 1;
+    if (statusRequests === 1) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{" });
+      return;
+    }
+    if (statusRequests === 2) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false }) });
+      return;
+    }
+    if (statusRequests === 3) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(gov24Status("ready", 4)) });
+  });
+
+  await page.goto("/gov24");
+  await expect.poll(() => statusRequests).toBe(1);
+  await expect(page.getByTestId("gov24-status-retrying")).toBeVisible();
+  await expect(page.getByText("기준 데이터 준비 필요", { exact: true })).toHaveCount(0);
+
+  for (const expectedRequests of [2, 3, 4]) {
+    await expect.poll(() => gov24TimerCount(page)).toBe(1);
+    await runGov24Timers(page);
+    await expect.poll(() => statusRequests).toBe(expectedRequests);
+  }
+
+  await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("gov24-status-retrying")).toHaveCount(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+});
+
+test("Gov24 keeps known syncing state through a transient parse failure and recovers", async ({ page }) => {
+  await installControlledGov24Timer(page);
+  let statusRequests = 0;
+  await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
+    statusRequests += 1;
+    if (statusRequests === 2) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: "not-json" });
+      return;
+    }
+    const payload = statusRequests === 1 ? gov24Status("syncing", 1) : gov24Status("ready", 3);
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+  });
+
+  await page.goto("/gov24");
+  await expect.poll(() => statusRequests).toBe(1);
+  await expect(page.getByText("기준 데이터 갱신 중", { exact: true })).toBeVisible();
+
+  await runGov24Timers(page);
+  await expect.poll(() => statusRequests).toBe(2);
+  await expect(page.getByText("기준 데이터 갱신 중", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("gov24-status-retrying")).toBeVisible();
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
+
+  await runGov24Timers(page);
+  await expect.poll(() => statusRequests).toBe(3);
+  await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("gov24-status-retrying")).toHaveCount(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+});
+
+test("Gov24 stops after bounded retries and offers one manual status retry", async ({ page }) => {
+  await installControlledGov24Timer(page);
+  let statusRequests = 0;
+  await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
+    statusRequests += 1;
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false }),
+    });
+  });
+
+  await page.goto("/gov24");
+  await expect.poll(() => statusRequests).toBe(1);
+  for (const expectedRequests of [2, 3, 4, 5]) {
+    await expect.poll(() => gov24TimerCount(page)).toBe(1);
+    await runGov24Timers(page);
+    await expect.poll(() => statusRequests).toBe(expectedRequests);
+  }
+
+  await expect(page.getByTestId("gov24-status-failed")).toContainText("상태 확인 실패");
+  await expect(page.getByText("기준 데이터 준비 필요", { exact: true })).toHaveCount(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+
+  await page.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect.poll(() => statusRequests).toBe(6);
+  await expect(page.getByTestId("gov24-status-retrying")).toBeVisible();
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
+});
+
+test("Gov24 treats a valid needs_sync response as terminal without retrying", async ({ page }) => {
+  await installControlledGov24Timer(page);
+  let statusRequests = 0;
+  await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
+    statusRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: { items: [] },
+        meta: {
+          snapshot: null,
+          sync: { state: "needs_sync" },
+          fallback: { mode: "CACHE", reason: "snapshot_missing" },
+          message: "공공 혜택 기준 데이터가 아직 준비되지 않았습니다.",
+        },
+      }),
+    });
+  });
+
+  await page.goto("/gov24");
+  await expect.poll(() => statusRequests).toBe(1);
+  await expect(page.getByText("기준 데이터 준비 필요", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("gov24-status-retrying")).toHaveCount(0);
+  await expect(page.getByTestId("gov24-status-failed")).toHaveCount(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+});
+
 test("Gov24 polls while syncing and stops immediately after the snapshot is ready", async ({ page }) => {
-  await installControlledGov24Interval(page);
+  await installControlledGov24Timer(page);
   let statusRequests = 0;
   await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
     statusRequests += 1;
@@ -146,23 +307,53 @@ test("Gov24 polls while syncing and stops immediately after the snapshot is read
   await page.waitForLoadState("networkidle");
   await expect.poll(() => statusRequests).toBe(1);
   await expect(page.getByText("기준 데이터 갱신 중", { exact: true })).toBeVisible();
-  await expect.poll(() => gov24IntervalCount(page)).toBe(1);
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
 
-  await runGov24Intervals(page);
+  await runGov24Timers(page);
   await expect.poll(() => statusRequests).toBe(2);
   await expect(page.getByText("기준 데이터 갱신 중", { exact: true })).toBeVisible();
 
-  await runGov24Intervals(page);
+  await runGov24Timers(page);
   await expect.poll(() => statusRequests).toBe(3);
   await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
-  await expect.poll(() => gov24IntervalCount(page)).toBe(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
 
-  await runGov24Intervals(page);
+  await runGov24Timers(page);
   expect(statusRequests).toBe(3);
 });
 
-test("Gov24 cancels a status request while hidden and resumes with one interval when visible", async ({ page }) => {
-  await installControlledGov24Interval(page);
+test("Gov24 bounds automatic polling while a valid status remains syncing", async ({ page }) => {
+  await installControlledGov24Timer(page);
+  let statusRequests = 0;
+  await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
+    statusRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(gov24Status("syncing", statusRequests)),
+    });
+  });
+
+  await page.goto("/gov24");
+  await expect.poll(() => statusRequests).toBe(1);
+  for (let expectedRequests = 2; expectedRequests <= 12; expectedRequests += 1) {
+    await expect.poll(() => gov24TimerCount(page)).toBe(1);
+    await runGov24Timers(page);
+    await expect.poll(() => statusRequests).toBe(expectedRequests);
+  }
+
+  await expect(page.getByTestId("gov24-status-paused")).toContainText("자동 상태 확인을 마쳤습니다");
+  await expect(page.getByText("기준 데이터 갱신 중", { exact: true })).toBeVisible();
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+
+  await page.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect.poll(() => statusRequests).toBe(13);
+  await expect(page.getByTestId("gov24-status-paused")).toHaveCount(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
+});
+
+test("Gov24 cancels a status request while hidden and resumes with one timer when visible", async ({ page }) => {
+  await installControlledGov24Timer(page);
   await page.addInitScript(() => {
     const mockWindow = window as typeof window & {
       __gov24StatusCounts?: () => { requests: number; aborts: number };
@@ -217,20 +408,20 @@ test("Gov24 cancels a status request while hidden and resumes with one interval 
 
   await page.goto("/gov24");
   await expect.poll(async () => (await counts()).requests).toBe(1);
-  await expect.poll(() => gov24IntervalCount(page)).toBe(1);
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
 
   await page.evaluate(() => (
     window as typeof window & { __gov24HoldStatus: (hold: boolean) => void }
   ).__gov24HoldStatus(true));
-  await runGov24Intervals(page);
+  await runGov24Timers(page);
   await expect.poll(async () => (await counts()).requests).toBe(2);
 
   await page.evaluate(() => (
     window as typeof window & { __gov24SetVisibility: (state: DocumentVisibilityState) => void }
   ).__gov24SetVisibility("hidden"));
   await expect.poll(async () => (await counts()).aborts).toBe(1);
-  await expect.poll(() => gov24IntervalCount(page)).toBe(0);
-  await runGov24Intervals(page);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+  await runGov24Timers(page);
   expect((await counts()).requests).toBe(2);
 
   await page.evaluate(() => {
@@ -242,15 +433,38 @@ test("Gov24 cancels a status request while hidden and resumes with one interval 
     mockWindow.__gov24SetVisibility("visible");
   });
   await expect.poll(async () => (await counts()).requests).toBe(3);
-  await expect.poll(() => gov24IntervalCount(page)).toBe(1);
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
 
   await page.evaluate(() => (
     window as typeof window & { __gov24SetStatusState: (state: "ready" | "syncing") => void }
   ).__gov24SetStatusState("ready"));
-  await runGov24Intervals(page);
+  await runGov24Timers(page);
   await expect.poll(async () => (await counts()).requests).toBe(4);
   await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
-  await expect.poll(() => gov24IntervalCount(page)).toBe(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+});
+
+test("Gov24 clears a scheduled status timer when the page unmounts", async ({ page }) => {
+  await installControlledGov24Timer(page);
+  let statusRequests = 0;
+  await page.route(/\/api\/gov24\/search(?:\?|$)/, async (route) => {
+    statusRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(gov24Status("syncing", statusRequests)),
+    });
+  });
+
+  await page.goto("/gov24");
+  await expect.poll(() => statusRequests).toBe(1);
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
+
+  await page.getByRole("link", { name: "MMD 홈" }).first().click();
+  await page.waitForURL((url) => url.pathname === "/");
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
+  await runGov24Timers(page);
+  expect(statusRequests).toBe(1);
 });
 
 test("Gov24 aborts active status and simple-find requests when the page unmounts", async ({ page }) => {
@@ -303,12 +517,13 @@ test("Gov24 aborts active status and simple-find requests when the page unmounts
 });
 
 test("Gov24 ignores stale status and search responses that resolve after newer requests", async ({ page }) => {
-  await installControlledGov24Interval(page);
+  await installControlledGov24Timer(page);
   await page.addInitScript(() => {
     type Resolver = (response: Response) => void;
     const mockWindow = window as typeof window & {
       __gov24DeferredCounts?: () => { status: number; search: number };
       __resolveGov24Status?: (requestNumber: number, state: "ready" | "syncing", total: number) => void;
+      __resolveGov24StatusError?: (requestNumber: number) => void;
       __resolveGov24Search?: (requestNumber: number, title: string) => void;
     };
     const nativeFetch = window.fetch.bind(window);
@@ -361,6 +576,13 @@ test("Gov24 ignores stale status and search responses that resolve after newer r
       statusResolvers.get(requestNumber)?.(statusResponse(state, total));
       statusResolvers.delete(requestNumber);
     };
+    mockWindow.__resolveGov24StatusError = (requestNumber) => {
+      statusResolvers.get(requestNumber)?.(new Response("not-json", {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }));
+      statusResolvers.delete(requestNumber);
+    };
     mockWindow.__resolveGov24Search = (requestNumber, title) => {
       searchResolvers.get(requestNumber)?.(searchResponse(title));
       searchResolvers.delete(requestNumber);
@@ -376,11 +598,17 @@ test("Gov24 ignores stale status and search responses that resolve after newer r
   await page.goto("/gov24");
   await expect.poll(async () => (await counts()).status).toBe(1);
   await expect(page.getByText("기준 데이터 갱신 중", { exact: true })).toBeVisible();
-  await expect.poll(() => gov24IntervalCount(page)).toBe(1);
+  await expect.poll(() => gov24TimerCount(page)).toBe(1);
 
-  await runGov24Intervals(page);
+  await runGov24Timers(page);
   await expect.poll(async () => (await counts()).status).toBe(2);
-  await runGov24Intervals(page);
+  await page.evaluate(() => {
+    const lifecycleWindow = window as typeof window & {
+      __gov24SetVisibility: (state: DocumentVisibilityState) => void;
+    };
+    lifecycleWindow.__gov24SetVisibility("hidden");
+    lifecycleWindow.__gov24SetVisibility("visible");
+  });
   await expect.poll(async () => (await counts()).status).toBe(3);
   await page.evaluate(() => (
     window as typeof window & {
@@ -392,14 +620,15 @@ test("Gov24 ignores stale status and search responses that resolve after newer r
 
   await page.evaluate(() => (
     window as typeof window & {
-      __resolveGov24Status: (requestNumber: number, state: "ready" | "syncing", total: number) => void;
+      __resolveGov24StatusError: (requestNumber: number) => void;
     }
-  ).__resolveGov24Status(2, "syncing", 222));
+  ).__resolveGov24StatusError(2));
   await settleFrame();
   await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
   await expect(page.getByText("333건", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("222건", { exact: true })).toHaveCount(0);
-  await expect.poll(() => gov24IntervalCount(page)).toBe(0);
+  await expect(page.getByTestId("gov24-status-retrying")).toHaveCount(0);
+  await expect(page.getByTestId("gov24-status-failed")).toHaveCount(0);
+  await expect.poll(() => gov24TimerCount(page)).toBe(0);
 
   await completeGov24Form(page);
   await page.getByRole("button", { name: "지금 기준으로 보기" }).click();
