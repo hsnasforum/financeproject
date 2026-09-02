@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { buildNormFilter, normalizeSearchQuery, type QueryMode } from "@/lib/sources/search";
 import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedCursor";
 import { normalizeProviderName } from "@/lib/sources/providerName";
-import { type UnifiedSourceId } from "@/lib/sources/types";
+import { type ProductSourceIssue, type UnifiedSourceId } from "@/lib/sources/types";
 import {
   DEFAULT_UNIFIED_SOURCE_LOADERS,
   buildFinlifeOptions,
@@ -10,6 +10,7 @@ import {
   getSamplebankMergedItems,
   getUnifiedSourceLoader,
   type UnifiedSourcePage,
+  type UnifiedSourceLoader,
   type UnifiedSourceLoaderMap,
 } from "@/lib/sources/unifiedLoaders";
 import {
@@ -39,6 +40,113 @@ export type {
 } from "@/lib/sources/unifiedTypes";
 
 const MATCH_CONFIDENCE_THRESHOLD = 0.92;
+const CATALOG_SCAN_MAX_PAGES = 20;
+const CATALOG_SCAN_MAX_ROWS = 20_000;
+const CATALOG_CURSOR_TTL_MS = 2 * 60 * 1000;
+const CATALOG_CURSOR_MAX_ENTRIES = 128;
+
+type CatalogSnapshot = {
+  signature: string;
+  createdAt: number;
+  kind: "deposit" | "saving";
+  sources: Record<string, { count: number }>;
+  items: UnifiedProductView[];
+  providers: string[];
+  partial: boolean;
+  sourceIssues?: ProductSourceIssue[];
+};
+
+type CatalogCursorState = {
+  snapshot: CatalogSnapshot;
+  offset: number;
+  nextCursor: string | null;
+};
+
+const catalogCursorStates = new Map<number, CatalogCursorState>();
+let nextCatalogCursorId = 1;
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException("The operation was aborted.", "AbortError");
+  }
+}
+
+function pruneCatalogCursorStates(now = Date.now()): void {
+  for (const [id, state] of catalogCursorStates) {
+    if (now - state.snapshot.createdAt > CATALOG_CURSOR_TTL_MS) catalogCursorStates.delete(id);
+  }
+  while (catalogCursorStates.size >= CATALOG_CURSOR_MAX_ENTRIES) {
+    const oldestId = catalogCursorStates.keys().next().value as number | undefined;
+    if (oldestId === undefined) break;
+    catalogCursorStates.delete(oldestId);
+  }
+}
+
+function allocateCatalogCursor(state: Omit<CatalogCursorState, "nextCursor">): string {
+  pruneCatalogCursorStates();
+  while (catalogCursorStates.has(nextCatalogCursorId)) nextCatalogCursorId += 1;
+  const id = nextCatalogCursorId;
+  nextCatalogCursorId = nextCatalogCursorId >= Number.MAX_SAFE_INTEGER ? 1 : nextCatalogCursorId + 1;
+  catalogCursorStates.set(id, { ...state, nextCursor: null });
+  return encodeUnifiedCursor({ id });
+}
+
+function catalogSnapshotSignature(input: UnifiedProductsInput, normalizedLimit: number): string {
+  return JSON.stringify({
+    kind: input.kind,
+    mode: input.mode ?? "merged",
+    includeSources: uniqueIncludedSources(input.includeSources),
+    q: input.q?.trim() ?? "",
+    provider: input.provider?.trim() ?? "",
+    termMonths: input.termMonths ?? null,
+    minRate: input.minRate ?? null,
+    refresh: input.refresh,
+    onlyNew: input.onlyNew,
+    changedSince: input.changedSince,
+    includeTimestamps: input.includeTimestamps,
+    limit: normalizedLimit,
+    sort: input.sort,
+    qMode: input.qMode,
+    depositProtection: input.depositProtection ?? "any",
+  });
+}
+
+function catalogPageFromSnapshot(input: {
+  snapshot: CatalogSnapshot;
+  offset: number;
+  limit: number;
+  state?: CatalogCursorState;
+}): UnifiedResult {
+  const items = input.snapshot.items.slice(input.offset, input.offset + input.limit);
+  const hasMore = input.offset + input.limit < input.snapshot.items.length;
+  let nextCursor: string | null = null;
+  if (hasMore) {
+    nextCursor = input.state?.nextCursor ?? allocateCatalogCursor({
+      snapshot: input.snapshot,
+      offset: input.offset + input.limit,
+    });
+    if (input.state && input.state.nextCursor === null) input.state.nextCursor = nextCursor;
+  }
+
+  return {
+    kind: input.snapshot.kind,
+    sources: input.snapshot.sources,
+    merged: items,
+    items,
+    facets: { providers: input.snapshot.providers },
+    pageInfo: {
+      hasMore,
+      nextCursor,
+      limit: input.limit,
+      ...(input.snapshot.partial ? { partial: true } : {}),
+    },
+    ...(input.snapshot.sourceIssues ? { sourceIssues: input.snapshot.sourceIssues } : {}),
+  };
+}
 
 function normalizeEnrichSources(input: EnrichSourceId[] | undefined): EnrichSourceId[] {
   if (!Array.isArray(input) || input.length === 0) return [];
@@ -368,6 +476,40 @@ function normalizeUnifiedLimit(limit: number): number {
   return Math.min(1000, Math.max(1, Math.trunc(limit)));
 }
 
+function hasCatalogFilters(input: Pick<UnifiedProductsInput, "provider" | "termMonths" | "minRate">): boolean {
+  return Boolean(
+    input.provider?.trim()
+    || (typeof input.termMonths === "number" && Number.isFinite(input.termMonths) && input.termMonths > 0)
+    || (typeof input.minRate === "number" && Number.isFinite(input.minRate) && input.minRate > 0),
+  );
+}
+
+function filterCatalogItems(
+  items: UnifiedProductView[],
+  input: Pick<UnifiedProductsInput, "provider" | "termMonths" | "minRate">,
+): UnifiedProductView[] {
+  if (!hasCatalogFilters(input)) return items;
+  const provider = input.provider?.trim() ?? "";
+  const termMonths = typeof input.termMonths === "number" && Number.isFinite(input.termMonths) && input.termMonths > 0
+    ? Math.trunc(input.termMonths)
+    : null;
+  const minRate = typeof input.minRate === "number" && Number.isFinite(input.minRate) && input.minRate > 0
+    ? input.minRate
+    : null;
+
+  return items.filter((item) => {
+    if (provider && item.providerName !== provider) return false;
+    if (termMonths === null && minRate === null) return true;
+    const options = Array.isArray(item.options) ? item.options : [];
+    return options.some((option) => {
+      if (termMonths !== null && option.termMonths !== termMonths) return false;
+      const rate = option.intrRate2 ?? option.intrRate;
+      if (minRate !== null && (rate === null || !Number.isFinite(rate) || rate < minRate)) return false;
+      return true;
+    });
+  });
+}
+
 function uniqueIncludedSources(includeSources: UnifiedSourceId[]): UnifiedSourceId[] {
   return [...new Set(includeSources)];
 }
@@ -382,6 +524,121 @@ function sourceResultFromPage(kind: "deposit" | "saving", page: UnifiedSourcePag
   };
 }
 
+async function queryAllSourcePages(
+  loader: UnifiedSourceLoader,
+  query: Parameters<UnifiedSourceLoader["query"]>[0],
+): Promise<UnifiedSourcePage> {
+  const items: UnifiedProductView[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  let count = 0;
+  let lastSourceId = loader.sourceId;
+
+  for (let pageIndex = 0; pageIndex < CATALOG_SCAN_MAX_PAGES; pageIndex += 1) {
+    throwIfAborted(query.signal);
+    const page = await loader.query({ ...query, cursor });
+    throwIfAborted(query.signal);
+    lastSourceId = page.sourceId;
+    count += page.items.length;
+    const availableRows = Math.max(0, CATALOG_SCAN_MAX_ROWS - items.length);
+    items.push(...page.items.slice(0, availableRows));
+    const rowsTruncated = page.items.length > availableRows;
+    const rowLimitReached = rowsTruncated || (items.length >= CATALOG_SCAN_MAX_ROWS && page.pageInfo.hasMore);
+    if (!page.pageInfo.hasMore) {
+      return {
+        sourceId: page.sourceId,
+        count,
+        items,
+        pageInfo: {
+          hasMore: false,
+          nextCursor: null,
+          limit: query.limit,
+          sourceId: page.sourceId,
+          ...(rowsTruncated ? { partial: true } : {}),
+        },
+      };
+    }
+
+    if (rowLimitReached || pageIndex + 1 >= CATALOG_SCAN_MAX_PAGES) {
+      return {
+        sourceId: page.sourceId,
+        count,
+        items,
+        pageInfo: {
+          hasMore: true,
+          nextCursor: page.pageInfo.nextCursor,
+          limit: query.limit,
+          sourceId: page.sourceId,
+          partial: true,
+        },
+      };
+    }
+
+    const nextCursor = page.pageInfo.nextCursor;
+    if (!nextCursor || seenCursors.has(nextCursor)) {
+      throw new UnifiedInputError(`상품 원천 ${page.sourceId}의 cursor가 진행되지 않습니다.`);
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  }
+
+  return {
+    sourceId: lastSourceId,
+    count,
+    items,
+    pageInfo: {
+      hasMore: true,
+      nextCursor: cursor,
+      limit: query.limit,
+      sourceId: lastSourceId,
+      partial: true,
+    },
+  };
+}
+
+function sourceIssue(input: {
+  sourceId: UnifiedSourceId;
+  phase: ProductSourceIssue["phase"];
+  error: unknown;
+}): ProductSourceIssue {
+  console.error("[unified] product source unavailable", {
+    sourceId: input.sourceId,
+    phase: input.phase,
+    message: input.error instanceof Error ? input.error.message : "unknown",
+  });
+  if (input.phase === "refresh") {
+    return {
+      sourceId: input.sourceId,
+      phase: input.phase,
+      code: "SOURCE_REFRESH_FAILED",
+      fallbackUsed: true,
+      message: "최신 데이터 갱신에 실패해 이전에 저장된 상품을 표시합니다. 가입 전 최신 공시를 다시 확인해 주세요.",
+    };
+  }
+  return {
+    sourceId: input.sourceId,
+    phase: input.phase,
+    code: "SOURCE_QUERY_FAILED",
+    fallbackUsed: false,
+    message: "이 원천의 상품 데이터를 불러오지 못했습니다. 다른 원천의 결과만 표시합니다.",
+  };
+}
+
+async function refreshSourceSafely(input: {
+  loader: UnifiedSourceLoader | undefined;
+  sourceId: UnifiedSourceId;
+  kind: "deposit" | "saving";
+  refresh: boolean;
+  issues: ProductSourceIssue[];
+}): Promise<void> {
+  if (!input.loader) throw new UnifiedInputError(`지원하지 않는 sourceId입니다: ${input.sourceId}`);
+  try {
+    await input.loader.refreshIfNeeded({ kind: input.kind, refresh: input.refresh });
+  } catch (error) {
+    input.issues.push(sourceIssue({ sourceId: input.sourceId, phase: "refresh", error }));
+  }
+}
+
 export async function getUnifiedProductsWithLoaders(
   input: UnifiedProductsInput,
   loaders: UnifiedSourceLoaderMap = DEFAULT_UNIFIED_SOURCE_LOADERS,
@@ -393,6 +650,9 @@ export async function getUnifiedProductsWithLoaders(
     sourceId,
     cursor,
     q,
+    provider = null,
+    termMonths = null,
+    minRate = null,
     refresh,
     onlyNew,
     changedSince,
@@ -407,6 +667,10 @@ export async function getUnifiedProductsWithLoaders(
     debug = false,
   } = input;
   const normalizedLimit = normalizeUnifiedLimit(limit);
+  const catalogFiltersActive = hasCatalogFilters({ provider, termMonths, minRate });
+  if (catalogFiltersActive && (mode !== "merged" || sourceId !== null)) {
+    throw new UnifiedInputError("카탈로그 필터는 merged 다중 원천 조회에서만 사용할 수 있습니다.");
+  }
   const sourceQuery = {
     kind,
     q,
@@ -417,7 +681,28 @@ export async function getUnifiedProductsWithLoaders(
     sort,
     qMode,
     debug,
+    provider,
+    termMonths,
+    minRate,
+    signal: input.signal,
   };
+  const catalogSignature = catalogSnapshotSignature(input, normalizedLimit);
+
+  if (catalogFiltersActive && cursor) {
+    throwIfAborted(input.signal);
+    pruneCatalogCursorStates();
+    const decoded = decodeUnifiedCursor(cursor);
+    const state = decoded ? catalogCursorStates.get(decoded.id) : undefined;
+    if (!state || state.snapshot.signature !== catalogSignature) {
+      throw new UnifiedInputError("상품 필터 cursor가 만료되었거나 현재 조건과 일치하지 않습니다.");
+    }
+    return catalogPageFromSnapshot({
+      snapshot: state.snapshot,
+      offset: state.offset,
+      limit: normalizedLimit,
+      state,
+    });
+  }
 
   if (mode === "integrated") {
     if (!includeSources.includes("finlife")) {
@@ -427,10 +712,12 @@ export async function getUnifiedProductsWithLoaders(
       throw new UnifiedInputError("Cursor pagination is not supported in integrated mode.");
     }
 
+    const sourceIssues: ProductSourceIssue[] = [];
     const finlifeLoader = getUnifiedSourceLoader(loaders, "finlife");
-    await finlifeLoader.refreshIfNeeded({ kind, refresh });
+    await refreshSourceSafely({ loader: finlifeLoader, sourceId: "finlife", kind, refresh, issues: sourceIssues });
     if (includeSources.includes("datago_kdb")) {
-      await getUnifiedSourceLoader(loaders, "datago_kdb").refreshIfNeeded({ kind, refresh });
+      const kdbLoader = getUnifiedSourceLoader(loaders, "datago_kdb");
+      await refreshSourceSafely({ loader: kdbLoader, sourceId: "datago_kdb", kind, refresh, issues: sourceIssues });
     }
 
     const canonicalPage = await finlifeLoader.query({
@@ -443,6 +730,7 @@ export async function getUnifiedProductsWithLoaders(
     if (kind !== "deposit") {
       return {
         ...canonical,
+        ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
         pageInfo: {
           hasMore: false,
           nextCursor: null,
@@ -453,16 +741,23 @@ export async function getUnifiedProductsWithLoaders(
 
     const enrichSourceSet = new Set<EnrichSourceId>();
     if (includeSources.includes("datago_kdb")) enrichSourceSet.add("datago_kdb");
-    const enriched = await enrichFinlifeDepositItems({
-      items: canonical.items,
-      enrichSources: [...enrichSourceSet],
-      depositProtection,
-      includeKdbOnly,
-      q,
-      qMode,
-      includeTimestamps,
-      debug,
-    });
+    let enriched: Awaited<ReturnType<typeof enrichFinlifeDepositItems>>;
+    try {
+      enriched = await enrichFinlifeDepositItems({
+        items: canonical.items,
+        enrichSources: [...enrichSourceSet],
+        depositProtection,
+        includeKdbOnly,
+        q,
+        qMode,
+        includeTimestamps,
+        debug,
+      });
+    } catch (error) {
+      if (!includeSources.includes("datago_kdb")) throw error;
+      sourceIssues.push(sourceIssue({ sourceId: "datago_kdb", phase: "query", error }));
+      enriched = { items: canonical.items };
+    }
 
     const sourceCounts = { ...canonical.sources };
     sourceCounts.finlife = { count: enriched.items.length };
@@ -477,6 +772,7 @@ export async function getUnifiedProductsWithLoaders(
       merged: enriched.items,
       extras: enriched.extras,
       diagnostics: enriched.diagnostics,
+      ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
       pageInfo: {
         hasMore: false,
         nextCursor: null,
@@ -495,7 +791,8 @@ export async function getUnifiedProductsWithLoaders(
       throw new UnifiedInputError("Cursor pagination requires single sourceId.");
     }
     const loader = getUnifiedSourceLoader(loaders, sourceId);
-    await loader.refreshIfNeeded({ kind, refresh });
+    const sourceIssues: ProductSourceIssue[] = [];
+    await refreshSourceSafely({ loader, sourceId, kind, refresh, issues: sourceIssues });
     const page = await loader.query({
       ...sourceQuery,
       cursor,
@@ -520,36 +817,105 @@ export async function getUnifiedProductsWithLoaders(
         merged: enriched.items,
         extras: enriched.extras,
         diagnostics: enriched.diagnostics,
+        ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
       };
     }
 
-    return applyDepositProtectionToResult(base, depositProtection);
+    const result = applyDepositProtectionToResult(base, depositProtection);
+    return sourceIssues.length > 0 ? { ...result, sourceIssues } : result;
   }
 
   const sourceMap: Record<string, { count: number }> = {};
   const merged: UnifiedProductView[] = [];
+  const sourceIssues: ProductSourceIssue[] = [];
+  const providerNames = new Set<string>();
+  let loadedSources = 0;
+  let catalogPartial = false;
   for (const includedSourceId of uniqueIncludedSources(includeSources)) {
+    throwIfAborted(input.signal);
     const loader = getUnifiedSourceLoader(loaders, includedSourceId);
-    await loader.refreshIfNeeded({ kind, refresh });
-    const page = await loader.query({
-      ...sourceQuery,
-      cursor: null,
-      limit: normalizedLimit,
-    });
-    sourceMap[page.sourceId] = { count: page.count };
-    merged.push(...page.items);
+    await refreshSourceSafely({ loader, sourceId: includedSourceId, kind, refresh, issues: sourceIssues });
+    let sourceItems: UnifiedProductView[] = [];
+    try {
+      const page = catalogFiltersActive
+        ? await queryAllSourcePages(loader, {
+            ...sourceQuery,
+            cursor: null,
+            limit: Math.min(1000, Math.max(200, normalizedLimit)),
+          })
+        : await loader.query({
+            ...sourceQuery,
+            cursor: null,
+            limit: normalizedLimit,
+          });
+      sourceMap[page.sourceId] = { count: page.count };
+      merged.push(...page.items);
+      sourceItems = page.items;
+      catalogPartial ||= page.pageInfo.partial === true;
+      loadedSources += 1;
+    } catch (error) {
+      if (input.signal?.aborted || isAbortError(error)) throw error;
+      sourceMap[includedSourceId] = { count: 0 };
+      sourceIssues.push(sourceIssue({ sourceId: includedSourceId, phase: "query", error }));
+    }
+
+    try {
+      const names = loader.listProviderNames
+        ? await loader.listProviderNames({ kind, signal: input.signal })
+        : sourceItems.map((item) => item.providerName);
+      for (const name of names) {
+        const normalized = name.trim();
+        if (normalized) providerNames.add(normalized);
+      }
+    } catch (error) {
+      if (input.signal?.aborted || isAbortError(error)) throw error;
+      catalogPartial = true;
+      console.error("[unified] provider facet unavailable", {
+        sourceId: includedSourceId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      for (const item of sourceItems) {
+        const normalized = item.providerName.trim();
+        if (normalized) providerNames.add(normalized);
+      }
+    }
+  }
+
+  if (loadedSources === 0) {
+    throw new Error("모든 상품 데이터 소스를 불러오지 못했습니다.");
   }
 
   const deduped = mergeUnifiedCatalogRows({
-    items: merged as UnifiedMergeItem[],
+    items: merged,
     sort,
   }) as UnifiedProductView[];
   const protectedItems = kind === "deposit"
     ? applyDepositProtectionOnViews({ items: deduped, mode: depositProtection })
     : deduped;
+  const filteredItems = filterCatalogItems(protectedItems, { provider, termMonths, minRate });
+
+  const sortedProviders = [...providerNames].sort((left, right) => left.localeCompare(right, "ko"));
+  if (catalogFiltersActive) {
+    const snapshot: CatalogSnapshot = {
+      signature: catalogSignature,
+      createdAt: Date.now(),
+      kind,
+      sources: sourceMap,
+      items: filteredItems,
+      providers: sortedProviders,
+      partial: catalogPartial,
+      ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
+    };
+    return catalogPageFromSnapshot({
+      snapshot,
+      offset: 0,
+      limit: normalizedLimit,
+    });
+  }
+
   const offset = mergedCursor?.id ?? 0;
-  const sliced = protectedItems.slice(offset, offset + normalizedLimit);
-  const hasMore = offset + normalizedLimit < protectedItems.length;
+  const sliced = filteredItems.slice(offset, offset + normalizedLimit);
+  const hasMore = offset + normalizedLimit < filteredItems.length;
   const nextCursor = hasMore ? encodeUnifiedCursor({ id: offset + normalizedLimit }) : null;
 
   return {
@@ -557,11 +923,14 @@ export async function getUnifiedProductsWithLoaders(
     sources: sourceMap,
     merged: sliced,
     items: sliced,
+    facets: { providers: sortedProviders },
     pageInfo: {
       hasMore,
       nextCursor,
       limit,
+      ...(catalogPartial ? { partial: true } : {}),
     },
+    ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
   };
 }
 

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "exceptions": [
+    {
+      "file": "benefits_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 재현 가능한 초기 화면을 제공하는 저장 스냅샷입니다.",
+      "mitigation": "사용자 화면에 원천 기준 시각과 오래됨 경고를 표시하고 실제 신청 전 원문 확인을 안내합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "file": "exchange_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 재현 가능한 초기 화면을 제공하는 저장 스냅샷입니다.",
+      "mitigation": "환율 화면의 기준일을 노출하고 실제 거래 전 최신 영업일 환율을 다시 확인하도록 안내합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "file": "finlife_credit-loan_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 상품 흐름을 검증하기 위한 저장 스냅샷입니다.",
+      "mitigation": "상품 화면에 sourceAsOf와 stale 상태를 표시하고 가입 전 최신 금융회사 공시 확인을 요구합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "file": "finlife_deposit_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 상품 흐름을 검증하기 위한 저장 스냅샷입니다.",
+      "mitigation": "상품 화면에 sourceAsOf와 stale 상태를 표시하고 가입 전 최신 금융회사 공시 확인을 요구합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "file": "finlife_mortgage-loan_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 상품 흐름을 검증하기 위한 저장 스냅샷입니다.",
+      "mitigation": "상품 화면에 sourceAsOf와 stale 상태를 표시하고 가입 전 최신 금융회사 공시 확인을 요구합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "file": "finlife_pension_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 상품 흐름을 검증하기 위한 저장 스냅샷입니다.",
+      "mitigation": "상품 화면에 sourceAsOf와 stale 상태를 표시하고 가입 전 최신 금융회사 공시 확인을 요구합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "file": "finlife_rent-house-loan_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 상품 흐름을 검증하기 위한 저장 스냅샷입니다.",
+      "mitigation": "상품 화면에 sourceAsOf와 stale 상태를 표시하고 가입 전 최신 금융회사 공시 확인을 요구합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "file": "finlife_saving_snapshot.json",
+      "reason": "CI와 오프라인 실행에서 외부 자격 증명 없이 상품 흐름을 검증하기 위한 저장 스냅샷입니다.",
+      "mitigation": "상품 화면에 sourceAsOf와 stale 상태를 표시하고 가입 전 최신 금융회사 공시 확인을 요구합니다.",
+      "expiresAt": "2026-09-30T00:00:00.000Z"
+    }
+  ]
+}

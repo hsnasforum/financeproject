@@ -12,12 +12,14 @@ import {
   hasIssues,
   parseEnum,
   parseIntValue,
+  parseNumberValue,
   parseStringValue,
 } from "@/lib/http/validate";
 import type { UnifiedSourceId } from "@/lib/sources/types";
 import { isSamplebankPublicAccessAllowed } from "@/lib/products/samplebankPolicy";
 import { pushError } from "../../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../lib/observability/trace";
+import { applyProductSourceIssues, getProductFreshnessSummary } from "@/lib/sources/productFreshness";
 
 function parseEnrichSources(input: string | null): Array<"datago_kdb"> {
   if (!input || !input.trim()) return [];
@@ -115,6 +117,36 @@ export async function GET(request: Request) {
 
     const cursor = searchParams.get("cursor");
     const q = searchParams.get("q");
+    const providerRaw = parseStringValue(bag, {
+      path: "provider",
+      value: searchParams.get("provider"),
+      fallback: "",
+      trim: true,
+      maxLength: 200,
+    });
+    const provider = providerRaw && providerRaw !== "all" ? providerRaw : null;
+    const termMonthsRaw = (searchParams.get("termMonths") ?? "").trim();
+    const termMonths = termMonthsRaw
+      ? parseIntValue(bag, {
+          path: "termMonths",
+          value: termMonthsRaw,
+          fallback: 1,
+          min: 1,
+          max: 1200,
+        })
+      : null;
+    const minRateRaw = (searchParams.get("minRate") ?? "").trim();
+    const parsedMinRate = minRateRaw
+      ? parseNumberValue(bag, {
+          path: "minRate",
+          value: minRateRaw,
+          fallback: 0,
+          min: 0,
+          max: 100,
+        })
+      : null;
+    const minRate = typeof parsedMinRate === "number" && parsedMinRate > 0 ? parsedMinRate : null;
+    const catalogFiltersActive = Boolean(provider || termMonths !== null || minRate !== null);
     const queryMode = parseEnum(bag, {
       path: "qMode",
       value: (searchParams.get("qMode") ?? "contains").trim().toLowerCase(),
@@ -164,6 +196,9 @@ export async function GET(request: Request) {
         addIssue(bag, "cursor", "Cursor pagination is not supported in integrated mode.");
       }
     }
+    if ((provider || termMonths !== null || minRate !== null) && (mode !== "merged" || sourceId !== null)) {
+      addIssue(bag, "filters", "provider, termMonths, minRate require merged multi-source mode");
+    }
     if (cursor && sourceId && (!includeSources.includes(sourceId) || includeSources.length !== 1)) {
       addIssue(bag, "cursor", "Cursor pagination requires single sourceId.");
     }
@@ -192,6 +227,9 @@ export async function GET(request: Request) {
       sourceId ?? "all",
       cursor ?? "",
       q ?? "",
+      provider ?? "all",
+      termMonths === null ? "" : String(termMonths),
+      minRate === null ? "" : String(minRate),
       refresh ? "1" : "0",
       onlyNew ? "1" : "0",
       changedSince ?? "",
@@ -204,30 +242,34 @@ export async function GET(request: Request) {
       includeKdbOnly ? "1" : "0",
       debug ? "1" : "0",
     ].join("|");
+    const unifiedQuery = () => getUnifiedProducts({
+      kind,
+      mode,
+      includeSources,
+      sourceId,
+      cursor,
+      q,
+      provider,
+      termMonths,
+      minRate,
+      refresh,
+      onlyNew,
+      changedSince,
+      includeTimestamps,
+      limit,
+      sort: sortMode,
+      qMode: queryMode,
+      enrichSources,
+      depositProtection,
+      includeKdbOnly,
+      debug,
+      ...(catalogFiltersActive ? { signal: request.signal } : {}),
+    });
     const dataTimed = await withTiming(
       "products.unified.query",
-      () => singleflight(
-        singleflightKey,
-        () => getUnifiedProducts({
-          kind,
-          mode,
-          includeSources,
-          sourceId,
-          cursor,
-          q,
-          refresh,
-          onlyNew,
-          changedSince,
-          includeTimestamps,
-          limit,
-          sort: sortMode,
-          qMode: queryMode,
-          enrichSources,
-          depositProtection,
-          includeKdbOnly,
-          debug,
-        }),
-      ),
+      () => catalogFiltersActive
+        ? unifiedQuery()
+        : singleflight(singleflightKey, unifiedQuery),
     );
     const data = dataTimed.value;
 
@@ -243,12 +285,18 @@ export async function GET(request: Request) {
     };
 
     const generatedAt = new Date().toISOString();
+    const freshness = applyProductSourceIssues(await getProductFreshnessSummary({
+      kind,
+      sourceIds: sourceId ? [sourceId] : includeSources,
+      checkedAt: generatedAt,
+    }), data.sourceIssues);
     return withTrace(jsonOk({
       data,
       coverage,
       meta: {
         ...traceMeta({
           generatedAt,
+          freshness,
         }),
         ...(debugRequested
           ? {

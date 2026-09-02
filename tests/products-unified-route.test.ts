@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocked = vi.hoisted(() => ({
   getUnifiedProducts: vi.fn(),
   UnifiedInputError: class UnifiedInputError extends Error {},
+  getProductFreshnessSummary: vi.fn(),
+}));
+
+vi.mock("@/lib/sources/productFreshness", () => ({
+  getProductFreshnessSummary: mocked.getProductFreshnessSummary,
+  applyProductSourceIssues: (summary: unknown) => summary,
 }));
 
 vi.mock("@/lib/sources/unified", () => ({
@@ -51,6 +57,13 @@ type UnifiedRouteJson = {
     };
     unmatchedProviders?: Array<{ providerName?: string; count?: number }>;
     notes?: string[];
+  };
+  meta?: {
+    generatedAt?: string;
+    freshness?: {
+      checkedAt?: string;
+      sources?: Array<{ sourceAsOf?: string | null }>;
+    };
   };
 };
 
@@ -121,6 +134,22 @@ describe("GET /api/products/unified", () => {
   beforeEach(() => {
     mocked.getUnifiedProducts.mockReset();
     mocked.getUnifiedProducts.mockResolvedValue(sampleUnified);
+    mocked.getProductFreshnessSummary.mockReset();
+    mocked.getProductFreshnessSummary.mockResolvedValue({
+      checkedAt: "2026-08-26T03:00:00.000Z",
+      overall: "stale",
+      sources: [{
+        sourceId: "finlife",
+        kind: "deposit",
+        sourceAsOf: "2026-06-22T15:58:01.146Z",
+        checkedAt: "2026-08-26T03:00:00.000Z",
+        ttlMs: 43_200_000,
+        ageMs: 1,
+        freshness: "stale",
+        fallbackUsed: false,
+        message: "stale",
+      }],
+    });
     setEnv("NODE_ENV", "test");
     setEnv("UNIFIED_DEBUG_ALLOW_IN_PROD", undefined);
   });
@@ -153,6 +182,14 @@ describe("GET /api/products/unified", () => {
     expect(typeof json.diagnostics?.unmatchedProviders?.[0]?.providerName).toBe("string");
     expect(typeof json.diagnostics?.unmatchedProviders?.[0]?.count).toBe("number");
     expect(Array.isArray(json.diagnostics?.notes)).toBe(true);
+  });
+
+  it("keeps response generation time separate from sourceAsOf", async () => {
+    const { status, json } = await callUnified("?kind=deposit&includeSources=finlife");
+
+    expect(status).toBe(200);
+    expect(json.meta?.freshness?.sources?.[0]?.sourceAsOf).toBe("2026-06-22T15:58:01.146Z");
+    expect(json.meta?.generatedAt).not.toBe(json.meta?.freshness?.sources?.[0]?.sourceAsOf);
   });
 
   it("does not expose diagnostics in production by default", async () => {
@@ -207,6 +244,21 @@ describe("GET /api/products/unified", () => {
     expect(json.ok).toBe(true);
     expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
       depositProtection: "require",
+    }));
+  });
+
+  it("passes catalog filters to the merged product service", async () => {
+    const { status, json } = await callUnified(
+      "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb&provider=%EA%B5%AD%EB%AF%BC%EC%9D%80%ED%96%89&termMonths=12&minRate=3.5",
+    );
+
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "국민은행",
+      termMonths: 12,
+      minRate: 3.5,
+      signal: expect.anything(),
     }));
   });
 

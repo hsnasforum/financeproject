@@ -149,8 +149,9 @@ describe("workspaceProfileBundle", () => {
     expect(duplicateFeedback.fallbackMessage).toBe("프로필 복제에 실패했습니다.");
     expect(resolveProfileSavePayloadName("duplicate", "기본 프로필")).toBe("기본 프로필 (copy)");
     expect(createProfileDeleteDialogState("")).toBeNull();
-    expect(dialog?.confirmText).toBe(dialog?.expectedConfirm);
-    expect(isDeleteProfileConfirmMatched(dialog)).toBe(true);
+    expect(dialog?.confirmText).toBe("");
+    expect(isDeleteProfileConfirmMatched(dialog)).toBe(false);
     expect(isDeleteProfileConfirmMatched(dialog ? { ...dialog, confirmText: "mismatch" } : null)).toBe(false);
+    expect(isDeleteProfileConfirmMatched(dialog ? { ...dialog, confirmText: dialog.expectedConfirm } : null)).toBe(true);
   });
 });

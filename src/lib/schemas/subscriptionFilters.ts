@@ -10,6 +10,7 @@ import {
   type Issue,
   type ParseResult,
 } from "./issueTypes";
+import { formatKstIsoDate, shiftKstIsoDate } from "../format/kstCalendarDate";
 
 export type SubscriptionHouseType = "apt" | "urbty" | "remndr";
 export type SubscriptionMode = "search" | "all";
@@ -44,21 +45,11 @@ function readParam(params: RawParams, key: string): string {
   return firstValue((params as Record<string, string | string[] | undefined>)[key]).trim();
 }
 
-function toIsoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function daysAgoIsoDate(baseDate: Date, days: number): string {
-  const d = new Date(baseDate);
-  d.setDate(d.getDate() - days);
-  return toIsoDate(d);
-}
-
 function isValidIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
   if (!Number.isFinite(date.getTime())) return false;
-  return toIsoDate(date) === value;
+  return date.toISOString().slice(0, 10) === value;
 }
 
 function parseDeepFlag(value: string): boolean {
@@ -70,8 +61,8 @@ export function defaults(options?: { now?: Date }): SubscriptionFiltersNormalize
   const now = options?.now ?? new Date();
   return {
     region: "전국",
-    from: daysAgoIsoDate(now, 90),
-    to: toIsoDate(now),
+    from: shiftKstIsoDate(now, -90),
+    to: formatKstIsoDate(now),
     q: "",
     houseType: "apt",
     mode: "all",

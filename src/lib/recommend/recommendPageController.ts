@@ -5,6 +5,7 @@ import {
   type RecommendProfileNormalized,
 } from "@/lib/schemas/recommendProfile";
 import type { Issue } from "@/lib/schemas/issueTypes";
+import type { RecommendWeightNormalization } from "@/lib/recommend/weights";
 
 type SearchParamsReader = {
   get(name: string): string | null;
@@ -25,6 +26,7 @@ export type RecommendQueryOverrides = {
 export type RecommendInitialProfileState = {
   profile: RecommendProfileNormalized;
   queryOverrides: RecommendQueryOverrides;
+  weightNormalization: RecommendWeightNormalization | null;
 };
 
 export type RecommendAutorunContinuation =
@@ -66,14 +68,19 @@ export function buildRecommendInitialProfileState(input: {
   storedProfileRaw: string | null;
 }): RecommendInitialProfileState {
   let profile = recommendProfileDefaults();
+  let weightNormalization: RecommendWeightNormalization | null = null;
 
   try {
     if (input.storedProfileRaw) {
       const parsed = JSON.parse(input.storedProfileRaw) as unknown;
-      profile = parseRecommendProfile({
+      const parsedProfile = parseRecommendProfile({
         ...profile,
         ...(typeof parsed === "object" && parsed ? (parsed as Record<string, unknown>) : {}),
-      }).value;
+      });
+      profile = parsedProfile.value;
+      if (parsedProfile.weightNormalization.normalized) {
+        weightNormalization = parsedProfile.weightNormalization;
+      }
     }
   } catch {
     // Invalid browser storage falls back to the current defaults.
@@ -84,7 +91,7 @@ export function buildRecommendInitialProfileState(input: {
     profile = parseRecommendProfile({ ...profile, ...queryOverrides.profilePatch }).value;
   }
 
-  return { profile, queryOverrides };
+  return { profile, queryOverrides, weightNormalization };
 }
 
 export function buildRecommendHistoryHref(runId: string): string {

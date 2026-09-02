@@ -495,12 +495,16 @@ export function PlanningWorkspaceProfilePanel({
                 />
               </label>
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
-                목돈 목표 시점
+                목돈 목표까지 남은 기간(개월)
                 <input
                   className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
-                  type="month"
+                  inputMode="numeric"
+                  max={1200}
+                  min={1}
+                  step={1}
+                  type="number"
                   value={monthOffsetToInput(beginnerGoals.lumpSum.targetMonth)}
-                  onChange={(event) => updateBeginnerGoal("lumpSum", { targetMonth: inputToMonthOffset(event.target.value) })}
+                  onChange={(event) => updateBeginnerGoal("lumpSum", { targetMonth: inputToMonthOffset(event.target.value, beginnerGoals.lumpSum.targetMonth) })}
                 />
               </label>
             </div>
@@ -517,12 +521,16 @@ export function PlanningWorkspaceProfilePanel({
                 />
               </label>
               <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
-                은퇴 목표 시점
+                은퇴 목표까지 남은 기간(개월)
                 <input
                   className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
-                  type="month"
+                  inputMode="numeric"
+                  max={1200}
+                  min={1}
+                  step={1}
+                  type="number"
                   value={monthOffsetToInput(beginnerGoals.retirement.targetMonth)}
-                  onChange={(event) => updateBeginnerGoal("retirement", { targetMonth: inputToMonthOffset(event.target.value) })}
+                  onChange={(event) => updateBeginnerGoal("retirement", { targetMonth: inputToMonthOffset(event.target.value, beginnerGoals.retirement.targetMonth) })}
                 />
               </label>
             </div>
@@ -581,12 +589,16 @@ export function PlanningWorkspaceProfilePanel({
                         />
                       </label>
                       <label className={`block text-xs ${bodyLabelClassName}`}>
-                        목표 시점
+                        목표까지 남은 기간(개월)
                         <input
                           className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
-                          type="month"
+                          inputMode="numeric"
+                          max={1200}
+                          min={1}
+                          step={1}
+                          type="number"
                           value={monthOffsetToInput(goal.targetMonth)}
-                          onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value) })}
+                          onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value, goal.targetMonth) })}
                         />
                       </label>
                     </div>

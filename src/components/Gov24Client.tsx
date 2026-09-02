@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { PageShell } from "@/components/ui/PageShell";
@@ -35,8 +35,10 @@ import {
   benefitResultSummary,
   buildBenefitsSnapshotStatus,
   readBenefitErrorMessage,
+  type BenefitsDataSourceMode,
 } from "@/lib/publicApis/benefitsFlowContract";
 import { cn } from "@/lib/utils";
+import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
 
 type SyncState = "ready" | "syncing" | "needs_sync";
 
@@ -73,6 +75,7 @@ type Gov24SearchStatusResponse = {
       state?: SyncState;
     };
     fallback?: {
+      mode?: string;
       reason?: string;
     };
     message?: string;
@@ -128,9 +131,14 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   const [completionRate, setCompletionRate] = useState<number | null>(null);
   const [syncMetaNote, setSyncMetaNote] = useState<string>("");
   const [snapshotIsStale, setSnapshotIsStale] = useState(false);
+  const [snapshotSourceMode, setSnapshotSourceMode] = useState<BenefitsDataSourceMode>("unavailable");
 
   const [detailData, setDetailData] = useState<Gov24ServiceDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const searchRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  const statusRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
+  if (searchRequestsRef.current === null) searchRequestsRef.current = createLatestRequestCoordinator();
+  if (statusRequestsRef.current === null) statusRequestsRef.current = createLatestRequestCoordinator();
 
   const selectedSido = useMemo(() => getSidoByCode(selectedSidoCode), [selectedSidoCode]);
   const sigunguOptions = useMemo(() => SIGUNGU_BY_SIDO_CODE_2025[selectedSidoCode] ?? [], [selectedSidoCode]);
@@ -144,8 +152,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       isStale: snapshotIsStale,
     },
     sync: { state: syncing ? "syncing" : syncState },
+    sourceMode: snapshotSourceMode,
     message: syncMetaNote || undefined,
-  }), [completionRate, snapshotGeneratedAt, snapshotIsStale, snapshotTotal, syncMetaNote, syncState, syncing, syncUniqueCount]);
+  }), [completionRate, snapshotGeneratedAt, snapshotIsStale, snapshotSourceMode, snapshotTotal, syncMetaNote, syncState, syncing, syncUniqueCount]);
 
   const summaryLine = useMemo(() => {
     const incomeLabel = INCOME_OPTIONS.find((entry) => entry.value === incomeBracket)?.label ?? incomeBracket;
@@ -166,41 +175,49 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     return () => window.cancelAnimationFrame(id);
   }, [items.length, step]);
 
-  const refreshSnapshotStatus = useCallback(async () => {
-    const statusRes = await fetch("/api/gov24/search?q=&cursor=0&pageSize=1", { cache: "no-store" });
-    const statusJson = await statusRes.json() as Gov24SearchStatusResponse;
-    const snapshot = statusJson.meta?.snapshot ?? null;
-    const nextStatus = buildBenefitsSnapshotStatus({
-      snapshot: {
-        totalItems: snapshot?.totalItems,
-        completionRate: snapshot?.completionRate,
-        generatedAt: snapshot?.generatedAt,
-        uniqueCount: snapshot?.uniqueCount,
-        truncatedByHardCap: snapshot?.truncatedByHardCap,
-        isStale: snapshot?.isStale,
-      },
-      sync: statusJson.meta?.sync,
-      message: statusJson.meta?.message,
-      fallback: statusJson.meta?.fallback,
-    });
-    setSnapshotTotal(snapshot?.totalItems ?? null);
-    setCompletionRate(typeof snapshot?.completionRate === "number" ? snapshot.completionRate : null);
-    setSnapshotGeneratedAt(typeof snapshot?.generatedAt === "string" ? snapshot.generatedAt : "");
-    setSyncUniqueCount(typeof snapshot?.uniqueCount === "number" ? snapshot.uniqueCount : null);
-    setSyncState(statusJson.meta?.sync?.state ?? "needs_sync");
-    setSyncing((statusJson.meta?.sync?.state ?? "needs_sync") === "syncing");
-    setSnapshotIsStale(nextStatus.isStale);
-    setSyncMetaNote(nextStatus.notice ?? "");
-    return { snapshot };
-  }, []);
-
   const checkSnapshotStatus = useCallback(async () => {
+    const request = statusRequestsRef.current!.start();
     try {
-      await refreshSnapshotStatus();
-    } catch {
-      setSyncState("needs_sync");
+      const statusRes = await fetch("/api/gov24/search?q=&cursor=0&pageSize=1", {
+        cache: "no-store",
+        signal: request.signal,
+      });
+      const statusJson = await statusRes.json() as Gov24SearchStatusResponse;
+      if (!request.isCurrent()) return;
+      const snapshot = statusJson.meta?.snapshot ?? null;
+      const nextStatus = buildBenefitsSnapshotStatus({
+        snapshot: {
+          totalItems: snapshot?.totalItems,
+          completionRate: snapshot?.completionRate,
+          generatedAt: snapshot?.generatedAt,
+          uniqueCount: snapshot?.uniqueCount,
+          truncatedByHardCap: snapshot?.truncatedByHardCap,
+          isStale: snapshot?.isStale,
+        },
+        sync: statusJson.meta?.sync,
+        message: statusJson.meta?.message,
+        fallback: statusJson.meta?.fallback,
+      });
+      const nextSyncState = statusJson.meta?.sync?.state ?? "needs_sync";
+      setSnapshotTotal(snapshot?.totalItems ?? null);
+      setCompletionRate(typeof snapshot?.completionRate === "number" ? snapshot.completionRate : null);
+      setSnapshotGeneratedAt(typeof snapshot?.generatedAt === "string" ? snapshot.generatedAt : "");
+      setSyncUniqueCount(typeof snapshot?.uniqueCount === "number" ? snapshot.uniqueCount : null);
+      setSyncState(nextSyncState);
+      setSyncing(nextSyncState === "syncing");
+      setSnapshotIsStale(nextStatus.isStale);
+      setSnapshotSourceMode(nextStatus.sourceMode);
+      setSyncMetaNote(nextStatus.notice ?? "");
+    } catch (statusError) {
+      if (request.isCurrent() && !(statusError instanceof Error && statusError.name === "AbortError")) {
+        setSyncState("needs_sync");
+        setSyncing(false);
+        setSnapshotSourceMode("unavailable");
+      }
+    } finally {
+      request.finish();
     }
-  }, [refreshSnapshotStatus]);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -225,17 +242,21 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     };
   }, [targetType, selectedSido?.name, selectedSigungu?.name, birthYmd, gender, incomeBracket, personalTraits, householdTraits, resultQuery]);
 
-  const searchSimpleFind = useCallback(async (opts?: { cursor?: number; append?: boolean }) => {
+  const searchSimpleFind = useCallback(async (opts?: { cursor?: number; append?: boolean; orgType?: Gov24OrgType }) => {
+    const request = searchRequestsRef.current!.start();
     const cursor = Math.max(0, Math.trunc(opts?.cursor ?? 0));
+    const requestOrgType = opts?.orgType ?? orgTypeFilter;
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/gov24/simple-find?cursor=${cursor}&pageSize=50&orgType=${orgTypeFilter}`, {
+      const res = await fetch(`/api/gov24/simple-find?cursor=${cursor}&pageSize=50&orgType=${requestOrgType}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildInput()),
+        signal: request.signal,
       });
       const json = await res.json();
+      if (!request.isCurrent()) return;
       if (!json?.ok) {
         setError(readBenefitErrorMessage(json));
         return;
@@ -246,10 +267,13 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       setNextCursor(typeof json?.data?.page?.nextCursor === "number" ? json.data.page.nextCursor : null);
       setOrgTypeCounts(typeof json?.data?.facets?.orgTypeCounts === "object" && json?.data?.facets?.orgTypeCounts ? json.data.facets.orgTypeCounts : {});
       setStep(7);
-    } catch {
-      setError(BENEFITS_FLOW_COPY.requestFailed);
+    } catch (searchError) {
+      if (request.isCurrent() && !(searchError instanceof Error && searchError.name === "AbortError")) {
+        setError(BENEFITS_FLOW_COPY.requestFailed);
+      }
     } finally {
-      setLoading(false);
+      if (request.isCurrent()) setLoading(false);
+      request.finish();
     }
   }, [buildInput, orgTypeFilter]);
 
@@ -281,20 +305,41 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
+    if (!syncing) return;
+    let intervalId: number | null = null;
+    const stopPolling = () => {
+      if (intervalId === null) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+    };
+    const startPolling = () => {
+      if (document.visibilityState !== "visible" || intervalId !== null) return;
+      intervalId = window.setInterval(() => {
+        void checkSnapshotStatus();
+      }, 10_000);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        stopPolling();
+        statusRequestsRef.current?.cancel();
+        return;
+      }
       void checkSnapshotStatus();
-    }, 10_000);
-    return () => window.clearInterval(timer);
-  }, [checkSnapshotStatus]);
+      startPolling();
+    };
 
-  useEffect(() => {
-    if (step !== 7) return;
-    const timer = window.setTimeout(() => {
-      void searchSimpleFind({ cursor: 0, append: false });
-    }, 0);
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      stopPolling();
+    };
+  }, [checkSnapshotStatus, syncing]);
 
-    return () => window.clearTimeout(timer);
-  }, [orgTypeFilter, searchSimpleFind, step]);
+  useEffect(() => () => {
+    searchRequestsRef.current?.cancel();
+    statusRequestsRef.current?.cancel();
+  }, []);
 
   return (
     <PageShell>
@@ -323,6 +368,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
               <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
               반영 범위 <span className="text-navy font-black ml-0.5">{snapshotStatus.completionRate !== null ? `${Math.round(snapshotStatus.completionRate * 1000) / 10}%` : "?"}</span>
             </div>
+            <div className="flex items-center gap-2">
+              출처 상태 <span className="text-navy font-black ml-0.5">{snapshotStatus.sourceLabel}</span>
+            </div>
             {syncUniqueCount !== null && (
               <div className="flex items-center gap-2 text-slate-400">
                 반영된 항목 <span className="font-black ml-0.5">{syncUniqueCount.toLocaleString()}건</span>
@@ -337,6 +385,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
           {syncMetaNote ? (
             <p className="mt-3 text-[10px] font-bold text-amber-600 bg-amber-50/50 p-2 rounded-lg">{syncMetaNote}</p>
           ) : null}
+          <p className="mt-3 text-[10px] font-medium text-slate-400">
+            실제 신청 전에는 정부 원문의 최신 지원 조건과 신청 방법을 다시 확인하세요.
+          </p>
         </Card>
 
         {step <= 6 ? (
@@ -582,7 +633,14 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                       onKeyDown={(e) => e.key === "Enter" && void searchSimpleFind({ cursor: 0 })}
                     />
                     <Button type="button" variant="primary" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={() => void searchSimpleFind({ cursor: 0 })} disabled={loading}>지금 기준으로 다시 찾기</Button>
-                    <Button type="button" variant="outline" className="h-11 px-6 rounded-2xl font-black" onClick={() => { setStep(1); setItems([]); setTotalMatched(0); setNextCursor(null); }}>조건 변경</Button>
+                    <Button type="button" variant="outline" className="h-11 px-6 rounded-2xl font-black" onClick={() => {
+                      searchRequestsRef.current?.cancel();
+                      setLoading(false);
+                      setStep(1);
+                      setItems([]);
+                      setTotalMatched(0);
+                      setNextCursor(null);
+                    }}>조건 변경</Button>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 min-w-[180px]">
@@ -590,7 +648,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                   <select
                     className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none shadow-sm focus:ring-1 focus:ring-primary"
                     value={orgTypeFilter}
-                    onChange={(e) => setOrgTypeFilter(e.target.value as Gov24OrgType)}
+                    onChange={(e) => {
+                      const nextOrgType = e.target.value as Gov24OrgType;
+                      setOrgTypeFilter(nextOrgType);
+                      void searchSimpleFind({ cursor: 0, append: false, orgType: nextOrgType });
+                    }}
                   >
                     {ORG_FILTER_OPTIONS.map((entry) => (
                       <option key={entry.value} value={entry.value}>{entry.label} ({orgTypeCounts[entry.value] ?? 0})</option>

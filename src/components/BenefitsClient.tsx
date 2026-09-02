@@ -72,6 +72,14 @@ type SearchMeta = {
     pagesFetched?: number;
     completionRate?: number;
     truncatedByHardCap?: boolean;
+    isStale?: boolean;
+  };
+  provenance?: {
+    mode?: string;
+  };
+  fallback?: {
+    mode?: string;
+    reason?: string;
   };
   normalizedCount?: number;
   dropStats?: { missingTitle?: number; generatedId?: number; unknownRegionNoText?: number; unknownRegionUnparsed?: number };
@@ -532,6 +540,9 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
           <p className="text-xs font-medium leading-relaxed text-slate-500">
             현재 검색과 지역 기준으로 다시 읽는 결과입니다. 상세에서 지원 조건과 신청 방법을 다시 확인하세요.
           </p>
+          <p className="text-[11px] font-bold text-slate-500">
+            출처 상태: <span className="text-navy">{snapshotStatus.sourceLabel}</span>
+          </p>
           {snapshotStatus.generatedAt ? (
             <p className="text-[11px] font-medium text-slate-400">
               기준 확인: {new Date(snapshotStatus.generatedAt).toLocaleString("ko-KR", { hour12: false })}
@@ -540,6 +551,9 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
           {snapshotStatus.notice ? (
             <p className="text-[11px] font-bold text-amber-600">{snapshotStatus.notice}</p>
           ) : null}
+          <p className="text-[11px] font-medium text-slate-400">
+            실제 신청 전에는 정부 원문의 최신 지원 조건과 신청 방법을 다시 확인하세요.
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="h-3 w-px bg-slate-200" />

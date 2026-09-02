@@ -39,6 +39,11 @@
 - DART: `pnpm dart:corpindex`, `pnpm dart:ensure-corpindex`, `pnpm dart:watch*`, `pnpm dart:rules:*`
 - FINLIFE/DataGo/Gov24: `pnpm finlife:sync*`, `pnpm finlife:inventory:report`, `pnpm datago:sync`, `pnpm products:sync`, `pnpm gov24:sync*`
 - freshness/warmup: `pnpm freshness:report`, `pnpm data:doctor`, `pnpm warm:if-stale`, `pnpm daily:refresh*`
+- 지원되는 freshness 명령(`freshness:report`, `freshness:release`, `data:doctor`, `verify`)은 모두
+  `config/data-freshness-exceptions.json`을 단일 예외 기준으로 사용합니다. 예외는 `expiresAt` 직전까지만
+  유효하고 그 시각부터 만료로 판정합니다.
+- 경계 재현이나 테스트가 필요하면 script에 `--now=<ISO date-time>`을 전달할 수 있습니다. 운영 판정은
+  package script가 사용하는 실제 현재 시각을 기준으로 합니다.
 - planning ops: `pnpm planning:v2:ops:*`, `pnpm planning:v2:backfill-legacy-runs`, `pnpm planning:v2:migrate:*`
 - 위 명령은 일반 PR 필수 게이트가 아니며, 실행했다면 `/work` 또는 release closeout에 목적과 결과를 남깁니다.
 

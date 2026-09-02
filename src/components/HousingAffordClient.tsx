@@ -14,7 +14,7 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { issuesToFieldMap } from "@/lib/forms/issueMap";
-import { housingBurden } from "@/lib/housing/afford";
+import { HOUSING_BURDEN_POLICY, housingBurden } from "@/lib/housing/afford";
 import { parseHousingAfford, type HousingAffordMode } from "@/lib/schemas/housingAfford";
 import { cn } from "@/lib/utils";
 
@@ -189,18 +189,32 @@ export function HousingAffordClient({
     } else {
       links.push({ href: "/products/rent-house-loan", label: "전월세 대출 조건 다시 보기" });
     }
-    if ((result.housingRatioPct ?? 0) >= 30) {
+    if (result.assessment.level === "attention" || result.assessment.level === "high") {
       links.push({ href: "/housing/subscription?region=전국&mode=all&houseType=apt", label: "청약 공고 다시 보기" });
     }
-    if (result.residualCashFlow < 0 || (result.housingRatioPct ?? 0) >= 40) {
+    if (result.residualCashFlow < 0 || result.assessment.level === "high") {
       links.push({ href: "/gov24", label: "지원금·혜택 다시 보기" });
     }
     return links;
-  }, [mode, result.housingRatioPct, result.residualCashFlow]);
+  }, [mode, result.assessment.level, result.residualCashFlow]);
 
   const incomeVal = Number(incomeNetInput) || 1;
   const otherOutflowVal = Number(outflowInput) || 0;
   const housingCostVal = result.monthlyHousingCost || 0;
+  const burdenBadgeClass = result.assessment.level === "low"
+    ? "bg-primary/5 text-primary border-primary/10"
+    : result.assessment.level === "attention"
+      ? "bg-amber-50 text-amber-600 border-amber-100"
+      : result.assessment.level === "high"
+        ? "bg-rose-50 text-rose-600 border-rose-100"
+        : "bg-slate-100 text-slate-600 border-slate-200";
+  const burdenProgressClass = result.assessment.level === "low"
+    ? "text-primary"
+    : result.assessment.level === "attention"
+      ? "text-amber-500"
+      : result.assessment.level === "high"
+        ? "text-rose-500"
+        : "text-slate-400";
 
   return (
     <PageShell>
@@ -440,11 +454,9 @@ export function HousingAffordClient({
                   <p className="text-2xl font-black text-navy tabular-nums">{fmtPct(result.housingRatioPct)}</p>
                   <span className={cn(
                     "rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-widest border",
-                    (result.housingRatioPct ?? 0) <= 25 ? "bg-primary/5 text-primary border-primary/10" :
-                    (result.housingRatioPct ?? 0) <= 35 ? "bg-amber-50 text-amber-600 border-amber-100" :
-                    "bg-rose-50 text-rose-600 border-rose-100"
+                    burdenBadgeClass,
                   )}>
-                    {(result.housingRatioPct ?? 0) <= 25 ? "안전" : (result.housingRatioPct ?? 0) <= 35 ? "주의" : "위험"}
+                    {result.assessment.label}
                   </span>
                 </div>
 
@@ -460,19 +472,13 @@ export function HousingAffordClient({
                   <div className="space-y-1.5 pt-1">
                     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                       <CspSafeProgressBar
-                        fillClassName={
-                          (result.housingRatioPct ?? 0) <= 25
-                            ? "text-primary"
-                            : (result.housingRatioPct ?? 0) <= 35
-                              ? "text-amber-500"
-                              : "text-rose-500"
-                        }
+                        fillClassName={burdenProgressClass}
                         value={result.housingRatioPct ?? 0}
                       />
                     </div>
                     <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                       <span>0%</span>
-                      <span>권장 25%</span>
+                      <span>주의 기준 {HOUSING_BURDEN_POLICY.attentionFromPct}% · 높음 기준 {HOUSING_BURDEN_POLICY.highFromPct}%</span>
                       <span>100%</span>
                     </div>
                   </div>

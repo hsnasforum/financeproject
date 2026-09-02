@@ -66,6 +66,9 @@ import {
   type RecommendResponse,
 } from "@/lib/recommend/recommendResultsViewModel";
 import {
+  formatRecommendWeightNormalizationNotice,
+} from "@/lib/recommend/weights";
+import {
   defaults as recommendProfileDefaults,
   parseRecommendProfile,
   type RecommendProfileNormalized,
@@ -133,6 +136,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   const [formIssues, setFormIssues] = useState<Issue[]>([]);
   const [sourceStatusRows, setSourceStatusRows] = useState<SourceStatusRow[]>([]);
   const [sourceStatusReady, setSourceStatusReady] = useState(false);
+  const [weightNormalizationNotice, setWeightNormalizationNotice] = useState("");
   const lastStoredRef = useRef<StoredRecommendResult | null>(null);
   const autoRunTriggeredRef = useRef(false);
   const sourceStatusAbortRef = useRef<AbortController | null>(null);
@@ -167,6 +171,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   ) => {
     const lease = requestCoordinator.start();
     const parsedProfile = parseRecommendProfile(profileInput);
+    setWeightNormalizationNotice(formatRecommendWeightNormalizationNotice(parsedProfile.weightNormalization));
     if (!parsedProfile.ok) {
       setLoading(false);
       setResult(null);
@@ -282,6 +287,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
       setLastStored(ownedStored);
       lastStoredRef.current = ownedStored;
       setProfile(nextProfile);
+      setWeightNormalizationNotice(formatRecommendWeightNormalizationNotice(initialState.weightNormalization));
       let legacyMigrationPending = false;
       try {
         legacyMigrationPending = hasLegacyRecommendStorage(localStorage)
@@ -438,6 +444,25 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
     setTimeout(() => setFeedback(""), 3000);
   }
 
+  function updateWeight(key: keyof StoredProfile["weights"], value: number) {
+    setWeightNormalizationNotice("");
+    setProfile((prev) => ({
+      ...prev,
+      weights: { ...prev.weights, [key]: value },
+    }));
+  }
+
+  function resetWeights() {
+    setProfile((prev) => ({
+      ...prev,
+      weights: { ...defaultProfile.weights },
+    }));
+    setWeightNormalizationNotice("가중치를 기본값(금리 55% · 기간 30% · 유동성 15%)으로 복원했습니다.");
+  }
+
+  const weightSum = profile.weights.rate + profile.weights.term + profile.weights.liquidity;
+  const weightSumPct = Math.round(weightSum * 10_000) / 100;
+
   return (
     <PageShell>
       <PageHeader
@@ -570,11 +595,23 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
 
           {advancedOpen && (
             <div className="mt-8 border-t border-slate-100 pt-8 animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className="mb-6 space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">가중치 설정</p>
+              <div className="mb-6 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">가중치 설정</p>
+                  <Button type="button" size="sm" variant="outline" onClick={resetWeights}>기본값 복원</Button>
+                </div>
                 <p className="text-xs font-medium leading-relaxed text-slate-500">
                   비교 후보를 먼저 본 뒤, 금리·기간·유동성 중 어떤 기준을 더 앞에 둘지만 조정하는 보조 설정입니다.
                 </p>
+                <p className="text-xs font-bold text-slate-600">
+                  현재 합계 {weightSumPct}%
+                  {weightSum === 1 ? "" : " · 비교 요청 시 각 비율을 유지해 100%로 정규화합니다."}
+                </p>
+                {weightNormalizationNotice ? (
+                  <p role="status" aria-live="polite" className="text-xs font-bold text-primary">
+                    {weightNormalizationNotice}
+                  </p>
+                ) : null}
               </div>
               <div className="grid gap-8 md:grid-cols-3">
                 <label className="space-y-3">
@@ -588,7 +625,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
                     max={1}
                     step={0.01}
                     value={profile.weights.rate}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, rate: Number(e.target.value) } }))}
+                    onChange={(e) => updateWeight("rate", Number(e.target.value))}
                     className="w-full accent-primary"
                   />
                 </label>
@@ -603,7 +640,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
                     max={1}
                     step={0.01}
                     value={profile.weights.term}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, term: Number(e.target.value) } }))}
+                    onChange={(e) => updateWeight("term", Number(e.target.value))}
                     className="w-full accent-primary"
                   />
                 </label>
@@ -618,7 +655,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
                     max={1}
                     step={0.01}
                     value={profile.weights.liquidity}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, liquidity: Number(e.target.value) } }))}
+                    onChange={(e) => updateWeight("liquidity", Number(e.target.value))}
                     className="w-full accent-primary"
                   />
                 </label>

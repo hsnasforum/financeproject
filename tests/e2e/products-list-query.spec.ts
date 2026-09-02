@@ -19,6 +19,39 @@ test("product category deep-link redirects to catalog preset and preserves shelf
   await expect(page.getByPlaceholder("은행명 또는 상품명으로 비교 후보를 좁혀 보세요")).toHaveValue("테스트", { timeout: 30_000 });
 });
 
+test("catalog keeps keyword edits as draft until one explicit search request", async ({ page }) => {
+  const requestQueries: string[] = [];
+  await page.route("**/api/products/unified?**", async (route) => {
+    requestQueries.push(new URL(route.request().url()).searchParams.toString());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [],
+          pageInfo: { hasMore: false, nextCursor: null, limit: 60 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit");
+  await expect.poll(() => requestQueries.length).toBe(1);
+
+  const search = page.getByPlaceholder("은행명 또는 상품명으로 비교 후보를 좁혀 보세요");
+  await search.fill("국민");
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  expect(requestQueries).toHaveLength(1);
+
+  await page.getByRole("button", { name: "조건으로 조회" }).click();
+  await expect.poll(() => requestQueries.length).toBe(2);
+  expect(new URLSearchParams(requestQueries[1]).get("q")).toBe("국민");
+  await expect(page).toHaveURL(/\/products\/catalog\?kind=deposit&q=%EA%B5%AD%EB%AF%BC/);
+});
+
 test("specialized product list applies the pure result pipeline to query filters", async ({ page }) => {
   await page.route("**/api/finlife/pension?**", async (route) => {
     await route.fulfill({

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
-import { buildConfirmString } from "@/lib/ops/confirm";
+import { createManualConfirmInput } from "@/lib/ops/confirm";
 
 type TrashKind = "profiles" | "runs" | "reports";
 type TrashKindOrAll = TrashKind | "all";
@@ -129,39 +129,39 @@ export function PlanningTrashClient() {
   });
 
   function openRestoreDialog(kind: TrashKind, id: string): void {
-    const expectedConfirm = buildConfirmString(`RESTORE ${kind}`, id);
+    const confirmInput = createManualConfirmInput(`RESTORE ${kind}`, id);
     setConfirmDialog({
       mode: "restore",
       kind,
       id,
-      expectedConfirm,
+      expectedConfirm: confirmInput.expectedConfirm,
     });
-    setConfirmText(expectedConfirm);
+    setConfirmText(confirmInput.confirmText);
     setError("");
     setNotice("");
   }
 
   function openDeleteDialog(kind: TrashKind, id: string): void {
-    const expectedConfirm = buildConfirmString(`DELETE ${kind}`, id);
+    const confirmInput = createManualConfirmInput(`DELETE ${kind}`, id);
     setConfirmDialog({
       mode: "delete",
       kind,
       id,
-      expectedConfirm,
+      expectedConfirm: confirmInput.expectedConfirm,
     });
-    setConfirmText(expectedConfirm);
+    setConfirmText(confirmInput.confirmText);
     setError("");
     setNotice("");
   }
 
   function openEmptyDialog(): void {
-    const expectedConfirm = buildConfirmString("EMPTY_TRASH", kindFilter);
+    const confirmInput = createManualConfirmInput("EMPTY_TRASH", kindFilter);
     setConfirmDialog({
       mode: "empty",
       kind: kindFilter,
-      expectedConfirm,
+      expectedConfirm: confirmInput.expectedConfirm,
     });
-    setConfirmText(expectedConfirm);
+    setConfirmText(confirmInput.confirmText);
     setError("");
     setNotice("");
   }

@@ -22,6 +22,7 @@ import { pathToId } from "@/lib/forms/ids";
 import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
 import { parseSubscriptionFilters, type SubscriptionHouseType, type SubscriptionMode } from "@/lib/schemas/subscriptionFilters";
 import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
+import { formatKstIsoDate, shiftKstIsoDate } from "@/lib/format/kstCalendarDate";
 
 const ERROR_SUMMARY_ID = "subscription_error_summary";
 
@@ -70,16 +71,6 @@ type SubscriptionFreshnessMeta = {
   assumptionNotes?: string[];
 };
 
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function daysAgoIsoDate(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
 function houseTypeLabel(value: "apt" | "urbty" | "remndr"): string {
   if (value === "urbty") return "오피스텔/도시형";
   if (value === "remndr") return "잔여세대";
@@ -127,8 +118,8 @@ type SubscriptionClientProps = {
 
 export function SubscriptionClient({
   initialRegion = "전국",
-  initialFrom = daysAgoIsoDate(90),
-  initialTo = todayIsoDate(),
+  initialFrom = shiftKstIsoDate(new Date(), -90),
+  initialTo = formatKstIsoDate(),
   initialQuery = "",
   initialHouseType = "apt",
   initialMode = "all",
@@ -343,7 +334,7 @@ export function SubscriptionClient({
               </div>
               
               <div className="flex items-center gap-3">
-                <Button type="button" variant="outline" className="rounded-2xl h-12 px-6 font-black" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }}>최근 30일</Button>
+                <Button type="button" variant="outline" className="rounded-2xl h-12 px-6 font-black" onClick={() => { const now = new Date(); setFrom(shiftKstIsoDate(now, -30)); setTo(formatKstIsoDate(now)); }}>최근 30일</Button>
                 <Button type="submit" variant="primary" className="rounded-2xl h-12 px-12 font-black shadow-md" disabled={loading}>
                   {loading ? "조회 중..." : "현재 조건으로 보기"}
                 </Button>
@@ -433,8 +424,9 @@ export function SubscriptionClient({
             description="지역, 기간, 유형 조건을 넓히거나 전체 보기로 다시 찾아보세요."
             actionLabel="전체 보기"
             onAction={() => {
-              const f = daysAgoIsoDate(90);
-              const t = todayIsoDate();
+              const now = new Date();
+              const f = shiftKstIsoDate(now, -90);
+              const t = formatKstIsoDate(now);
               setRegion("전국");
               setQuery("");
               setFrom(f);

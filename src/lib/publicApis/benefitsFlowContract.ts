@@ -10,19 +10,27 @@ export type BenefitsSnapshotInput = {
     uniqueCount?: number;
     truncatedByHardCap?: boolean;
     isStale?: boolean;
+    fromCache?: "memory" | "disk" | "built";
   } | null;
   sync?: {
     state?: string;
   };
   fallback?: {
+    mode?: string;
     reason?: string;
   };
+  provenance?: {
+    mode?: string;
+  };
+  sourceMode?: BenefitsDataSourceMode;
   generatedAt?: string | null;
   snapshotTotal?: number | null;
   completionRate?: number | null;
   uniqueCount?: number | null;
   message?: string | null;
 };
+
+export type BenefitsDataSourceMode = "live" | "cache" | "mock" | "unavailable";
 
 export type BenefitsSnapshotStatus = {
   state: "ready" | "syncing" | "needs_sync" | "partial" | "unknown";
@@ -32,6 +40,8 @@ export type BenefitsSnapshotStatus = {
   uniqueCount: number | null;
   completionRate: number | null;
   isStale: boolean;
+  sourceMode: BenefitsDataSourceMode;
+  sourceLabel: string;
   notice: string | null;
 };
 
@@ -43,7 +53,7 @@ export const BENEFITS_FLOW_COPY = {
   snapshotMissing:
     "공공 혜택 기준 데이터가 아직 준비되지 않았습니다. 잠시 후 다시 조회하거나 검색 범위를 줄여 주세요.",
   snapshotStale:
-    "공공 혜택 기준 시점이 오래되었습니다. 현재 결과는 마지막으로 저장된 자료이며 최신 내용은 신청 전에 다시 확인해 주세요.",
+    "공공 혜택 기준 시점이 오래되었습니다. 현재 결과는 마지막으로 저장된 자료이며 최신 원문은 신청 전에 다시 확인해 주세요.",
   requestFailed: "혜택 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.",
   empty: "조건이나 키워드를 조금 넓혀서 혜택 후보를 다시 찾아보세요.",
   loading: "현재 조건에 맞는 정부 혜택 후보를 찾고 있습니다.",
@@ -56,6 +66,47 @@ function asNumber(value: unknown): number | null {
 function asString(value: unknown): string | null {
   const raw = typeof value === "string" ? value.trim() : "";
   return raw ? raw : null;
+}
+
+const SOURCE_LABELS: Record<BenefitsDataSourceMode, string> = {
+  live: "실시간 원천 조회",
+  cache: "저장 캐시 자료",
+  mock: "예시 데이터",
+  unavailable: "사용 가능한 자료 없음",
+};
+
+function isBenefitsDataSourceMode(value: unknown): value is BenefitsDataSourceMode {
+  return value === "live" || value === "cache" || value === "mock" || value === "unavailable";
+}
+
+function resolveBenefitsDataSource(meta: BenefitsSnapshotInput | null | undefined): {
+  sourceMode: BenefitsDataSourceMode;
+  sourceLabel: string;
+} {
+  const fallbackReason = asString(meta?.fallback?.reason);
+  if (fallbackReason === "snapshot_missing") {
+    return { sourceMode: "unavailable", sourceLabel: SOURCE_LABELS.unavailable };
+  }
+
+  if (isBenefitsDataSourceMode(meta?.sourceMode)) {
+    return { sourceMode: meta.sourceMode, sourceLabel: SOURCE_LABELS[meta.sourceMode] };
+  }
+
+  const provenanceMode = asString(meta?.provenance?.mode)?.toLowerCase();
+  if (provenanceMode === "mock") return { sourceMode: "mock", sourceLabel: SOURCE_LABELS.mock };
+  if (provenanceMode === "live") return { sourceMode: "live", sourceLabel: SOURCE_LABELS.live };
+  if (provenanceMode === "cache") return { sourceMode: "cache", sourceLabel: SOURCE_LABELS.cache };
+
+  const fallbackMode = asString(meta?.fallback?.mode)?.toUpperCase();
+  if (fallbackMode === "LIVE") return { sourceMode: "live", sourceLabel: SOURCE_LABELS.live };
+  if (fallbackMode === "CACHE" || fallbackMode === "REPLAY" || meta?.snapshot?.fromCache) {
+    return { sourceMode: "cache", sourceLabel: SOURCE_LABELS.cache };
+  }
+
+  if (meta?.snapshot || meta?.generatedAt || meta?.snapshotTotal !== undefined) {
+    return { sourceMode: "cache", sourceLabel: SOURCE_LABELS.cache };
+  }
+  return { sourceMode: "unavailable", sourceLabel: SOURCE_LABELS.unavailable };
 }
 
 export function sanitizeBenefitUserMessage(value: unknown, fallback: string = BENEFITS_FLOW_COPY.requestFailed): string {
@@ -90,6 +141,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
   const completionRate = asNumber(snapshot?.completionRate) ?? asNumber(meta?.completionRate);
   const syncState = asString(meta?.sync?.state);
   const isStale = snapshot?.isStale === true || fallbackReason === "snapshot_stale";
+  const sourceStatus = resolveBenefitsDataSource(meta);
 
   if (syncState === "syncing") {
     return {
@@ -100,6 +152,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       uniqueCount,
       completionRate,
       isStale,
+      ...sourceStatus,
       notice: "공공 혜택 기준 데이터를 갱신하는 중입니다. 잠시 후 결과가 늘어날 수 있습니다.",
     };
   }
@@ -113,6 +166,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       uniqueCount,
       completionRate,
       isStale,
+      ...sourceStatus,
       notice: sanitizeBenefitUserMessage(meta?.message, BENEFITS_FLOW_COPY.snapshotStale),
     };
   }
@@ -126,6 +180,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       uniqueCount,
       completionRate,
       isStale,
+      ...sourceStatus,
       notice: sanitizeBenefitUserMessage(meta?.message, BENEFITS_FLOW_COPY.snapshotMissing),
     };
   }
@@ -140,6 +195,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       uniqueCount,
       completionRate,
       isStale,
+      ...sourceStatus,
       notice: `일부 혜택은 순차 반영 중일 수 있습니다. 현재 반영 범위 ${percent}`,
     };
   }
@@ -153,6 +209,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
       uniqueCount,
       completionRate,
       isStale,
+      ...sourceStatus,
       notice: null,
     };
   }
@@ -165,6 +222,7 @@ export function buildBenefitsSnapshotStatus(meta: BenefitsSnapshotInput | null |
     uniqueCount,
     completionRate,
     isStale,
+    ...sourceStatus,
     notice: null,
   };
 }

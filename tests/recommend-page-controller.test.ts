@@ -61,6 +61,24 @@ describe("recommend page controller", () => {
     });
   });
 
+  it("normalizes legacy stored weights and reports that adjustment", () => {
+    const storedProfile = {
+      ...recommendProfileDefaults(),
+      weights: { rate: 1, term: 1, liquidity: 1 },
+    };
+    const state = buildRecommendInitialProfileState({
+      searchParams: new URLSearchParams(),
+      storedProfileRaw: JSON.stringify(storedProfile),
+    });
+
+    expect(state.profile.weights.rate + state.profile.weights.term + state.profile.weights.liquidity).toBe(1);
+    expect(state.weightNormalization).toMatchObject({
+      normalized: true,
+      originalSum: 3,
+      reason: "sum_adjusted",
+    });
+  });
+
   it("reuses the same autorun signature and preserves the encoded history URL", () => {
     const continuation = resolveRecommendAutorunContinuation({
       signature: "same-signature",

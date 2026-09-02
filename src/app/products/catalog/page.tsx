@@ -20,7 +20,10 @@ import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
 import {
   buildCatalogQueryKey,
   buildCatalogRequestParams,
+  buildCatalogUrlParams,
   buildCatalogViewModel,
+  formatCatalogSourceAsOf,
+  formatCatalogSourceName,
   formatCatalogRate,
   isCatalogSamplebankVisible,
   parseCatalogKind,
@@ -40,7 +43,7 @@ export default function ProductsCatalogPage() {
   const [termMonths, setTermMonths] = useState<string>(urlState.termMonths);
   const [minRate, setMinRate] = useState<string>(urlState.minRate);
   const [q, setQ] = useState(urlState.q);
-  const [selectedProvider, setSelectedProvider] = useState<string>("all");
+  const [selectedProvider, setSelectedProvider] = useState<string>(urlState.provider);
   const samplebankVisible = isCatalogSamplebankVisible();
   const [includeSamplebank, setIncludeSamplebank] = useState(false);
   const [catalogState, setCatalogState] = useState<CatalogState>({
@@ -48,6 +51,9 @@ export default function ProductsCatalogPage() {
     rows: [],
     nextCursor: null,
     hasMore: false,
+    freshness: null,
+    providerNames: [],
+    partial: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -56,8 +62,15 @@ export default function ProductsCatalogPage() {
   if (catalogRequestsRef.current == null) catalogRequestsRef.current = createLatestRequestCoordinator();
   const effectiveIncludeSamplebank = samplebankVisible && includeSamplebank;
   const catalogQueryKey = useMemo(
-    () => buildCatalogQueryKey({ kind, q, includeSamplebank: effectiveIncludeSamplebank }),
-    [effectiveIncludeSamplebank, kind, q],
+    () => buildCatalogQueryKey({
+      kind: urlState.kind,
+      q: urlState.q,
+      provider: urlState.provider,
+      termMonths: urlState.termMonths,
+      minRate: urlState.minRate,
+      includeSamplebank: effectiveIncludeSamplebank,
+    }),
+    [effectiveIncludeSamplebank, urlState.kind, urlState.minRate, urlState.provider, urlState.q, urlState.termMonths],
   );
   const currentCatalog = useMemo(() => {
     const isCurrent = catalogState.queryKey === catalogQueryKey;
@@ -65,22 +78,31 @@ export default function ProductsCatalogPage() {
       rows: isCurrent ? catalogState.rows : [],
       nextCursor: isCurrent ? catalogState.nextCursor : null,
       hasMore: isCurrent && catalogState.hasMore,
+      freshness: isCurrent ? catalogState.freshness : null,
+      providerNames: isCurrent ? catalogState.providerNames : [],
+      partial: isCurrent && catalogState.partial,
     };
-  }, [catalogQueryKey, catalogState.hasMore, catalogState.nextCursor, catalogState.queryKey, catalogState.rows]);
-  const { rows, nextCursor, hasMore } = currentCatalog;
+  }, [catalogQueryKey, catalogState.freshness, catalogState.hasMore, catalogState.nextCursor, catalogState.partial, catalogState.providerNames, catalogState.queryKey, catalogState.rows]);
+  const { rows, nextCursor, hasMore, freshness, providerNames, partial } = currentCatalog;
 
   useEffect(() => {
     setKind(urlState.kind);
     setTermMonths(urlState.termMonths);
     setMinRate(urlState.minRate);
     setQ(urlState.q);
-    setSelectedProvider("all");
+    setSelectedProvider(urlState.provider);
     setIncludeSamplebank(false);
-  }, [urlState.kind, urlState.minRate, urlState.q, urlState.termMonths]);
+  }, [urlState.kind, urlState.minRate, urlState.provider, urlState.q, urlState.termMonths]);
 
   const catalogViewModel = useMemo(
-    () => buildCatalogViewModel({ rows, selectedProvider, termMonths, minRate }),
-    [minRate, rows, selectedProvider, termMonths],
+    () => buildCatalogViewModel({
+      rows,
+      providerNames,
+      selectedProvider: urlState.provider,
+      termMonths: urlState.termMonths,
+      minRate: urlState.minRate,
+    }),
+    [providerNames, rows, urlState.minRate, urlState.provider, urlState.termMonths],
   );
   const providers = catalogViewModel.providers;
   const filteredRows = catalogViewModel.filteredRows;
@@ -92,8 +114,11 @@ export default function ProductsCatalogPage() {
     setError("");
     try {
       const params = buildCatalogRequestParams({
-        kind,
-        q,
+        kind: urlState.kind,
+        q: urlState.q,
+        provider: urlState.provider,
+        termMonths: urlState.termMonths,
+        minRate: urlState.minRate,
         includeSamplebank: effectiveIncludeSamplebank,
         append,
         cursor: input?.cursor,
@@ -112,12 +137,22 @@ export default function ProductsCatalogPage() {
         return;
       }
 
-      const { pageItems, hasMore: responseHasMore, nextCursor: responseNextCursor } = parseCatalogResponse(json);
+      const {
+        pageItems,
+        hasMore: responseHasMore,
+        nextCursor: responseNextCursor,
+        freshness: responseFreshness,
+        providerNames: responseProviderNames,
+        partial: responsePartial,
+      } = parseCatalogResponse(json);
       setCatalogState((prev) => ({
         queryKey: catalogQueryKey,
         rows: append && prev.queryKey === catalogQueryKey ? [...prev.rows, ...pageItems] : pageItems,
         hasMore: responseHasMore,
         nextCursor: responseNextCursor,
+        freshness: responseFreshness,
+        providerNames: responseProviderNames,
+        partial: responsePartial,
       }));
       setCompareNotice("");
     } catch (fetchError) {
@@ -127,31 +162,36 @@ export default function ProductsCatalogPage() {
       if (request.isCurrent()) setLoading(false);
       request.finish();
     }
-  }, [catalogQueryKey, effectiveIncludeSamplebank, kind, q]);
+  }, [catalogQueryKey, effectiveIncludeSamplebank, urlState.kind, urlState.minRate, urlState.provider, urlState.q, urlState.termMonths]);
+
+  const applySearch = useCallback((overrides: Partial<{
+    kind: CatalogKind;
+    q: string;
+    provider: string;
+    termMonths: string;
+    minRate: string;
+  }> = {}) => {
+    const nextParams = buildCatalogUrlParams({
+      kind: overrides.kind ?? kind,
+      q: overrides.q ?? q,
+      provider: overrides.provider ?? selectedProvider,
+      termMonths: overrides.termMonths ?? termMonths,
+      minRate: overrides.minRate ?? minRate,
+    });
+    const nextQuery = nextParams.toString();
+    if (nextQuery === searchParams.toString()) {
+      void run({ append: false });
+      return;
+    }
+    router.replace(`${pathname}?${nextQuery}`, { scroll: false });
+  }, [kind, minRate, pathname, q, router, run, searchParams, selectedProvider, termMonths]);
 
   const handleKindChange = useCallback((id: string) => {
     const nextKind = parseCatalogKind(id);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("kind", nextKind);
-    if (q.trim()) {
-      params.set("q", q.trim());
-    } else {
-      params.delete("q");
-    }
-    if (termMonths.trim()) {
-      params.set("termMonths", termMonths.trim());
-    } else {
-      params.delete("termMonths");
-    }
-    if (minRate.trim()) {
-      params.set("minRate", minRate.trim());
-    } else {
-      params.delete("minRate");
-    }
     setKind(nextKind);
     setSelectedProvider("all");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [minRate, pathname, q, router, searchParams, termMonths]);
+    applySearch({ kind: nextKind, provider: "all" });
+  }, [applySearch]);
 
   useEffect(() => {
     let active = true;
@@ -209,8 +249,8 @@ export default function ProductsCatalogPage() {
                     onClear={() => setQ("")}
                     isLoading={loading && rows.length === 0}
                   />
-                  <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-navy/20" onClick={() => void run({ append: false })} disabled={loading}>
-                    {loading ? "조회 중" : "지금 기준으로 보기"}
+                  <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-navy/20" onClick={() => applySearch()} disabled={loading}>
+                    {loading ? "조회 중" : "조건으로 조회"}
                   </Button>
                 </div>
               </div>
@@ -221,7 +261,10 @@ export default function ProductsCatalogPage() {
               <ProviderChips
                 providers={providers}
                 selectedId={selectedProvider}
-                onSelect={setSelectedProvider}
+                onSelect={(provider) => {
+                  setSelectedProvider(provider);
+                  applySearch({ provider });
+                }}
               />
             </div>
 
@@ -267,6 +310,49 @@ export default function ProductsCatalogPage() {
           </div>
         </Card>
       </div>
+
+      {freshness ? (
+        <section
+          className={`mb-8 rounded-2xl border px-5 py-4 ${freshness.overall === "fresh" ? "border-primary/15 bg-primary/5" : "border-amber-200 bg-amber-50"}`}
+          role={freshness.overall === "fresh" ? "status" : "alert"}
+          aria-live="polite"
+          data-testid="catalog-freshness-summary"
+        >
+          <p className={`text-sm font-black ${freshness.overall === "fresh" ? "text-navy" : "text-amber-900"}`}>
+            {freshness.overall === "fresh"
+              ? "원천 데이터가 설정된 갱신 주기 안에 있습니다."
+              : freshness.overall === "partial"
+                ? "일부 원천의 기준 시각을 확인하지 못했습니다."
+                : freshness.overall === "unavailable"
+                  ? "원천 데이터의 기준 시각을 확인하지 못했습니다."
+                  : "설정된 갱신 주기를 지난 데이터가 포함되어 있습니다."}
+          </p>
+          <p className="mt-1 text-xs font-medium leading-relaxed text-slate-600">
+            화면을 연 시각이 아니라 아래 수집 기준을 확인해 주세요. 가입 전 실제 금리와 조건은 금융회사 공시에서 다시 확인해야 합니다.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {freshness.sources.map((source) => (
+              <li key={`${source.sourceId}-${source.kind}`} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600">
+                {formatCatalogSourceName(source.sourceId)} · {formatCatalogSourceAsOf(source.sourceAsOf)}
+                {source.fallbackUsed ? " · 대체/예시 데이터" : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {partial ? (
+        <section
+          className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4"
+          role="alert"
+          data-testid="catalog-partial-results"
+        >
+          <p className="text-sm font-black text-amber-900">조회 안전 한도 안에서 찾은 일부 결과입니다.</p>
+          <p className="mt-1 text-xs font-medium leading-relaxed text-amber-800">
+            저장된 상품 수가 많아 조회를 중단했습니다. 기관이나 기간 조건을 더 좁혀 다시 확인해 주세요.
+          </p>
+        </section>
+      ) : null}
 
       {compareNotice && (
         <div className="mb-8 rounded-2xl border border-primary/10 bg-primary/10 p-4 text-center animate-in fade-in slide-in-from-top-2">
@@ -320,13 +406,13 @@ export default function ProductsCatalogPage() {
                   </div>
 
                   <div className="mt-8 space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">지금 비교 중인 대표 옵션</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">저장된 데이터의 대표 옵션</p>
                     {item.options?.slice(0, 2).map((option, idx) => (
                       <div key={idx} className="flex items-center justify-between rounded-xl bg-surface-muted/50 p-4 border border-slate-100/50">
                         <span className="text-xs font-black text-slate-600 tabular-nums">{option.termMonths ? `${option.termMonths}개월` : option.saveTrm}</span>
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">대표 금리</span>
-                          <span className="text-base font-black text-primary tabular-nums">{formatCatalogRate(option.intrRate2)}</span>
+                          <span className="text-base font-black text-primary tabular-nums">{formatCatalogRate(option.intrRate2 ?? option.intrRate)}</span>
                         </div>
                       </div>
                     ))}
@@ -375,6 +461,7 @@ export default function ProductsCatalogPage() {
                 setMinRate("");
                 setQ("");
                 setSelectedProvider("all");
+                applySearch({ q: "", provider: "all", termMonths: "", minRate: "" });
               }}
             />
           </div>

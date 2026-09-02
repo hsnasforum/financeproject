@@ -1,5 +1,5 @@
 import type { QueryMode } from "@/lib/sources/search";
-import type { UnifiedSourceId } from "@/lib/sources/types";
+import type { ProductSourceIssue, UnifiedSourceId } from "@/lib/sources/types";
 import type { DepositProtectionMode, UnifiedOptionView } from "@/lib/sources/unifiedEnrichPolicy";
 
 export class UnifiedInputError extends Error {}
@@ -53,6 +53,8 @@ export type UnifiedPageInfo = {
   nextCursor: string | null;
   limit: number;
   sourceId?: UnifiedSourceId;
+  /** True when a bounded fallback stopped before exhausting every stored row. */
+  partial?: boolean;
 };
 
 export type UnifiedResult = {
@@ -74,7 +76,11 @@ export type UnifiedResult = {
     unmatchedProviders: Array<{ providerName: string; count: number }>;
     notes: string[];
   };
+  facets?: {
+    providers: string[];
+  };
   pageInfo: UnifiedPageInfo;
+  sourceIssues?: ProductSourceIssue[];
 };
 
 export type UnifiedProductsInput = {
@@ -84,6 +90,12 @@ export type UnifiedProductsInput = {
   sourceId: UnifiedSourceId | null;
   cursor: string | null;
   q: string | null;
+  /** Public catalog filters. They are supported only in merged multi-source mode. */
+  provider?: string | null;
+  termMonths?: number | null;
+  minRate?: number | null;
+  /** Request-scoped cancellation used by bounded catalog scans. */
+  signal?: AbortSignal;
   refresh: boolean;
   onlyNew: boolean;
   changedSince: string | null;

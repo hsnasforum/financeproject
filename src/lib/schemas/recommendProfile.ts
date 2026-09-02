@@ -20,6 +20,10 @@ import {
   type RecommendPurpose,
 } from "../recommend/types";
 import {
+  normalizeRecommendWeights,
+  type RecommendWeightNormalization,
+} from "../recommend/weights";
+import {
   buildParseResult,
   issue,
   parseStringIssues,
@@ -44,6 +48,10 @@ export type RecommendProfileNormalized = {
   };
   planning?: RecommendPlanningHandoff;
   planningContext?: RecommendPlanningContext;
+};
+
+export type RecommendProfileParseResult = ParseResult<RecommendProfileNormalized> & {
+  weightNormalization: RecommendWeightNormalization;
 };
 
 type SearchParamsInput =
@@ -268,7 +276,7 @@ export function defaults(): RecommendProfileNormalized {
   };
 }
 
-export function parseRecommendProfile(input: unknown): ParseResult<RecommendProfileNormalized> {
+export function parseRecommendProfile(input: unknown): RecommendProfileParseResult {
   const bag = createValidationBag();
   const fallback = defaults();
   const source = isRecord(input) ? input : {};
@@ -371,6 +379,11 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
     min: 0,
     max: 1,
   });
+  const weightNormalization = normalizeRecommendWeights({
+    rate: weightRate,
+    term: weightTerm,
+    liquidity: weightLiquidity,
+  });
 
   const issues = [...parseStringIssues(bag.issues), ...preferredTermIssues];
   const parsedPlanning = parsePlanningHandoff(source);
@@ -404,7 +417,8 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
   const hasPlanningContext = Object.keys(planningContext).length > 0;
   const allIssues = [...issues, ...parsedPlanning.issues, ...planningContextIssues];
 
-  return buildParseResult(
+  return {
+    ...buildParseResult(
     {
       purpose,
       kind,
@@ -415,16 +429,14 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
       candidatePool,
       candidateSources,
       depositProtection,
-      weights: {
-        rate: weightRate,
-        term: weightTerm,
-        liquidity: weightLiquidity,
-      },
+      weights: weightNormalization.weights,
       ...(parsedPlanning.planning ? { planning: parsedPlanning.planning } : {}),
       ...(hasPlanningContext ? { planningContext } : {}),
     },
-    allIssues,
-  );
+      allIssues,
+    ),
+    weightNormalization,
+  };
 }
 
 export function issuesToApi(issues: Issue[]): string[] {

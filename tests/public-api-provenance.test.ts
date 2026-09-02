@@ -7,6 +7,7 @@ import { createDataSourcePingSnapshot, formatDataSourcePingSummary } from "../sr
 const originalEnv = {
   KEXIM_API_KEY: process.env.KEXIM_API_KEY,
   KEXIM_FX_API_URL: process.env.KEXIM_FX_API_URL,
+  API_CACHE_STORE: process.env.API_CACHE_STORE,
   MOLIT_SALES_API_KEY: process.env.MOLIT_SALES_API_KEY,
   MOLIT_SALES_API_URL: process.env.MOLIT_SALES_API_URL,
   PUBLIC_APIS_FALLBACK_TO_MOCK: process.env.PUBLIC_APIS_FALLBACK_TO_MOCK,
@@ -19,6 +20,7 @@ function setEnv(name: string, value: string | undefined): void {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   for (const [key, value] of Object.entries(originalEnv)) {
     setEnv(key, value);
@@ -105,6 +107,65 @@ describe("public API provenance contract", () => {
       mode: "mock",
       degraded: true,
     });
+  });
+
+  it("normalizes generic EXIM currency batch units before calculating KRW", async () => {
+    setEnv("KEXIM_API_KEY", "test-key");
+    setEnv("KEXIM_FX_API_URL", "https://example.test/fx");
+    setEnv("PUBLIC_APIS_FALLBACK_TO_MOCK", "0");
+    setEnv("API_CACHE_STORE", "memory");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([
+      { cur_unit: "JPY(100)", deal_bas_r: "912.00", deal_bas_dt: "20260901" },
+      { cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "20260901" },
+    ]), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })));
+
+    const response = await getFxRoute(new Request(
+      "http://localhost/api/public/fx?date=20260901&pairs=JPY:50000,USD:2",
+    ));
+    const json = await response.json() as {
+      data?: { items?: Array<{ currency?: string; rate?: number | null; krw?: number | null }> };
+      meta?: { provenance?: { mode?: string; degraded?: boolean } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.data?.items?.[0]).toMatchObject({
+      currency: "JPY",
+      rate: 9.12,
+      asOfDate: "20260901",
+    });
+    expect(json.data?.items?.[0]?.krw).toBeCloseTo(456_000, 8);
+    expect(json.data?.items?.[1]).toEqual({
+      currency: "USD",
+      amount: 2,
+      rate: 1_330.5,
+      asOfDate: "20260901",
+      krw: 2_661,
+    });
+    expect(json.meta?.provenance).toMatchObject({ mode: "live", degraded: false });
+  });
+
+  it("uses the KST calendar date when the live FX row omits its base date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-31T15:00:00.000Z"));
+    setEnv("KEXIM_API_KEY", "test-key");
+    setEnv("KEXIM_FX_API_URL", "https://example.test/fx-kst-fallback");
+    setEnv("PUBLIC_APIS_FALLBACK_TO_MOCK", "0");
+    setEnv("API_CACHE_STORE", "memory");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([
+      { cur_unit: "USD", deal_bas_r: "1,330.50" },
+    ]), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })));
+
+    const result = await getExchangeQuotes("20260901", ["USD"]);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data[0]?.asOfDate).toBe("2026-09-01");
   });
 
   it("marks housing mock fallback as degraded provenance when the sales API key is missing", async () => {

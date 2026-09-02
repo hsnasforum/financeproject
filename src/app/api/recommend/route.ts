@@ -118,7 +118,6 @@ async function loadUnifiedCandidates(input: {
       rateMode: input.profile.rateMode,
     },
   });
-
   return {
     candidates: adapted.map((candidate) => ({
       sourceId: candidate.sourceId,
@@ -201,6 +200,11 @@ export async function POST(request: Request) {
         }));
       }
       const profile: UserRecommendProfile = parsedProfile.value;
+      const weightNormalization = {
+        applied: parsedProfile.weightNormalization.normalized,
+        originalSum: parsedProfile.weightNormalization.originalSum,
+        reason: parsedProfile.weightNormalization.reason,
+      };
       const planningLinkage = buildPlanningLinkageMeta(profile);
 
       const candidatePool = profile.candidatePool ?? "unified";
@@ -236,6 +240,7 @@ export async function POST(request: Request) {
               planningContext: profile.planningContext ?? null,
               planningLinkage,
               weights: profile.weights,
+              weightNormalization,
               assumptions: {
                 rateSelectionPolicy: "금리 선택 정책: 최고금리 우선(기본값)",
                 liquidityPolicy: "유동성은 기간 기반 휴리스틱으로 반영",
@@ -302,6 +307,7 @@ export async function POST(request: Request) {
             planningContext: profile.planningContext ?? null,
             planningLinkage,
             weights: recommendedBase.weights,
+            weightNormalization,
             assumptions: {
               ...recommendedBase.assumptions,
               kdbParsingPolicy: "KDB 금리/기간은 원문 문자열 파싱과 휴리스틱 가정(기간별 동일금리 가정 가능)에 기반합니다.",

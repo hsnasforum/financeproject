@@ -62,6 +62,29 @@ export const CLIENT_STORAGE_WHITELIST = [
   "freshness:autoSmoke",
 ] as const;
 
+export const BROWSER_SETTINGS_STORAGE_WHITELIST = [
+  "products_shelf_v1",
+  "products_compare_ids_v1",
+  "finlife_planner_link_open_mode_v1",
+  "finlife_planner_checklist_checked_v1",
+] as const;
+
+export type BrowserSettingsRestoreResult = {
+  applied: number;
+  removed: number;
+  ignored: number;
+  failed: number;
+};
+
+type BrowserStorageWriter = {
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+};
+
+type BrowserStorageReader = {
+  getItem(key: string): string | null;
+};
+
 export type BackupBundle = {
   version: typeof BACKUP_BUNDLE_VERSION;
   generatedAt: string;
@@ -73,6 +96,21 @@ type BuildBundleInput = {
   serverFilesMap: Record<string, string | null>;
   clientStorageMap: Record<string, string | null>;
 };
+
+export type BrowserSettingsBackupPreparation =
+  | {
+      ok: true;
+      bundle: BackupBundle;
+      notice: string;
+      values: Record<string, string | null>;
+      failedKeys: [];
+    }
+  | {
+      ok: false;
+      error: string;
+      values: Record<string, string | null>;
+      failedKeys: string[];
+    };
 
 export type ValidateBundleResult =
   | { ok: true }
@@ -109,6 +147,89 @@ export function isClientStorageKeyWhitelisted(key: string): boolean {
   return (CLIENT_STORAGE_WHITELIST as readonly string[]).includes(normalized)
     || (RECOMMEND_LEGACY_STORAGE_KEYS as readonly string[]).includes(normalized)
     || isRecommendOwnerStorageKey(normalized);
+}
+
+export function isBrowserSettingsStorageKey(key: string): boolean {
+  const normalized = String(key ?? "").trim();
+  return (BROWSER_SETTINGS_STORAGE_WHITELIST as readonly string[]).includes(normalized);
+}
+
+export function selectBrowserSettingsStorage(
+  input: Record<string, string | null>,
+): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!isBrowserSettingsStorageKey(key)) continue;
+    out[key] = typeof value === "string" ? value : null;
+  }
+  return out;
+}
+
+export function prepareBrowserSettingsBackup(
+  storage: BrowserStorageReader,
+  keys: readonly string[] = BROWSER_SETTINGS_STORAGE_WHITELIST,
+): BrowserSettingsBackupPreparation {
+  const values: Record<string, string | null> = {};
+  const failedKeys: string[] = [];
+
+  for (const key of keys) {
+    try {
+      values[key] = storage.getItem(key);
+    } catch {
+      failedKeys.push(key);
+    }
+  }
+
+  if (failedKeys.length > 0) {
+    return {
+      ok: false,
+      error: `브라우저 설정 ${failedKeys.length}개를 읽지 못해 다운로드하지 않았습니다. 브라우저 저장소 접근을 확인한 뒤 다시 시도해 주세요.`,
+      values,
+      failedKeys,
+    };
+  }
+
+  const storedCount = Object.values(values).filter((value) => typeof value === "string").length;
+  const missingCount = Object.keys(values).length - storedCount;
+  return {
+    ok: true,
+    bundle: buildBundle({ serverFilesMap: {}, clientStorageMap: values }),
+    notice: `브라우저 설정을 내려받았습니다. 저장값 ${storedCount}개, 비어 있음 ${missingCount}개.`,
+    values,
+    failedKeys: [],
+  };
+}
+
+export function restoreBrowserSettingsStorage(
+  storage: BrowserStorageWriter,
+  input: Record<string, string | null>,
+): BrowserSettingsRestoreResult {
+  const result: BrowserSettingsRestoreResult = {
+    applied: 0,
+    removed: 0,
+    ignored: 0,
+    failed: 0,
+  };
+
+  for (const [key, value] of Object.entries(input)) {
+    if (!isBrowserSettingsStorageKey(key)) {
+      result.ignored += 1;
+      continue;
+    }
+    try {
+      if (value === null) {
+        storage.removeItem(key);
+        result.removed += 1;
+      } else {
+        storage.setItem(key, value);
+        result.applied += 1;
+      }
+    } catch {
+      result.failed += 1;
+    }
+  }
+
+  return result;
 }
 
 export function buildBundle({ serverFilesMap, clientStorageMap }: BuildBundleInput): BackupBundle {

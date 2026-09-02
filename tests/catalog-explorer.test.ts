@@ -3,7 +3,9 @@ import {
   buildCatalogPresetHref,
   buildCatalogQueryKey,
   buildCatalogRequestParams,
+  buildCatalogUrlParams,
   buildCatalogViewModel,
+  formatCatalogRate,
   isCatalogSamplebankVisible,
   parseCatalogUrlState,
   parseCatalogResponse,
@@ -18,25 +20,44 @@ describe("catalog explorer helpers", () => {
   });
 
   it("parses catalog kind deep-link state and builds category preset hrefs", () => {
-    const parsed = parseCatalogUrlState(new URLSearchParams("kind=saving&q=%EA%B5%AD%EB%AF%BC&termMonths=12&minRate=3.5"));
+    const parsed = parseCatalogUrlState(new URLSearchParams("kind=saving&q=%EA%B5%AD%EB%AF%BC&provider=%ED%95%9C%EA%B5%AD%EC%9D%80%ED%96%89&termMonths=12&minRate=3.5"));
 
     expect(parsed).toEqual({
       kind: "saving",
       q: "국민",
+      provider: "한국은행",
       termMonths: "12",
       minRate: "3.5",
     });
     expect(parseCatalogUrlState(new URLSearchParams("kind=loan")).kind).toBe("deposit");
     expect(buildCatalogPresetHref("deposit", { q: " 테스트 ", termMonths: "6", ignored: "x" })).toBe("/products/catalog?kind=deposit&q=%ED%85%8C%EC%8A%A4%ED%8A%B8&termMonths=6");
+    expect(buildCatalogUrlParams(parsed).toString()).toBe("kind=saving&q=%EA%B5%AD%EB%AF%BC&provider=%ED%95%9C%EA%B5%AD%EC%9D%80%ED%96%89&termMonths=12&minRate=3.5");
   });
 
   it("builds catalog request without exposing samplebank by default", () => {
-    const key = buildCatalogQueryKey({ kind: "deposit", q: "국민", includeSamplebank: false });
-    const params = buildCatalogRequestParams({ kind: "deposit", q: "국민", includeSamplebank: false });
+    const key = buildCatalogQueryKey({
+      kind: "deposit",
+      q: "국민",
+      provider: "국민은행",
+      termMonths: "12",
+      minRate: "3.5",
+      includeSamplebank: false,
+    });
+    const params = buildCatalogRequestParams({
+      kind: "deposit",
+      q: "국민",
+      provider: "국민은행",
+      termMonths: "12",
+      minRate: "3.5",
+      includeSamplebank: false,
+    });
 
-    expect(key).toBe("deposit\u0000finlife,datago_kdb\u0000국민");
+    expect(key).toBe("deposit\u0000finlife,datago_kdb\u0000국민\u0000국민은행\u000012\u00003.5");
     expect(params.get("includeSources")).toBe("finlife,datago_kdb");
     expect(params.get("q")).toBe("국민");
+    expect(params.get("provider")).toBe("국민은행");
+    expect(params.get("termMonths")).toBe("12");
+    expect(params.get("minRate")).toBe("3.5");
   });
 
   it("maps catalog response and filters rows as a view model", () => {
@@ -63,12 +84,14 @@ describe("catalog explorer helpers", () => {
             options: [{ termMonths: 6, intrRate: 1.1, intrRate2: 1.5 }],
           },
         ],
-        pageInfo: { hasMore: true, nextCursor: "next" },
+        facets: { providers: ["A은행", "B은행", "뒤페이지은행"] },
+        pageInfo: { hasMore: true, nextCursor: "next", partial: true },
       },
     });
 
     const vm = buildCatalogViewModel({
       rows: parsed.pageItems,
+      providerNames: parsed.providerNames,
       selectedProvider: "A은행",
       termMonths: "12",
       minRate: "3",
@@ -76,7 +99,30 @@ describe("catalog explorer helpers", () => {
 
     expect(parsed.hasMore).toBe(true);
     expect(parsed.nextCursor).toBe("next");
-    expect(vm.providers.map((entry) => entry.id)).toEqual(["all", "A은행", "B은행"]);
+    expect(parsed.partial).toBe(true);
+    expect(vm.providers.map((entry) => entry.id)).toEqual(["all", "A은행", "B은행", "뒤페이지은행"]);
     expect(vm.filteredRows.map((entry) => entry.stableId)).toEqual(["finlife:A"]);
+  });
+
+  it("labels missing rates without treating them as a numeric comparison", () => {
+    expect(formatCatalogRate(null)).toBe("금리 정보 없음");
+    expect(formatCatalogRate(3.25)).toBe("3.25%");
+
+    const vm = buildCatalogViewModel({
+      rows: [{
+        stableId: "finlife:NO-RATE",
+        sourceId: "finlife",
+        kind: "deposit",
+        externalKey: "NO-RATE",
+        providerName: "가은행",
+        productName: "금리 미공시 예금",
+        options: [{ termMonths: 12, intrRate: null, intrRate2: null }],
+      }],
+      selectedProvider: "all",
+      termMonths: "",
+      minRate: "1",
+    });
+
+    expect(vm.filteredRows).toEqual([]);
   });
 });

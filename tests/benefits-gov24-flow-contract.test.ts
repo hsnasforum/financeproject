@@ -16,18 +16,20 @@ describe("benefits/gov24 shared flow contract", () => {
 
   it("builds the same snapshot-missing status for benefits and gov24 fallback meta", () => {
     expect(buildBenefitsSnapshotStatus({
-      fallback: { reason: "snapshot_missing" },
+      fallback: { mode: "CACHE", reason: "snapshot_missing" },
       message: BENEFITS_FLOW_COPY.snapshotMissing,
     })).toMatchObject({
       state: "needs_sync",
       stateLabel: "기준 데이터 준비 필요",
+      sourceMode: "unavailable",
+      sourceLabel: "사용 가능한 자료 없음",
       notice: BENEFITS_FLOW_COPY.snapshotMissing,
     });
   });
 
   it("keeps stale snapshot guidance distinct from a missing snapshot", () => {
     expect(buildBenefitsSnapshotStatus({
-      fallback: { reason: "snapshot_stale" },
+      fallback: { mode: "CACHE", reason: "snapshot_stale" },
       sync: { state: "needs_sync" },
       snapshot: {
         totalItems: 25,
@@ -41,6 +43,8 @@ describe("benefits/gov24 shared flow contract", () => {
       generatedAt: "2026-07-01T00:00:00.000Z",
       notice: BENEFITS_FLOW_COPY.snapshotStale,
       isStale: true,
+      sourceMode: "cache",
+      sourceLabel: "저장 캐시 자료",
     });
   });
 
@@ -97,6 +101,17 @@ describe("benefits/gov24 shared flow contract", () => {
       totalItems: 12,
       notice: null,
     });
+  });
+
+  it("distinguishes live and mock provenance", () => {
+    expect(buildBenefitsSnapshotStatus({
+      provenance: { mode: "live" },
+      generatedAt: "2026-07-01T00:00:00.000Z",
+    })).toMatchObject({ sourceMode: "live", sourceLabel: "실시간 원천 조회" });
+    expect(buildBenefitsSnapshotStatus({
+      provenance: { mode: "mock" },
+      generatedAt: "2026-07-01T00:00:00.000Z",
+    })).toMatchObject({ sourceMode: "mock", sourceLabel: "예시 데이터" });
   });
 
   it("uses shared result summary copy", () => {

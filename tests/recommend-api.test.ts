@@ -113,6 +113,12 @@ type RecommendApiJson = {
       inferenceSource?: string;
     };
     fallback?: { reason?: string };
+    weights?: { rate: number; term: number; liquidity: number };
+    weightNormalization?: {
+      applied?: boolean;
+      originalSum?: number;
+      reason?: string;
+    };
   };
   items?: Array<{ finalScore?: number; breakdown?: unknown[] }>;
   debug?: { candidateCount?: number };
@@ -368,7 +374,7 @@ describe("POST /api/recommend", () => {
         },
       ],
       debug: { candidateCount: 1, rateMin: 3.1, rateMax: 3.1 },
-      weights: { rate: 0.55, term: 0.3, liquidity: 0.15 },
+      weights: { rate: 1 / 3, term: 1 / 3, liquidity: 1 / 3 },
       assumptions: {
         rateSelectionPolicy: "금리 선택 정책: 최고금리 우선",
         liquidityPolicy: "유동성은 기간 기반 휴리스틱으로 반영",
@@ -384,6 +390,7 @@ describe("POST /api/recommend", () => {
       liquidityPref: "mid",
       rateMode: "max",
       topN: 10,
+      weights: { rate: 1, term: 1, liquidity: 1 },
       planningContext: {
         monthlyIncomeKrw: 4_500_000,
         monthlyExpenseKrw: 2_600_000,
@@ -423,6 +430,23 @@ describe("POST /api/recommend", () => {
       userId: "default",
       authSource: "local-namespace",
     });
+    expect(json.meta?.weights?.rate).toBeCloseTo(1 / 3, 12);
+    expect(json.meta?.weights?.term).toBeCloseTo(1 / 3, 12);
+    expect(json.meta?.weights?.liquidity).toBeCloseTo(1 / 3, 12);
+    expect(json.meta?.weightNormalization).toMatchObject({
+      applied: true,
+      originalSum: 3,
+      reason: "sum_adjusted",
+    });
+    expect(mocked.recommendCandidates).toHaveBeenCalledWith(expect.objectContaining({
+      profile: expect.objectContaining({
+        weights: expect.objectContaining({
+          rate: expect.closeTo(1 / 3, 12),
+          term: expect.closeTo(1 / 3, 12),
+          liquidity: expect.closeTo(1 / 3, 12),
+        }),
+      }),
+    }));
     expect(json).not.toHaveProperty("engine");
     expect(json).not.toHaveProperty("stage");
     expect(json).not.toHaveProperty("stageDecision");
@@ -479,6 +503,69 @@ describe("POST /api/recommend", () => {
     expect(json.message ?? "").not.toMatch(/pnpm|\/api\/dev|Run /i);
     expect(JSON.stringify(json.meta?.debug ?? {})).not.toMatch(/pnpm|\/api\/dev|Run /i);
     expect(json.debug?.candidateCount).toBe(0);
+  });
+
+  it.each([
+    {
+      label: "zero sum",
+      weights: { rate: 0, term: 0, liquidity: 0 },
+      expected: { rate: 0.55, term: 0.3, liquidity: 0.15 },
+      originalSum: 0,
+      reason: "zero_sum_defaulted",
+    },
+    {
+      label: "sum below one",
+      weights: { rate: 0.2, term: 0.1, liquidity: 0.1 },
+      expected: { rate: 0.5, term: 0.25, liquidity: 0.25 },
+      originalSum: 0.4,
+      reason: "sum_adjusted",
+    },
+    {
+      label: "sum above one",
+      weights: { rate: 1, term: 1, liquidity: 1 },
+      expected: { rate: 1 / 3, term: 1 / 3, liquidity: 1 / 3 },
+      originalSum: 3,
+      reason: "sum_adjusted",
+    },
+  ])("returns normalized weights for $label", async ({
+    weights,
+    expected,
+    originalSum,
+    reason,
+  }) => {
+    mocked.getUnifiedProducts.mockResolvedValue({
+      kind: "deposit",
+      sources: { finlife: { count: 0 } },
+      merged: [],
+      items: [],
+      pageInfo: {
+        hasMore: false,
+        nextCursor: null,
+        limit: 1000,
+        sourceId: "finlife",
+      },
+    });
+    mocked.externalProductFindMany.mockResolvedValue([]);
+
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+      weights,
+    });
+
+    expect(status).toBe(200);
+    expect(json.meta?.weights?.rate).toBeCloseTo(expected.rate, 12);
+    expect(json.meta?.weights?.term).toBeCloseTo(expected.term, 12);
+    expect(json.meta?.weights?.liquidity).toBeCloseTo(expected.liquidity, 12);
+    expect(json.meta?.weightNormalization).toMatchObject({
+      applied: true,
+      originalSum,
+      reason,
+    });
   });
 
   it("uses the no-candidates contract when scoring filters every loaded candidate", async () => {

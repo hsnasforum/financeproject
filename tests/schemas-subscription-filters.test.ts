@@ -33,6 +33,16 @@ describe("subscription filters schema", () => {
     expect(parsed.value.to).toBe("2026-02-20");
   });
 
+  it("uses KST calendar dates for the default range", () => {
+    const parsed = parseSubscriptionFilters(
+      new URLSearchParams(),
+      { now: new Date("2026-08-31T15:30:00.000Z") },
+    );
+
+    expect(parsed.value.from).toBe("2026-06-03");
+    expect(parsed.value.to).toBe("2026-09-01");
+  });
+
   it("returns issues for invalid date format", () => {
     const parsed = parseSubscriptionFilters(
       new URLSearchParams("from=20260201&to=2026-02-31"),
