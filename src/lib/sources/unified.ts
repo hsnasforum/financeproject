@@ -84,6 +84,7 @@ export type CatalogProvenanceCaptureInput = {
   sourceIds: UnifiedSourceId[];
   sourceCounts: Record<string, { count: number }>;
   sourceIssues: ProductSourceIssue[];
+  signal?: AbortSignal;
 };
 
 export type UnifiedProductsRuntimeOptions = {
@@ -607,12 +608,14 @@ function requiresCatalogSnapshot(input: Pick<
 async function captureDefaultCatalogProvenance(
   input: CatalogProvenanceCaptureInput,
 ): Promise<UnifiedSnapshotProvenance> {
+  throwIfAborted(input.signal);
   const capturedAt = new Date().toISOString();
   const freshness = applyProductSourceIssues(await getProductFreshnessSummary({
     kind: input.kind,
     sourceIds: input.sourceIds,
     checkedAt: capturedAt,
   }), input.sourceIssues);
+  throwIfAborted(input.signal);
   const versionShape = {
     sources: [...freshness.sources]
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
@@ -863,6 +866,15 @@ export async function getUnifiedProductsWithLoaders(
   loaders: UnifiedSourceLoaderMap = DEFAULT_UNIFIED_SOURCE_LOADERS,
   runtime: UnifiedProductsRuntimeOptions = {},
 ): Promise<UnifiedResult> {
+  return getUnifiedProductsWithLoadersInternal(input, loaders, runtime, true);
+}
+
+async function getUnifiedProductsWithLoadersInternal(
+  input: UnifiedProductsInput,
+  loaders: UnifiedSourceLoaderMap,
+  runtime: UnifiedProductsRuntimeOptions,
+  coordinateCatalogSnapshotBuild: boolean,
+): Promise<UnifiedResult> {
   const {
     kind,
     mode = "merged",
@@ -943,6 +955,7 @@ export async function getUnifiedProductsWithLoaders(
   }
 
   if (catalogSnapshotActive) {
+    throwIfAborted(input.signal);
     const cached = snapshotStore.getBySignature(catalogSignature);
     if (cached) {
       return catalogPageFromSnapshot({
@@ -950,6 +963,18 @@ export async function getUnifiedProductsWithLoaders(
         snapshot: cached.value,
         offset: 0,
         limit: normalizedLimit,
+      });
+    }
+    if (coordinateCatalogSnapshotBuild) {
+      return snapshotStore.runSharedBuild({
+        signature: catalogSignature,
+        callerSignal: input.signal,
+        build: (signal) => getUnifiedProductsWithLoadersInternal(
+          { ...input, signal },
+          loaders,
+          runtime,
+          false,
+        ),
       });
     }
   }
@@ -1180,6 +1205,7 @@ export async function getUnifiedProductsWithLoaders(
         if (normalized) providerNames.add(normalized);
       }
     }
+    throwIfAborted(input.signal);
   }
 
   if (loadedSources === 0) {
@@ -1200,14 +1226,17 @@ export async function getUnifiedProductsWithLoaders(
     ? { state: "partial", issues: providerFacetIssues }
     : { state: "complete", issues: [] };
   if (catalogSnapshotActive) {
+    throwIfAborted(input.signal);
     const provenance = runtime.captureCatalogProvenance
       ? await runtime.captureCatalogProvenance({
           kind,
           sourceIds: canonicalIncludedSources(includeSources),
           sourceCounts: sourceMap,
           sourceIssues,
+          signal: input.signal,
         })
       : undefined;
+    throwIfAborted(input.signal);
     const snapshot: UnifiedCatalogSnapshot = {
       signature: catalogSignature,
       kind,
@@ -1219,6 +1248,7 @@ export async function getUnifiedProductsWithLoaders(
       ...(sourceIssues.length > 0 ? { sourceIssues } : {}),
       ...(provenance ? { provenance } : {}),
     };
+    throwIfAborted(input.signal);
     const stored = snapshotStore.put(snapshot);
     if (stored.stored) {
       return catalogPageFromSnapshot({

@@ -43,6 +43,7 @@ type UnifiedRouteJson = {
   data?: {
     items?: Array<{ badges?: string[] }>;
     pageInfo?: {
+      nextCursor?: string | null;
       partial?: boolean;
       partialReasons?: Array<{
         code?: string;
@@ -149,13 +150,26 @@ const sampleUnified = {
   },
 };
 
-async function callUnified(query = ""): Promise<{ status: number; json: UnifiedRouteJson }> {
-  const req = new Request(`http://localhost/api/products/unified${query}`);
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function callUnifiedRequest(req: Request): Promise<{ status: number; json: UnifiedRouteJson }> {
   const res = await GET(req);
   return {
     status: res.status,
     json: (await res.json()) as UnifiedRouteJson,
   };
+}
+
+async function callUnified(query = ""): Promise<{ status: number; json: UnifiedRouteJson }> {
+  return callUnifiedRequest(new Request(`http://localhost/api/products/unified${query}`));
 }
 
 function setEnv(name: string, value: string | undefined): void {
@@ -315,6 +329,64 @@ describe("GET /api/products/unified", () => {
       sourceId: null,
       signal: expect.anything(),
     }));
+  });
+
+  it("isolates one aborted HTTP snapshot caller from another concurrent caller", async () => {
+    const secondRelease = deferred<void>();
+    const seenSignals: AbortSignal[] = [];
+    const pinned = {
+      ...sampleUnified,
+      pageInfo: {
+        ...sampleUnified.pageInfo,
+        hasMore: true,
+        nextCursor: "signed-snapshot-cursor",
+      },
+      provenance: {
+        policy: "pinned_snapshot" as const,
+        capturedAt: "2026-09-03T00:00:00.000Z",
+        versionFingerprint: "concurrent-route-snapshot",
+        freshness: {
+          checkedAt: "2026-09-03T00:00:00.000Z",
+          overall: "fresh" as const,
+          sources: [],
+        },
+      },
+    };
+    let invocation = 0;
+    mocked.getUnifiedProducts.mockImplementation((input: { signal?: AbortSignal }) => {
+      invocation += 1;
+      if (!input.signal) return Promise.reject(new Error("expected request signal"));
+      const signal = input.signal;
+      seenSignals.push(signal);
+      if (invocation === 1) {
+        return new Promise((resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            reject(new DOMException("request cancelled", "AbortError"));
+          }, { once: true });
+          void secondRelease.promise.then(() => resolve(pinned));
+        });
+      }
+      return secondRelease.promise.then(() => pinned);
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const url = "http://localhost/api/products/unified?mode=merged&kind=deposit&includeSources=finlife,datago_kdb";
+
+    const first = callUnifiedRequest(new Request(url, { signal: firstController.signal }));
+    const second = callUnifiedRequest(new Request(url, { signal: secondController.signal }));
+    await vi.waitFor(() => expect(seenSignals).toHaveLength(2));
+    expect(seenSignals[0]).not.toBe(seenSignals[1]);
+
+    firstController.abort();
+    secondRelease.resolve();
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+
+    expect(firstResponse.status).toBe(499);
+    expect(firstResponse.json.error?.code).toBe("REQUEST_ABORTED");
+    expect(secondResponse.status).toBe(200);
+    expect(secondResponse.json.data?.pageInfo?.nextCursor).toBe("signed-snapshot-cursor");
+    expect(secondResponse.json.data?.provenance?.versionFingerprint).toBe("concurrent-route-snapshot");
+    expect(seenSignals[1]?.aborted).toBe(false);
   });
 
   it("reports deposit protection matched and unknown coverage", async () => {

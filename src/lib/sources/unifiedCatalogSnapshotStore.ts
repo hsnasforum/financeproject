@@ -22,6 +22,14 @@ export type CatalogSnapshotStoreStats = {
   retainedRows: number;
   estimatedBytes: number;
   lruSnapshotIds: string[];
+  inFlightBuildCount: number;
+  activeSubscriberCount: number;
+};
+
+export type CatalogSnapshotSharedBuildInput<R> = {
+  signature: string;
+  callerSignal?: AbortSignal;
+  build: (signal: AbortSignal) => Promise<R>;
 };
 
 export type CatalogSnapshotStoreConfig<T extends CatalogSnapshotValue> = {
@@ -64,9 +72,22 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
+function createAbortError(): DOMException {
+  return new DOMException("The operation was aborted.", "AbortError");
+}
+
+type CatalogSnapshotInFlightEntry = {
+  signature: string;
+  controller: AbortController;
+  promise: Promise<unknown>;
+  activeSubscribers: number;
+  settled: boolean;
+};
+
 export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
   private readonly entries = new Map<string, CatalogSnapshotEntry<T>>();
   private readonly signatureIndex = new Map<string, string>();
+  private readonly inFlightBuilds = new Map<string, CatalogSnapshotInFlightEntry>();
   private readonly now: () => number;
   private readonly estimateBytes: (value: T) => number;
   private readonly createId: () => string;
@@ -155,6 +176,34 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
     return { stored: true, reused: false, entry };
   }
 
+  runSharedBuild<R>(input: CatalogSnapshotSharedBuildInput<R>): Promise<R> {
+    if (input.callerSignal?.aborted) return Promise.reject(createAbortError());
+
+    let entry = this.inFlightBuilds.get(input.signature);
+    if (!entry || entry.settled || entry.controller.signal.aborted) {
+      const controller = new AbortController();
+      const promise = Promise.resolve().then(async () => {
+        if (controller.signal.aborted) throw createAbortError();
+        return input.build(controller.signal);
+      });
+      const createdEntry: CatalogSnapshotInFlightEntry = {
+        signature: input.signature,
+        controller,
+        promise,
+        activeSubscribers: 0,
+        settled: false,
+      };
+      this.inFlightBuilds.set(input.signature, createdEntry);
+      void promise.then(
+        () => this.finishSharedBuild(createdEntry),
+        () => this.finishSharedBuild(createdEntry),
+      );
+      entry = createdEntry;
+    }
+
+    return this.subscribeToSharedBuild<R>(entry, input.callerSignal);
+  }
+
   delete(id: string): boolean {
     const entry = this.entries.get(id);
     if (!entry) return false;
@@ -184,10 +233,17 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
       retainedRows: this.retainedRows,
       estimatedBytes: this.estimatedBytes,
       lruSnapshotIds: [...this.entries.keys()],
+      inFlightBuildCount: this.inFlightBuilds.size,
+      activeSubscriberCount: [...this.inFlightBuilds.values()]
+        .reduce((total, entry) => total + entry.activeSubscribers, 0),
     };
   }
 
   clear(): void {
+    for (const entry of this.inFlightBuilds.values()) {
+      entry.controller.abort();
+    }
+    this.inFlightBuilds.clear();
     this.entries.clear();
     this.signatureIndex.clear();
     this.retainedRows = 0;
@@ -204,6 +260,56 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
     this.entries.delete(entry.id);
     this.entries.set(entry.id, entry);
     return entry;
+  }
+
+  private subscribeToSharedBuild<R>(
+    entry: CatalogSnapshotInFlightEntry,
+    callerSignal: AbortSignal | undefined,
+  ): Promise<R> {
+    entry.activeSubscribers += 1;
+    return new Promise<R>((resolve, reject) => {
+      let released = false;
+      let completed = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        entry.activeSubscribers = Math.max(0, entry.activeSubscribers - 1);
+        if (entry.activeSubscribers === 0 && !entry.settled) {
+          entry.controller.abort();
+          if (this.inFlightBuilds.get(entry.signature) === entry) {
+            this.inFlightBuilds.delete(entry.signature);
+          }
+        }
+      };
+      const finishCaller = (complete: () => void) => {
+        if (completed) return;
+        completed = true;
+        callerSignal?.removeEventListener("abort", onAbort);
+        release();
+        complete();
+      };
+      const onAbort = () => {
+        finishCaller(() => reject(createAbortError()));
+      };
+
+      callerSignal?.addEventListener("abort", onAbort, { once: true });
+      if (callerSignal?.aborted) {
+        onAbort();
+        return;
+      }
+
+      void entry.promise.then(
+        (value) => finishCaller(() => resolve(value as R)),
+        (error: unknown) => finishCaller(() => reject(error)),
+      );
+    });
+  }
+
+  private finishSharedBuild(entry: CatalogSnapshotInFlightEntry): void {
+    entry.settled = true;
+    if (this.inFlightBuilds.get(entry.signature) === entry) {
+      this.inFlightBuilds.delete(entry.signature);
+    }
   }
 
   private evictOldest(): boolean {

@@ -8,7 +8,10 @@ import {
   type UnifiedProductsRuntimeOptions,
   type UnifiedSnapshotProvenance,
 } from "../src/lib/sources/unified";
-import { BoundedCatalogSnapshotStore } from "../src/lib/sources/unifiedCatalogSnapshotStore";
+import {
+  BoundedCatalogSnapshotStore,
+  type CatalogSnapshotSharedBuildInput,
+} from "../src/lib/sources/unifiedCatalogSnapshotStore";
 import {
   type UnifiedSourceLoader,
   type UnifiedSourceLoaderMap,
@@ -42,6 +45,16 @@ function createLoader(
       ...page,
     })),
   };
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 const RECENT_SORT_KEY = Symbol.for("finance.unified.recentSortAt");
@@ -143,6 +156,20 @@ function baseInput(overrides: Partial<Parameters<typeof getUnifiedProductsWithLo
     debug: false,
     ...overrides,
   };
+}
+
+function createCatalogSnapshotStore(input: Partial<{
+  maxSnapshots: number;
+  maxRetainedRows: number;
+  maxEstimatedBytes: number;
+}> = {}) {
+  return new BoundedCatalogSnapshotStore<UnifiedCatalogSnapshot>({
+    ttlMs: 1_000,
+    sweepIntervalMs: 100,
+    maxSnapshots: input.maxSnapshots ?? 8,
+    maxRetainedRows: input.maxRetainedRows ?? 1_000,
+    maxEstimatedBytes: input.maxEstimatedBytes ?? 1_000_000,
+  });
 }
 
 describe("unified source loaders", () => {
@@ -284,6 +311,568 @@ describe("unified source loaders", () => {
       cursor: firstCursor,
     }, loaders);
     expect(normalizedQueryPage.items.map((item) => item.stableId)).toEqual(pages[1]?.items.map((item) => item.stableId));
+  });
+
+  it.each([
+    { name: "default", q: null, repeatedQ: null },
+    { name: "q-only", q: "검색대상", repeatedQ: "  검색대상  " },
+  ])("coalesces concurrent canonical-equivalent $name snapshot builds", async ({ q, repeatedQ }) => {
+    const finItems = orderedProducts({
+      sourceId: "finlife",
+      prefix: "CF",
+      count: 3,
+      newestAt: "2026-09-03T00:00:00.000Z",
+      productNamePrefix: q ?? undefined,
+    });
+    const kdbItems = orderedProducts({
+      sourceId: "datago_kdb",
+      prefix: "CK",
+      count: 3,
+      newestAt: "2026-09-02T00:00:00.000Z",
+      productNamePrefix: q ?? undefined,
+    });
+    const finlife = createPaginatedLoader({ sourceId: "finlife", items: finItems, nativePageSize: 2 });
+    const kdb = createPaginatedLoader({ sourceId: "datago_kdb", items: kdbItems, nativePageSize: 2 });
+    const firstFinlifePageStarted = deferred();
+    const releaseFinlifeFirstPages = deferred();
+    const originalFinlifeQuery = vi.mocked(finlife.query).getMockImplementation();
+    if (!originalFinlifeQuery) throw new Error("expected finlife query implementation");
+    vi.mocked(finlife.query).mockImplementation(async (query) => {
+      if (query.cursor === null) {
+        firstFinlifePageStarted.resolve();
+        await releaseFinlifeFirstPages.promise;
+      }
+      return originalFinlifeQuery(query);
+    });
+    finlife.listProviderNames = vi.fn(async () => ["CF은행"]);
+    kdb.listProviderNames = vi.fn(async () => ["CK은행"]);
+    const pinned: UnifiedSnapshotProvenance = {
+      policy: "pinned_snapshot",
+      capturedAt: "2026-09-03T00:00:00.000Z",
+      versionFingerprint: `concurrent-${q ?? "default"}`,
+      freshness: {
+        checkedAt: "2026-09-03T00:00:00.000Z",
+        overall: "fresh",
+        sources: [],
+      },
+    };
+    const captureCatalogProvenance = vi.fn(async () => pinned);
+    const loaders = { finlife, datago_kdb: kdb };
+    const runtime = { captureCatalogProvenance };
+    const query = baseInput({ q, limit: 2 });
+
+    const firstPromise = getUnifiedProductsWithLoaders(query, loaders, runtime);
+    await firstFinlifePageStarted.promise;
+    const secondPromise = getUnifiedProductsWithLoaders({
+      ...query,
+      includeSources: ["datago_kdb", "finlife"],
+      q: repeatedQ,
+    }, loaders, runtime);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+      inFlightBuildCount: 1,
+      activeSubscriberCount: 2,
+    }));
+    releaseFinlifeFirstPages.resolve();
+
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+
+    expect(vi.mocked(finlife.query).mock.calls.map(([call]) => call.cursor)).toEqual([null, "finlife:2"]);
+    expect(vi.mocked(kdb.query).mock.calls.map(([call]) => call.cursor)).toEqual([null, "datago_kdb:2"]);
+    expect(finlife.listProviderNames).toHaveBeenCalledTimes(1);
+    expect(kdb.listProviderNames).toHaveBeenCalledTimes(1);
+    expect(captureCatalogProvenance).toHaveBeenCalledTimes(1);
+    expect(first.items.map((item) => item.stableId)).toEqual(second.items.map((item) => item.stableId));
+    expect(first.pageInfo.nextCursor).toBe(second.pageInfo.nextCursor);
+    expect(first.provenance?.versionFingerprint).toBe(second.provenance?.versionFingerprint);
+    expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+      snapshotCount: 1,
+      inFlightBuildCount: 0,
+      activeSubscriberCount: 0,
+    }));
+  });
+
+  it("keeps a shared catalog build running when only one caller aborts", async () => {
+    const store = createCatalogSnapshotStore();
+    const firstPageStarted = deferred<AbortSignal>();
+    const releaseFirstPage = deferred<void>();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({ stableId: "AF-1", sourceId: "finlife", externalKey: "AF-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    const originalFinlifeQuery = vi.mocked(finlife.query).getMockImplementation();
+    if (!originalFinlifeQuery) throw new Error("expected finlife query implementation");
+    vi.mocked(finlife.query).mockImplementation(async (query) => {
+      if (!query.signal) throw new Error("expected shared build signal");
+      firstPageStarted.resolve(query.signal);
+      await releaseFirstPage.promise;
+      return originalFinlifeQuery(query);
+    });
+    const kdb = createLoader("datago_kdb", {
+      count: 1,
+      items: [product({ stableId: "AK-1", sourceId: "datago_kdb", externalKey: "AK-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "datago_kdb" },
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const query = baseInput({ limit: 1 });
+    const runtime = { catalogSnapshotStore: store };
+
+    try {
+      const first = getUnifiedProductsWithLoaders(
+        { ...query, signal: firstController.signal },
+        { finlife, datago_kdb: kdb },
+        runtime,
+      );
+      const firstOutcome = first.then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      );
+      const sharedSignal = await firstPageStarted.promise;
+      const second = getUnifiedProductsWithLoaders(
+        { ...query, signal: secondController.signal },
+        { finlife, datago_kdb: kdb },
+        runtime,
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(store.stats()).toEqual(expect.objectContaining({
+        inFlightBuildCount: 1,
+        activeSubscriberCount: 2,
+      }));
+
+      firstController.abort();
+      expect(await firstOutcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(sharedSignal.aborted).toBe(false);
+      releaseFirstPage.resolve();
+
+      await expect(second).resolves.toEqual(expect.objectContaining({
+        items: expect.any(Array),
+      }));
+      expect(finlife.query).toHaveBeenCalledTimes(1);
+      expect(kdb.query).toHaveBeenCalledTimes(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      releaseFirstPage.resolve();
+      store.dispose();
+    }
+  });
+
+  it("cancels an all-aborted catalog build and lets a new caller retry immediately", async () => {
+    const store = createCatalogSnapshotStore();
+    const firstBuildStarted = deferred<AbortSignal>();
+    let queryInvocation = 0;
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({ stableId: "RF-1", sourceId: "finlife", externalKey: "RF-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    const retryPage = vi.mocked(finlife.query).getMockImplementation();
+    if (!retryPage) throw new Error("expected finlife query implementation");
+    vi.mocked(finlife.query).mockImplementation(async (query) => {
+      queryInvocation += 1;
+      if (queryInvocation > 1) return retryPage(query);
+      if (!query.signal) throw new Error("expected shared build signal");
+      firstBuildStarted.resolve(query.signal);
+      return new Promise<UnifiedSourcePage>((_resolve, reject) => {
+        query.signal?.addEventListener("abort", () => {
+          reject(new DOMException("cancelled", "AbortError"));
+        }, { once: true });
+      });
+    });
+    const kdb = createLoader("datago_kdb", {
+      count: 1,
+      items: [product({ stableId: "RK-1", sourceId: "datago_kdb", externalKey: "RK-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "datago_kdb" },
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const query = baseInput({ limit: 1 });
+    const loaders = { finlife, datago_kdb: kdb };
+    const runtime = { catalogSnapshotStore: store };
+
+    try {
+      const first = getUnifiedProductsWithLoaders({ ...query, signal: firstController.signal }, loaders, runtime);
+      const second = getUnifiedProductsWithLoaders({ ...query, signal: secondController.signal }, loaders, runtime);
+      const abortedOutcomes = Promise.allSettled([first, second]);
+      const oldSignal = await firstBuildStarted.promise;
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+      firstController.abort();
+      expect(oldSignal.aborted).toBe(false);
+      secondController.abort();
+      expect(oldSignal.aborted).toBe(true);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      const retry = getUnifiedProductsWithLoaders(query, loaders, runtime);
+      const [outcomes, retryResult] = await Promise.all([abortedOutcomes, retry]);
+
+      expect(outcomes).toEqual([
+        expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ name: "AbortError" }) }),
+        expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ name: "AbortError" }) }),
+      ]);
+      expect(retryResult.items.map((item) => item.stableId)).toEqual(["RF-1"]);
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+      expect(kdb.query).toHaveBeenCalledTimes(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it.each([
+    { name: "q", override: { q: "다른 검색어" } },
+    { name: "limit", override: { limit: 21 } },
+    { name: "kind", override: { kind: "saving" as const } },
+    { name: "sort", override: { sort: "name" as const } },
+    { name: "provider", override: { provider: "다른은행" } },
+    { name: "term", override: { termMonths: 12 } },
+    { name: "rate", override: { minRate: 3.5 } },
+  ])("does not share concurrent catalog builds with a different $name signature", async ({ override }) => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({
+        stableId: "SF-1",
+        sourceId: "finlife",
+        externalKey: "SF-1",
+        providerName: "기준은행",
+        options: [{ sourceId: "finlife", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 20, sourceId: "finlife" },
+    });
+    const kdb = createLoader("datago_kdb", {
+      count: 1,
+      items: [product({
+        stableId: "SK-1",
+        sourceId: "datago_kdb",
+        externalKey: "SK-1",
+        providerName: "기준은행",
+        options: [{ sourceId: "datago_kdb", termMonths: 12, intrRate: 3, intrRate2: 4 }],
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 20, sourceId: "datago_kdb" },
+    });
+    const loaders = { finlife, datago_kdb: kdb };
+    const runtime = { catalogSnapshotStore: store };
+
+    try {
+      await Promise.all([
+        getUnifiedProductsWithLoaders(baseInput(), loaders, runtime),
+        getUnifiedProductsWithLoaders(baseInput(override), loaders, runtime),
+      ]);
+
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+      expect(kdb.query).toHaveBeenCalledTimes(2);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 2,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it("shares a structured partial snapshot across concurrent callers", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({ stableId: "PF-1", sourceId: "finlife", externalKey: "PF-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 20, sourceId: "finlife" },
+    });
+    const kdb = createLoader("datago_kdb", {
+      count: 0,
+      items: [],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 20, sourceId: "datago_kdb" },
+    });
+    vi.mocked(kdb.query).mockRejectedValueOnce(new Error("kdb unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const loaders = { finlife, datago_kdb: kdb };
+    const runtime = { catalogSnapshotStore: store };
+
+    try {
+      const [first, second] = await Promise.all([
+        getUnifiedProductsWithLoaders(baseInput(), loaders, runtime),
+        getUnifiedProductsWithLoaders(baseInput(), loaders, runtime),
+      ]);
+
+      expect(finlife.query).toHaveBeenCalledTimes(1);
+      expect(kdb.query).toHaveBeenCalledTimes(1);
+      expect(first.pageInfo.partialReasons).toEqual([
+        expect.objectContaining({ code: "SOURCE_QUERY_FAILED", sourceId: "datago_kdb" }),
+      ]);
+      expect(second.pageInfo.partialReasons).toEqual(first.pageInfo.partialReasons);
+      expect(first.sourceIssues).toEqual(second.sourceIssues);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      consoleError.mockRestore();
+      store.dispose();
+    }
+  });
+
+  it("rechecks the completed snapshot after becoming the shared build owner", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 0,
+      items: [],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    const originalRunSharedBuild = store.runSharedBuild.bind(store);
+    let capturedSignature = "";
+    const interceptedRunSharedBuild = <R>(input: CatalogSnapshotSharedBuildInput<R>): Promise<R> => {
+      capturedSignature = input.signature;
+      return originalRunSharedBuild(input);
+    };
+    vi.spyOn(store, "runSharedBuild").mockImplementation(interceptedRunSharedBuild);
+    const query = baseInput({ includeSources: ["finlife"], provider: "race-bank", limit: 1 });
+
+    try {
+      const pending = getUnifiedProductsWithLoaders(query, { finlife }, { catalogSnapshotStore: store });
+      expect(capturedSignature).not.toBe("");
+      const stored = store.put({
+        signature: capturedSignature,
+        kind: "deposit",
+        sources: { finlife: { count: 1 } },
+        items: [product({
+          stableId: "DOUBLE-CHECK-1",
+          sourceId: "finlife",
+          externalKey: "DOUBLE-CHECK-1",
+          providerName: "race-bank",
+        })],
+        providers: ["race-bank"],
+        partialReasons: [],
+        providerStatus: { state: "complete", issues: [] },
+      });
+      expect(stored.stored).toBe(true);
+
+      const result = await pending;
+
+      expect(result.items.map((item) => item.stableId)).toEqual(["DOUBLE-CHECK-1"]);
+      expect(finlife.refreshIfNeeded).not.toHaveBeenCalled();
+      expect(finlife.query).not.toHaveBeenCalled();
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it("shares one no-cursor result when the completed snapshot exceeds its resource budget", async () => {
+    const store = createCatalogSnapshotStore({ maxRetainedRows: 1 });
+    const put = vi.spyOn(store, "put");
+    const firstPageStarted = deferred<void>();
+    const releaseFirstPage = deferred<void>();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({ stableId: "LF-1", sourceId: "finlife", externalKey: "LF-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    const firstPage = vi.mocked(finlife.query).getMockImplementation();
+    if (!firstPage) throw new Error("expected finlife query implementation");
+    vi.mocked(finlife.query).mockImplementation(async (query) => {
+      firstPageStarted.resolve();
+      await releaseFirstPage.promise;
+      return firstPage(query);
+    });
+    const kdb = createLoader("datago_kdb", {
+      count: 1,
+      items: [product({ stableId: "LK-1", sourceId: "datago_kdb", externalKey: "LK-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "datago_kdb" },
+    });
+    const query = baseInput({ limit: 1 });
+    const loaders = { finlife, datago_kdb: kdb };
+    const runtime = { catalogSnapshotStore: store };
+
+    try {
+      const first = getUnifiedProductsWithLoaders(query, loaders, runtime);
+      await firstPageStarted.promise;
+      const second = getUnifiedProductsWithLoaders(query, loaders, runtime);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      releaseFirstPage.resolve();
+      const [firstResult, secondResult] = await Promise.all([first, second]);
+
+      expect(finlife.query).toHaveBeenCalledTimes(1);
+      expect(kdb.query).toHaveBeenCalledTimes(1);
+      expect(put).toHaveBeenCalledTimes(1);
+      expect(firstResult.pageInfo).toEqual(expect.objectContaining({
+        hasMore: false,
+        nextCursor: null,
+        partial: true,
+      }));
+      expect(firstResult.pageInfo.partialReasons).toContainEqual(expect.objectContaining({
+        code: "CURSOR_UNAVAILABLE_RESOURCE_LIMIT",
+      }));
+      expect(secondResult).toEqual(firstResult);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      releaseFirstPage.resolve();
+      store.dispose();
+    }
+  });
+
+  it("shares a real build failure and retries after in-flight cleanup", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({
+        stableId: "RECOVERED-1",
+        sourceId: "finlife",
+        externalKey: "RECOVERED-1",
+        providerName: "복구은행",
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    vi.mocked(finlife.query).mockRejectedValueOnce(new Error("storage unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const query = baseInput({ includeSources: ["finlife"], provider: "복구은행", limit: 1 });
+    const runtime = { catalogSnapshotStore: store };
+
+    try {
+      const outcomes = await Promise.allSettled([
+        getUnifiedProductsWithLoaders(query, { finlife }, runtime),
+        getUnifiedProductsWithLoaders(query, { finlife }, runtime),
+      ]);
+
+      expect(outcomes[0]?.status).toBe("rejected");
+      expect(outcomes[1]?.status).toBe("rejected");
+      if (outcomes[0]?.status !== "rejected" || outcomes[1]?.status !== "rejected") {
+        throw new Error("expected both shared callers to fail");
+      }
+      expect(outcomes[1].reason).toBe(outcomes[0].reason);
+      expect(finlife.query).toHaveBeenCalledTimes(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      await expect(getUnifiedProductsWithLoaders(query, { finlife }, runtime)).resolves.toEqual(
+        expect.objectContaining({ items: [expect.objectContaining({ stableId: "RECOVERED-1" })] }),
+      );
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+      expect(store.stats().snapshotCount).toBe(1);
+    } finally {
+      consoleError.mockRestore();
+      store.dispose();
+    }
+  });
+
+  it("cancels provenance capture without storing a snapshot when every caller aborts", async () => {
+    const store = createCatalogSnapshotStore();
+    const put = vi.spyOn(store, "put");
+    const provenanceStarted = deferred<AbortSignal>();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({ stableId: "PV-1", sourceId: "finlife", externalKey: "PV-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    const captureCatalogProvenance = vi.fn((captureInput: Parameters<NonNullable<
+      UnifiedProductsRuntimeOptions["captureCatalogProvenance"]
+    >>[0]) => {
+      if (!captureInput.signal) throw new Error("expected shared provenance signal");
+      provenanceStarted.resolve(captureInput.signal);
+      return new Promise<UnifiedSnapshotProvenance>((_resolve, reject) => {
+        captureInput.signal?.addEventListener("abort", () => {
+          reject(new DOMException("cancelled", "AbortError"));
+        }, { once: true });
+      });
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const query = baseInput({ includeSources: ["finlife"], provider: "Provider", limit: 1 });
+    const runtime = { catalogSnapshotStore: store, captureCatalogProvenance };
+
+    try {
+      const first = getUnifiedProductsWithLoaders({ ...query, signal: firstController.signal }, { finlife }, runtime);
+      const second = getUnifiedProductsWithLoaders({ ...query, signal: secondController.signal }, { finlife }, runtime);
+      const outcomes = Promise.allSettled([first, second]);
+      const sharedSignal = await provenanceStarted.promise;
+
+      firstController.abort();
+      expect(sharedSignal.aborted).toBe(false);
+      secondController.abort();
+      expect(sharedSignal.aborted).toBe(true);
+
+      expect(await outcomes).toEqual([
+        expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ name: "AbortError" }) }),
+        expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ name: "AbortError" }) }),
+      ]);
+      expect(captureCatalogProvenance).toHaveBeenCalledTimes(1);
+      expect(put).not.toHaveBeenCalled();
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it("aborts the production in-flight build when the test reset clears the store", async () => {
+    const buildStarted = deferred<AbortSignal>();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({ stableId: "RESET-1", sourceId: "finlife", externalKey: "RESET-1" })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    vi.mocked(finlife.query).mockImplementation(async (query) => {
+      if (!query.signal) throw new Error("expected shared build signal");
+      buildStarted.resolve(query.signal);
+      return new Promise<UnifiedSourcePage>((_resolve, reject) => {
+        query.signal?.addEventListener("abort", () => {
+          reject(new DOMException("reset", "AbortError"));
+        }, { once: true });
+      });
+    });
+    const pending = getUnifiedProductsWithLoaders(
+      baseInput({ includeSources: ["finlife"], provider: "Provider", limit: 1 }),
+      { finlife },
+    );
+    const outcome = pending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    );
+    const signal = await buildStarted.promise;
+
+    resetUnifiedCatalogSnapshotStoreForTests();
+
+    expect(signal.aborted).toBe(true);
+    expect(await outcome).toEqual({
+      status: "rejected",
+      error: expect.objectContaining({ name: "AbortError" }),
+    });
+    expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+      snapshotCount: 0,
+      inFlightBuildCount: 0,
+      activeSubscriberCount: 0,
+    }));
   });
 
   it("keeps interleaved global order when source page counts are uneven", async () => {
