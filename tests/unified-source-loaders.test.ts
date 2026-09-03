@@ -57,6 +57,15 @@ function deferred<T = void>() {
   return { promise, resolve, reject };
 }
 
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 const RECENT_SORT_KEY = Symbol.for("finance.unified.recentSortAt");
 
 function withRecentSortAt(item: UnifiedProductView, recentAt: string): UnifiedProductView {
@@ -835,44 +844,84 @@ describe("unified source loaders", () => {
     }
   });
 
-  it("aborts the production in-flight build when the test reset clears the store", async () => {
-    const buildStarted = deferred<AbortSignal>();
+  it("settles a production caller during an uncancellable refresh when test reset clears the store", async () => {
+    const refreshStarted = deferred();
+    const releaseOldRefresh = deferred();
+    const oldRefreshReleased = deferred();
+    let refreshInvocation = 0;
     const finlife = createLoader("finlife", {
       count: 1,
       items: [product({ stableId: "RESET-1", sourceId: "finlife", externalKey: "RESET-1" })],
       pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
     });
-    vi.mocked(finlife.query).mockImplementation(async (query) => {
-      if (!query.signal) throw new Error("expected shared build signal");
-      buildStarted.resolve(query.signal);
-      return new Promise<UnifiedSourcePage>((_resolve, reject) => {
-        query.signal?.addEventListener("abort", () => {
-          reject(new DOMException("reset", "AbortError"));
-        }, { once: true });
-      });
+    vi.mocked(finlife.refreshIfNeeded).mockImplementation(async () => {
+      refreshInvocation += 1;
+      if (refreshInvocation !== 1) return undefined;
+      refreshStarted.resolve();
+      await releaseOldRefresh.promise;
+      oldRefreshReleased.resolve();
+      return undefined;
     });
+    const putStatsBefore = getUnifiedCatalogSnapshotStoreStats();
     const pending = getUnifiedProductsWithLoaders(
       baseInput({ includeSources: ["finlife"], provider: "Provider", limit: 1 }),
       { finlife },
     );
+    let settlementCount = 0;
     const outcome = pending.then(
       (value) => ({ status: "fulfilled" as const, value }),
       (error: unknown) => ({ status: "rejected" as const, error }),
-    );
-    const signal = await buildStarted.promise;
-
-    resetUnifiedCatalogSnapshotStoreForTests();
-
-    expect(signal.aborted).toBe(true);
-    expect(await outcome).toEqual({
-      status: "rejected",
-      error: expect.objectContaining({ name: "AbortError" }),
+    ).finally(() => {
+      settlementCount += 1;
     });
-    expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
-      snapshotCount: 0,
-      inFlightBuildCount: 0,
-      activeSubscriberCount: 0,
-    }));
+    await refreshStarted.promise;
+
+    try {
+      resetUnifiedCatalogSnapshotStoreForTests();
+      await flushMicrotasks();
+
+      expect(settlementCount).toBe(1);
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(finlife.query).not.toHaveBeenCalled();
+      expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      const retry = getUnifiedProductsWithLoaders(
+        baseInput({ includeSources: ["finlife"], provider: "Provider", limit: 1 }),
+        { finlife },
+      );
+      await expect(retry).resolves.toEqual(expect.objectContaining({
+        items: [expect.objectContaining({ stableId: "RESET-1" })],
+      }));
+      expect(finlife.query).toHaveBeenCalledTimes(1);
+      expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+        snapshotCount: putStatsBefore.snapshotCount + 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      releaseOldRefresh.resolve();
+      await oldRefreshReleased.promise;
+      await flushMicrotasks();
+
+      expect(settlementCount).toBe(1);
+      expect(finlife.query).toHaveBeenCalledTimes(1);
+      expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+        snapshotCount: putStatsBefore.snapshotCount + 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      releaseOldRefresh.resolve();
+      await Promise.allSettled([outcome]);
+      resetUnifiedCatalogSnapshotStoreForTests();
+    }
   });
 
   it("keeps interleaved global order when source page counts are uneven", async () => {

@@ -76,6 +76,38 @@ function createAbortError(): DOMException {
   return new DOMException("The operation was aborted.", "AbortError");
 }
 
+function createAbortAwareBuildPromise<R>(
+  controller: AbortController,
+  build: (signal: AbortSignal) => Promise<R>,
+): Promise<R> {
+  const rawBuildPromise = Promise.resolve().then(() => {
+    if (controller.signal.aborted) throw createAbortError();
+    return build(controller.signal);
+  });
+
+  return new Promise<R>((resolve, reject) => {
+    let completed = false;
+    const finish = (complete: () => void) => {
+      if (completed) return;
+      completed = true;
+      controller.signal.removeEventListener("abort", onAbort);
+      complete();
+    };
+    const onAbort = () => {
+      finish(() => reject(createAbortError()));
+    };
+
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+    if (controller.signal.aborted) onAbort();
+
+    // Keep both handlers attached so a non-cooperative build cannot surface a late unhandled rejection.
+    void rawBuildPromise.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
+
 type CatalogSnapshotInFlightEntry = {
   signature: string;
   controller: AbortController;
@@ -182,10 +214,7 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
     let entry = this.inFlightBuilds.get(input.signature);
     if (!entry || entry.settled || entry.controller.signal.aborted) {
       const controller = new AbortController();
-      const promise = Promise.resolve().then(async () => {
-        if (controller.signal.aborted) throw createAbortError();
-        return input.build(controller.signal);
-      });
+      const promise = createAbortAwareBuildPromise(controller, input.build);
       const createdEntry: CatalogSnapshotInFlightEntry = {
         signature: input.signature,
         controller,
@@ -273,7 +302,7 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
       const release = () => {
         if (released) return;
         released = true;
-        entry.activeSubscribers = Math.max(0, entry.activeSubscribers - 1);
+        entry.activeSubscribers -= 1;
         if (entry.activeSubscribers === 0 && !entry.settled) {
           entry.controller.abort();
           if (this.inFlightBuilds.get(entry.signature) === entry) {

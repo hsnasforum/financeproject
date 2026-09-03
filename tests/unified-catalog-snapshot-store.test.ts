@@ -27,6 +27,15 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function createStore(input: Partial<{
   ttlMs: number;
   maxSnapshots: number;
@@ -268,6 +277,313 @@ describe("bounded unified catalog snapshot store", () => {
       activeSubscriberCount: 0,
     }));
     store.dispose();
+  });
+
+  it("settles every subscriber on clear when the shared build ignores abort and resolves late", async () => {
+    const store = createStore();
+    const started = deferred<AbortSignal>();
+    const release = deferred<string>();
+    const build = vi.fn((signal: AbortSignal) => {
+      started.resolve(signal);
+      return release.promise;
+    });
+    const subscribers = Array.from({ length: 3 }, () => store.runSharedBuild({
+      signature: "clear-ignored-signal",
+      build,
+    }));
+    const settlementCounts = [0, 0, 0];
+    const outcomes = subscribers.map((subscriber, index) => subscriber.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCounts[index] += 1;
+    }));
+    const signal = await started.promise;
+
+    try {
+      store.clear();
+      await flushMicrotasks();
+
+      expect(signal.aborted).toBe(true);
+      expect(settlementCounts).toEqual([1, 1, 1]);
+      expect(await Promise.all(outcomes)).toEqual([
+        { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+        { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+        { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+      ]);
+      expect(build).toHaveBeenCalledTimes(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      release.resolve("late-success");
+      await flushMicrotasks();
+
+      expect(settlementCounts).toEqual([1, 1, 1]);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      release.resolve("cleanup");
+      await Promise.allSettled(outcomes);
+      store.dispose();
+    }
+  });
+
+  it("settles a never-ending shared build on dispose and keeps teardown idempotent", async () => {
+    const store = createStore();
+    const started = deferred<AbortSignal>();
+    const release = deferred<string>();
+    let settlementCount = 0;
+    expect(store.put(snapshot("dispose-existing", 1)).stored).toBe(true);
+    const pending = store.runSharedBuild({
+      signature: "dispose-ignored-signal",
+      build: (signal) => {
+        started.resolve(signal);
+        return release.promise;
+      },
+    });
+    const outcome = pending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCount += 1;
+    });
+    const signal = await started.promise;
+
+    try {
+      store.dispose();
+      store.dispose();
+      store.clear();
+      await flushMicrotasks();
+
+      expect(signal.aborted).toBe(true);
+      expect(settlementCount).toBe(1);
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      release.resolve("late-success");
+      await flushMicrotasks();
+
+      expect(settlementCount).toBe(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      release.resolve("cleanup");
+      await Promise.allSettled([outcome]);
+      store.dispose();
+    }
+  });
+
+  it("handles an ignored shared build rejection after clear without resettling subscribers", async () => {
+    const store = createStore();
+    const started = deferred<AbortSignal>();
+    const release = deferred<string>();
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    let settlementCount = 0;
+    let rawBuildSettled = false;
+    process.on("unhandledRejection", onUnhandledRejection);
+    const pending = store.runSharedBuild({
+      signature: "clear-late-rejection",
+      build: (signal) => {
+        started.resolve(signal);
+        return release.promise;
+      },
+    });
+    const outcome = pending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCount += 1;
+    });
+    await started.promise;
+
+    try {
+      store.clear();
+      await flushMicrotasks();
+
+      expect(settlementCount).toBe(1);
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+
+      rawBuildSettled = true;
+      release.reject(new Error("late build failure"));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(unhandledRejections).toEqual([]);
+      expect(settlementCount).toBe(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      if (!rawBuildSettled) release.reject(new Error("cleanup"));
+      await Promise.allSettled([outcome]);
+      process.off("unhandledRejection", onUnhandledRejection);
+      store.dispose();
+    }
+  });
+
+  it("releases caller and internal abort listeners once when caller abort is followed by clear", async () => {
+    const store = createStore();
+    const started = deferred<AbortSignal>();
+    const release = deferred<string>();
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const firstAdd = vi.spyOn(firstController.signal, "addEventListener");
+    const firstRemove = vi.spyOn(firstController.signal, "removeEventListener");
+    const secondAdd = vi.spyOn(secondController.signal, "addEventListener");
+    const secondRemove = vi.spyOn(secondController.signal, "removeEventListener");
+    const build = vi.fn((signal: AbortSignal) => {
+      started.resolve(signal);
+      return release.promise;
+    });
+    const first = store.runSharedBuild({
+      signature: "caller-then-clear",
+      callerSignal: firstController.signal,
+      build,
+    });
+    const second = store.runSharedBuild({
+      signature: "caller-then-clear",
+      callerSignal: secondController.signal,
+      build,
+    });
+    const settlementCounts = [0, 0];
+    const outcomes = [first, second].map((subscriber, index) => subscriber.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCounts[index] += 1;
+    }));
+    const sharedSignal = await started.promise;
+    const internalRemove = vi.spyOn(sharedSignal, "removeEventListener");
+
+    try {
+      firstController.abort();
+      await flushMicrotasks();
+
+      expect(settlementCounts).toEqual([1, 0]);
+      expect(sharedSignal.aborted).toBe(false);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        inFlightBuildCount: 1,
+        activeSubscriberCount: 1,
+      }));
+
+      store.clear();
+      await flushMicrotasks();
+
+      expect(sharedSignal.aborted).toBe(true);
+      expect(settlementCounts).toEqual([1, 1]);
+      expect(await Promise.all(outcomes)).toEqual([
+        { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+        { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+      ]);
+      expect(firstAdd).toHaveBeenCalledTimes(1);
+      expect(firstRemove).toHaveBeenCalledTimes(1);
+      expect(secondAdd).toHaveBeenCalledTimes(1);
+      expect(secondRemove).toHaveBeenCalledTimes(1);
+      expect(internalRemove).toHaveBeenCalledTimes(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      release.resolve("late-success");
+      await flushMicrotasks();
+      expect(settlementCounts).toEqual([1, 1]);
+    } finally {
+      release.resolve("cleanup");
+      await Promise.allSettled(outcomes);
+      store.dispose();
+    }
+  });
+
+  it.each([
+    { name: "success", lateFailure: false },
+    { name: "rejection", lateFailure: true },
+  ])("keeps a new same-signature entry registered after clear and old late $name", async ({ lateFailure }) => {
+    const store = createStore();
+    const oldStarted = deferred<AbortSignal>();
+    const retryStarted = deferred<AbortSignal>();
+    const oldRelease = deferred<string>();
+    const retryRelease = deferred<string>();
+    let invocation = 0;
+    const build = vi.fn((signal: AbortSignal) => {
+      invocation += 1;
+      if (invocation === 1) {
+        oldStarted.resolve(signal);
+        return oldRelease.promise;
+      }
+      retryStarted.resolve(signal);
+      return retryRelease.promise;
+    });
+    let oldSettlementCount = 0;
+    const oldPending = store.runSharedBuild({ signature: "clear-retry", build });
+    const oldOutcome = oldPending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      oldSettlementCount += 1;
+    });
+    const oldSignal = await oldStarted.promise;
+
+    try {
+      store.clear();
+      const retry = store.runSharedBuild({ signature: "clear-retry", build });
+      const retrySignal = await retryStarted.promise;
+      await flushMicrotasks();
+      expect(oldSettlementCount).toBe(1);
+      expect(await oldOutcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(oldSignal.aborted).toBe(true);
+      expect(retrySignal.aborted).toBe(false);
+
+      if (lateFailure) {
+        oldRelease.reject(new Error("old late failure"));
+      } else {
+        oldRelease.resolve("old-late-success");
+      }
+      await flushMicrotasks();
+      expect(store.stats()).toEqual(expect.objectContaining({
+        inFlightBuildCount: 1,
+        activeSubscriberCount: 1,
+      }));
+
+      retryRelease.resolve("retry-success");
+      await expect(retry).resolves.toBe("retry-success");
+      expect(build).toHaveBeenCalledTimes(2);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      oldRelease.resolve("cleanup");
+      retryRelease.resolve("cleanup");
+      await Promise.allSettled([oldOutcome]);
+      store.dispose();
+    }
   });
 
   it("evicts the least recently used snapshot when the count budget is full", () => {
