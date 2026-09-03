@@ -792,6 +792,230 @@ describe("unified source loaders", () => {
     }
   });
 
+  it("does not expose a signed cursor when clear wins queued service settlement", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "QUEUED-CURSOR-1",
+          sourceId: "finlife",
+          externalKey: "QUEUED-CURSOR-1",
+          providerName: "경합은행",
+        }),
+        product({
+          stableId: "QUEUED-CURSOR-2",
+          sourceId: "finlife",
+          externalKey: "QUEUED-CURSOR-2",
+          providerName: "경합은행",
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const query = baseInput({ includeSources: ["finlife"], provider: "경합은행", limit: 1 });
+    const runtime = { catalogSnapshotStore: store };
+    const originalRunSharedBuild = store.runSharedBuild.bind(store);
+    let sharedBuildInvocation = 0;
+    let preparedCursor: string | null = null;
+    let preparedSnapshotCount = 0;
+    let settlementCount = 0;
+    let deliveredCursor: string | null | undefined;
+    let teardownWindow: { internalRemoveCalls: number; settlementCount: number } | undefined;
+    const interceptedRunSharedBuild = <R>(input: CatalogSnapshotSharedBuildInput<R>): Promise<R> => {
+      sharedBuildInvocation += 1;
+      if (sharedBuildInvocation !== 1) return originalRunSharedBuild(input);
+      return originalRunSharedBuild({
+        ...input,
+        build: (signal) => {
+          const internalRemove = vi.spyOn(signal, "removeEventListener");
+          const actualBuild = input.build(signal);
+          return {
+            then(
+              resolve: (value: R | PromiseLike<R>) => void,
+              reject: (reason?: unknown) => void,
+            ) {
+              void actualBuild.then(
+                (value) => {
+                  const prepared = value as Awaited<ReturnType<typeof getUnifiedProductsWithLoaders>>;
+                  preparedCursor = prepared.pageInfo.nextCursor;
+                  preparedSnapshotCount = store.stats().snapshotCount;
+                  resolve(value);
+                  queueMicrotask(() => {
+                    teardownWindow = {
+                      internalRemoveCalls: internalRemove.mock.calls.length,
+                      settlementCount,
+                    };
+                    store.clear();
+                  });
+                },
+                reject,
+              );
+            },
+          } as unknown as Promise<R>;
+        },
+      });
+    };
+    vi.spyOn(store, "runSharedBuild").mockImplementation(interceptedRunSharedBuild);
+    const pending = getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+    const outcome = pending.then(
+      (value) => {
+        deliveredCursor = value.pageInfo.nextCursor;
+        return { status: "fulfilled" as const, value };
+      },
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCount += 1;
+    });
+
+    try {
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(teardownWindow).toEqual({ internalRemoveCalls: 1, settlementCount: 0 });
+      expect(preparedSnapshotCount).toBe(1);
+      expect(preparedCursor).toEqual(expect.any(String));
+      expect(deliveredCursor).toBeUndefined();
+      expect(settlementCount).toBe(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      if (!preparedCursor) throw new Error("expected internally prepared stale cursor");
+      await expect(getUnifiedProductsWithLoaders({
+        ...query,
+        cursor: preparedCursor,
+      }, { finlife }, runtime)).rejects.toMatchObject({ code: "CURSOR_EXPIRED" });
+
+      const retry = await getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+      const retryCursor = retry.pageInfo.nextCursor;
+      expect(retry.items.map((item) => item.stableId)).toEqual(["QUEUED-CURSOR-1"]);
+      expect(retryCursor).toEqual(expect.any(String));
+      expect(retryCursor).not.toBe(preparedCursor);
+      if (!retryCursor) throw new Error("expected retry cursor");
+
+      const nextPage = await getUnifiedProductsWithLoaders({
+        ...query,
+        cursor: retryCursor,
+      }, { finlife }, runtime);
+      expect(nextPage.items.map((item) => item.stableId)).toEqual(["QUEUED-CURSOR-2"]);
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it("prioritizes clear over a queued real service build failure", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({
+        stableId: "QUEUED-FAILURE-RETRY",
+        sourceId: "finlife",
+        externalKey: "QUEUED-FAILURE-RETRY",
+        providerName: "오류경합은행",
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    vi.mocked(finlife.query).mockRejectedValueOnce(new Error("raw-failure"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const query = baseInput({ includeSources: ["finlife"], provider: "오류경합은행", limit: 1 });
+    const runtime = { catalogSnapshotStore: store };
+    const originalRunSharedBuild = store.runSharedBuild.bind(store);
+    let sharedBuildInvocation = 0;
+    let preparedError: unknown;
+    let settlementCount = 0;
+    let teardownWindow: { internalRemoveCalls: number; settlementCount: number } | undefined;
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+    const interceptedRunSharedBuild = <R>(input: CatalogSnapshotSharedBuildInput<R>): Promise<R> => {
+      sharedBuildInvocation += 1;
+      if (sharedBuildInvocation !== 1) return originalRunSharedBuild(input);
+      return originalRunSharedBuild({
+        ...input,
+        build: (signal) => {
+          const internalRemove = vi.spyOn(signal, "removeEventListener");
+          const actualBuild = input.build(signal);
+          return {
+            then(
+              resolve: (value: R | PromiseLike<R>) => void,
+              reject: (reason?: unknown) => void,
+            ) {
+              void actualBuild.then(
+                resolve,
+                (error: unknown) => {
+                  preparedError = error;
+                  reject(error);
+                  queueMicrotask(() => {
+                    teardownWindow = {
+                      internalRemoveCalls: internalRemove.mock.calls.length,
+                      settlementCount,
+                    };
+                    store.clear();
+                  });
+                },
+              );
+            },
+          } as unknown as Promise<R>;
+        },
+      });
+    };
+    vi.spyOn(store, "runSharedBuild").mockImplementation(interceptedRunSharedBuild);
+    const pending = getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+    const outcome = pending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCount += 1;
+    });
+
+    try {
+      const result = await outcome;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(result).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      if (result.status !== "rejected") throw new Error("expected service rejection");
+      expect(result.error).not.toBe(preparedError);
+      expect(teardownWindow).toEqual({ internalRemoveCalls: 1, settlementCount: 0 });
+      expect(settlementCount).toBe(1);
+      expect(unhandledRejections).toEqual([]);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      await expect(getUnifiedProductsWithLoaders(query, { finlife }, runtime)).resolves.toEqual(
+        expect.objectContaining({
+          items: [expect.objectContaining({ stableId: "QUEUED-FAILURE-RETRY" })],
+        }),
+      );
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 1,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+      consoleError.mockRestore();
+      store.dispose();
+    }
+  });
+
   it("cancels provenance capture without storing a snapshot when every caller aborts", async () => {
     const store = createCatalogSnapshotStore();
     const put = vi.spyOn(store, "put");

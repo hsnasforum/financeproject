@@ -27,6 +27,40 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+function deferredThenable<T>() {
+  const attached = deferred<void>();
+  let fulfillThenable: ((value: T) => unknown) | undefined;
+  let rejectThenable: ((reason?: unknown) => unknown) | undefined;
+  const promise = {
+    then(
+      onFulfilled: (value: T) => unknown,
+      onRejected: (reason?: unknown) => unknown,
+    ) {
+      fulfillThenable = onFulfilled;
+      rejectThenable = onRejected;
+      attached.resolve();
+    },
+  } as unknown as Promise<T>;
+
+  return {
+    promise,
+    attached: attached.promise,
+    fulfill(value: T) {
+      if (!fulfillThenable) throw new Error("thenable fulfillment handler is not attached");
+      fulfillThenable(value);
+    },
+    reject(reason: unknown) {
+      if (!rejectThenable) throw new Error("thenable rejection handler is not attached");
+      rejectThenable(reason);
+    },
+  };
+}
+
+function settleBeforeQueuedTeardown(settle: () => void, teardown: () => void): void {
+  settle();
+  queueMicrotask(teardown);
+}
+
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -273,6 +307,261 @@ describe("bounded unified catalog snapshot store", () => {
     });
     expect(store.stats()).toEqual(expect.objectContaining({
       snapshotCount: 0,
+      inFlightBuildCount: 0,
+      activeSubscriberCount: 0,
+    }));
+    store.dispose();
+  });
+
+  it.each(["clear", "dispose"] as const)(
+    "prioritizes %s over queued shared success before the subscriber reaction",
+    async (teardownMethod) => {
+      const store = createStore();
+      const started = deferred<AbortSignal>();
+      const buildResult = deferredThenable<string>();
+      const callerController = new AbortController();
+      const callerRemove = vi.spyOn(callerController.signal, "removeEventListener");
+      let settlementCount = 0;
+      const pending = store.runSharedBuild({
+        signature: `queued-success-${teardownMethod}`,
+        callerSignal: callerController.signal,
+        build: (signal) => {
+          started.resolve(signal);
+          return buildResult.promise;
+        },
+      });
+      const outcome = pending.then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      ).finally(() => {
+        settlementCount += 1;
+      });
+      const sharedSignal = await started.promise;
+      await buildResult.attached;
+      const internalRemove = vi.spyOn(sharedSignal, "removeEventListener");
+      let teardownWindow: {
+        internalRemoveCalls: number;
+        callerRemoveCalls: number;
+        settlementCount: number;
+      } | undefined;
+
+      settleBeforeQueuedTeardown(
+        () => buildResult.fulfill("raw-success"),
+        () => {
+          teardownWindow = {
+            internalRemoveCalls: internalRemove.mock.calls.length,
+            callerRemoveCalls: callerRemove.mock.calls.length,
+            settlementCount,
+          };
+          if (teardownMethod === "clear") store.clear();
+          else store.dispose();
+        },
+      );
+
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(teardownWindow).toEqual({
+        internalRemoveCalls: 1,
+        callerRemoveCalls: 0,
+        settlementCount: 0,
+      });
+      expect(settlementCount).toBe(1);
+      expect(callerRemove).toHaveBeenCalledTimes(1);
+      expect(internalRemove).toHaveBeenCalledTimes(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+      store.dispose();
+    },
+  );
+
+  it("prioritizes clear over queued shared rejection without exposing the original error", async () => {
+    const store = createStore();
+    const started = deferred<AbortSignal>();
+    const buildResult = deferredThenable<string>();
+    const expectedError = new Error("raw-failure");
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    let settlementCount = 0;
+    process.on("unhandledRejection", onUnhandledRejection);
+    const pending = store.runSharedBuild({
+      signature: "queued-rejection-clear",
+      build: (signal) => {
+        started.resolve(signal);
+        return buildResult.promise;
+      },
+    });
+    const outcome = pending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCount += 1;
+    });
+    const sharedSignal = await started.promise;
+    await buildResult.attached;
+    const internalRemove = vi.spyOn(sharedSignal, "removeEventListener");
+    let teardownWindow: { internalRemoveCalls: number; settlementCount: number } | undefined;
+
+    try {
+      settleBeforeQueuedTeardown(
+        () => buildResult.reject(expectedError),
+        () => {
+          teardownWindow = {
+            internalRemoveCalls: internalRemove.mock.calls.length,
+            settlementCount,
+          };
+          store.clear();
+        },
+      );
+
+      const result = await outcome;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(result).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      if (result.status !== "rejected") throw new Error("expected subscriber rejection");
+      expect(result.error).not.toBe(expectedError);
+      expect(teardownWindow).toEqual({ internalRemoveCalls: 1, settlementCount: 0 });
+      expect(settlementCount).toBe(1);
+      expect(internalRemove).toHaveBeenCalledTimes(1);
+      expect(unhandledRejections).toEqual([]);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+      store.dispose();
+    }
+  });
+
+  it("aborts every queued subscriber exactly once when clear follows shared success", async () => {
+    const store = createStore();
+    const started = deferred<AbortSignal>();
+    const buildResult = deferredThenable<string>();
+    const subscribers = Array.from({ length: 3 }, () => store.runSharedBuild({
+      signature: "queued-success-multiple-clear",
+      build: (signal) => {
+        started.resolve(signal);
+        return buildResult.promise;
+      },
+    }));
+    const settlementCounts = [0, 0, 0];
+    const rawSuccessDeliveries: string[] = [];
+    const outcomes = subscribers.map((subscriber, index) => subscriber.then(
+      (value) => {
+        rawSuccessDeliveries.push(value);
+        return { status: "fulfilled" as const, value };
+      },
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      settlementCounts[index] += 1;
+    }));
+    const sharedSignal = await started.promise;
+    await buildResult.attached;
+    const internalRemove = vi.spyOn(sharedSignal, "removeEventListener");
+    let teardownWindow: { internalRemoveCalls: number; settlementCounts: number[] } | undefined;
+
+    settleBeforeQueuedTeardown(
+      () => buildResult.fulfill("raw-success"),
+      () => {
+        teardownWindow = {
+          internalRemoveCalls: internalRemove.mock.calls.length,
+          settlementCounts: [...settlementCounts],
+        };
+        store.clear();
+      },
+    );
+
+    expect(await Promise.all(outcomes)).toEqual([
+      { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+      { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+      { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+    ]);
+    expect(teardownWindow).toEqual({ internalRemoveCalls: 1, settlementCounts: [0, 0, 0] });
+    expect(settlementCounts).toEqual([1, 1, 1]);
+    expect(rawSuccessDeliveries).toEqual([]);
+    expect(internalRemove).toHaveBeenCalledTimes(1);
+    expect(store.stats()).toEqual(expect.objectContaining({
+      snapshotCount: 0,
+      inFlightBuildCount: 0,
+      activeSubscriberCount: 0,
+    }));
+    store.dispose();
+  });
+
+  it("keeps an immediate same-signature retry isolated from old queued reactions", async () => {
+    const store = createStore();
+    const oldStarted = deferred<AbortSignal>();
+    const oldBuildResult = deferredThenable<string>();
+    const retryStarted = deferred<AbortSignal>();
+    const retryRelease = deferred<string>();
+    let oldSettlementCount = 0;
+    let retry: Promise<string> | undefined;
+    const oldPending = store.runSharedBuild({
+      signature: "queued-clear-retry",
+      build: (signal) => {
+        oldStarted.resolve(signal);
+        return oldBuildResult.promise;
+      },
+    });
+    const oldOutcome = oldPending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      oldSettlementCount += 1;
+    });
+    const oldSignal = await oldStarted.promise;
+    await oldBuildResult.attached;
+    const internalRemove = vi.spyOn(oldSignal, "removeEventListener");
+    let teardownWindow: { internalRemoveCalls: number; oldSettlementCount: number } | undefined;
+
+    settleBeforeQueuedTeardown(
+      () => oldBuildResult.fulfill("old-success"),
+      () => {
+        teardownWindow = {
+          internalRemoveCalls: internalRemove.mock.calls.length,
+          oldSettlementCount,
+        };
+        store.clear();
+        retry = store.runSharedBuild({
+          signature: "queued-clear-retry",
+          build: (signal) => {
+            retryStarted.resolve(signal);
+            return retryRelease.promise;
+          },
+        });
+      },
+    );
+
+    const retrySignal = await retryStarted.promise;
+    expect(await oldOutcome).toEqual({
+      status: "rejected",
+      error: expect.objectContaining({ name: "AbortError" }),
+    });
+    expect(teardownWindow).toEqual({ internalRemoveCalls: 1, oldSettlementCount: 0 });
+    expect(oldSettlementCount).toBe(1);
+    expect(oldSignal.aborted).toBe(true);
+    expect(retrySignal.aborted).toBe(false);
+    expect(store.stats()).toEqual(expect.objectContaining({
+      inFlightBuildCount: 1,
+      activeSubscriberCount: 1,
+    }));
+
+    retryRelease.resolve("retry-success");
+    if (!retry) throw new Error("expected same-signature retry");
+    await expect(retry).resolves.toBe("retry-success");
+    expect(oldSettlementCount).toBe(1);
+    expect(store.stats()).toEqual(expect.objectContaining({
       inFlightBuildCount: 0,
       activeSubscriberCount: 0,
     }));

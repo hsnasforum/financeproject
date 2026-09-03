@@ -114,6 +114,7 @@ type CatalogSnapshotInFlightEntry = {
   promise: Promise<unknown>;
   activeSubscribers: number;
   settled: boolean;
+  invalidatedByTeardown: boolean;
 };
 
 export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
@@ -221,6 +222,7 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
         promise,
         activeSubscribers: 0,
         settled: false,
+        invalidatedByTeardown: false,
       };
       this.inFlightBuilds.set(input.signature, createdEntry);
       void promise.then(
@@ -270,6 +272,7 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
 
   clear(): void {
     for (const entry of this.inFlightBuilds.values()) {
+      entry.invalidatedByTeardown = true;
       entry.controller.abort();
     }
     this.inFlightBuilds.clear();
@@ -320,6 +323,13 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
       const onAbort = () => {
         finishCaller(() => reject(createAbortError()));
       };
+      const finishFromEntry = (complete: () => void) => {
+        if (entry.invalidatedByTeardown || entry.controller.signal.aborted) {
+          finishCaller(() => reject(createAbortError()));
+          return;
+        }
+        finishCaller(complete);
+      };
 
       callerSignal?.addEventListener("abort", onAbort, { once: true });
       if (callerSignal?.aborted) {
@@ -328,8 +338,8 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
       }
 
       void entry.promise.then(
-        (value) => finishCaller(() => resolve(value as R)),
-        (error: unknown) => finishCaller(() => reject(error)),
+        (value) => finishFromEntry(() => resolve(value as R)),
+        (error: unknown) => finishFromEntry(() => reject(error)),
       );
     });
   }
