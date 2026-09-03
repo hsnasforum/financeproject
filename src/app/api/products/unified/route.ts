@@ -165,6 +165,8 @@ export async function GET(request: Request) {
       allowed: ["merged", "integrated"] as const,
       fallback: "merged",
     }) as UnifiedMode;
+    const catalogSnapshotActive = catalogFiltersActive
+      || (mode === "merged" && sourceId === null && includeSources.length > 1);
     const debugRequested = searchParams.get("debug") === "1";
     const canExposeDiagnostics = process.env.NODE_ENV !== "production" || process.env.UNIFIED_DEBUG_ALLOW_IN_PROD === "1";
     const debug = debugRequested && canExposeDiagnostics;
@@ -269,11 +271,11 @@ export async function GET(request: Request) {
       depositProtection,
       includeKdbOnly,
       debug,
-      ...(catalogFiltersActive ? { signal: request.signal } : {}),
+      ...(catalogSnapshotActive ? { signal: request.signal } : {}),
     });
     const dataTimed = await withTiming(
       "products.unified.query",
-      () => catalogFiltersActive
+      () => catalogSnapshotActive
         ? unifiedQuery()
         : singleflight(singleflightKey, unifiedQuery),
     );

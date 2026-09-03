@@ -147,6 +147,20 @@ export function buildCatalogQueryKey(input: {
   ].join("\u0000");
 }
 
+export function canAppendCatalogPage(input: {
+  currentQueryKey: string;
+  responseQueryKey: string;
+  currentFingerprint: string | null;
+  responseFingerprint: string | null;
+}): boolean {
+  const currentFingerprint = input.currentFingerprint?.trim() ?? "";
+  const responseFingerprint = input.responseFingerprint?.trim() ?? "";
+  return input.currentQueryKey === input.responseQueryKey
+    && currentFingerprint.length > 0
+    && responseFingerprint.length > 0
+    && currentFingerprint === responseFingerprint;
+}
+
 export function buildCatalogRequestParams(input: {
   kind: CatalogKind;
   q: string;
@@ -272,7 +286,9 @@ function parseSnapshotProvenance(value: unknown): UnifiedSnapshotProvenance | nu
     !isRecord(value)
     || value.policy !== "pinned_snapshot"
     || typeof value.capturedAt !== "string"
+    || value.capturedAt.trim().length === 0
     || typeof value.versionFingerprint !== "string"
+    || value.versionFingerprint.trim().length === 0
     || !isRecord(value.freshness)
     || typeof value.freshness.checkedAt !== "string"
     || !Array.isArray(value.freshness.sources)

@@ -5,6 +5,7 @@ import {
   resetUnifiedCatalogSnapshotStoreForTests,
   type UnifiedCatalogSnapshot,
   type UnifiedProductView,
+  type UnifiedProductsRuntimeOptions,
   type UnifiedSnapshotProvenance,
 } from "../src/lib/sources/unified";
 import { BoundedCatalogSnapshotStore } from "../src/lib/sources/unifiedCatalogSnapshotStore";
@@ -43,6 +44,84 @@ function createLoader(
   };
 }
 
+const RECENT_SORT_KEY = Symbol.for("finance.unified.recentSortAt");
+
+function withRecentSortAt(item: UnifiedProductView, recentAt: string): UnifiedProductView {
+  return Object.assign(item, { [RECENT_SORT_KEY]: recentAt });
+}
+
+function createPaginatedLoader(input: {
+  sourceId: UnifiedProductView["sourceId"];
+  items: UnifiedProductView[];
+  nativePageSize?: number;
+}): UnifiedSourceLoader {
+  const nativePageSize = input.nativePageSize ?? 60;
+  return {
+    sourceId: input.sourceId,
+    refreshIfNeeded: vi.fn(async () => undefined),
+    query: vi.fn(async (query) => {
+      const offset = query.cursor === null
+        ? 0
+        : Number(query.cursor?.slice(query.cursor.lastIndexOf(":") + 1));
+      if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("unexpected test cursor");
+      const items = input.items.slice(offset, offset + nativePageSize);
+      const nextOffset = offset + items.length;
+      const hasMore = nextOffset < input.items.length;
+      return {
+        sourceId: input.sourceId,
+        count: items.length,
+        items,
+        pageInfo: {
+          hasMore,
+          nextCursor: hasMore ? `${input.sourceId}:${nextOffset}` : null,
+          limit: query.limit,
+          sourceId: input.sourceId,
+        },
+      };
+    }),
+  };
+}
+
+function orderedProducts(input: {
+  sourceId: UnifiedProductView["sourceId"];
+  prefix: string;
+  count: number;
+  newestAt: string;
+  productNamePrefix?: string;
+}): UnifiedProductView[] {
+  const newestAt = new Date(input.newestAt).getTime();
+  return Array.from({ length: input.count }, (_, index) => {
+    const id = `${input.prefix}${String(index + 1).padStart(3, "0")}`;
+    return withRecentSortAt(product({
+      stableId: id,
+      sourceId: input.sourceId,
+      externalKey: id,
+      providerName: `${input.prefix}은행`,
+      productName: `${input.productNamePrefix ?? "상품"} ${id}`,
+    }), new Date(newestAt - index * 60_000).toISOString());
+  });
+}
+
+async function collectCatalogPages(input: {
+  query: ReturnType<typeof baseInput>;
+  loaders: UnifiedSourceLoaderMap;
+  runtime?: UnifiedProductsRuntimeOptions;
+}): Promise<Awaited<ReturnType<typeof getUnifiedProductsWithLoaders>>[]> {
+  const pages: Awaited<ReturnType<typeof getUnifiedProductsWithLoaders>>[] = [];
+  let cursor: string | null = null;
+  for (let pageIndex = 0; pageIndex < 10; pageIndex += 1) {
+    const page = await getUnifiedProductsWithLoaders(
+      { ...input.query, cursor },
+      input.loaders,
+      input.runtime,
+    );
+    pages.push(page);
+    cursor = page.pageInfo.nextCursor;
+    if (!cursor) return pages;
+  }
+  throw new Error("catalog pagination did not terminate");
+}
+
 function baseInput(overrides: Partial<Parameters<typeof getUnifiedProductsWithLoaders>[0]> = {}) {
   return {
     kind: "deposit" as const,
@@ -69,6 +148,183 @@ function baseInput(overrides: Partial<Parameters<typeof getUnifiedProductsWithLo
 describe("unified source loaders", () => {
   beforeEach(() => {
     resetUnifiedCatalogSnapshotStoreForTests();
+  });
+
+  it("returns every default multi-source catalog row across stable global pages", async () => {
+    const finItems = orderedProducts({
+      sourceId: "finlife",
+      prefix: "F",
+      count: 100,
+      newestAt: "2026-09-02T23:59:00.000Z",
+    });
+    const kdbItems = orderedProducts({
+      sourceId: "datago_kdb",
+      prefix: "K",
+      count: 100,
+      newestAt: "2026-09-01T23:59:00.000Z",
+    });
+    const finlife = createPaginatedLoader({ sourceId: "finlife", items: finItems });
+    const kdb = createPaginatedLoader({ sourceId: "datago_kdb", items: kdbItems });
+    const pinned: UnifiedSnapshotProvenance = {
+      policy: "pinned_snapshot",
+      capturedAt: "2026-09-03T00:00:00.000Z",
+      versionFingerprint: "default-catalog-v1",
+      freshness: {
+        checkedAt: "2026-09-03T00:00:00.000Z",
+        overall: "fresh",
+        sources: [],
+      },
+    };
+    const captureCatalogProvenance = vi.fn(async () => pinned);
+    const query = baseInput({ limit: 60 });
+
+    const pages = await collectCatalogPages({
+      query,
+      loaders: { finlife, datago_kdb: kdb },
+      runtime: { captureCatalogProvenance },
+    });
+    const pageIds = pages.map((page) => page.items.map((item) => item.stableId));
+    const allIds = pageIds.flat();
+
+    expect(pageIds).toEqual([
+      finItems.slice(0, 60).map((item) => item.stableId),
+      [
+        ...finItems.slice(60).map((item) => item.stableId),
+        ...kdbItems.slice(0, 20).map((item) => item.stableId),
+      ],
+      kdbItems.slice(20, 80).map((item) => item.stableId),
+      kdbItems.slice(80).map((item) => item.stableId),
+    ]);
+    expect(allIds).toHaveLength(200);
+    expect(new Set(allIds)).toHaveProperty("size", 200);
+    expect(pages.map((page) => page.pageInfo.hasMore)).toEqual([true, true, true, false]);
+    expect(pages.every((page) => page.provenance?.versionFingerprint === "default-catalog-v1")).toBe(true);
+    expect(captureCatalogProvenance).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(finlife.query).mock.calls.map(([call]) => call.cursor)).toEqual([null, "finlife:60"]);
+    expect(vi.mocked(kdb.query).mock.calls.map(([call]) => call.cursor)).toEqual([null, "datago_kdb:60"]);
+
+    const repeated = await getUnifiedProductsWithLoaders(
+      query,
+      { finlife, datago_kdb: kdb },
+      { captureCatalogProvenance },
+    );
+    expect(repeated.items.map((item) => item.stableId)).toEqual(pageIds[0]);
+    expect(finlife.query).toHaveBeenCalledTimes(2);
+    expect(kdb.query).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns every q-only match and binds its cursor to the normalized query", async () => {
+    const finItems = orderedProducts({
+      sourceId: "finlife",
+      prefix: "QF",
+      count: 100,
+      newestAt: "2026-09-02T23:59:00.000Z",
+      productNamePrefix: "검색대상",
+    });
+    const kdbItems = orderedProducts({
+      sourceId: "datago_kdb",
+      prefix: "QK",
+      count: 100,
+      newestAt: "2026-09-01T23:59:00.000Z",
+      productNamePrefix: "검색대상",
+    });
+    const finlife = createPaginatedLoader({ sourceId: "finlife", items: finItems });
+    const kdb = createPaginatedLoader({ sourceId: "datago_kdb", items: kdbItems });
+    const query = baseInput({ q: "  검색대상  ", limit: 60 });
+    const loaders = { finlife, datago_kdb: kdb };
+
+    const pages = await collectCatalogPages({ query, loaders });
+    const allIds = pages.flatMap((page) => page.items.map((item) => item.stableId));
+
+    expect(pages).toHaveLength(4);
+    expect(allIds).toEqual([
+      ...finItems.map((item) => item.stableId),
+      ...kdbItems.map((item) => item.stableId),
+    ]);
+    expect(new Set(allIds)).toHaveProperty("size", 200);
+    expect(vi.mocked(finlife.query).mock.calls.map(([call]) => call.cursor)).toEqual([null, "finlife:60"]);
+    expect(vi.mocked(kdb.query).mock.calls.map(([call]) => call.cursor)).toEqual([null, "datago_kdb:60"]);
+
+    const firstCursor = pages[0]?.pageInfo.nextCursor;
+    if (!firstCursor) throw new Error("expected q-only catalog cursor");
+    await expect(getUnifiedProductsWithLoaders({
+      ...query,
+      q: "다른검색어",
+      cursor: firstCursor,
+    }, loaders)).rejects.toMatchObject({ code: "CURSOR_MISMATCH" });
+    await expect(getUnifiedProductsWithLoaders({
+      ...query,
+      kind: "saving",
+      cursor: firstCursor,
+    }, loaders)).rejects.toMatchObject({ code: "CURSOR_MISMATCH" });
+    await expect(getUnifiedProductsWithLoaders({
+      ...query,
+      sort: "name",
+      cursor: firstCursor,
+    }, loaders)).rejects.toMatchObject({ code: "CURSOR_MISMATCH" });
+    await expect(getUnifiedProductsWithLoaders({
+      ...query,
+      limit: 61,
+      cursor: firstCursor,
+    }, loaders)).rejects.toMatchObject({ code: "CURSOR_MISMATCH" });
+    await expect(getUnifiedProductsWithLoaders({
+      ...query,
+      includeSources: ["finlife", "samplebank"],
+      cursor: firstCursor,
+    }, loaders)).rejects.toMatchObject({ code: "CURSOR_MISMATCH" });
+    const legacyOffsetCursor = Buffer.from(JSON.stringify({ id: 60 }), "utf8").toString("base64url");
+    await expect(getUnifiedProductsWithLoaders({
+      ...query,
+      cursor: legacyOffsetCursor,
+    }, loaders)).rejects.toMatchObject({ code: "CURSOR_INVALID" });
+    const normalizedQueryPage = await getUnifiedProductsWithLoaders({
+      ...query,
+      includeSources: ["datago_kdb", "finlife"],
+      q: "검색대상",
+      cursor: firstCursor,
+    }, loaders);
+    expect(normalizedQueryPage.items.map((item) => item.stableId)).toEqual(pages[1]?.items.map((item) => item.stableId));
+  });
+
+  it("keeps interleaved global order when source page counts are uneven", async () => {
+    const finItems: UnifiedProductView[] = [];
+    const kdbItems: UnifiedProductView[] = [];
+    const expectedIds: string[] = [];
+    const newestAt = new Date("2026-09-03T00:00:00.000Z").getTime();
+    for (let index = 0; index < 160; index += 1) {
+      const sourceId = index % 16 === 0 ? "finlife" as const : "datago_kdb" as const;
+      const sourceItems = sourceId === "finlife" ? finItems : kdbItems;
+      const id = `${sourceId === "finlife" ? "UF" : "UK"}-${String(sourceItems.length + 1).padStart(3, "0")}`;
+      sourceItems.push(withRecentSortAt(product({
+        stableId: id,
+        sourceId,
+        externalKey: id,
+        providerName: sourceId === "finlife" ? "소형은행" : "대형은행",
+        productName: `교차 상품 ${id}`,
+      }), new Date(newestAt - index * 60_000).toISOString()));
+      expectedIds.push(id);
+    }
+    expect(finItems).toHaveLength(10);
+    expect(kdbItems).toHaveLength(150);
+
+    const finlife = createPaginatedLoader({ sourceId: "finlife", items: finItems });
+    const kdb = createPaginatedLoader({ sourceId: "datago_kdb", items: kdbItems });
+    const pages = await collectCatalogPages({
+      query: baseInput({ limit: 60 }),
+      loaders: { finlife, datago_kdb: kdb },
+    });
+    const allIds = pages.flatMap((page) => page.items.map((item) => item.stableId));
+
+    expect(allIds).toEqual(expectedIds);
+    expect(new Set(allIds)).toHaveProperty("size", 160);
+    expect(pages.map((page) => page.items.length)).toEqual([60, 60, 40]);
+    expect(pages.map((page) => page.pageInfo.hasMore)).toEqual([true, true, false]);
+    expect(vi.mocked(finlife.query).mock.calls.map(([call]) => call.cursor)).toEqual([null]);
+    expect(vi.mocked(kdb.query).mock.calls.map(([call]) => call.cursor)).toEqual([
+      null,
+      "datago_kdb:60",
+      "datago_kdb:120",
+    ]);
   });
 
   it("merges fake loader pages without DB/network and preserves deposit protection policy", async () => {

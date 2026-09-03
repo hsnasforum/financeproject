@@ -302,6 +302,21 @@ describe("GET /api/products/unified", () => {
     }));
   });
 
+  it.each([
+    ["default", "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb"],
+    ["q-only", "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb&q=%EA%B2%80%EC%83%89%EB%8C%80%EC%83%81"],
+  ])("passes request cancellation into %s multi-source snapshot scans", async (_name, query) => {
+    const { status, json } = await callUnified(query);
+
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
+      includeSources: ["finlife", "datago_kdb"],
+      sourceId: null,
+      signal: expect.anything(),
+    }));
+  });
+
   it("reports deposit protection matched and unknown coverage", async () => {
     mocked.getUnifiedProducts.mockResolvedValueOnce({
       ...sampleUnified,
@@ -404,7 +419,9 @@ describe("GET /api/products/unified", () => {
       },
     });
 
-    const { status, json } = await callUnified("?kind=deposit&termMonths=12");
+    const { status, json } = await callUnified(
+      "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb",
+    );
 
     expect(status).toBe(200);
     expect(json.meta?.freshness).toEqual(pinnedFreshness);

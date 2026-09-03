@@ -156,7 +156,7 @@ test("catalog refuses to append a page with different snapshot provenance", asyn
     });
   });
 
-  await page.goto("/products/catalog?kind=deposit&termMonths=12");
+  await page.goto("/products/catalog?kind=deposit");
   await expect(page.getByRole("heading", { name: "첫 snapshot 상품" })).toBeVisible();
   await page.getByRole("button", { name: "비교 후보 더 보기" }).click();
 
@@ -165,6 +165,125 @@ test("catalog refuses to append a page with different snapshot provenance", asyn
   await expect(page.getByRole("heading", { name: "섞이면 안 되는 상품" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "비교 후보 더 보기" })).toHaveCount(0);
 });
+
+test("catalog does not offer append when a pageable first response has no snapshot provenance", async ({ page }) => {
+  const requestCursors: Array<string | null> = [];
+  await page.route("**/api/products/unified?**", async (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    requestCursors.push(cursor);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [{
+            stableId: cursor ? "PAGE-B" : "PAGE-A",
+            sourceId: "finlife",
+            kind: "deposit",
+            externalKey: cursor ? "PAGE-B" : "PAGE-A",
+            providerName: "기준은행",
+            productName: cursor ? "합치면 안 되는 상품" : "기준 없는 첫 페이지 상품",
+            options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+          }],
+          pageInfo: {
+            hasMore: !cursor,
+            nextCursor: cursor ? null : "next-page",
+            limit: 60,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit");
+  await expect(page.getByRole("heading", { name: "기준 없는 첫 페이지 상품" })).toBeVisible();
+  await expect(page.getByText(/CURSOR_PROVENANCE_MISSING/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "비교 후보 더 보기" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "합치면 안 되는 상품" })).toHaveCount(0);
+  expect(requestCursors).toEqual([null]);
+});
+
+for (const scenario of [
+  { name: "default", url: "/products/catalog?kind=deposit", q: null },
+  { name: "q-only", url: "/products/catalog?kind=deposit&q=%EA%B2%80%EC%83%89%EB%8C%80%EC%83%81", q: "검색대상" },
+]) {
+  test(`catalog appends all 200 ${scenario.name} snapshot rows without duplicate IDs`, async ({ page }) => {
+    const allRows = Array.from({ length: 200 }, (_, index) => {
+      const id = `FIXTURE-${String(index + 1).padStart(3, "0")}`;
+      return {
+        stableId: id,
+        sourceId: index < 100 ? "finlife" : "datago_kdb",
+        kind: "deposit",
+        externalKey: id,
+        providerName: index < 100 ? "F은행" : "K은행",
+        productName: `${scenario.q ?? "기본"} 상품 ${id}`,
+        options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+      };
+    });
+    const requestCursors: Array<string | null> = [];
+    const requestQueries: Array<string | null> = [];
+    await page.route("**/api/products/unified?**", async (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      const cursor = params.get("cursor");
+      requestCursors.push(cursor);
+      requestQueries.push(params.get("q"));
+      const pageNumber = cursor ? Number(cursor.slice("snapshot-page-".length)) : 1;
+      const offset = (pageNumber - 1) * 60;
+      const items = allRows.slice(offset, offset + 60);
+      const hasMore = offset + items.length < allRows.length;
+      const freshness = {
+        checkedAt: "2026-09-03T00:00:00.000Z",
+        overall: "fresh",
+        sources: [],
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            items,
+            facets: {
+              providers: ["F은행", "K은행"],
+              providerStatus: { state: "complete", issues: [] },
+            },
+            pageInfo: {
+              hasMore,
+              nextCursor: hasMore ? `snapshot-page-${pageNumber + 1}` : null,
+              limit: 60,
+            },
+            provenance: {
+              policy: "pinned_snapshot",
+              capturedAt: "2026-09-03T00:00:00.000Z",
+              versionFingerprint: `${scenario.name}-snapshot-v1`,
+              freshness,
+            },
+          },
+          meta: { freshness },
+        }),
+      });
+    });
+
+    await page.goto(scenario.url);
+    await expect(page.getByRole("heading", { name: `${scenario.q ?? "기본"} 상품 FIXTURE-060` })).toBeVisible();
+    for (const lastRow of [120, 180, 200]) {
+      await page.getByRole("button", { name: "비교 후보 더 보기" }).click();
+      await expect(page.getByRole("heading", {
+        name: `${scenario.q ?? "기본"} 상품 FIXTURE-${String(lastRow).padStart(3, "0")}`,
+      })).toBeVisible();
+    }
+
+    const detailHrefs = await page.locator('a[href^="/products/catalog/"]').evaluateAll((links) =>
+      links.map((link) => (link as HTMLAnchorElement).getAttribute("href")),
+    );
+    expect(detailHrefs).toHaveLength(200);
+    expect(new Set(detailHrefs).size).toBe(200);
+    expect(requestCursors).toEqual([null, "snapshot-page-2", "snapshot-page-3", "snapshot-page-4"]);
+    expect(requestQueries).toEqual(Array(4).fill(scenario.q));
+    await expect(page.getByRole("button", { name: "비교 후보 더 보기" })).toHaveCount(0);
+  });
+}
 
 test("specialized product list applies the pure result pipeline to query filters", async ({ page }) => {
   await page.route("**/api/finlife/pension?**", async (route) => {

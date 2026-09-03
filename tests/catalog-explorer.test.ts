@@ -5,6 +5,7 @@ import {
   buildCatalogRequestParams,
   buildCatalogUrlParams,
   buildCatalogViewModel,
+  canAppendCatalogPage,
   formatCatalogRate,
   isCatalogSamplebankVisible,
   parseCatalogUrlState,
@@ -58,6 +59,22 @@ describe("catalog explorer helpers", () => {
     expect(params.get("provider")).toBe("국민은행");
     expect(params.get("termMonths")).toBe("12");
     expect(params.get("minRate")).toBe("3.5");
+  });
+
+  it("allows append only for the same query with matching non-empty provenance", () => {
+    const base = {
+      currentQueryKey: "deposit-query",
+      responseQueryKey: "deposit-query",
+      currentFingerprint: "snapshot-a",
+      responseFingerprint: "snapshot-a",
+    };
+
+    expect(canAppendCatalogPage(base)).toBe(true);
+    expect(canAppendCatalogPage({ ...base, responseQueryKey: "other-query" })).toBe(false);
+    expect(canAppendCatalogPage({ ...base, currentFingerprint: null, responseFingerprint: null })).toBe(false);
+    expect(canAppendCatalogPage({ ...base, responseFingerprint: null })).toBe(false);
+    expect(canAppendCatalogPage({ ...base, responseFingerprint: "snapshot-b" })).toBe(false);
+    expect(canAppendCatalogPage({ ...base, responseFingerprint: "   " })).toBe(false);
   });
 
   it("maps catalog response and filters rows as a view model", () => {

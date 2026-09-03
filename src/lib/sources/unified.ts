@@ -123,19 +123,23 @@ function catalogSnapshotSignature(input: UnifiedProductsInput, normalizedLimit: 
   return JSON.stringify({
     kind: input.kind,
     mode: input.mode ?? "merged",
-    includeSources: uniqueIncludedSources(input.includeSources),
-    q: input.q?.trim() ?? "",
+    includeSources: canonicalIncludedSources(input.includeSources),
+    q: normalizeSearchQuery(input.q ?? ""),
     provider: input.provider?.trim() ?? "",
-    termMonths: input.termMonths ?? null,
-    minRate: input.minRate ?? null,
-    refresh: input.refresh,
-    onlyNew: input.onlyNew,
-    changedSince: input.changedSince,
-    includeTimestamps: input.includeTimestamps,
+    termMonths: normalizedCatalogTerm(input.termMonths),
+    minRate: normalizedCatalogRate(input.minRate),
+    refresh: Boolean(input.refresh),
+    onlyNew: Boolean(input.onlyNew),
+    changedSince: input.changedSince?.trim() || null,
+    includeTimestamps: Boolean(input.includeTimestamps),
+    includeRecommendDetail: input.includeRecommendDetail === true,
     limit: normalizedLimit,
     sort: input.sort,
     qMode: input.qMode,
+    enrichSources: [...new Set(input.enrichSources ?? [])].sort(),
     depositProtection: input.depositProtection ?? "any",
+    includeKdbOnly: input.includeKdbOnly === true,
+    debug: input.debug === true,
   });
 }
 
@@ -535,6 +539,18 @@ function normalizeUnifiedLimit(limit: number): number {
   return Math.min(1000, Math.max(1, Math.trunc(limit)));
 }
 
+function normalizedCatalogTerm(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.trunc(value)
+    : null;
+}
+
+function normalizedCatalogRate(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
+
 function hasCatalogFilters(input: Pick<UnifiedProductsInput, "provider" | "termMonths" | "minRate">): boolean {
   return Boolean(
     input.provider?.trim()
@@ -571,6 +587,21 @@ function filterCatalogItems(
 
 function uniqueIncludedSources(includeSources: UnifiedSourceId[]): UnifiedSourceId[] {
   return [...new Set(includeSources)];
+}
+
+function canonicalIncludedSources(includeSources: UnifiedSourceId[]): UnifiedSourceId[] {
+  return uniqueIncludedSources(includeSources).sort((left, right) => left.localeCompare(right));
+}
+
+function requiresCatalogSnapshot(input: Pick<
+  UnifiedProductsInput,
+  "mode" | "includeSources" | "sourceId" | "includeRecommendDetail" | "provider" | "termMonths" | "minRate"
+>): boolean {
+  if (hasCatalogFilters(input)) return true;
+  return (input.mode ?? "merged") === "merged"
+    && input.sourceId === null
+    && input.includeRecommendDetail !== true
+    && uniqueIncludedSources(input.includeSources).length > 1;
 }
 
 async function captureDefaultCatalogProvenance(
@@ -857,6 +888,15 @@ export async function getUnifiedProductsWithLoaders(
   } = input;
   const normalizedLimit = normalizeUnifiedLimit(limit);
   const catalogFiltersActive = hasCatalogFilters({ provider, termMonths, minRate });
+  const catalogSnapshotActive = requiresCatalogSnapshot({
+    mode,
+    includeSources,
+    sourceId,
+    includeRecommendDetail,
+    provider,
+    termMonths,
+    minRate,
+  });
   if (catalogFiltersActive && (mode !== "merged" || sourceId !== null)) {
     throw new UnifiedInputError("카탈로그 필터는 merged 다중 원천 조회에서만 사용할 수 있습니다.");
   }
@@ -878,21 +918,21 @@ export async function getUnifiedProductsWithLoaders(
   const catalogSignature = catalogSnapshotSignature(input, normalizedLimit);
   const snapshotStore = runtime.catalogSnapshotStore ?? catalogSnapshotStore;
 
-  if (catalogFiltersActive && cursor) {
+  if (catalogSnapshotActive && cursor) {
     throwIfAborted(input.signal);
     const decoded = decodeUnifiedCatalogPageCursor(cursor);
     if (!decoded) {
-      throw new UnifiedInputError("상품 필터 cursor 형식 또는 서명이 올바르지 않습니다.", "CURSOR_INVALID");
+      throw new UnifiedInputError("카탈로그 cursor 형식 또는 서명이 올바르지 않습니다.", "CURSOR_INVALID");
     }
     const entry = snapshotStore.getById(decoded.snapshotId);
     if (!entry) {
-      throw new UnifiedInputError("상품 필터 cursor의 snapshot이 만료되었거나 제거되었습니다.", "CURSOR_EXPIRED");
+      throw new UnifiedInputError("카탈로그 cursor의 snapshot이 만료되었거나 제거되었습니다.", "CURSOR_EXPIRED");
     }
     if (entry.value.signature !== catalogSignature) {
-      throw new UnifiedInputError("상품 필터 cursor가 현재 조회 조건과 일치하지 않습니다.", "CURSOR_MISMATCH");
+      throw new UnifiedInputError("카탈로그 cursor가 현재 조회 조건과 일치하지 않습니다.", "CURSOR_MISMATCH");
     }
     if (decoded.offset >= entry.value.items.length) {
-      throw new UnifiedInputError("상품 필터 cursor의 위치가 snapshot 범위를 벗어났습니다.", "CURSOR_INVALID");
+      throw new UnifiedInputError("카탈로그 cursor의 위치가 snapshot 범위를 벗어났습니다.", "CURSOR_INVALID");
     }
     return catalogPageFromSnapshot({
       snapshotId: entry.id,
@@ -902,7 +942,7 @@ export async function getUnifiedProductsWithLoaders(
     });
   }
 
-  if (catalogFiltersActive) {
+  if (catalogSnapshotActive) {
     const cached = snapshotStore.getBySignature(catalogSignature);
     if (cached) {
       return catalogPageFromSnapshot({
@@ -1096,7 +1136,7 @@ export async function getUnifiedProductsWithLoaders(
     });
     let sourceItems: UnifiedProductView[] = [];
     try {
-      const page = catalogFiltersActive
+      const page = catalogSnapshotActive
         ? await queryAllSourcePages(loader, {
             ...sourceQuery,
             cursor: null,
@@ -1159,11 +1199,11 @@ export async function getUnifiedProductsWithLoaders(
   const providerStatus: UnifiedProviderFacetStatus = providerFacetIssues.length > 0
     ? { state: "partial", issues: providerFacetIssues }
     : { state: "complete", issues: [] };
-  if (catalogFiltersActive) {
+  if (catalogSnapshotActive) {
     const provenance = runtime.captureCatalogProvenance
       ? await runtime.captureCatalogProvenance({
           kind,
-          sourceIds: uniqueIncludedSources(includeSources),
+          sourceIds: canonicalIncludedSources(includeSources),
           sourceCounts: sourceMap,
           sourceIssues,
         })

@@ -22,6 +22,7 @@ import {
   buildCatalogRequestParams,
   buildCatalogUrlParams,
   buildCatalogViewModel,
+  canAppendCatalogPage,
   formatCatalogSourceAsOf,
   formatCatalogSourceName,
   formatCatalogRate,
@@ -174,23 +175,30 @@ export default function ProductsCatalogPage() {
         provenance: responseProvenance,
       } = parseCatalogResponse(json);
       const previous = catalogStateRef.current;
-      const responseFingerprint = responseProvenance?.versionFingerprint ?? null;
+      const responseFingerprint = responseProvenance?.versionFingerprint.trim() || null;
       if (
         append
-        && previous.queryKey === catalogQueryKey
-        && previous.provenanceFingerprint !== responseFingerprint
+        && !canAppendCatalogPage({
+          currentQueryKey: previous.queryKey,
+          responseQueryKey: catalogQueryKey,
+          currentFingerprint: previous.provenanceFingerprint,
+          responseFingerprint,
+        })
       ) {
-        const stopped = { ...previous, hasMore: false, nextCursor: null };
+        const stopped = previous.queryKey === catalogQueryKey
+          ? { ...previous, hasMore: false, nextCursor: null }
+          : previous;
         catalogStateRef.current = stopped;
         setCatalogState(stopped);
-        setError("CURSOR_PROVENANCE_MISMATCH: 이전 페이지와 데이터 기준이 달라 결과를 합치지 않았습니다. 첫 페이지부터 다시 조회해 주세요.");
+        setError("CURSOR_PROVENANCE_MISMATCH: 이전 페이지와 데이터 기준을 확인할 수 없거나 서로 달라 결과를 합치지 않았습니다. 첫 페이지부터 다시 조회해 주세요.");
         return;
       }
+      const missingFirstPageProvenance = !append && responseHasMore && responseFingerprint === null;
       const nextState: CatalogState = {
         queryKey: catalogQueryKey,
         rows: append && previous.queryKey === catalogQueryKey ? [...previous.rows, ...pageItems] : pageItems,
-        hasMore: responseHasMore,
-        nextCursor: responseNextCursor,
+        hasMore: missingFirstPageProvenance ? false : responseHasMore,
+        nextCursor: missingFirstPageProvenance ? null : responseNextCursor,
         freshness: responseFreshness,
         providerNames: responseProviderNames,
         partialReasons: responsePartialReasons,
@@ -200,6 +208,9 @@ export default function ProductsCatalogPage() {
       catalogStateRef.current = nextState;
       setCatalogState(nextState);
       setCompareNotice("");
+      if (missingFirstPageProvenance) {
+        setError("CURSOR_PROVENANCE_MISSING: 다음 페이지의 데이터 기준을 확인할 수 없어 더 보기를 중단했습니다. 첫 페이지부터 다시 조회해 주세요.");
+      }
     } catch (fetchError) {
       if (!request.isCurrent() || (fetchError instanceof Error && fetchError.name === "AbortError")) return;
       setError("UPSTREAM: 통합 카탈로그 조회 중 오류가 발생했습니다.");
