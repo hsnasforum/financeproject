@@ -3,22 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  buildBundle,
-  CLIENT_STORAGE_WHITELIST,
+  BROWSER_SETTINGS_STORAGE_WHITELIST,
   isServerPathWhitelisted,
+  prepareBrowserSettingsBackup,
+  restoreBrowserSettingsStorage,
   validateBundle,
   type BackupBundle,
+  type BrowserSettingsRestoreResult,
 } from "@/lib/backup/backupBundle";
 import { diffServerFiles, type ServerFileDiffResult } from "@/lib/backup/backupDiff";
 import { downloadText } from "@/lib/browser/download";
-import {
-  recommendOwnerId,
-  recommendOwnerStorageKeys,
-} from "@/lib/recommend/ownerNamespace";
-import {
-  buildLegacyRecommendBackupRestore,
-  countLegacyRecommendStorageEntries,
-} from "@/lib/recommend/legacyStorageMigration";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -63,8 +57,12 @@ type RestorePointStatusPayload = {
 };
 
 type ImportSummary = {
-  localApplied: string[];
-  localRemoved: string[];
+  serverProcessed: boolean;
+  clientProcessed: boolean;
+  localApplied: number;
+  localRemoved: number;
+  localIgnored: number;
+  localFailed: number;
   serverWritten: string[];
   serverSkipped: Array<{ path: string; reason: string }>;
   restorePointCreated: boolean;
@@ -79,43 +77,58 @@ function makeFilename(prefix: string): string {
   return `${prefix}_${stamp}.json`;
 }
 
-function readClientStorageMap(keys: readonly string[]): Record<string, string | null> {
-  const out: Record<string, string | null> = {};
-  for (const key of keys) {
-    try {
-      out[key] = window.localStorage.getItem(key);
-    } catch {
-      out[key] = null;
-    }
+type BrowserSettingsDownload = (
+  filename: string,
+  content: string,
+  contentType: string,
+) => void;
+
+export type BrowserSettingsDownloadResult =
+  | { ok: true; notice: string; bundle: BackupBundle }
+  | { ok: false; error: string; failedKeys: string[] };
+
+export function downloadBrowserSettingsBackup(
+  storage: Pick<Storage, "getItem">,
+  download: BrowserSettingsDownload = downloadText,
+): BrowserSettingsDownloadResult {
+  const prepared = prepareBrowserSettingsBackup(storage, BROWSER_SETTINGS_STORAGE_WHITELIST);
+  if (!prepared.ok) {
+    return {
+      ok: false,
+      error: prepared.error,
+      failedKeys: prepared.failedKeys,
+    };
   }
-  return out;
+  download(
+    makeFilename("finance_browser_settings"),
+    JSON.stringify(prepared.bundle, null, 2),
+    "application/json;charset=utf-8",
+  );
+  return {
+    ok: true,
+    notice: prepared.notice,
+    bundle: prepared.bundle,
+  };
 }
 
-function applyClientStorageMap(
-  map: Record<string, string | null>,
-  keys: readonly string[],
-): { applied: string[]; removed: string[] } {
-  const applied: string[] = [];
-  const removed: string[] = [];
-  for (const key of keys) {
-    if (!Object.prototype.hasOwnProperty.call(map, key)) continue;
-    const value = map[key];
-    try {
-      if (value === null) {
-        window.localStorage.removeItem(key);
-        removed.push(key);
-      } else {
-        window.localStorage.setItem(key, value);
-        applied.push(key);
-      }
-    } catch {
-      // ignore local storage failures per key
-    }
+export function formatBrowserSettingsRestoreResult(
+  result: BrowserSettingsRestoreResult,
+): { notice: string; error: string } {
+  const summary = `적용 ${result.applied}개, 제거 ${result.removed}개, 무시 ${result.ignored}개, 실패 ${result.failed}개.`;
+  if (result.failed > 0) {
+    return {
+      notice: "",
+      error: `일부 브라우저 설정을 복원하지 못했습니다. ${summary}`,
+    };
   }
-  return { applied, removed };
+  return {
+    notice: `브라우저 설정을 복원했습니다. ${summary}`,
+    error: "",
+  };
 }
 
-export function BackupClient({ ownerId }: { ownerId?: string | null }) {
+export function BackupClient(_props: { ownerId?: string | null }) {
+  void _props;
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
@@ -128,27 +141,12 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
   const [selectedServerPaths, setSelectedServerPaths] = useState<string[]>([]);
   const [applyServerFiles, setApplyServerFiles] = useState(true);
   const [applyClientStorage, setApplyClientStorage] = useState(true);
-  const [adoptLegacyRecommendations, setAdoptLegacyRecommendations] = useState(false);
   const [restorePointInfo, setRestorePointInfo] = useState<{ exists: boolean; createdAt: string | null }>({
     exists: false,
     createdAt: null,
   });
 
-  const clientStorageKeys = useMemo(() => {
-    if (!ownerId) return [...CLIENT_STORAGE_WHITELIST];
-    try {
-      return [
-        ...CLIENT_STORAGE_WHITELIST,
-        ...recommendOwnerStorageKeys(recommendOwnerId(ownerId)),
-      ];
-    } catch {
-      return [...CLIENT_STORAGE_WHITELIST];
-    }
-  }, [ownerId]);
-  const whitelistPreview = useMemo(
-    () => clientStorageKeys.slice(0, 5).join(", "),
-    [clientStorageKeys],
-  );
+  const whitelistPreview = BROWSER_SETTINGS_STORAGE_WHITELIST.join(", ");
   const selectablePaths = useMemo(() => {
     if (!pendingBundle) return [];
     return Object.keys(pendingBundle.serverFiles)
@@ -156,12 +154,6 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
       .filter((entry) => entry.length > 0 && isServerPathWhitelisted(entry))
       .sort((a, b) => a.localeCompare(b));
   }, [pendingBundle]);
-  const pendingLegacyRecommendationCount = useMemo(
-    () => pendingBundle
-      ? countLegacyRecommendStorageEntries(pendingBundle.clientStorage)
-      : 0,
-    [pendingBundle],
-  );
   const diffStatusByPath = useMemo(() => {
     const map = new Map<string, "same" | "changed" | "added" | "missing">();
     if (!serverDiff) return map;
@@ -217,26 +209,17 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
     setError("");
     setImportSummary(null);
     try {
-      const response = await fetch("/api/dev/backup/export", { cache: "no-store" });
-      const payload = (await response.json().catch(() => null)) as ExportApiPayload | null;
-      if (!response.ok || !payload?.ok) {
-        setError(payload?.error?.message ?? "백업 export API 호출에 실패했습니다.");
+      const result = downloadBrowserSettingsBackup(window.localStorage);
+      if (!result.ok) {
+        const failedKeys = result.failedKeys.length > 0
+          ? ` (실패 키: ${result.failedKeys.join(", ")})`
+          : "";
+        setError(`${result.error}${failedKeys}`);
         return;
       }
-      const serverFiles = payload.data?.serverFiles ?? {};
-      const clientStorage = readClientStorageMap(clientStorageKeys);
-      const bundle = buildBundle({
-        serverFilesMap: serverFiles,
-        clientStorageMap: clientStorage,
-      });
-      downloadText(
-        makeFilename("finance_backup_bundle"),
-        JSON.stringify(bundle, null, 2),
-        "application/json;charset=utf-8",
-      );
-      setNotice(`백업 파일을 다운로드했습니다. (serverFiles ${Object.keys(bundle.serverFiles).length}개, clientStorage ${Object.keys(bundle.clientStorage).length}개)`);
+      setNotice(result.notice);
     } catch {
-      setError("백업 파일 생성 중 오류가 발생했습니다.");
+      setError("브라우저 설정 백업 파일 생성 중 오류가 발생했습니다.");
     } finally {
       setExporting(false);
     }
@@ -255,16 +238,20 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
         return;
       }
       const bundle = parsed as BackupBundle;
+      const serverPaths = Object.keys(bundle.serverFiles)
+        .map((entry) => String(entry).trim().replaceAll("\\", "/"))
+        .filter((entry) => entry.length > 0 && isServerPathWhitelisted(entry))
+        .sort((a, b) => a.localeCompare(b));
       setPendingBundle(bundle);
       setPendingFilename(file.name);
-      setAdoptLegacyRecommendations(false);
-      setSelectedServerPaths(
-        Object.keys(bundle.serverFiles)
-          .map((entry) => String(entry).trim().replaceAll("\\", "/"))
-          .filter((entry) => entry.length > 0 && isServerPathWhitelisted(entry))
-          .sort((a, b) => a.localeCompare(b)),
-      );
-      await buildDiffPreview(bundle);
+      setSelectedServerPaths(serverPaths);
+      setApplyServerFiles(serverPaths.length > 0);
+      setApplyClientStorage(Object.keys(bundle.clientStorage).length > 0);
+      if (serverPaths.length > 0) {
+        await buildDiffPreview(bundle);
+      } else {
+        setServerDiff(null);
+      }
       setNotice("복원 미리보기를 불러왔습니다. 적용 옵션을 확인한 뒤 복원 버튼을 눌러주세요.");
     } catch {
       setError("백업 파일을 읽거나 미리보기를 생성하는 중 오류가 발생했습니다.");
@@ -290,79 +277,74 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
     setError("");
     setImportSummary(null);
     try {
-      const response = await fetch("/api/dev/backup/import", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          bundle: pendingBundle,
-          options: {
-            restorePoint: true,
-            applyServerFiles,
-            includePaths: applyServerFiles ? selectedServerPaths : [],
-          },
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as ImportApiPayload | null;
-      const payloadIssues = Array.isArray(payload?.issues)
+      let payload: ImportApiPayload = {
+        ok: true,
+        written: [],
+        skipped: [],
+        restorePointCreated: false,
+        validated: false,
+        rolledBack: false,
+        issues: [],
+      };
+      if (applyServerFiles) {
+        const response = await fetch("/api/dev/backup/import", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            bundle: pendingBundle,
+            options: {
+              restorePoint: true,
+              applyServerFiles: true,
+              includePaths: selectedServerPaths,
+            },
+          }),
+        });
+        const serverPayload = (await response.json().catch(() => null)) as ImportApiPayload | null;
+        const serverIssues = Array.isArray(serverPayload?.issues)
+          ? serverPayload.issues.map((item) => String(item))
+          : [];
+
+        if (!response.ok || !serverPayload?.ok) {
+          setImportSummary({
+            serverProcessed: true,
+            clientProcessed: false,
+            localApplied: 0,
+            localRemoved: 0,
+            localIgnored: 0,
+            localFailed: 0,
+            serverWritten: Array.isArray(serverPayload?.written) ? serverPayload.written : [],
+            serverSkipped: Array.isArray(serverPayload?.skipped)
+              ? serverPayload.skipped.map((item) => ({
+                  path: String(item.path ?? "-"),
+                  reason: String(item.reason ?? "-"),
+                }))
+              : [],
+            restorePointCreated: serverPayload?.restorePointCreated === true,
+            validated: serverPayload?.validated === true,
+            rolledBack: serverPayload?.rolledBack === true,
+            issues: serverIssues,
+          });
+          setError(serverPayload?.error?.message ?? "서버 파일 복원에 실패했습니다.");
+          await refreshRestorePoint();
+          await buildDiffPreview(pendingBundle);
+          return;
+        }
+        payload = serverPayload;
+      }
+      const payloadIssues = Array.isArray(payload.issues)
         ? payload.issues.map((item) => String(item))
         : [];
 
-      if (!response.ok || !payload?.ok) {
-        setImportSummary({
-          localApplied: [],
-          localRemoved: [],
-          serverWritten: Array.isArray(payload?.written) ? payload.written : [],
-          serverSkipped: Array.isArray(payload?.skipped)
-            ? payload.skipped.map((item) => ({
-                path: String(item.path ?? "-"),
-                reason: String(item.reason ?? "-"),
-              }))
-            : [],
-          restorePointCreated: payload?.restorePointCreated === true,
-          validated: payload?.validated === true,
-          rolledBack: payload?.rolledBack === true,
-          issues: payloadIssues,
-        });
-        setError(payload?.error?.message ?? "서버 파일 복원에 실패했습니다.");
-        await refreshRestorePoint();
-        await buildDiffPreview(pendingBundle);
-        return;
-      }
-
-      let clientStorageMap = pendingBundle.clientStorage;
-      let migratedLegacyRecommendationCount = 0;
-      let skippedLegacyRecommendationCount = pendingLegacyRecommendationCount;
-      if (
-        applyClientStorage
-        && adoptLegacyRecommendations
-        && ownerId
-        && pendingLegacyRecommendationCount > 0
-      ) {
-        try {
-          const resolvedOwnerId = recommendOwnerId(ownerId);
-          const migration = buildLegacyRecommendBackupRestore(
-            resolvedOwnerId,
-            pendingBundle.clientStorage,
-            readClientStorageMap(recommendOwnerStorageKeys(resolvedOwnerId)),
-          );
-          clientStorageMap = migration.clientStorageMap;
-          migratedLegacyRecommendationCount = migration.migratedEntryCount;
-          skippedLegacyRecommendationCount = migration.skippedLegacyKeys.length;
-        } catch {
-          migratedLegacyRecommendationCount = 0;
-          skippedLegacyRecommendationCount = pendingLegacyRecommendationCount;
-        }
-      }
-
       const local = applyClientStorage
-        ? applyClientStorageMap(clientStorageMap, clientStorageKeys)
-        : { applied: [], removed: [] };
-      const ignoredLegacyRecommendationCount = applyClientStorage
-        ? skippedLegacyRecommendationCount
-        : 0;
+        ? restoreBrowserSettingsStorage(window.localStorage, pendingBundle.clientStorage)
+        : { applied: 0, removed: 0, ignored: 0, failed: 0 };
       const summary: ImportSummary = {
+        serverProcessed: applyServerFiles,
+        clientProcessed: applyClientStorage,
         localApplied: local.applied,
         localRemoved: local.removed,
+        localIgnored: local.ignored,
+        localFailed: local.failed,
         serverWritten: Array.isArray(payload.written) ? payload.written : [],
         serverSkipped: Array.isArray(payload.skipped)
           ? payload.skipped.map((item) => ({
@@ -376,18 +358,29 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
         issues: payloadIssues,
       };
       setImportSummary(summary);
-      const completionMessage = payload.validated
-        ? "백업 복원 및 검증 통과가 완료되었습니다."
-        : "백업 복원이 완료되었습니다.";
-      setNotice(
-        migratedLegacyRecommendationCount > 0
-          ? `${completionMessage} 확인한 이전 추천 상태 ${migratedLegacyRecommendationCount}개를 현재 사용자 영역으로 변환했습니다.${ignoredLegacyRecommendationCount > 0 ? ` 확인이 더 필요한 ${ignoredLegacyRecommendationCount}개는 적용하지 않았습니다.` : ""}`
-          : (ignoredLegacyRecommendationCount > 0
-            ? `${completionMessage} 이전 전역 추천 상태 ${ignoredLegacyRecommendationCount}개는 사용자 간 혼합을 막기 위해 적용하지 않았습니다.`
-            : completionMessage),
-      );
-      await refreshRestorePoint();
-      await buildDiffPreview(pendingBundle);
+      const localMessage = formatBrowserSettingsRestoreResult(local);
+      if (localMessage.error) {
+        setNotice(applyServerFiles ? "서버 파일 복원은 완료되었습니다." : localMessage.notice);
+        setError(localMessage.error);
+      } else {
+        const localSummary = localMessage.notice.replace(/^브라우저 설정을 복원했습니다\.\s*/, "");
+        if (applyServerFiles && applyClientStorage) {
+          const completionMessage = payload.validated
+            ? "서버 파일 검증과 브라우저 설정 복원이 완료되었습니다."
+            : "서버 파일과 브라우저 설정 복원이 완료되었습니다.";
+          setNotice(`${completionMessage} ${localSummary}`);
+        } else if (applyServerFiles) {
+          setNotice(payload.validated
+            ? "서버 파일 검증과 복원이 완료되었습니다."
+            : "서버 파일 복원이 완료되었습니다.");
+        } else {
+          setNotice(`브라우저 설정 복원이 완료되었습니다. ${localSummary}`);
+        }
+      }
+      if (applyServerFiles) {
+        await refreshRestorePoint();
+        await buildDiffPreview(pendingBundle);
+      }
     } catch {
       setError("백업 파일 import 중 오류가 발생했습니다.");
     } finally {
@@ -410,8 +403,12 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
         return;
       }
       setImportSummary({
-        localApplied: [],
-        localRemoved: [],
+        serverProcessed: true,
+        clientProcessed: false,
+        localApplied: 0,
+        localRemoved: 0,
+        localIgnored: 0,
+        localFailed: 0,
         serverWritten: Array.isArray(payload.written) ? payload.written : [],
         serverSkipped: Array.isArray(payload.skipped)
           ? payload.skipped.map((item) => ({
@@ -451,11 +448,22 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
     setSelectedServerPaths([]);
   }
 
+  const restoreProgressLabel = applyServerFiles
+    ? applyClientStorage
+      ? "서버 파일·브라우저 설정 복원 중..."
+      : "서버 파일 복원 중..."
+    : "브라우저 설정 복원 중...";
+  const restoreButtonLabel = applyServerFiles
+    ? applyClientStorage
+      ? "서버 파일·브라우저 설정 복원 실행 (서버 파일 Restore Point 자동 생성)"
+      : "서버 파일 복원 실행 (Restore Point 자동 생성)"
+    : "브라우저 설정 복원 실행";
+
   return (
     <PageShell>
       <PageHeader
         title="백업 및 복원"
-        description="로컬 상태와 서버 파일을 단일 JSON 번들로 내보내거나 선택 복원합니다."
+        description="브라우저 화면 설정은 민감 재무 정보 없이 JSON으로 내보내고, 기존 백업은 허용된 항목만 선택 복원합니다."
         action={
           <Link href="/settings">
             <Button variant="outline" className="rounded-xl font-black">설정 홈으로</Button>
@@ -465,24 +473,25 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
-          <SubSectionHeader title="데이터 내보내기 (Export)" description="서버 화이트리스트 파일과 클라이언트 저장소 키를 백업합니다." />
+          <SubSectionHeader title="브라우저 화면 설정 내보내기" description="상품 보관함·비교 목록과 화면 열기 방식만 평문 JSON으로 백업합니다." />
           <p className="mt-3 text-xs font-medium leading-relaxed text-slate-500">
-            {ownerId
-              ? "로그인한 사용자의 추천 조건·최근 결과·저장 기록도 사용자 범위를 유지해 포함합니다."
-              : "사용자 확인 정보가 없어 사용자별 추천 기록은 이 백업에서 제외됩니다."}
+            재무 프로필, 플래닝 기록, 추천 조건·결과·저장 실행과 서버 파일은 포함하지 않습니다.
           </p>
           <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-surface-muted p-3 rounded-xl leading-relaxed">
             대상 키 예시: {whitelistPreview}
           </p>
           <div className="mt-8 flex items-center gap-4">
             <Button type="button" variant="primary" className="h-12 px-8 rounded-2xl font-black shadow-md" disabled={exporting || importing} onClick={() => void handleExport()}>
-              {exporting ? "백업 번들 생성 중..." : "백업 JSON 다운로드"}
+              {exporting ? "브라우저 설정 확인 중..." : "브라우저 설정 JSON 다운로드"}
             </Button>
           </div>
         </Card>
 
         <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
-          <SubSectionHeader title="데이터 가져오기 (Import)" description="백업 파일을 업로드하여 상태를 복원합니다." />
+          <SubSectionHeader title="데이터 가져오기 (Import)" description="기존 백업도 읽을 수 있지만 브라우저에는 허용된 화면 설정만 적용합니다." />
+          <p className="mt-3 text-xs font-medium leading-relaxed text-slate-500">
+            복원 결과는 적용·제거·무시·실패 건수를 나누어 표시하며, 실패가 있으면 전체 성공으로 표시하지 않습니다.
+          </p>
           <div className="mt-6 flex flex-col gap-4">
             <div className="flex items-center gap-3">
               <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-surface-muted active:scale-95">
@@ -578,32 +587,9 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
                   />
                   <div>
                     <p className="text-sm font-black text-slate-800">클라이언트 저장소 복원</p>
-                    <p className="text-[11px] font-bold text-slate-400 mt-0.5">localStorage의 앱 설정을 복원합니다.</p>
+                    <p className="text-[11px] font-bold text-slate-400 mt-0.5">허용된 화면 설정만 복원하며 재무·추천 키는 무시합니다.</p>
                   </div>
                 </label>
-                {applyClientStorage && pendingLegacyRecommendationCount > 0 ? (
-                  ownerId ? (
-                    <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-5 w-5 rounded border-amber-300 text-primary focus:ring-primary"
-                        checked={adoptLegacyRecommendations}
-                        onChange={(event) => setAdoptLegacyRecommendations(event.target.checked)}
-                      />
-                      <div>
-                        <p className="text-sm font-black text-amber-900">이전 추천 데이터를 현재 사용자로 가져오기</p>
-                        <p className="mt-1 text-[11px] font-bold leading-relaxed text-amber-700">
-                          이전 전역 추천 상태 {pendingLegacyRecommendationCount}개를 사용자별 저장 형식으로 변환합니다.
-                          번들에 이미 사용자별 값이 있으면 그 값을 유지합니다.
-                        </p>
-                      </div>
-                    </label>
-                  ) : (
-                    <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] font-bold leading-relaxed text-amber-800">
-                      이전 추천 데이터가 포함되어 있지만 현재 사용자를 확인할 수 없어 적용하지 않습니다.
-                    </p>
-                  )
-                ) : null}
               </div>
             </div>
 
@@ -650,15 +636,28 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
           </div>
 
           <div className="mt-10 flex justify-center border-t border-slate-50 pt-8">
-            <Button
-              type="button"
-              variant="primary"
-              className="h-14 px-12 rounded-2xl font-black shadow-xl shadow-primary/10 transition-all hover:-translate-y-0.5 active:scale-95"
-              disabled={importing || rollingBack}
-              onClick={() => void handleImportApply()}
-            >
-              {importing ? "복원 진행 중..." : "선택 항목 복원 실행 (Restore Point 자동 생성)"}
-            </Button>
+            <div className="flex flex-col items-center gap-3">
+              {applyServerFiles ? (
+                <p className="text-xs font-bold text-slate-500">
+                  {applyClientStorage
+                    ? "Restore Point는 선택한 서버 파일에만 적용됩니다. 브라우저 설정은 포함되지 않습니다."
+                    : "Restore Point는 선택한 서버 파일에만 적용됩니다."}
+                </p>
+              ) : applyClientStorage ? (
+                <p className="text-xs font-bold text-slate-500">
+                  브라우저 설정은 복원 전 상태를 자동 보관하지 않습니다.
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                variant="primary"
+                className="h-14 px-12 rounded-2xl font-black shadow-xl shadow-primary/10 transition-all hover:-translate-y-0.5 active:scale-95"
+                disabled={importing || rollingBack}
+                onClick={() => void handleImportApply()}
+              >
+                {importing ? restoreProgressLabel : restoreButtonLabel}
+              </Button>
+            </div>
           </div>
         </Card>
       ) : null}
@@ -668,26 +667,40 @@ export function BackupClient({ ownerId }: { ownerId?: string | null }) {
           <SubSectionHeader 
             title="복원 결과 요약" 
             className="mb-6"
-            description={importSummary.validated ? "검증 통과 및 복원이 성공적으로 완료되었습니다." : "복원 처리가 완료되었습니다."} 
+            description={importSummary.clientProcessed && importSummary.localFailed > 0
+              ? "일부 브라우저 설정을 복원하지 못했습니다."
+              : importSummary.serverProcessed && importSummary.validated
+                ? "검증 통과 및 복원이 완료되었습니다."
+                : "복원 처리가 완료되었습니다."}
           />
           
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">localStorage</p>
-              <p className="text-base font-black tabular-nums mt-1 text-navy">+{importSummary.localApplied.length} / -{importSummary.localRemoved.length}</p>
-            </div>
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Server Files</p>
-              <p className="text-base font-black tabular-nums mt-1 text-navy">Written {importSummary.serverWritten.length}</p>
-            </div>
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
-              <p className="text-base font-black mt-1 text-navy">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
-            </div>
-            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rollback Status</p>
-              <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-primary")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
-            </div>
+            {importSummary.clientProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">localStorage</p>
+                <p className="text-base font-black tabular-nums mt-1 text-navy">
+                  적용 {importSummary.localApplied} · 제거 {importSummary.localRemoved} · 무시 {importSummary.localIgnored} · 실패 {importSummary.localFailed}
+                </p>
+              </div>
+            ) : null}
+            {importSummary.serverProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Server Files</p>
+                <p className="text-base font-black tabular-nums mt-1 text-navy">Written {importSummary.serverWritten.length}</p>
+              </div>
+            ) : null}
+            {importSummary.serverProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
+                <p className="text-base font-black mt-1 text-navy">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
+              </div>
+            ) : null}
+            {importSummary.serverProcessed ? (
+              <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rollback Status</p>
+                <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-primary")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
+              </div>
+            ) : null}
           </div>
 
           {importSummary.issues.length > 0 && (

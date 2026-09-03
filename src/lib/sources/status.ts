@@ -133,6 +133,10 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
       ? foundEvidence.meta.lastAttemptAt
       : null;
     const lastRun = foundEvidence ? normalizeLastRun(foundEvidence.meta) : undefined;
+    const snapshotMeta = (snapshot?.meta as unknown as Record<string, unknown> | null) ?? null;
+    const fallbackUsed = foundEvidence
+      ? foundEvidence.meta.fallbackUsed === true
+      : snapshotMeta?.fallbackUsed === true;
     const completedEvidenceCount = foundEvidence?.state === "complete"
       && typeof lastRun?.fetchedItems === "number"
       ? Math.max(0, Math.trunc(lastRun.fetchedItems))
@@ -147,6 +151,7 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
       ttlMs,
       ageMs: fresh.ageMs,
       isFresh: incompleteAttempt ? false : evidenceCanBeFresh && fresh.isFresh,
+      fallbackUsed,
       counts: completedEvidenceCount ?? snapshot?.items?.length ?? 0,
       lastRun,
       lastError: incompleteAttempt
@@ -202,6 +207,7 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
         ttlMs,
         ageMs: fresh.ageMs,
         isFresh: fresh.isFresh,
+        fallbackUsed: meta?.fallbackUsed === true,
         counts: count,
         lastRun: lastRun
           ? {

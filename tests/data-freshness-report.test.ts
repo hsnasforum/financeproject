@@ -78,4 +78,221 @@ describe("data_freshness_report", () => {
     expect(report).toContain("| benefits_snapshot.json | benefits | not-a-date | - | 7 | invalid_generated_at |");
     expect(report).toContain("- invalidTimestamp: 1");
   });
+
+  it("allows only an explicit unexpired stale exception and records its mitigation", () => {
+    const root = makeRoot();
+    fs.mkdirSync(path.join(root, "config"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify({ generatedAt: "2026-01-01T00:00:00.000Z" }),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(root, "config", "freshness-exceptions.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        exceptions: [{
+          file: "exchange_snapshot.json",
+          reason: "오프라인 재현을 위한 저장 스냅샷입니다.",
+          mitigation: "사용자에게 기준일과 최신 환율 재확인 안내를 표시합니다.",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+        }],
+      }),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "data_freshness_report.mjs"),
+      "--strict",
+      "--exceptions=config/freshness-exceptions.json",
+    ], {
+      cwd: root,
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(0);
+    const report = fs.readFileSync(path.join(root, "docs", "data-freshness-report.md"), "utf8");
+    expect(report).toContain("stale_exception");
+    expect(report).toContain("## Time-limited Exceptions");
+    expect(report).toContain("최신 환율 재확인 안내");
+    expect(report).toContain("- staleException: 1");
+  });
+
+  it.each([
+    ["2026-09-29T23:59:59.999Z", 0],
+    ["2026-09-30T00:00:00.000Z", 1],
+    ["2026-09-30T00:00:00.001Z", 1],
+  ] as const)("enforces the exception boundary %s (%s)", (now, expectedStatus) => {
+    const root = makeRoot();
+    fs.mkdirSync(path.join(root, "config"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify({ generatedAt: "2026-01-01T00:00:00.000Z" }),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(root, "config", "data-freshness-exceptions.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        exceptions: [{
+          file: "exchange_snapshot.json",
+          reason: "오프라인 재현을 위한 저장 스냅샷입니다.",
+          mitigation: "사용자에게 기준일과 최신 환율 재확인 안내를 표시합니다.",
+          expiresAt: "2026-09-30T00:00:00.000Z",
+        }],
+      }),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "data_freshness_report.mjs"),
+      "--strict",
+      "--exceptions=config/data-freshness-exceptions.json",
+      `--now=${now}`,
+    ], { cwd: root, encoding: "utf8" });
+
+    expect(result.status).toBe(expectedStatus);
+    if (expectedStatus === 0) {
+      expect(fs.readFileSync(path.join(root, "docs", "data-freshness-report.md"), "utf8"))
+        .toContain(`- Generated at: ${now}`);
+    } else {
+      expect(result.stderr).toContain("expired freshness exception: exchange_snapshot.json");
+    }
+  });
+
+  it("fails clearly when the configured canonical exception file is missing", () => {
+    const root = makeRoot();
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify({ generatedAt: "2026-01-01T00:00:00.000Z" }),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "data_freshness_report.mjs"),
+      "--strict",
+      "--exceptions=config/data-freshness-exceptions.json",
+      "--now=2026-09-01T00:00:00.000Z",
+    ], { cwd: root, encoding: "utf8" });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("freshness exceptions file not found: config/data-freshness-exceptions.json");
+  });
+
+  it("keeps an existing report byte-identical in strict check-only mode", () => {
+    const root = makeRoot();
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify({ generatedAt: "2026-05-24T12:00:00.000Z" }),
+      "utf8",
+    );
+    fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+    const existingReport = Buffer.from("# Existing report\n\nDo not rewrite this file.\n", "utf8");
+    fs.writeFileSync(path.join(root, "docs", "data-freshness-report.md"), existingReport);
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "data_freshness_report.mjs"),
+      "--strict",
+      "--check-only",
+      "--now=2026-05-25T00:00:00.000Z",
+    ], { cwd: root, encoding: "utf8" });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[freshness:check]");
+    expect(fs.readFileSync(path.join(root, "docs", "data-freshness-report.md"))).toEqual(existingReport);
+  });
+
+  it("does not create a report in strict check-only mode", () => {
+    const root = makeRoot();
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify({ generatedAt: "2026-05-24T12:00:00.000Z" }),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "data_freshness_report.mjs"),
+      "--strict",
+      "--check-only",
+      "--now=2026-05-25T00:00:00.000Z",
+    ], { cwd: root, encoding: "utf8" });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[freshness:check] validation passed");
+    expect(fs.existsSync(path.join(root, "docs", "data-freshness-report.md"))).toBe(false);
+  });
+
+  it.each([
+    ["stale", { generatedAt: "2026-05-20T00:00:00.000Z" }],
+    ["missing", { rates: [] }],
+    ["invalid", { generatedAt: "not-a-date" }],
+  ] as const)("fails strict check-only mode for a %s snapshot", (_label, snapshot) => {
+    const root = makeRoot();
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify(snapshot),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "data_freshness_report.mjs"),
+      "--strict",
+      "--check-only",
+      "--now=2026-05-25T00:00:00.000Z",
+    ], { cwd: root, encoding: "utf8" });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("[freshness:check]");
+    expect(result.stdout).not.toContain("validation passed");
+    expect(fs.existsSync(path.join(root, "docs", "data-freshness-report.md"))).toBe(false);
+  });
+
+  it("fails check-only validation when a freshness exception has expired", () => {
+    const root = makeRoot();
+    fs.mkdirSync(path.join(root, "config"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify({ generatedAt: "2026-01-01T00:00:00.000Z" }),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(root, "config", "data-freshness-exceptions.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        exceptions: [{
+          file: "exchange_snapshot.json",
+          reason: "오프라인 재현을 위한 저장 스냅샷입니다.",
+          mitigation: "사용자에게 기준일과 최신 환율 재확인 안내를 표시합니다.",
+          expiresAt: "2026-05-25T00:00:00.000Z",
+        }],
+      }),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "data_freshness_report.mjs"),
+      "--strict",
+      "--check-only",
+      "--exceptions=config/data-freshness-exceptions.json",
+      "--now=2026-05-25T00:00:00.000Z",
+    ], { cwd: root, encoding: "utf8" });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("[freshness:check] failed: expired freshness exception: exchange_snapshot.json");
+    expect(result.stdout).not.toContain("validation passed");
+    expect(fs.existsSync(path.join(root, "docs", "data-freshness-report.md"))).toBe(false);
+  });
+
+  it("keeps supported local and release commands on the canonical exception file", () => {
+    const scripts = (JSON.parse(fs.readFileSync("package.json", "utf8")) as {
+      scripts: Record<string, string>;
+    }).scripts;
+
+    for (const name of ["freshness:report", "freshness:release", "data:doctor", "verify"]) {
+      expect(scripts[name], name).toContain("--exceptions=config/data-freshness-exceptions.json");
+    }
+    expect(scripts["freshness:release"]).toContain("--strict");
+    expect(scripts["freshness:release"]).toContain("--check-only");
+    expect(scripts["freshness:report"]).not.toContain("--check-only");
+  });
 });

@@ -4,15 +4,21 @@ const mocks = vi.hoisted(() => ({
   loadFinlifeSnapshot: vi.fn(),
   findCompletionEvidence: vi.fn(),
   findProducts: vi.fn(),
+  findSourceSnapshots: vi.fn(),
+  findExternalProducts: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     externalSourceSnapshot: {
       findUnique: mocks.findCompletionEvidence,
+      findMany: mocks.findSourceSnapshots,
     },
     product: {
       findMany: mocks.findProducts,
+    },
+    externalProduct: {
+      findMany: mocks.findExternalProducts,
     },
   },
 }));
@@ -22,7 +28,7 @@ vi.mock("@/lib/finlife/snapshot", () => ({
   loadFinlifeSyncAttempt: vi.fn(),
 }));
 
-import { finlifeUnifiedSourceLoader } from "../src/lib/sources/unifiedLoaders";
+import { datagoKdbUnifiedSourceLoader, finlifeUnifiedSourceLoader } from "../src/lib/sources/unifiedLoaders";
 
 const QUERY_INPUT = {
   kind: "deposit" as const,
@@ -48,6 +54,8 @@ describe("unified FINLIFE onlyNew completion evidence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findProducts.mockResolvedValue([]);
+    mocks.findSourceSnapshots.mockResolvedValue([]);
+    mocks.findExternalProducts.mockResolvedValue([]);
     mocks.loadFinlifeSnapshot.mockReturnValue({
       meta: { generatedAt: "2026-07-10T12:00:00.000Z" },
       items: [],
@@ -112,6 +120,80 @@ describe("unified FINLIFE onlyNew completion evidence", () => {
       },
     );
     consoleError.mockRestore();
+  });
+
+  it("pushes provider, term, and minimum-rate filters into the FINLIFE database query", async () => {
+    mocks.findCompletionEvidence.mockResolvedValue(null);
+
+    await finlifeUnifiedSourceLoader.query({
+      ...QUERY_INPUT,
+      onlyNew: false,
+      provider: "테스트은행",
+      termMonths: 12,
+      minRate: 3.5,
+    });
+
+    expect(mocks.findProducts).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        provider: { is: { name: "테스트은행" } },
+        options: {
+          some: {
+            saveTrm: "12",
+            OR: [
+              { intrRate2: { gte: 3.5 } },
+              { AND: [{ intrRate2: null }, { intrRate: { gte: 3.5 } }] },
+            ],
+          },
+        },
+      }),
+    }));
+  });
+
+  it("pushes the KDB provider into storage and bounds unsupported option filters after reading", async () => {
+    mocks.findExternalProducts.mockResolvedValue([
+      {
+        id: 1,
+        sourceId: "datago_kdb",
+        kind: "deposit",
+        externalKey: "KDB-6",
+        providerNameRaw: "테스트은행",
+        productNameRaw: "6개월 상품",
+        summary: null,
+        rawJson: { prdJinTrmCone: "6개월", lowIrtCndCone: "3.0", hitIrtCndCone: "4.0" },
+        firstSeenAt: new Date("2026-07-10T00:00:00.000Z"),
+        lastSeenAt: new Date("2026-07-11T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-11T00:00:00.000Z"),
+        matches: [],
+      },
+      {
+        id: 2,
+        sourceId: "datago_kdb",
+        kind: "deposit",
+        externalKey: "KDB-12",
+        providerNameRaw: "테스트은행",
+        productNameRaw: "12개월 상품",
+        summary: null,
+        rawJson: { prdJinTrmCone: "12개월", lowIrtCndCone: "3.0", hitIrtCndCone: "4.0" },
+        firstSeenAt: new Date("2026-07-10T00:00:00.000Z"),
+        lastSeenAt: new Date("2026-07-11T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-11T00:00:00.000Z"),
+        matches: [],
+      },
+    ]);
+
+    const result = await datagoKdbUnifiedSourceLoader.query({
+      ...QUERY_INPUT,
+      onlyNew: false,
+      provider: "테스트은행",
+      termMonths: 12,
+      minRate: 3.5,
+    });
+
+    expect(mocks.findExternalProducts).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ providerNameRaw: "테스트은행" }),
+      take: 21,
+    }));
+    expect(result.items.map((item) => item.externalKey)).toEqual(["KDB-12"]);
   });
 
   it("returns an internal allowlisted recommendation detail only when explicitly requested", async () => {

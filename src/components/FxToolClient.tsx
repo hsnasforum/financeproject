@@ -7,6 +7,11 @@ import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { formatKrwWithEok } from "@/lib/format/krw";
+import {
+  buildFxDataStatus,
+  type FxDataStatus,
+  type FxResponseMeta,
+} from "@/lib/publicApis/fxDataStatus";
 import { cn } from "@/lib/utils";
 
 type FxRow = {
@@ -23,10 +28,12 @@ export function FxToolClient() {
   const [totalKrw, setTotalKrw] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dataStatus, setDataStatus] = useState<FxDataStatus | null>(null);
 
   async function run() {
     setLoading(true);
     setError("");
+    setDataStatus(null);
     try {
       const res = await fetch(`/api/public/fx?pairs=${encodeURIComponent(pairs)}`, { cache: "no-store" });
       const json = await res.json();
@@ -34,15 +41,22 @@ export function FxToolClient() {
         setError(json?.error?.message ?? "환율 데이터를 불러오지 못했습니다.");
         setRows([]);
         setTotalKrw(0);
+        setDataStatus(buildFxDataStatus({ rowCount: 0, meta: null }));
         return;
       }
-      setRows(Array.isArray(json.data?.items) ? (json.data.items as FxRow[]) : []);
+      const nextRows = Array.isArray(json.data?.items) ? (json.data.items as FxRow[]) : [];
+      setRows(nextRows);
       setTotalKrw(typeof json.data?.totalKrw === "number" ? json.data.totalKrw : 0);
+      setDataStatus(buildFxDataStatus({
+        rowCount: nextRows.filter((row) => typeof row.rate === "number" && Number.isFinite(row.rate)).length,
+        meta: typeof json.meta === "object" && json.meta ? json.meta as FxResponseMeta : null,
+      }));
     } catch (err) {
       console.error("[fx-tool] fetch failed", err);
       setError("환율 데이터를 불러오지 못했습니다.");
       setRows([]);
       setTotalKrw(0);
+      setDataStatus(buildFxDataStatus({ rowCount: 0, meta: null }));
     } finally {
       setLoading(false);
     }
@@ -52,7 +66,7 @@ export function FxToolClient() {
     <PageShell>
       <PageHeader
         title="환율 자동 계산기"
-        description="현재 조회 기준 환율로 외화 자산이나 지출 항목을 원화로 비교해 봅니다."
+        description="조회한 기준 환율로 외화 자산이나 지출 항목을 원화로 비교해 봅니다."
       />
 
       <div className="grid gap-8 lg:grid-cols-3 items-start">
@@ -96,7 +110,7 @@ export function FxToolClient() {
 
         <div className="lg:col-span-2 space-y-6">
           <Card className={cn("rounded-[2rem] p-8 shadow-sm transition-all border-2", rows.length > 0 ? "border-primary/10 bg-white" : "border-dashed border-slate-100 bg-surface-muted/30")}>
-            <SubSectionHeader title="현재 기준 환산 결과" description={rows.length > 0 ? "현재 조회 기준 환율로 계산한 비교 결과입니다." : "환산 버튼을 누르면 여기에 비교 결과가 표시됩니다."} />
+            <SubSectionHeader title="환율 환산 결과" description={rows.length > 0 ? "조회한 기준 환율로 계산한 비교 결과입니다." : "환산 버튼을 누르면 여기에 비교 결과가 표시됩니다."} />
             
             {rows.length === 0 ? (
               <div className="py-20 text-center">
@@ -104,6 +118,15 @@ export function FxToolClient() {
               </div>
             ) : (
               <div className="mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                {dataStatus ? (
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-black">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">{dataStatus.label}</span>
+                    <span className={cn("rounded-full px-3 py-1", dataStatus.isStale ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700")}>
+                      {dataStatus.freshnessLabel}
+                    </span>
+                    {dataStatus.asOf ? <span className="font-medium text-slate-400">출처 기준일 {dataStatus.asOf}</span> : null}
+                  </div>
+                ) : null}
                 <div className="grid gap-4 sm:grid-cols-2">
                   {rows.map((row) => (
                     <div key={`${row.currency}-${row.amount}`} className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5 group hover:border-primary/20 transition-all">
@@ -125,7 +148,7 @@ export function FxToolClient() {
                 <div className="rounded-3xl bg-primary p-8 shadow-xl shadow-navy/20 text-white">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">현재 기준 합계</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">조회 기준 합계</p>
                       <p className="text-sm font-black text-white">원화 환산 합계</p>
                     </div>
                     <p className="text-3xl font-black tabular-nums tracking-tight">
@@ -137,7 +160,7 @@ export function FxToolClient() {
                 <div className="flex items-center gap-3 px-2">
                   <span className="w-1 h-1 rounded-full bg-slate-300" />
                   <p className="text-[10px] font-medium text-slate-400 leading-relaxed">
-                    참고 지표입니다. 실제 환전/결제 시점의 고시 환율이나 수수료에 따라 결과가 다를 수 있습니다.
+                    {dataStatus?.notice ?? "참고 지표입니다. 실제 환전·결제 시점의 고시 환율이나 수수료에 따라 결과가 다를 수 있습니다."}
                   </p>
                 </div>
               </div>

@@ -1,19 +1,16 @@
 import fxMock from "@/data/public/fx.mock.json";
 import { ExternalApiError, fetchExternal, requireServerEnv } from "../../http/fetchExternal";
 import { type DataProvenance, type ExchangeRateQuote, type PublicApiResult } from "@/lib/publicApis/contracts/types";
+import {
+  normalizeExchangeCurrencyUnit,
+  normalizeExchangeQuoteDate,
+  parseExchangeRate,
+} from "./exchangeNormalization";
 
 const FX_SOURCE_LABEL = "한국수출입은행";
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-
-function parseRate(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string") return null;
-  const normalized = value.replace(/,/g, "").replace(/[^0-9.-]/g, "");
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : null;
 }
 
 function normalizeKeximJson(raw: unknown, wanted: Set<string>): ExchangeRateQuote[] {
@@ -27,17 +24,19 @@ function normalizeKeximJson(raw: unknown, wanted: Set<string>): ExchangeRateQuot
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
     const rec = row as Record<string, unknown>;
-    const currency = typeof rec.cur_unit === "string" ? rec.cur_unit.trim() : typeof rec.currency === "string" ? rec.currency.trim() : "";
-    if (!currency || (wanted.size > 0 && !wanted.has(currency))) continue;
+    const currencyRaw = typeof rec.cur_unit === "string" ? rec.cur_unit : typeof rec.currency === "string" ? rec.currency : "";
+    const currency = normalizeExchangeCurrencyUnit(currencyRaw);
+    if (!currency || (wanted.size > 0 && !wanted.has(currency.code))) continue;
 
-    const rate = parseRate(rec.deal_bas_r ?? rec.rate ?? rec.baseRate);
-    if (rate === null) continue;
-
-    const asOfDate = typeof rec.deal_bas_dt === "string" ? rec.deal_bas_dt : new Date().toISOString().slice(0, 10);
+    const rawRate = parseExchangeRate(rec.deal_bas_r ?? rec.rate ?? rec.baseRate);
+    if (rawRate === null) continue;
+    const asOfDate = normalizeExchangeQuoteDate(rec.deal_bas_dt);
+    if (!asOfDate) continue;
+    const rate = rawRate / currency.scale;
 
     out.push({
       asOfDate,
-      currency,
+      currency: currency.code,
       base: "KRW",
       rate,
       source: "한국수출입은행",
@@ -78,15 +77,16 @@ function mockMeta(degradedReason: string, extra?: { upstreamStatus?: number | un
   };
 }
 
-function liveMeta(quotes: ExchangeRateQuote[], fallbackAsOf: string): { provenance: DataProvenance } {
+function liveMeta(quotes: ExchangeRateQuote[]): { provenance: DataProvenance } {
+  const provenance: DataProvenance = {
+    mode: "live",
+    degraded: false,
+    fetchedAt: nowIso(),
+    source: FX_SOURCE_LABEL,
+  };
+  if (quotes[0]?.asOfDate) provenance.asOf = quotes[0].asOfDate;
   return {
-    provenance: {
-      mode: "live",
-      degraded: false,
-      asOf: quotes[0]?.asOfDate ?? fallbackAsOf,
-      fetchedAt: nowIso(),
-      source: FX_SOURCE_LABEL,
-    },
+    provenance,
   };
 }
 
@@ -134,7 +134,7 @@ export async function getExchangeQuotes(date: string, currencies: string[]): Pro
     }
 
     const quotes = normalizeKeximJson(fetched.body, wanted);
-    return { ok: true, data: quotes, meta: liveMeta(quotes, date) };
+    return { ok: true, data: quotes, meta: liveMeta(quotes) };
   } catch (error) {
     if (fallbackToMock) {
       return {

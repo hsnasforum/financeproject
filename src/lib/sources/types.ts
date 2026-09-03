@@ -34,6 +34,7 @@ export type SourceStatusRow = {
   ttlMs: number;
   ageMs: number | null;
   isFresh: boolean;
+  fallbackUsed?: boolean;
   counts: number;
   lastRun?: {
     startedAt?: string;
@@ -51,6 +52,33 @@ export type SourceStatusRow = {
     at?: string;
     message?: string;
   } | null;
+};
+
+export type ProductSourceFreshness = {
+  sourceId: UnifiedSourceId;
+  kind: UnifiedKind;
+  sourceAsOf: string | null;
+  checkedAt: string;
+  ttlMs: number | null;
+  ageMs: number | null;
+  freshness: "fresh" | "stale" | "unavailable" | "sample";
+  fallbackUsed: boolean;
+  message: string;
+};
+
+export type ProductFreshnessSummary = {
+  checkedAt: string;
+  overall: "fresh" | "stale" | "partial" | "unavailable";
+  sources: ProductSourceFreshness[];
+};
+
+export type ProductSourceIssue = {
+  sourceId: UnifiedSourceId;
+  phase: "refresh" | "query";
+  code: "SOURCE_REFRESH_FAILED" | "SOURCE_QUERY_FAILED";
+  fallbackUsed: boolean;
+  message: string;
+  recovery: string;
 };
 
 export type SyncSourceOption = "kdb" | "all";

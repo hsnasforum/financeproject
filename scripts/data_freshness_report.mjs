@@ -4,6 +4,9 @@ import path from "node:path";
 const cwd = process.cwd();
 const dataDir = path.join(cwd, ".data");
 const reportPath = path.join(cwd, "docs", "data-freshness-report.md");
+const cliArgs = process.argv.slice(2);
+const checkOnly = cliArgs.includes("--check-only");
+const logPrefix = checkOnly ? "[freshness:check]" : "[freshness:report]";
 
 const SOURCE_RULES = [
   { source: "finlife", pattern: /^finlife_.*_snapshot\.json$/i, maxAgeDays: 3 },
@@ -41,6 +44,47 @@ function isAuxiliaryFile(fileName) {
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+}
+
+function parseNow(args) {
+  const option = args.find((arg) => arg.startsWith("--now="));
+  if (!option) return new Date();
+  const configuredNow = option.slice("--now=".length).trim();
+  const configuredNowMs = Date.parse(configuredNow);
+  if (!configuredNow || !Number.isFinite(configuredNowMs)) {
+    throw new Error("--now requires a valid ISO date-time");
+  }
+  return new Date(configuredNowMs);
+}
+
+function parseExceptions(args, now) {
+  const option = args.find((arg) => arg.startsWith("--exceptions="));
+  if (!option) return new Map();
+  const configuredPath = option.slice("--exceptions=".length).trim();
+  if (!configuredPath) throw new Error("--exceptions requires a JSON file path");
+  const absolutePath = path.resolve(cwd, configuredPath);
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`freshness exceptions file not found: ${configuredPath}`);
+  }
+  const parsed = readJson(absolutePath);
+  if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.exceptions)) {
+    throw new Error("freshness exceptions must use schemaVersion=1 and an exceptions array");
+  }
+  const out = new Map();
+  for (const entry of parsed.exceptions) {
+    const file = typeof entry?.file === "string" ? entry.file.trim() : "";
+    const reason = typeof entry?.reason === "string" ? entry.reason.trim() : "";
+    const mitigation = typeof entry?.mitigation === "string" ? entry.mitigation.trim() : "";
+    const expiresAt = typeof entry?.expiresAt === "string" ? entry.expiresAt.trim() : "";
+    const expiresAtMs = Date.parse(expiresAt);
+    if (!file || path.basename(file) !== file || !reason || !mitigation || !Number.isFinite(expiresAtMs)) {
+      throw new Error(`invalid freshness exception entry: ${file || "<missing file>"}`);
+    }
+    if (expiresAtMs <= now.getTime()) throw new Error(`expired freshness exception: ${file}`);
+    if (out.has(file)) throw new Error(`duplicate freshness exception: ${file}`);
+    out.set(file, { file, reason, mitigation, expiresAt });
+  }
+  return out;
 }
 
 function findGeneratedAt(value) {
@@ -93,6 +137,16 @@ function buildReportMarkdown(input) {
     );
   }
   lines.push("");
+  if (input.appliedExceptions.length > 0) {
+    lines.push("## Time-limited Exceptions");
+    lines.push("");
+    lines.push("| File | Expires at | Reason | Mitigation |");
+    lines.push("| --- | --- | --- | --- |");
+    for (const entry of input.appliedExceptions) {
+      lines.push(`| ${entry.file} | ${entry.expiresAt} | ${entry.reason} | ${entry.mitigation} |`);
+    }
+    lines.push("");
+  }
   if (input.ignoredFiles.length > 0) {
     lines.push("## Ignored Auxiliary Files");
     lines.push("");
@@ -108,6 +162,7 @@ function buildReportMarkdown(input) {
   lines.push(`- total: ${input.rows.length}`);
   lines.push(`- fresh: ${input.summary.fresh}`);
   lines.push(`- stale: ${input.summary.stale}`);
+  lines.push(`- staleException: ${input.summary.staleException}`);
   lines.push(`- missingTimestamp: ${input.summary.missingTimestamp}`);
   lines.push(`- invalidTimestamp: ${input.summary.invalidTimestamp}`);
   lines.push(`- ignoredAuxiliary: ${input.ignoredFiles.length}`);
@@ -117,9 +172,10 @@ function buildReportMarkdown(input) {
 }
 
 function main() {
-  const args = process.argv.slice(2);
+  const args = cliArgs;
   const strict = args.includes("--strict");
-  const now = new Date();
+  const now = parseNow(args);
+  const exceptions = parseExceptions(args, now);
 
   const allFileNames = listSnapshots();
   if (allFileNames.length === 0) {
@@ -144,7 +200,7 @@ function main() {
     } else if (ageDays === null) {
       status = "invalid_generated_at";
     } else if (ageDays > rule.maxAgeDays) {
-      status = "stale";
+      status = exceptions.has(fileName) ? "stale_exception" : "stale";
     }
 
     rows.push({
@@ -160,9 +216,17 @@ function main() {
   const summary = {
     fresh: rows.filter((row) => row.status === "fresh").length,
     stale: rows.filter((row) => row.status === "stale").length,
+    staleException: rows.filter((row) => row.status === "stale_exception").length,
     missingTimestamp: rows.filter((row) => row.status === "missing_generated_at").length,
     invalidTimestamp: rows.filter((row) => row.status === "invalid_generated_at").length,
   };
+  const appliedExceptions = rows
+    .filter((row) => row.status === "stale_exception")
+    .map((row) => exceptions.get(row.fileName));
+  const unusedExceptions = [...exceptions.keys()].filter((fileName) => !appliedExceptions.some((entry) => entry.file === fileName));
+  if (unusedExceptions.length > 0) {
+    throw new Error(`unused freshness exceptions: ${unusedExceptions.join(", ")}`);
+  }
 
   const report = buildReportMarkdown({
     generatedAt: now.toISOString(),
@@ -170,27 +234,32 @@ function main() {
     rows,
     summary,
     ignoredFiles,
+    appliedExceptions,
   });
 
-  ensureDir(reportPath);
-  fs.writeFileSync(reportPath, report, "utf-8");
-
-  console.log("[freshness:report] generated docs/data-freshness-report.md");
+  if (!checkOnly) {
+    ensureDir(reportPath);
+    fs.writeFileSync(reportPath, report, "utf-8");
+    console.log(`${logPrefix} generated docs/data-freshness-report.md`);
+  }
   console.log(
-    `[freshness:report] total=${rows.length} fresh=${summary.fresh} stale=${summary.stale} missing=${summary.missingTimestamp} invalid=${summary.invalidTimestamp}`,
+    `${logPrefix} total=${rows.length} fresh=${summary.fresh} stale=${summary.stale} exceptions=${summary.staleException} missing=${summary.missingTimestamp} invalid=${summary.invalidTimestamp}`,
   );
 
   const blockingIssueCount = summary.stale + summary.missingTimestamp + summary.invalidTimestamp;
 
   if (summary.missingTimestamp > 0) {
-    console.warn("[freshness:report] some snapshots do not expose meta.generatedAt or generatedAt");
+    console.warn(`${logPrefix} some snapshots do not expose meta.generatedAt or generatedAt`);
   }
   if (summary.invalidTimestamp > 0) {
-    console.warn("[freshness:report] some snapshots have invalid generatedAt timestamp");
+    console.warn(`${logPrefix} some snapshots have invalid generatedAt timestamp`);
   }
   if (strict && blockingIssueCount > 0) {
-    console.error("[freshness:report] snapshot freshness issues found in strict mode");
+    console.error(`${logPrefix} snapshot freshness issues found in strict mode`);
     process.exit(1);
+  }
+  if (checkOnly) {
+    console.log(`${logPrefix} validation passed`);
   }
 }
 
@@ -198,6 +267,6 @@ try {
   main();
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`[freshness:report] failed: ${message}`);
+  console.error(`${logPrefix} failed: ${message}`);
   process.exit(1);
 }

@@ -19,7 +19,7 @@ import { buildWorkspaceLiveSummary } from "@/lib/planning/ui/workspaceQuickStart
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { isApiBaseResponse } from "@/lib/http/apiContract";
-import { buildConfirmString } from "@/lib/ops/confirm";
+import { createManualConfirmInput, verifyConfirm } from "@/lib/ops/confirm";
 import { t, type Locale } from "@/lib/planning/i18n";
 import {
   normalizeProfileId,
@@ -210,11 +210,10 @@ export function createProfileDeleteDialogState(
 ): WorkspaceProfileDeleteDialogState {
   const safeProfileId = selectedProfileId.trim();
   if (!safeProfileId) return null;
-  const expectedConfirm = buildConfirmString("DELETE profile", safeProfileId);
+  const confirmInput = createManualConfirmInput("DELETE profile", safeProfileId);
   return {
     profileId: safeProfileId,
-    expectedConfirm,
-    confirmText: expectedConfirm,
+    ...confirmInput,
   };
 }
 
@@ -222,7 +221,7 @@ export function isDeleteProfileConfirmMatched(
   dialog: WorkspaceProfileDeleteDialogState,
 ): boolean {
   if (!dialog) return false;
-  return dialog.confirmText.trim() === dialog.expectedConfirm;
+  return verifyConfirm(dialog.confirmText, dialog.expectedConfirm);
 }
 
 function beginnerGoalContext(form: ProfileFormModel): BeginnerGoalContext {

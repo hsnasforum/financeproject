@@ -12,8 +12,10 @@ const test = base.extend({
         const pathname = window.location.pathname;
         if (
           pathname === "/planning"
+          || pathname === "/gov24"
           || pathname === "/planning/runs"
           || pathname === "/planning/reports"
+          || pathname === "/planning/trash"
           || pathname.startsWith("/planning/reports/")
           || pathname === "/planning/v3/accounts"
           || pathname === "/planning/v3/transactions"
@@ -21,6 +23,7 @@ const test = base.extend({
           || pathname.startsWith("/planning/v3/profile/drafts")
           || pathname === "/products"
           || pathname.startsWith("/products/")
+          || pathname === "/tools/fx"
           || pathname === "/recommend"
           || pathname.startsWith("/recommend/")
           || pathname === "/invest/companies"

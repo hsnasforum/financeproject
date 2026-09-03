@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { depositToMonthly, housingBurden, monthlyMortgagePayment } from "../src/lib/housing/afford";
+import {
+  assessHousingBurdenRatio,
+  depositToMonthly,
+  housingBurden,
+  monthlyMortgagePayment,
+} from "../src/lib/housing/afford";
 import { parseAffordInit } from "../src/lib/housing/affordQuery";
 
 describe("housing afford calculators", () => {
@@ -42,6 +47,42 @@ describe("housing afford calculators", () => {
     expect(result.monthlyHousingCost).toBeGreaterThan(3_000_000);
     expect(result.warnings.join(" ")).toContain("40%");
     expect(result.warnings.join(" ")).toContain("잔여현금흐름");
+  });
+
+  it.each([
+    [29.99, "low", "낮음"],
+    [30, "attention", "주의"],
+    [30.01, "attention", "주의"],
+    [39.99, "attention", "주의"],
+    [40, "high", "높음"],
+    [40.01, "high", "높음"],
+  ] as const)("classifies %s%% as %s", (ratio, level, label) => {
+    expect(assessHousingBurdenRatio(ratio)).toEqual({ level, label });
+  });
+
+  it("uses the same assessment for the result and warning", () => {
+    const result = housingBurden({
+      incomeNetMonthly: 1_000_000,
+      nonHousingOutflowMonthly: 0,
+      mode: "rent",
+      rent: { deposit: 0, monthlyRent: 300_000, opportunityAprPct: 0 },
+    });
+
+    expect(result.assessment).toEqual({ level: "attention", label: "주의" });
+    expect(result.warnings.join(" ")).toContain("30% 이상");
+  });
+
+  it.each([0, -1])("limits percentage calculations for non-positive income %s", (incomeNetMonthly) => {
+    const result = housingBurden({
+      incomeNetMonthly,
+      nonHousingOutflowMonthly: 200_000,
+      mode: "rent",
+      rent: { deposit: 0, monthlyRent: 300_000, opportunityAprPct: 0 },
+    });
+
+    expect(result.housingRatioPct).toBeNull();
+    expect(result.assessment).toEqual({ level: "unavailable", label: "계산 제한" });
+    expect(result.residualCashFlow).toBe(-500_000);
   });
 });
 

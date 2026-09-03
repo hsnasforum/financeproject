@@ -1,7 +1,9 @@
 import {
   getUnifiedProducts,
   UnifiedInputError,
+  type UnifiedCursorErrorReason,
   type UnifiedMode,
+  type UnifiedRequestInterruptionReason,
 } from "@/lib/sources/unified";
 import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { singleflight } from "../../../../lib/cache/singleflight";
@@ -12,12 +14,14 @@ import {
   hasIssues,
   parseEnum,
   parseIntValue,
+  parseNumberValue,
   parseStringValue,
 } from "@/lib/http/validate";
 import type { UnifiedSourceId } from "@/lib/sources/types";
 import { isSamplebankPublicAccessAllowed } from "@/lib/products/samplebankPolicy";
 import { pushError } from "../../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../lib/observability/trace";
+import { applyProductSourceIssues, getProductFreshnessSummary } from "@/lib/sources/productFreshness";
 
 function parseEnrichSources(input: string | null): Array<"datago_kdb"> {
   if (!input || !input.trim()) return [];
@@ -60,6 +64,10 @@ function hasSamplebankSource(input: {
   sourceId: UnifiedSourceId | null;
 }): boolean {
   return input.sourceId === "samplebank" || input.includeSources.includes("samplebank");
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 export async function GET(request: Request) {
@@ -115,6 +123,36 @@ export async function GET(request: Request) {
 
     const cursor = searchParams.get("cursor");
     const q = searchParams.get("q");
+    const providerRaw = parseStringValue(bag, {
+      path: "provider",
+      value: searchParams.get("provider"),
+      fallback: "",
+      trim: true,
+      maxLength: 200,
+    });
+    const provider = providerRaw && providerRaw !== "all" ? providerRaw : null;
+    const termMonthsRaw = (searchParams.get("termMonths") ?? "").trim();
+    const termMonths = termMonthsRaw
+      ? parseIntValue(bag, {
+          path: "termMonths",
+          value: termMonthsRaw,
+          fallback: 1,
+          min: 1,
+          max: 1200,
+        })
+      : null;
+    const minRateRaw = (searchParams.get("minRate") ?? "").trim();
+    const parsedMinRate = minRateRaw
+      ? parseNumberValue(bag, {
+          path: "minRate",
+          value: minRateRaw,
+          fallback: 0,
+          min: 0,
+          max: 100,
+        })
+      : null;
+    const minRate = typeof parsedMinRate === "number" && parsedMinRate > 0 ? parsedMinRate : null;
+    const catalogFiltersActive = Boolean(provider || termMonths !== null || minRate !== null);
     const queryMode = parseEnum(bag, {
       path: "qMode",
       value: (searchParams.get("qMode") ?? "contains").trim().toLowerCase(),
@@ -127,6 +165,8 @@ export async function GET(request: Request) {
       allowed: ["merged", "integrated"] as const,
       fallback: "merged",
     }) as UnifiedMode;
+    const catalogSnapshotActive = catalogFiltersActive
+      || (mode === "merged" && sourceId === null && includeSources.length > 1);
     const debugRequested = searchParams.get("debug") === "1";
     const canExposeDiagnostics = process.env.NODE_ENV !== "production" || process.env.UNIFIED_DEBUG_ALLOW_IN_PROD === "1";
     const debug = debugRequested && canExposeDiagnostics;
@@ -164,6 +204,9 @@ export async function GET(request: Request) {
         addIssue(bag, "cursor", "Cursor pagination is not supported in integrated mode.");
       }
     }
+    if ((provider || termMonths !== null || minRate !== null) && (mode !== "merged" || sourceId !== null)) {
+      addIssue(bag, "filters", "provider, termMonths, minRate require merged multi-source mode");
+    }
     if (cursor && sourceId && (!includeSources.includes(sourceId) || includeSources.length !== 1)) {
       addIssue(bag, "cursor", "Cursor pagination requires single sourceId.");
     }
@@ -192,6 +235,9 @@ export async function GET(request: Request) {
       sourceId ?? "all",
       cursor ?? "",
       q ?? "",
+      provider ?? "all",
+      termMonths === null ? "" : String(termMonths),
+      minRate === null ? "" : String(minRate),
       refresh ? "1" : "0",
       onlyNew ? "1" : "0",
       changedSince ?? "",
@@ -204,30 +250,34 @@ export async function GET(request: Request) {
       includeKdbOnly ? "1" : "0",
       debug ? "1" : "0",
     ].join("|");
+    const unifiedQuery = () => getUnifiedProducts({
+      kind,
+      mode,
+      includeSources,
+      sourceId,
+      cursor,
+      q,
+      provider,
+      termMonths,
+      minRate,
+      refresh,
+      onlyNew,
+      changedSince,
+      includeTimestamps,
+      limit,
+      sort: sortMode,
+      qMode: queryMode,
+      enrichSources,
+      depositProtection,
+      includeKdbOnly,
+      debug,
+      ...(catalogSnapshotActive ? { signal: request.signal } : {}),
+    });
     const dataTimed = await withTiming(
       "products.unified.query",
-      () => singleflight(
-        singleflightKey,
-        () => getUnifiedProducts({
-          kind,
-          mode,
-          includeSources,
-          sourceId,
-          cursor,
-          q,
-          refresh,
-          onlyNew,
-          changedSince,
-          includeTimestamps,
-          limit,
-          sort: sortMode,
-          qMode: queryMode,
-          enrichSources,
-          depositProtection,
-          includeKdbOnly,
-          debug,
-        }),
-      ),
+      () => catalogSnapshotActive
+        ? unifiedQuery()
+        : singleflight(singleflightKey, unifiedQuery),
     );
     const data = dataTimed.value;
 
@@ -243,12 +293,18 @@ export async function GET(request: Request) {
     };
 
     const generatedAt = new Date().toISOString();
+    const freshness = data.provenance?.freshness ?? applyProductSourceIssues(await getProductFreshnessSummary({
+      kind,
+      sourceIds: sourceId ? [sourceId] : includeSources,
+      checkedAt: generatedAt,
+    }), data.sourceIssues);
     return withTrace(jsonOk({
       data,
       coverage,
       meta: {
         ...traceMeta({
           generatedAt,
+          freshness,
         }),
         ...(debugRequested
           ? {
@@ -262,7 +318,34 @@ export async function GET(request: Request) {
       fetchedAt: generatedAt,
     }));
   } catch (error) {
+    if (isAbortError(error)) {
+      const reason: UnifiedRequestInterruptionReason = {
+        code: "REQUEST_ABORTED",
+        message: "상품 조회 요청이 완료되기 전에 취소되었습니다.",
+        recovery: "현재 조건으로 다시 조회해 주세요.",
+      };
+      recordError(reason.code, reason.message, 499);
+      return withTrace(jsonError(reason.code, reason.message, {
+        status: 499,
+        details: { reason },
+        meta: traceMeta(),
+      }));
+    }
     if (error instanceof UnifiedInputError) {
+      if (error.code === "CURSOR_INVALID" || error.code === "CURSOR_EXPIRED" || error.code === "CURSOR_MISMATCH") {
+        const reason: UnifiedCursorErrorReason = {
+          code: error.code,
+          message: error.message,
+          recovery: "현재 조회 조건으로 첫 페이지부터 다시 조회해 주세요.",
+        };
+        const status = error.code === "CURSOR_EXPIRED" ? 410 : 400;
+        recordError(reason.code, reason.message, status);
+        return withTrace(jsonError(reason.code, reason.message, {
+          status,
+          details: { reason },
+          meta: traceMeta(),
+        }));
+      }
       const status = statusFromCode("INPUT");
       recordError("INPUT", error.message, status);
       return withTrace(jsonError("INPUT", error.message, {

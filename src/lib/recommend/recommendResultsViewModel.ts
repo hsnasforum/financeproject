@@ -58,6 +58,11 @@ export type RecommendResponse = {
     candidateSources?: CandidateSource[];
     depositProtection?: DepositProtectionMode;
     weights: { rate: number; term: number; liquidity: number };
+    weightNormalization?: {
+      applied: boolean;
+      originalSum: number;
+      reason: "none" | "sum_adjusted" | "zero_sum_defaulted";
+    };
     assumptions: {
       rateSelectionPolicy: string;
       liquidityPolicy: string;

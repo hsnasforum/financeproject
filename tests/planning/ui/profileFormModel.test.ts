@@ -363,6 +363,7 @@ describe("planning profileFormModel", () => {
     expect(Array.isArray(parsed.profile.goals)).toBe(true);
     expect(parsed.profile.debts[0]?.id).toBe("loan-rt-1");
     expect(parsed.profile.goals[0]?.id).toBe("goal-rt-1");
+    expect(parsed.profile.goals[0]?.targetMonth).toBe(36);
   });
 
   it("validates debt offer liability ids against profile debts", () => {

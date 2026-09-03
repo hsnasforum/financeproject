@@ -2,7 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
   getUnifiedProducts: vi.fn(),
-  UnifiedInputError: class UnifiedInputError extends Error {},
+  UnifiedInputError: class UnifiedInputError extends Error {
+    constructor(message: string, readonly code = "INPUT") {
+      super(message);
+    }
+  },
+  getProductFreshnessSummary: vi.fn(),
+}));
+
+vi.mock("@/lib/sources/productFreshness", () => ({
+  getProductFreshnessSummary: mocked.getProductFreshnessSummary,
+  applyProductSourceIssues: (summary: unknown) => summary,
 }));
 
 vi.mock("@/lib/sources/unified", () => ({
@@ -32,6 +42,32 @@ type UnifiedRouteJson = {
   ok?: boolean;
   data?: {
     items?: Array<{ badges?: string[] }>;
+    pageInfo?: {
+      nextCursor?: string | null;
+      partial?: boolean;
+      partialReasons?: Array<{
+        code?: string;
+        sourceId?: string;
+        message?: string;
+        recovery?: string;
+      }>;
+    };
+    facets?: {
+      providerStatus?: {
+        state?: string;
+        issues?: Array<{ code?: string; sourceId?: string }>;
+      };
+    };
+    provenance?: {
+      policy?: string;
+      capturedAt?: string;
+      versionFingerprint?: string;
+      freshness?: {
+        checkedAt?: string;
+        overall?: string;
+        sources?: Array<{ sourceAsOf?: string | null }>;
+      };
+    };
   };
   coverage?: {
     totalProducts?: number;
@@ -51,6 +87,24 @@ type UnifiedRouteJson = {
     };
     unmatchedProviders?: Array<{ providerName?: string; count?: number }>;
     notes?: string[];
+  };
+  meta?: {
+    generatedAt?: string;
+    freshness?: {
+      checkedAt?: string;
+      sources?: Array<{ sourceAsOf?: string | null }>;
+    };
+  };
+  error?: {
+    code?: string;
+    message?: string;
+    details?: {
+      reason?: {
+        code?: string;
+        message?: string;
+        recovery?: string;
+      };
+    };
   };
 };
 
@@ -96,13 +150,26 @@ const sampleUnified = {
   },
 };
 
-async function callUnified(query = ""): Promise<{ status: number; json: UnifiedRouteJson }> {
-  const req = new Request(`http://localhost/api/products/unified${query}`);
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function callUnifiedRequest(req: Request): Promise<{ status: number; json: UnifiedRouteJson }> {
   const res = await GET(req);
   return {
     status: res.status,
     json: (await res.json()) as UnifiedRouteJson,
   };
+}
+
+async function callUnified(query = ""): Promise<{ status: number; json: UnifiedRouteJson }> {
+  return callUnifiedRequest(new Request(`http://localhost/api/products/unified${query}`));
 }
 
 function setEnv(name: string, value: string | undefined): void {
@@ -121,6 +188,22 @@ describe("GET /api/products/unified", () => {
   beforeEach(() => {
     mocked.getUnifiedProducts.mockReset();
     mocked.getUnifiedProducts.mockResolvedValue(sampleUnified);
+    mocked.getProductFreshnessSummary.mockReset();
+    mocked.getProductFreshnessSummary.mockResolvedValue({
+      checkedAt: "2026-08-26T03:00:00.000Z",
+      overall: "stale",
+      sources: [{
+        sourceId: "finlife",
+        kind: "deposit",
+        sourceAsOf: "2026-06-22T15:58:01.146Z",
+        checkedAt: "2026-08-26T03:00:00.000Z",
+        ttlMs: 43_200_000,
+        ageMs: 1,
+        freshness: "stale",
+        fallbackUsed: false,
+        message: "stale",
+      }],
+    });
     setEnv("NODE_ENV", "test");
     setEnv("UNIFIED_DEBUG_ALLOW_IN_PROD", undefined);
   });
@@ -153,6 +236,14 @@ describe("GET /api/products/unified", () => {
     expect(typeof json.diagnostics?.unmatchedProviders?.[0]?.providerName).toBe("string");
     expect(typeof json.diagnostics?.unmatchedProviders?.[0]?.count).toBe("number");
     expect(Array.isArray(json.diagnostics?.notes)).toBe(true);
+  });
+
+  it("keeps response generation time separate from sourceAsOf", async () => {
+    const { status, json } = await callUnified("?kind=deposit&includeSources=finlife");
+
+    expect(status).toBe(200);
+    expect(json.meta?.freshness?.sources?.[0]?.sourceAsOf).toBe("2026-06-22T15:58:01.146Z");
+    expect(json.meta?.generatedAt).not.toBe(json.meta?.freshness?.sources?.[0]?.sourceAsOf);
   });
 
   it("does not expose diagnostics in production by default", async () => {
@@ -210,6 +301,94 @@ describe("GET /api/products/unified", () => {
     }));
   });
 
+  it("passes catalog filters to the merged product service", async () => {
+    const { status, json } = await callUnified(
+      "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb&provider=%EA%B5%AD%EB%AF%BC%EC%9D%80%ED%96%89&termMonths=12&minRate=3.5",
+    );
+
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "국민은행",
+      termMonths: 12,
+      minRate: 3.5,
+      signal: expect.anything(),
+    }));
+  });
+
+  it.each([
+    ["default", "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb"],
+    ["q-only", "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb&q=%EA%B2%80%EC%83%89%EB%8C%80%EC%83%81"],
+  ])("passes request cancellation into %s multi-source snapshot scans", async (_name, query) => {
+    const { status, json } = await callUnified(query);
+
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
+      includeSources: ["finlife", "datago_kdb"],
+      sourceId: null,
+      signal: expect.anything(),
+    }));
+  });
+
+  it("isolates one aborted HTTP snapshot caller from another concurrent caller", async () => {
+    const secondRelease = deferred<void>();
+    const seenSignals: AbortSignal[] = [];
+    const pinned = {
+      ...sampleUnified,
+      pageInfo: {
+        ...sampleUnified.pageInfo,
+        hasMore: true,
+        nextCursor: "signed-snapshot-cursor",
+      },
+      provenance: {
+        policy: "pinned_snapshot" as const,
+        capturedAt: "2026-09-03T00:00:00.000Z",
+        versionFingerprint: "concurrent-route-snapshot",
+        freshness: {
+          checkedAt: "2026-09-03T00:00:00.000Z",
+          overall: "fresh" as const,
+          sources: [],
+        },
+      },
+    };
+    let invocation = 0;
+    mocked.getUnifiedProducts.mockImplementation((input: { signal?: AbortSignal }) => {
+      invocation += 1;
+      if (!input.signal) return Promise.reject(new Error("expected request signal"));
+      const signal = input.signal;
+      seenSignals.push(signal);
+      if (invocation === 1) {
+        return new Promise((resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            reject(new DOMException("request cancelled", "AbortError"));
+          }, { once: true });
+          void secondRelease.promise.then(() => resolve(pinned));
+        });
+      }
+      return secondRelease.promise.then(() => pinned);
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const url = "http://localhost/api/products/unified?mode=merged&kind=deposit&includeSources=finlife,datago_kdb";
+
+    const first = callUnifiedRequest(new Request(url, { signal: firstController.signal }));
+    const second = callUnifiedRequest(new Request(url, { signal: secondController.signal }));
+    await vi.waitFor(() => expect(seenSignals).toHaveLength(2));
+    expect(seenSignals[0]).not.toBe(seenSignals[1]);
+
+    firstController.abort();
+    secondRelease.resolve();
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+
+    expect(firstResponse.status).toBe(499);
+    expect(firstResponse.json.error?.code).toBe("REQUEST_ABORTED");
+    expect(secondResponse.status).toBe(200);
+    expect(secondResponse.json.data?.pageInfo?.nextCursor).toBe("signed-snapshot-cursor");
+    expect(secondResponse.json.data?.provenance?.versionFingerprint).toBe("concurrent-route-snapshot");
+    expect(seenSignals[1]?.aborted).toBe(false);
+  });
+
   it("reports deposit protection matched and unknown coverage", async () => {
     mocked.getUnifiedProducts.mockResolvedValueOnce({
       ...sampleUnified,
@@ -227,5 +406,116 @@ describe("GET /api/products/unified", () => {
       matched: 1,
       unknown: 2,
     });
+  });
+
+  it("preserves structured data and provider-facet partial status in the public route", async () => {
+    mocked.getUnifiedProducts.mockResolvedValueOnce({
+      ...sampleUnified,
+      pageInfo: {
+        ...sampleUnified.pageInfo,
+        partial: true,
+        partialReasons: [{
+          code: "SOURCE_QUERY_FAILED",
+          sourceId: "datago_kdb",
+          message: "상품 후보가 누락되었습니다.",
+          recovery: "잠시 후 다시 조회해 주세요.",
+        }],
+      },
+      facets: {
+        providers: ["테스트은행"],
+        providerStatus: {
+          state: "partial",
+          issues: [{
+            code: "PROVIDER_FACET_FAILED",
+            sourceId: "datago_kdb",
+            message: "전체 기관 목록을 불러오지 못했습니다.",
+            recovery: "잠시 후 다시 조회해 주세요.",
+          }],
+        },
+      },
+    });
+
+    const { status, json } = await callUnified("?kind=deposit");
+
+    expect(status).toBe(200);
+    expect(json.data?.pageInfo?.partial).toBe(true);
+    expect(json.data?.pageInfo?.partialReasons).toEqual([
+      expect.objectContaining({ code: "SOURCE_QUERY_FAILED", sourceId: "datago_kdb" }),
+    ]);
+    expect(json.data?.facets?.providerStatus).toEqual({
+      state: "partial",
+      issues: [expect.objectContaining({ code: "PROVIDER_FACET_FAILED", sourceId: "datago_kdb" })],
+    });
+  });
+
+  it("keeps an aborted request distinct from an upstream failure", async () => {
+    mocked.getUnifiedProducts.mockRejectedValueOnce(new DOMException("request cancelled", "AbortError"));
+
+    const { status, json } = await callUnified("?kind=deposit&provider=%EA%B5%AD%EB%AF%BC%EC%9D%80%ED%96%89");
+
+    expect(status).toBe(499);
+    expect(json.error).toEqual(expect.objectContaining({
+      code: "REQUEST_ABORTED",
+      details: {
+        reason: expect.objectContaining({
+          code: "REQUEST_ABORTED",
+          recovery: expect.any(String),
+        }),
+      },
+    }));
+  });
+
+  it("uses snapshot-pinned freshness instead of recomputing current provenance", async () => {
+    const pinnedFreshness = {
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      overall: "fresh" as const,
+      sources: [{
+        sourceId: "finlife" as const,
+        kind: "deposit" as const,
+        sourceAsOf: "2026-08-31T23:00:00.000Z",
+        checkedAt: "2026-09-01T00:00:00.000Z",
+        ttlMs: 43_200_000,
+        ageMs: 3_600_000,
+        freshness: "fresh" as const,
+        fallbackUsed: false,
+        message: "snapshot fresh",
+      }],
+    };
+    mocked.getUnifiedProducts.mockResolvedValueOnce({
+      ...sampleUnified,
+      provenance: {
+        policy: "pinned_snapshot",
+        capturedAt: "2026-09-01T00:00:00.000Z",
+        versionFingerprint: "snapshot-version-a",
+        freshness: pinnedFreshness,
+      },
+    });
+
+    const { status, json } = await callUnified(
+      "?mode=merged&kind=deposit&includeSources=finlife,datago_kdb",
+    );
+
+    expect(status).toBe(200);
+    expect(json.meta?.freshness).toEqual(pinnedFreshness);
+    expect(mocked.getProductFreshnessSummary).not.toHaveBeenCalled();
+  });
+
+  it("returns an explicit cursor-expired response with first-page recovery", async () => {
+    mocked.getUnifiedProducts.mockRejectedValueOnce(
+      new mocked.UnifiedInputError("snapshot expired", "CURSOR_EXPIRED"),
+    );
+
+    const { status, json } = await callUnified("?kind=deposit&termMonths=12&cursor=expired");
+
+    expect(status).toBe(410);
+    expect(json.error).toEqual(expect.objectContaining({
+      code: "CURSOR_EXPIRED",
+      details: {
+        reason: expect.objectContaining({
+          code: "CURSOR_EXPIRED",
+          recovery: expect.stringContaining("첫 페이지"),
+        }),
+      },
+    }));
   });
 });

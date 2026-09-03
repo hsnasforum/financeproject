@@ -14,7 +14,7 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { issuesToFieldMap } from "@/lib/forms/issueMap";
-import { housingBurden } from "@/lib/housing/afford";
+import { HOUSING_BURDEN_POLICY, housingBurden } from "@/lib/housing/afford";
 import { parseHousingAfford, type HousingAffordMode } from "@/lib/schemas/housingAfford";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +40,11 @@ function fmtKrw(value: number): string {
 function fmtPct(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "-";
   return `${value.toFixed(2)}%`;
+}
+
+function fmtRoundedPct(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "-";
+  return `${Math.round(value)}%`;
 }
 
 function toNumberOrNull(text: string): number | null {
@@ -162,25 +167,25 @@ export function HousingAffordClient({
     }, 0);
   }, [parsedInput.issues]);
 
+  const normalizedInput = parsedInput.value;
   const result = useMemo(() => {
-    const normalized = parsedInput.value;
     return housingBurden({
-      incomeNetMonthly: normalized.incomeNet,
-      nonHousingOutflowMonthly: normalized.outflow,
-      mode: normalized.mode,
+      incomeNetMonthly: normalizedInput.incomeNet,
+      nonHousingOutflowMonthly: normalizedInput.outflow,
+      mode: normalizedInput.mode,
       rent: {
-        deposit: normalized.deposit,
-        monthlyRent: normalized.monthlyRent,
-        opportunityAprPct: normalized.opportunityAprPct,
+        deposit: normalizedInput.deposit,
+        monthlyRent: normalizedInput.monthlyRent,
+        opportunityAprPct: normalizedInput.opportunityAprPct,
       },
       buy: {
-        purchasePrice: normalized.purchasePrice,
-        equity: normalized.equity,
-        loanAprPct: normalized.loanAprPct,
-        termMonths: normalized.termMonths,
+        purchasePrice: normalizedInput.purchasePrice,
+        equity: normalizedInput.equity,
+        loanAprPct: normalizedInput.loanAprPct,
+        termMonths: normalizedInput.termMonths,
       },
     });
-  }, [parsedInput.value]);
+  }, [normalizedInput]);
 
   const ctaLinks = useMemo(() => {
     const links: Array<{ href: string; label: string }> = [];
@@ -189,18 +194,39 @@ export function HousingAffordClient({
     } else {
       links.push({ href: "/products/rent-house-loan", label: "전월세 대출 조건 다시 보기" });
     }
-    if ((result.housingRatioPct ?? 0) >= 30) {
+    if (result.assessment.level === "attention" || result.assessment.level === "high") {
       links.push({ href: "/housing/subscription?region=전국&mode=all&houseType=apt", label: "청약 공고 다시 보기" });
     }
-    if (result.residualCashFlow < 0 || (result.housingRatioPct ?? 0) >= 40) {
+    if (result.residualCashFlow < 0 || result.assessment.level === "high") {
       links.push({ href: "/gov24", label: "지원금·혜택 다시 보기" });
     }
     return links;
-  }, [mode, result.housingRatioPct, result.residualCashFlow]);
+  }, [mode, result.assessment.level, result.residualCashFlow]);
 
-  const incomeVal = Number(incomeNetInput) || 1;
-  const otherOutflowVal = Number(outflowInput) || 0;
-  const housingCostVal = result.monthlyHousingCost || 0;
+  const incomeVal = normalizedInput.incomeNet;
+  const otherOutflowVal = normalizedInput.outflow;
+  const housingCostVal = result.monthlyHousingCost;
+  const compositionRatios = incomeVal > 0
+    ? {
+        otherOutflowPct: (otherOutflowVal / incomeVal) * 100,
+        housingCostPct: (housingCostVal / incomeVal) * 100,
+        residualPct: Math.max(0, (result.residualCashFlow / incomeVal) * 100),
+      }
+    : null;
+  const burdenBadgeClass = result.assessment.level === "low"
+    ? "bg-primary/5 text-primary border-primary/10"
+    : result.assessment.level === "attention"
+      ? "bg-amber-50 text-amber-600 border-amber-100"
+      : result.assessment.level === "high"
+        ? "bg-rose-50 text-rose-600 border-rose-100"
+        : "bg-slate-100 text-slate-600 border-slate-200";
+  const burdenProgressClass = result.assessment.level === "low"
+    ? "text-primary"
+    : result.assessment.level === "attention"
+      ? "text-amber-500"
+      : result.assessment.level === "high"
+        ? "text-rose-500"
+        : "text-slate-400";
 
   return (
     <PageShell>
@@ -440,11 +466,9 @@ export function HousingAffordClient({
                   <p className="text-2xl font-black text-navy tabular-nums">{fmtPct(result.housingRatioPct)}</p>
                   <span className={cn(
                     "rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-widest border",
-                    (result.housingRatioPct ?? 0) <= 25 ? "bg-primary/5 text-primary border-primary/10" :
-                    (result.housingRatioPct ?? 0) <= 35 ? "bg-amber-50 text-amber-600 border-amber-100" :
-                    "bg-rose-50 text-rose-600 border-rose-100"
+                    burdenBadgeClass,
                   )}>
-                    {(result.housingRatioPct ?? 0) <= 25 ? "안전" : (result.housingRatioPct ?? 0) <= 35 ? "주의" : "위험"}
+                    {result.assessment.label}
                   </span>
                 </div>
 
@@ -459,20 +483,19 @@ export function HousingAffordClient({
                   {/* Housing Ratio Bar */}
                   <div className="space-y-1.5 pt-1">
                     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                      <CspSafeProgressBar
-                        fillClassName={
-                          (result.housingRatioPct ?? 0) <= 25
-                            ? "text-primary"
-                            : (result.housingRatioPct ?? 0) <= 35
-                              ? "text-amber-500"
-                              : "text-rose-500"
-                        }
-                        value={result.housingRatioPct ?? 0}
-                      />
+                      {result.housingRatioPct === null ? (
+                        <div className="h-full w-full bg-slate-200" role="img" aria-label="주거비 부담 비율 계산 불가" />
+                      ) : (
+                        <CspSafeProgressBar
+                          fillClassName={burdenProgressClass}
+                          value={result.housingRatioPct}
+                          ariaLabel="주거비 부담 비율"
+                        />
+                      )}
                     </div>
                     <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                       <span>0%</span>
-                      <span>권장 25%</span>
+                      <span>주의 기준 {HOUSING_BURDEN_POLICY.attentionFromPct}% · 높음 기준 {HOUSING_BURDEN_POLICY.highFromPct}%</span>
                       <span>100%</span>
                     </div>
                   </div>
@@ -484,27 +507,31 @@ export function HousingAffordClient({
             <div className="mt-8 space-y-3 rounded-3xl bg-surface-muted p-8 border border-slate-100 shadow-sm">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">월 현금흐름 구성</p>
-                <p className="text-xs font-black text-primary">월 소득 기준 {fmtKrw(Number(incomeNetInput))}</p>
+                <p className="text-xs font-black text-primary">월 소득 기준 {fmtKrw(incomeVal)}</p>
               </div>
 
               <div className="h-4 w-full flex overflow-hidden rounded-full bg-slate-200 mt-4">
-                <CashflowCompositionBar
-                  housingCostPct={(housingCostVal / incomeVal) * 100}
-                  otherOutflowPct={(otherOutflowVal / incomeVal) * 100}
-                />
+                {compositionRatios ? (
+                  <CashflowCompositionBar
+                    housingCostPct={compositionRatios.housingCostPct}
+                    otherOutflowPct={compositionRatios.otherOutflowPct}
+                  />
+                ) : (
+                  <div className="h-full w-full bg-slate-200" role="img" aria-label="월 현금흐름 구성 비율 계산 불가" />
+                )}
               </div>
 
               <div className="flex flex-wrap gap-4 pt-2">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-slate-400" />
-                  <span className="text-[10px] font-bold text-slate-500">기타 지출 ({Math.round((otherOutflowVal / incomeVal) * 100)}%)</span>
+                  <span className="text-[10px] font-bold text-slate-500">기타 지출 ({fmtRoundedPct(compositionRatios?.otherOutflowPct ?? null)})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-primary" />
-                  <span className="text-[10px] font-bold text-slate-500">주거비 ({Math.round((housingCostVal / incomeVal) * 100)}%)</span>
+                  <span className="text-[10px] font-bold text-slate-500">주거비 ({fmtRoundedPct(compositionRatios?.housingCostPct ?? null)})</span>
                 </div>
                 <div className="flex items-center gap-2 ml-auto">
-                  <span className="text-[10px] font-black text-primary uppercase tracking-widest">잔여 {Math.max(0, Math.round((result.residualCashFlow / incomeVal) * 100))}%</span>
+                  <span className="text-[10px] font-black text-primary uppercase tracking-widest">잔여 {fmtRoundedPct(compositionRatios?.residualPct ?? null)}</span>
                 </div>
               </div>
             </div>

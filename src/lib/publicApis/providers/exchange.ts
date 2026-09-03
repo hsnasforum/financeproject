@@ -1,6 +1,12 @@
 import { ExternalApiError, fetchExternal } from "../../http/fetchExternal";
 import { type PublicApiResult } from "../contracts/types";
 import { buildSchemaMismatchError, safeEndpoint } from "../schemaDrift";
+import {
+  normalizeExchangeCurrencyUnit,
+  normalizeExchangeQuoteDate,
+  parseExchangeRate,
+} from "./exchangeNormalization";
+import { formatKstCompactDate } from "../../format/kstCalendarDate";
 
 type NormalizedExchange = {
   asOf: string;
@@ -43,47 +49,8 @@ export function resolveExchangeBaseUrl(raw: string):
   }
 }
 
-function parseRate(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string") return null;
-  const normalized = value.replace(/,/g, "").replace(/[^0-9.-]/g, "");
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : null;
-}
-
-function normalizeCurrencyUnit(raw: string): { code: string; scale: number } {
-  const text = raw.trim().toUpperCase();
-  const matched = text.match(/^([A-Z]{3})\s*\((\d+)\)$/);
-  if (!matched) return { code: text, scale: 1 };
-  const scale = Number(matched[2]);
-  return {
-    code: matched[1],
-    scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
-  };
-}
-
-function normalizeDate(raw: unknown): string {
-  const value = typeof raw === "string" ? raw : "";
-  const digits = value.replace(/[^0-9]/g, "");
-  if (/^\d{8}$/.test(digits)) {
-    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function getKstTodayYYYYMMDD(): string {
-  const d = new Date();
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const year = parts.find((p) => p.type === "year")?.value ?? "";
-  const month = parts.find((p) => p.type === "month")?.value ?? "";
-  const day = parts.find((p) => p.type === "day")?.value ?? "";
-  return `${year}${month}${day}`;
+export function getKstTodayYYYYMMDD(now = new Date()): string {
+  return formatKstCompactDate(now);
 }
 
 export function normalizeEximExchange(raw: unknown, baseUrl = ""): NormalizedExchange | null {
@@ -106,21 +73,24 @@ export function normalizeEximExchange(raw: unknown, baseUrl = ""): NormalizedExc
             ? rec.currency
             : "";
     if (!currencyRaw) continue;
-    const currency = normalizeCurrencyUnit(currencyRaw);
+    const currency = normalizeExchangeCurrencyUnit(currencyRaw);
+    if (!currency) continue;
 
-    const rate = parseRate(rec.deal_bas_r ?? rec.dealBasR ?? rec.kftcDealBasR ?? rec.rate ?? rec.baseRate ?? rec.tts ?? rec.ttb);
+    const rate = parseExchangeRate(rec.deal_bas_r ?? rec.dealBasR ?? rec.kftcDealBasR ?? rec.rate ?? rec.baseRate ?? rec.tts ?? rec.ttb);
     if (rate === null) continue;
+    const rowAsOf = normalizeExchangeQuoteDate(rec.deal_bas_dt ?? rec.dealBasDt ?? rec.asOf);
+    if (!rowAsOf) continue;
 
     rates[currency.code] = rate / currency.scale;
     if (!asOf) {
-      asOf = normalizeDate(rec.deal_bas_dt ?? rec.dealBasDt ?? rec.asOf);
+      asOf = rowAsOf;
     }
   }
 
   if (Object.keys(rates).length === 0) return null;
 
   return {
-    asOf: asOf || new Date().toISOString().slice(0, 10),
+    asOf,
     base: "KRW",
     rates,
     rawMeta: { source: "EXIM", baseUrl },

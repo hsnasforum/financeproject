@@ -19,6 +19,272 @@ test("product category deep-link redirects to catalog preset and preserves shelf
   await expect(page.getByPlaceholder("은행명 또는 상품명으로 비교 후보를 좁혀 보세요")).toHaveValue("테스트", { timeout: 30_000 });
 });
 
+test("catalog keeps keyword edits as draft until one explicit search request", async ({ page }) => {
+  const requestQueries: string[] = [];
+  await page.route("**/api/products/unified?**", async (route) => {
+    requestQueries.push(new URL(route.request().url()).searchParams.toString());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [],
+          pageInfo: { hasMore: false, nextCursor: null, limit: 60 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit");
+  await expect.poll(() => requestQueries.length).toBe(1);
+
+  const search = page.getByPlaceholder("은행명 또는 상품명으로 비교 후보를 좁혀 보세요");
+  await search.fill("국민");
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  expect(requestQueries).toHaveLength(1);
+
+  await page.getByRole("button", { name: "조건으로 조회" }).click();
+  await expect.poll(() => requestQueries.length).toBe(2);
+  expect(new URLSearchParams(requestQueries[1]).get("q")).toBe("국민");
+  await expect(page).toHaveURL(/\/products\/catalog\?kind=deposit&q=%EA%B5%AD%EB%AF%BC/);
+});
+
+test("catalog explains source and provider-facet partial results without a false scan-cap message", async ({ page }) => {
+  await page.route("**/api/products/unified?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [{
+            stableId: "finlife:HEALTHY",
+            sourceId: "finlife",
+            kind: "deposit",
+            externalKey: "HEALTHY",
+            providerName: "정상은행",
+            productName: "정상 원천 상품",
+            options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+          }],
+          facets: {
+            providers: ["정상은행"],
+            providerStatus: {
+              state: "partial",
+              issues: [{
+                code: "PROVIDER_FACET_FAILED",
+                sourceId: "datago_kdb",
+                message: "전체 제공 기관 목록을 불러오지 못해 현재 상품의 기관만 표시합니다.",
+                recovery: "잠시 후 다시 조회해 전체 기관 목록을 확인해 주세요.",
+              }],
+            },
+          },
+          pageInfo: {
+            hasMore: false,
+            nextCursor: null,
+            limit: 60,
+            partial: true,
+            partialReasons: [{
+              code: "SOURCE_QUERY_FAILED",
+              sourceId: "datago_kdb",
+              message: "이 원천의 상품 데이터를 불러오지 못해 후보가 누락되었습니다.",
+              recovery: "잠시 후 다시 조회하거나 원천 상태를 확인해 주세요.",
+            }],
+          },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit");
+
+  await expect(page.getByRole("heading", { name: "정상 원천 상품" })).toBeVisible();
+  const dataPartial = page.getByTestId("catalog-partial-results");
+  await expect(dataPartial).toContainText("공공데이터 예금상품");
+  await expect(dataPartial).toContainText("후보가 누락되었습니다");
+  await expect(dataPartial).toContainText("잠시 후 다시 조회하거나 원천 상태를 확인해 주세요");
+  const facetPartial = page.getByTestId("catalog-provider-facet-partial");
+  await expect(facetPartial).toContainText("전체 제공 기관 목록");
+  await expect(page.getByText("저장된 상품 수가 많아 조회를 중단했습니다.")).toHaveCount(0);
+});
+
+test("catalog refuses to append a page with different snapshot provenance", async ({ page }) => {
+  await page.route("**/api/products/unified?**", async (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    const version = cursor ? "version-b" : "version-a";
+    const product = cursor
+      ? { stableId: "PAGE-B", externalKey: "PAGE-B", productName: "섞이면 안 되는 상품" }
+      : { stableId: "PAGE-A", externalKey: "PAGE-A", productName: "첫 snapshot 상품" };
+    const freshness = {
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      overall: "fresh",
+      sources: [],
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [{
+            ...product,
+            sourceId: "finlife",
+            kind: "deposit",
+            providerName: "기준은행",
+            options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+          }],
+          facets: {
+            providers: ["기준은행"],
+            providerStatus: { state: "complete", issues: [] },
+          },
+          pageInfo: {
+            hasMore: !cursor,
+            nextCursor: cursor ? null : "next-page",
+            limit: 60,
+          },
+          provenance: {
+            policy: "pinned_snapshot",
+            capturedAt: "2026-09-01T00:00:00.000Z",
+            versionFingerprint: version,
+            freshness,
+          },
+        },
+        meta: { freshness },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit");
+  await expect(page.getByRole("heading", { name: "첫 snapshot 상품" })).toBeVisible();
+  await page.getByRole("button", { name: "비교 후보 더 보기" }).click();
+
+  await expect(page.getByText(/CURSOR_PROVENANCE_MISMATCH/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "첫 snapshot 상품" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "섞이면 안 되는 상품" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "비교 후보 더 보기" })).toHaveCount(0);
+});
+
+test("catalog does not offer append when a pageable first response has no snapshot provenance", async ({ page }) => {
+  const requestCursors: Array<string | null> = [];
+  await page.route("**/api/products/unified?**", async (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    requestCursors.push(cursor);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          items: [{
+            stableId: cursor ? "PAGE-B" : "PAGE-A",
+            sourceId: "finlife",
+            kind: "deposit",
+            externalKey: cursor ? "PAGE-B" : "PAGE-A",
+            providerName: "기준은행",
+            productName: cursor ? "합치면 안 되는 상품" : "기준 없는 첫 페이지 상품",
+            options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+          }],
+          pageInfo: {
+            hasMore: !cursor,
+            nextCursor: cursor ? null : "next-page",
+            limit: 60,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/products/catalog?kind=deposit");
+  await expect(page.getByRole("heading", { name: "기준 없는 첫 페이지 상품" })).toBeVisible();
+  await expect(page.getByText(/CURSOR_PROVENANCE_MISSING/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "비교 후보 더 보기" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "합치면 안 되는 상품" })).toHaveCount(0);
+  expect(requestCursors).toEqual([null]);
+});
+
+for (const scenario of [
+  { name: "default", url: "/products/catalog?kind=deposit", q: null },
+  { name: "q-only", url: "/products/catalog?kind=deposit&q=%EA%B2%80%EC%83%89%EB%8C%80%EC%83%81", q: "검색대상" },
+]) {
+  test(`catalog appends all 200 ${scenario.name} snapshot rows without duplicate IDs`, async ({ page }) => {
+    const allRows = Array.from({ length: 200 }, (_, index) => {
+      const id = `FIXTURE-${String(index + 1).padStart(3, "0")}`;
+      return {
+        stableId: id,
+        sourceId: index < 100 ? "finlife" : "datago_kdb",
+        kind: "deposit",
+        externalKey: id,
+        providerName: index < 100 ? "F은행" : "K은행",
+        productName: `${scenario.q ?? "기본"} 상품 ${id}`,
+        options: [{ termMonths: 12, intrRate: 3.1, intrRate2: 3.5 }],
+      };
+    });
+    const requestCursors: Array<string | null> = [];
+    const requestQueries: Array<string | null> = [];
+    await page.route("**/api/products/unified?**", async (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      const cursor = params.get("cursor");
+      requestCursors.push(cursor);
+      requestQueries.push(params.get("q"));
+      const pageNumber = cursor ? Number(cursor.slice("snapshot-page-".length)) : 1;
+      const offset = (pageNumber - 1) * 60;
+      const items = allRows.slice(offset, offset + 60);
+      const hasMore = offset + items.length < allRows.length;
+      const freshness = {
+        checkedAt: "2026-09-03T00:00:00.000Z",
+        overall: "fresh",
+        sources: [],
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            items,
+            facets: {
+              providers: ["F은행", "K은행"],
+              providerStatus: { state: "complete", issues: [] },
+            },
+            pageInfo: {
+              hasMore,
+              nextCursor: hasMore ? `snapshot-page-${pageNumber + 1}` : null,
+              limit: 60,
+            },
+            provenance: {
+              policy: "pinned_snapshot",
+              capturedAt: "2026-09-03T00:00:00.000Z",
+              versionFingerprint: `${scenario.name}-snapshot-v1`,
+              freshness,
+            },
+          },
+          meta: { freshness },
+        }),
+      });
+    });
+
+    await page.goto(scenario.url);
+    await expect(page.getByRole("heading", { name: `${scenario.q ?? "기본"} 상품 FIXTURE-060` })).toBeVisible();
+    for (const lastRow of [120, 180, 200]) {
+      await page.getByRole("button", { name: "비교 후보 더 보기" }).click();
+      await expect(page.getByRole("heading", {
+        name: `${scenario.q ?? "기본"} 상품 FIXTURE-${String(lastRow).padStart(3, "0")}`,
+      })).toBeVisible();
+    }
+
+    const detailHrefs = await page.locator('a[href^="/products/catalog/"]').evaluateAll((links) =>
+      links.map((link) => (link as HTMLAnchorElement).getAttribute("href")),
+    );
+    expect(detailHrefs).toHaveLength(200);
+    expect(new Set(detailHrefs).size).toBe(200);
+    expect(requestCursors).toEqual([null, "snapshot-page-2", "snapshot-page-3", "snapshot-page-4"]);
+    expect(requestQueries).toEqual(Array(4).fill(scenario.q));
+    await expect(page.getByRole("button", { name: "비교 후보 더 보기" })).toHaveCount(0);
+  });
+}
+
 test("specialized product list applies the pure result pipeline to query filters", async ({ page }) => {
   await page.route("**/api/finlife/pension?**", async (route) => {
     await route.fulfill({

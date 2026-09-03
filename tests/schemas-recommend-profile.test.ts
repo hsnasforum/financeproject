@@ -70,6 +70,21 @@ describe("recommend profile schema", () => {
     expect(parsed.issues.some((entry) => entry.path === "weights.rate")).toBe(true);
   });
 
+  it("normalizes valid individual weights whose sum is not one", () => {
+    const parsed = parseRecommendProfile({
+      ...defaults(),
+      weights: { rate: 1, term: 1, liquidity: 1 },
+    });
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.weightNormalization).toMatchObject({
+      normalized: true,
+      originalSum: 3,
+      reason: "sum_adjusted",
+    });
+    expect(parsed.value.weights.rate + parsed.value.weights.term + parsed.value.weights.liquidity).toBe(1);
+  });
+
   it("collects issues for invalid planning handoff", () => {
     const parsed = parseRecommendProfile({
       ...defaults(),

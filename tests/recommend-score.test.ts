@@ -103,4 +103,22 @@ describe("recommend score engine", () => {
 
     expect(stampedRanked).toEqual(plainRanked);
   });
+
+  it("normalizes direct scorer weight overrides as a last-line defense", () => {
+    const result = recommendFinlifeProducts({
+      kind: "deposit",
+      products: [makeProduct({ code: "A", name: "A", term: "12", intrRate: 2.8, intrRate2: 3.1 })],
+      profile: {
+        purpose: "seed-money",
+        kind: "deposit",
+        preferredTerm: 12,
+        liquidityPref: "mid",
+        rateMode: "max",
+        topN: 10,
+        weights: { rate: 1, term: 1, liquidity: 1 },
+      },
+    });
+
+    expect(result.weights.rate + result.weights.term + result.weights.liquidity).toBe(1);
+  });
 });

@@ -32,6 +32,8 @@
 - companion: `pnpm build`
 - 사용자 흐름 영향이 있으면 같은 소유자가 `pnpm e2e:rc`를 이어서 실행합니다.
 - `release:verify` 구성은 `scripts/quality_gates.mjs`의 `QUALITY_GATE_SUITES["release:verify"]`를 기준으로 합니다.
+- required preflight는 `cleanup:next-artifacts → deps:audit → freshness:release → e2e:inventory:check` 순서입니다.
+- 설치본 release 단계는 `release:verify → artifact build/install → production smoke → desktop smoke` 순서이며, 두 smoke는 `release:verify` 내부 gate가 아닙니다.
 - `pnpm planning:postgres:readiness`는 release suite의 optional gate이며, PostgreSQL target schema readiness evidence만 만들고 운영 DB migration을 실행하지 않습니다.
 
 ## 수동 운영·데이터 명령
@@ -39,6 +41,11 @@
 - DART: `pnpm dart:corpindex`, `pnpm dart:ensure-corpindex`, `pnpm dart:watch*`, `pnpm dart:rules:*`
 - FINLIFE/DataGo/Gov24: `pnpm finlife:sync*`, `pnpm finlife:inventory:report`, `pnpm datago:sync`, `pnpm products:sync`, `pnpm gov24:sync*`
 - freshness/warmup: `pnpm freshness:report`, `pnpm data:doctor`, `pnpm warm:if-stale`, `pnpm daily:refresh*`
+- 지원되는 freshness 명령(`freshness:report`, `freshness:release`, `data:doctor`, `verify`)은 모두
+  `config/data-freshness-exceptions.json`을 단일 예외 기준으로 사용합니다. 예외는 `expiresAt` 직전까지만
+  유효하고 그 시각부터 만료로 판정합니다.
+- 경계 재현이나 테스트가 필요하면 script에 `--now=<ISO date-time>`을 전달할 수 있습니다. 운영 판정은
+  package script가 사용하는 실제 현재 시각을 기준으로 합니다.
 - planning ops: `pnpm planning:v2:ops:*`, `pnpm planning:v2:backfill-legacy-runs`, `pnpm planning:v2:migrate:*`
 - 위 명령은 일반 PR 필수 게이트가 아니며, 실행했다면 `/work` 또는 release closeout에 목적과 결과를 남깁니다.
 

@@ -1,5 +1,23 @@
 export type HousingAffordMode = "rent" | "buy";
 
+export const HOUSING_BURDEN_POLICY = {
+  attentionFromPct: 30,
+  highFromPct: 40,
+  labels: {
+    unavailable: "계산 제한",
+    low: "낮음",
+    attention: "주의",
+    high: "높음",
+  },
+} as const;
+
+export type HousingBurdenLevel = keyof typeof HOUSING_BURDEN_POLICY.labels;
+
+export type HousingBurdenAssessment = {
+  level: HousingBurdenLevel;
+  label: (typeof HOUSING_BURDEN_POLICY.labels)[HousingBurdenLevel];
+};
+
 export type HousingBurdenInput = {
   incomeNetMonthly: number;
   nonHousingOutflowMonthly: number;
@@ -21,6 +39,7 @@ export type HousingBurdenResult = {
   mode: HousingAffordMode;
   monthlyHousingCost: number;
   housingRatioPct: number | null;
+  assessment: HousingBurdenAssessment;
   residualCashFlow: number;
   warnings: string[];
   breakdown: {
@@ -64,6 +83,17 @@ export function depositToMonthly(deposit: number, opportunityAprPct: number): nu
   return (safeDeposit * (safeApr / 100)) / 12;
 }
 
+export function assessHousingBurdenRatio(housingRatioPct: number | null): HousingBurdenAssessment {
+  let level: HousingBurdenLevel = "unavailable";
+  if (housingRatioPct !== null && Number.isFinite(housingRatioPct)) {
+    if (housingRatioPct >= HOUSING_BURDEN_POLICY.highFromPct) level = "high";
+    else if (housingRatioPct >= HOUSING_BURDEN_POLICY.attentionFromPct) level = "attention";
+    else level = "low";
+  }
+
+  return { level, label: HOUSING_BURDEN_POLICY.labels[level] };
+}
+
 export function housingBurden(input: HousingBurdenInput): HousingBurdenResult {
   const incomeNetMonthly = toSafeNonNegative(input.incomeNetMonthly);
   const nonHousingOutflowMonthly = toSafeNonNegative(input.nonHousingOutflowMonthly);
@@ -87,20 +117,25 @@ export function housingBurden(input: HousingBurdenInput): HousingBurdenResult {
     : monthlyRent + depositOpportunityCostMonthly;
 
   const housingRatioPct = incomeNetMonthly > 0 ? (monthlyHousingCost / incomeNetMonthly) * 100 : null;
+  const assessment = assessHousingBurdenRatio(housingRatioPct);
   const residualCashFlow = incomeNetMonthly - nonHousingOutflowMonthly - monthlyHousingCost;
 
   const warnings: string[] = [];
   if (incomeNetMonthly <= 0) warnings.push("월 소득(세후)이 0원으로 입력되어 부담비율 계산이 제한됩니다.");
   if (mode === "buy" && principal <= 0) warnings.push("매매가 대비 자기자본이 충분해 대출 원금이 0원입니다.");
   if (mode === "buy" && principal > 0 && termMonths <= 0) warnings.push("대출 기간(개월)이 0 이하라 월 상환액이 0원으로 계산됩니다.");
-  if (housingRatioPct !== null && housingRatioPct >= 40) warnings.push("주거비 비율이 40% 이상으로 높습니다.");
-  else if (housingRatioPct !== null && housingRatioPct >= 30) warnings.push("주거비 비율이 30% 이상입니다.");
+  if (assessment.level === "high") {
+    warnings.push(`주거비 비율이 ${HOUSING_BURDEN_POLICY.highFromPct}% 이상으로 현재 계산 기준 '${assessment.label}'입니다.`);
+  } else if (assessment.level === "attention") {
+    warnings.push(`주거비 비율이 ${HOUSING_BURDEN_POLICY.attentionFromPct}% 이상으로 현재 계산 기준 '${assessment.label}'입니다.`);
+  }
   if (residualCashFlow < 0) warnings.push("주거비 반영 후 잔여현금흐름이 음수입니다.");
 
   return {
     mode,
     monthlyHousingCost,
     housingRatioPct,
+    assessment,
     residualCashFlow,
     warnings,
     breakdown: {

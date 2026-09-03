@@ -1,7 +1,6 @@
 import { type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
 import { selectBestOption } from "./selectOption";
 import {
-  DEFAULT_WEIGHTS,
   type RecommendDebug,
   type RecommendationAssumptions,
   type RecommendDetailProduct,
@@ -12,6 +11,7 @@ import {
   type UserRecommendProfile,
 } from "./types";
 import { getRateForPreference } from "../finlife/uiSort";
+import { normalizeRecommendWeights } from "./weights";
 
 export type RecommendProfile = {
   purpose: string;
@@ -433,14 +433,6 @@ function buildBreakdown(input: {
   ];
 }
 
-function mergeWeights(overrides?: Partial<RecommendWeights>): RecommendWeights {
-  return {
-    rate: clamp01(overrides?.rate ?? DEFAULT_WEIGHTS.rate),
-    term: clamp01(overrides?.term ?? DEFAULT_WEIGHTS.term),
-    liquidity: clamp01(overrides?.liquidity ?? DEFAULT_WEIGHTS.liquidity),
-  };
-}
-
 export function getRecommendAssumptions(rateMode: UserRecommendProfile["rateMode"]): RecommendationAssumptions {
   const policy =
     rateMode === "max"
@@ -491,7 +483,7 @@ export function recommendCandidates(input: {
   profile: UserRecommendProfile;
 }): { items: RecommendedItem[]; debug: RecommendDebug; weights: RecommendWeights; assumptions: RecommendationAssumptions } {
   const { kind, candidates: rawCandidates, profile } = input;
-  const weights = mergeWeights(profile.weights);
+  const weights = normalizeRecommendWeights(profile.weights).weights;
   const candidates = rawCandidates
     .map((candidate) => ({
       ...candidate,

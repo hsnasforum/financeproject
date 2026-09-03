@@ -1,6 +1,7 @@
 import { odcloudFetchWithAuth, resolveOdcloudEndpoint, setSearchParams } from "../odcloud";
 import { buildSearchText, extractOdcloudRows, scanPagedOdcloud } from "../odcloudScan";
 import { type PublicApiResult, type SubscriptionNotice, type PublicApiErrorCode } from "../contracts/types";
+import { formatKstIsoDate, shiftKstIsoDate } from "../../format/kstCalendarDate";
 
 function normalizeLookupKey(value: string): string {
   return value.toLowerCase().replace(/[\s_\-:/()[\].]/g, "");
@@ -107,16 +108,6 @@ function normalizeDate(value: string): string | undefined {
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
   if (/^\d{8}$/.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
   return undefined;
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
 }
 
 function endpointByHouseType(houseType?: string): string {
@@ -253,8 +244,9 @@ export async function listSubscriptionNotices(
     const requestedRegion = region.trim();
     const requestedRegionToken = isNationwideRegion(requestedRegion) ? "" : normalizeRegionToken(requestedRegion);
     const requestedRegionCode = requestedRegionToken ? regionCodeFromName(requestedRegion) : undefined;
-    const dateFrom = normalizeDate(options?.from ?? "") ?? daysAgoIso(90);
-    const dateTo = normalizeDate(options?.to ?? "") ?? todayIso();
+    const now = new Date();
+    const dateFrom = normalizeDate(options?.from ?? "") ?? shiftKstIsoDate(now, -90);
+    const dateTo = normalizeDate(options?.to ?? "") ?? formatKstIsoDate(now);
     const q = (options?.q ?? "").trim();
 
     const baseConds: Record<string, string> = {

@@ -30,6 +30,7 @@ export const QUALITY_GATES = [
     args: ["--", "--build-preflight"],
   }),
   gate({ id: "deps:audit", tier: "required", scope: ["release"], script: "deps:audit" }),
+  gate({ id: "freshness:release", tier: "required", scope: ["release", "data"], script: "freshness:release" }),
   gate({
     id: "e2e:inventory:check",
     tier: "required",
@@ -130,6 +131,7 @@ export const QUALITY_GATE_SUITES = {
     preflightRequired: [
       "cleanup:next-artifacts",
       "deps:audit",
+      "freshness:release",
       "e2e:inventory:check",
     ],
     earlyRequired: [

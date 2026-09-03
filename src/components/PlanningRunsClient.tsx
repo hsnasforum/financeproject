@@ -15,7 +15,7 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Badge } from "@/components/ui/Badge";
 import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
-import { buildConfirmString } from "@/lib/ops/confirm";
+import { buildConfirmString, createManualConfirmInput } from "@/lib/ops/confirm";
 import {
   appendProfileIdQuery,
   normalizeProfileId,
@@ -575,9 +575,9 @@ export function PlanningRunsClient({
   }
 
   function openDeleteRunDialog(runId: string): void {
-    const expectedConfirm = buildConfirmString("DELETE run", runId);
+    const confirmInput = createManualConfirmInput("DELETE run", runId);
     setDeleteTargetRunId(runId);
-    setDeleteConfirmText(expectedConfirm);
+    setDeleteConfirmText(confirmInput.confirmText);
     setError("");
     setNotice("");
   }
@@ -623,9 +623,9 @@ export function PlanningRunsClient({
 
       await loadRuns(filterProfileId);
       closeDeleteRunDialog();
-      const expectedRestoreConfirm = buildConfirmString("RESTORE runs", runId);
+      const restoreConfirmInput = createManualConfirmInput("RESTORE runs", runId);
       setRestoreTargetRunId(runId);
-      setRestoreConfirmText(expectedRestoreConfirm);
+      setRestoreConfirmText(restoreConfirmInput.confirmText);
       pushNotice("실행 기록을 휴지통으로 이동했습니다. 필요하면 바로 복구 확인을 진행하세요.");
     } catch (error) {
       pushError(error instanceof Error ? error.message : "실행 기록 삭제 중 오류가 발생했습니다.");

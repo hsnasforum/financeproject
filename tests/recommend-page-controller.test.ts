@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRecommendHistoryHref,
   buildRecommendInitialProfileState,
+  isRecommendResultProfileStale,
   parseRecommendQueryOverrides,
   resolveRecommendAutorunContinuation,
 } from "../src/lib/recommend/recommendPageController";
@@ -61,6 +62,24 @@ describe("recommend page controller", () => {
     });
   });
 
+  it("normalizes legacy stored weights and reports that adjustment", () => {
+    const storedProfile = {
+      ...recommendProfileDefaults(),
+      weights: { rate: 1, term: 1, liquidity: 1 },
+    };
+    const state = buildRecommendInitialProfileState({
+      searchParams: new URLSearchParams(),
+      storedProfileRaw: JSON.stringify(storedProfile),
+    });
+
+    expect(state.profile.weights.rate + state.profile.weights.term + state.profile.weights.liquidity).toBe(1);
+    expect(state.weightNormalization).toMatchObject({
+      normalized: true,
+      originalSum: 3,
+      reason: "sum_adjusted",
+    });
+  });
+
   it("reuses the same autorun signature and preserves the encoded history URL", () => {
     const continuation = resolveRecommendAutorunContinuation({
       signature: "same-signature",
@@ -90,5 +109,19 @@ describe("recommend page controller", () => {
       previous: { sig: "same", runId: null },
       goHistory: false,
     })).toEqual({ kind: "save", signature: "same", goHistory: false });
+  });
+
+  it("compares the current canonical profile with the submitted result snapshot", () => {
+    const resultProfile = {
+      ...recommendProfileDefaults(),
+      weights: { rate: 0.7, term: 0.2, liquidity: 0.1 },
+    };
+
+    expect(isRecommendResultProfileStale(resultProfile, resultProfile)).toBe(false);
+    expect(isRecommendResultProfileStale({
+      ...resultProfile,
+      weights: { ...resultProfile.weights, rate: 0.6 },
+    }, resultProfile)).toBe(true);
+    expect(isRecommendResultProfileStale(recommendProfileDefaults(), resultProfile)).toBe(true);
   });
 });

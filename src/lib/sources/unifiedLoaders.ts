@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
 import { readFinlifeCompletionEvidence } from "@/lib/finlife/completionEvidence";
 import { FINLIFE_FIELD_CONFIG, type FinlifeFieldSpec } from "@/lib/finlife/fieldConfig";
 import { PRODUCT_DETAIL_OPTION_IDENTITY_RAW_KEYS } from "@/lib/finlife/productDetailOption";
@@ -14,6 +15,7 @@ import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedC
 import {
   buildStableUnifiedId,
   sortUnifiedOptions,
+  withUnifiedRecentSortAt,
   type UnifiedOptionView,
 } from "@/lib/sources/unifiedEnrichPolicy";
 import {
@@ -25,6 +27,10 @@ import {
 export type RefreshInput = {
   kind: "deposit" | "saving";
   refresh: boolean;
+};
+
+export type UnifiedSourceRefreshResult = {
+  fallbackUsed: boolean;
 };
 
 export type SourceQuery = {
@@ -39,6 +45,15 @@ export type SourceQuery = {
   sort: "recent" | "name";
   qMode: QueryMode;
   debug: boolean;
+  provider?: string | null;
+  termMonths?: number | null;
+  minRate?: number | null;
+  signal?: AbortSignal;
+};
+
+export type SourceProviderFacetQuery = {
+  kind: "deposit" | "saving";
+  signal?: AbortSignal;
 };
 
 export type UnifiedSourcePage = {
@@ -50,14 +65,66 @@ export type UnifiedSourcePage = {
 
 export type UnifiedSourceLoader = {
   sourceId: UnifiedSourceId;
-  refreshIfNeeded(input: RefreshInput): Promise<void>;
+  refreshIfNeeded(input: RefreshInput): Promise<UnifiedSourceRefreshResult | void>;
   query(input: SourceQuery): Promise<UnifiedSourcePage>;
+  listProviderNames?(input: SourceProviderFacetQuery): Promise<string[]>;
 };
 
 export type UnifiedSourceLoaderMap = Partial<Record<UnifiedSourceId, UnifiedSourceLoader>>;
 
 function normalizeLimit(limit: number): number {
   return Math.min(1000, Math.max(1, Math.trunc(limit)));
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException("The operation was aborted.", "AbortError");
+  }
+}
+
+function normalizedCatalogTerm(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.trunc(value)
+    : null;
+}
+
+function normalizedCatalogRate(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
+
+function matchesCatalogFilters(item: UnifiedProductView, input: SourceQuery): boolean {
+  const provider = input.provider?.trim() ?? "";
+  if (provider && item.providerName !== provider) return false;
+
+  const termMonths = normalizedCatalogTerm(input.termMonths);
+  const minRate = normalizedCatalogRate(input.minRate);
+  if (termMonths === null && minRate === null) return true;
+
+  return (item.options ?? []).some((option) => {
+    if (termMonths !== null && option.termMonths !== termMonths) return false;
+    const rate = option.intrRate2 ?? option.intrRate;
+    return minRate === null || (rate !== null && Number.isFinite(rate) && rate >= minRate);
+  });
+}
+
+function buildFinlifeOptionFilter(input: SourceQuery): Prisma.ProductOptionWhereInput | null {
+  const termMonths = normalizedCatalogTerm(input.termMonths);
+  const minRate = normalizedCatalogRate(input.minRate);
+  if (termMonths === null && minRate === null) return null;
+
+  return {
+    ...(termMonths !== null ? { saveTrm: String(termMonths) } : {}),
+    ...(minRate !== null
+      ? {
+          OR: [
+            { intrRate2: { gte: minRate } },
+            { AND: [{ intrRate2: null }, { intrRate: { gte: minRate } }] },
+          ],
+        }
+      : {}),
+  };
 }
 
 function normalizeRate(value: unknown): number | null {
@@ -215,7 +282,7 @@ export async function getSamplebankMergedItems(input: {
       input.qMode,
     ));
 
-  const merged = filtered.map((item) => ({
+  const merged = filtered.map((item) => withUnifiedRecentSortAt({
     stableId: item.stableId || `samplebank:${item.externalKey}`,
     sourceId: "samplebank" as const,
     kind: item.kind,
@@ -227,7 +294,7 @@ export async function getSamplebankMergedItems(input: {
     lastSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
     updatedAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
     badges: ["SAMPLEBANK"],
-  }));
+  }, executed.meta.generatedAt));
   return {
     items: merged,
     count: merged.length,
@@ -257,8 +324,11 @@ function toFinlifeRefreshEvidenceMeta(input: {
   };
 }
 
-export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", refresh: boolean): Promise<void> {
-  if (!refresh) return;
+export async function refreshFinlifeSnapshotIfStale(
+  kind: "deposit" | "saving",
+  refresh: boolean,
+): Promise<UnifiedSourceRefreshResult> {
+  if (!refresh) return { fallbackUsed: false };
 
   const incompleteAttempt = loadFinlifeSyncAttempt(kind);
   if (incompleteAttempt) {
@@ -268,7 +338,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
       phase: incompleteAttempt.phase,
       errorCode: incompleteAttempt.errorCode ?? null,
     });
-    return;
+    return { fallbackUsed: true };
   }
 
   const evidence = await readFinlifeCompletionEvidence(kind);
@@ -277,7 +347,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
       kind,
       message: evidence.error instanceof Error ? evidence.error.message : "unknown",
     });
-    return;
+    return { fallbackUsed: true };
   }
 
   const snapshot = loadFinlifeSnapshot(kind);
@@ -288,7 +358,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
     ? toFinlifeRefreshEvidenceMeta(evidence)
     : snapshot?.meta ?? null;
   const decision = shouldRunFinlifeSync(policyMeta, Date.now(), { ttlMs, minCompletionRate: 0.95 });
-  if (!decision.shouldRun) return;
+  if (!decision.shouldRun) return { fallbackUsed: false };
 
   let result: Awaited<ReturnType<typeof runFinlifePersistentSync>>;
   try {
@@ -300,9 +370,9 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
       message: error instanceof Error ? error.message : "Unexpected FINLIFE refresh error",
       upstreamStatus: null,
     });
-    return;
+    return { fallbackUsed: true };
   }
-  if (result.ok) return;
+  if (result.ok) return { fallbackUsed: false };
 
   console.error("[unified] finlife refresh failed", {
     kind,
@@ -310,6 +380,7 @@ export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", 
     message: result.error.message,
     upstreamStatus: result.error.upstreamStatus ?? null,
   });
+  return { fallbackUsed: true };
 }
 
 async function getOnlyNewSinceBySource(kind: "deposit" | "saving", sourceIds: string[]): Promise<Map<string, Date>> {
@@ -376,6 +447,7 @@ function pageResult(input: {
 }
 
 async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
+  throwIfAborted(input.signal);
   const sourceId: UnifiedSourceId = "finlife";
   const limit = normalizeLimit(input.limit);
   const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
@@ -392,11 +464,15 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
   const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
   const qNorm = normalizeSearchQuery(input.q ?? "");
   const qFilter = buildNormFilter(["productNameNorm", "providerNameNorm", "searchTextNorm"], qNorm, input.qMode);
+  const provider = input.provider?.trim() ?? "";
+  const optionFilter = buildFinlifeOptionFilter(input);
 
   const rows = await prisma.product.findMany({
     where: {
       kind: input.kind,
       ...qFilter,
+      ...(provider ? { provider: { is: { name: provider } } } : {}),
+      ...(optionFilter ? { options: { some: optionFilter } } : {}),
       ...(onlyNewThreshold ? { createdAt: { gte: onlyNewThreshold } } : {}),
       ...(hasChangedSince && changedSinceDate
         ? {
@@ -436,6 +512,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
     take: limit + 1,
     ...(decoded ? { cursor: { id: decoded.id }, skip: 1 } : {}),
   });
+  throwIfAborted(input.signal);
 
   const hasMore = rows.length > limit;
   const picked = hasMore ? rows.slice(0, limit) : rows;
@@ -446,7 +523,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
     const detailConfig = FINLIFE_FIELD_CONFIG[input.kind];
     const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
     const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
-    return {
+    return withUnifiedRecentSortAt({
       stableId: buildStableUnifiedId({
         sourceId,
         externalKey: row.finPrdtCd,
@@ -481,7 +558,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
       signals: {
         depositProtection: "unknown",
       },
-    };
+    }, row.updatedAt.toISOString());
   });
 
   return pageResult({
@@ -495,6 +572,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
 }
 
 async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
+  throwIfAborted(input.signal);
   const sourceId = "datago_kdb" as const;
   const limit = normalizeLimit(input.limit);
   const onlyNewMap = await getOnlyNewSinceBySource(input.kind, [sourceId]);
@@ -504,6 +582,7 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
   const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
   const qNorm = normalizeSearchQuery(input.q ?? "");
   const qFilter = buildNormFilter(["providerNameNorm", "productNameNorm"], qNorm, input.qMode);
+  const provider = input.provider?.trim() ?? "";
 
   const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
   if (input.cursor && !decoded) {
@@ -515,6 +594,7 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
       sourceId,
       kind: input.kind,
       ...qFilter,
+      ...(provider ? { providerNameRaw: provider } : {}),
       ...(onlyNewThreshold ? { firstSeenAt: { gte: onlyNewThreshold } } : {}),
       ...(hasChangedSince && changedSinceDate
         ? {
@@ -548,12 +628,13 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
     take: limit + 1,
     ...(decoded ? { cursor: { id: decoded.id }, skip: 1 } : {}),
   });
+  throwIfAborted(input.signal);
 
   const hasMore = rows.length > limit;
   const picked = hasMore ? rows.slice(0, limit) : rows;
   const nextCursor = hasMore ? encodeUnifiedCursor({ id: picked[picked.length - 1].id }) : null;
 
-  const items: UnifiedProductView[] = picked.map((row) => ({
+  const items = picked.map<UnifiedProductView>((row) => withUnifiedRecentSortAt({
     stableId: buildStableUnifiedId({
       sourceId,
       externalKey: row.externalKey,
@@ -581,7 +662,7 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
           evidence: (row.matches[0].evidenceJson as Record<string, unknown>) ?? undefined,
         }
       : undefined,
-  }));
+  }, row.lastSeenAt.toISOString())).filter((item) => matchesCatalogFilters(item, input));
 
   return pageResult({
     sourceId,
@@ -594,6 +675,7 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
 }
 
 async function querySamplebank(input: SourceQuery): Promise<UnifiedSourcePage> {
+  throwIfAborted(input.signal);
   const sourceId = "samplebank" as const;
   const limit = normalizeLimit(input.limit);
   const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
@@ -608,19 +690,58 @@ async function querySamplebank(input: SourceQuery): Promise<UnifiedSourcePage> {
     includeTimestamps: input.includeTimestamps,
     debug: input.debug,
   });
+  throwIfAborted(input.signal);
   const offset = decoded?.id ?? 0;
-  const items = loaded.items.slice(offset, offset + limit);
-  const hasMore = offset + limit < loaded.items.length;
+  const filtered = loaded.items.filter((item) => matchesCatalogFilters(item, input));
+  const items = filtered.slice(offset, offset + limit);
+  const hasMore = offset + limit < filtered.length;
   const nextCursor = hasMore ? encodeUnifiedCursor({ id: offset + limit }) : null;
 
   return pageResult({
     sourceId,
     items,
-    count: loaded.count,
+    count: filtered.length,
     hasMore,
     nextCursor,
     limit,
   });
+}
+
+async function listFinlifeProviderNames(input: SourceProviderFacetQuery): Promise<string[]> {
+  throwIfAborted(input.signal);
+  const rows = await prisma.provider.findMany({
+    where: { products: { some: { kind: input.kind } } },
+    select: { name: true },
+    orderBy: { name: "asc" },
+  });
+  throwIfAborted(input.signal);
+  return rows.map((row) => row.name.trim()).filter(Boolean);
+}
+
+async function listDatagoKdbProviderNames(input: SourceProviderFacetQuery): Promise<string[]> {
+  throwIfAborted(input.signal);
+  const rows = await prisma.externalProduct.findMany({
+    where: { sourceId: "datago_kdb", kind: input.kind },
+    select: { providerNameRaw: true },
+    distinct: ["providerNameRaw"],
+    orderBy: { providerNameRaw: "asc" },
+  });
+  throwIfAborted(input.signal);
+  return rows.map((row) => row.providerNameRaw.trim()).filter(Boolean);
+}
+
+async function listSamplebankProviderNames(input: SourceProviderFacetQuery): Promise<string[]> {
+  throwIfAborted(input.signal);
+  const loaded = await getSamplebankMergedItems({
+    kind: input.kind,
+    q: null,
+    qMode: "contains",
+    includeTimestamps: false,
+    debug: false,
+  });
+  throwIfAborted(input.signal);
+  return [...new Set(loaded.items.map((item) => item.providerName.trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, "ko"));
 }
 
 export const finlifeUnifiedSourceLoader: UnifiedSourceLoader = {
@@ -629,22 +750,26 @@ export const finlifeUnifiedSourceLoader: UnifiedSourceLoader = {
     await refreshFinlifeSnapshotIfStale(input.kind, input.refresh);
   },
   query: queryFinlife,
+  listProviderNames: listFinlifeProviderNames,
 };
 
 export const datagoKdbUnifiedSourceLoader: UnifiedSourceLoader = {
   sourceId: "datago_kdb",
   async refreshIfNeeded(input) {
     await refreshSourceIfStale("datago_kdb", input.kind, input.refresh);
+    return { fallbackUsed: false };
   },
   query: queryDatagoKdb,
+  listProviderNames: listDatagoKdbProviderNames,
 };
 
 export const samplebankUnifiedSourceLoader: UnifiedSourceLoader = {
   sourceId: "samplebank",
   async refreshIfNeeded() {
-    return undefined;
+    return { fallbackUsed: false };
   },
   query: querySamplebank,
+  listProviderNames: listSamplebankProviderNames,
 };
 
 export const DEFAULT_UNIFIED_SOURCE_LOADERS: UnifiedSourceLoaderMap = {

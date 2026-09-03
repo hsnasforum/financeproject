@@ -51,6 +51,30 @@ describe("quality gate registry", () => {
     expect(releaseGateIds.every((id) => Boolean(getQualityGate(id)))).toBe(true);
   });
 
+  it("keeps strict freshness as one required release preflight gate", () => {
+    const preflight = QUALITY_GATE_SUITES["release:verify"].preflightRequired;
+    const freshnessGate = getQualityGate("freshness:release");
+    const auditIndex = preflight.indexOf("deps:audit");
+    const freshnessIndex = preflight.indexOf("freshness:release");
+    const inventoryIndex = preflight.indexOf("e2e:inventory:check");
+
+    expect(freshnessGate).toMatchObject({
+      id: "freshness:release",
+      tier: "required",
+      script: "freshness:release",
+    });
+    expect(preflight.filter((id) => id === "freshness:release")).toHaveLength(1);
+    expect(preflight).toEqual([
+      "cleanup:next-artifacts",
+      "deps:audit",
+      "freshness:release",
+      "e2e:inventory:check",
+    ]);
+    expect(freshnessIndex).toBe(auditIndex + 1);
+    expect(freshnessIndex).toBe(inventoryIndex - 1);
+    expect(renderQualityGateCommand(freshnessGate)).toBe("pnpm freshness:release");
+  });
+
   it("keeps planning auth check script as a registry runner instead of a long exact string", () => {
     const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
     const authGate = getQualityGate("planning:auth:check");
