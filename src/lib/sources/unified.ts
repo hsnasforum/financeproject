@@ -861,12 +861,25 @@ async function refreshSourceSafely(input: {
   }
 }
 
-export async function getUnifiedProductsWithLoaders(
+function runUnifiedProductsForPublicDelivery<R>(
+  input: UnifiedProductsInput,
+  loaders: UnifiedSourceLoaderMap,
+  runtime: UnifiedProductsRuntimeOptions,
+  finalize: (result: UnifiedResult) => R | PromiseLike<R>,
+): Promise<R> {
+  const operation = () => getUnifiedProductsWithLoadersInternal(input, loaders, runtime, true)
+    .then(finalize);
+  if (!requiresCatalogSnapshot(input)) return operation();
+  const snapshotStore = runtime.catalogSnapshotStore ?? catalogSnapshotStore;
+  return snapshotStore.runInCurrentTeardownGeneration(operation, input.signal);
+}
+
+export function getUnifiedProductsWithLoaders(
   input: UnifiedProductsInput,
   loaders: UnifiedSourceLoaderMap = DEFAULT_UNIFIED_SOURCE_LOADERS,
   runtime: UnifiedProductsRuntimeOptions = {},
 ): Promise<UnifiedResult> {
-  return getUnifiedProductsWithLoadersInternal(input, loaders, runtime, true);
+  return runUnifiedProductsForPublicDelivery(input, loaders, runtime, (result) => result);
 }
 
 async function getUnifiedProductsWithLoadersInternal(
@@ -1291,27 +1304,29 @@ async function getUnifiedProductsWithLoadersInternal(
   };
 }
 
-export async function getUnifiedProducts(input: UnifiedProductsInput): Promise<UnifiedResult> {
-  const result = await getUnifiedProductsWithLoaders(input, DEFAULT_UNIFIED_SOURCE_LOADERS, {
-    captureCatalogProvenance: captureDefaultCatalogProvenance,
-  });
+export function getUnifiedProducts(input: UnifiedProductsInput): Promise<UnifiedResult> {
   const stripItems = (items: UnifiedProductView[] | undefined): UnifiedProductView[] | undefined =>
     items?.map((item) => stripUnifiedRecentSortAt(item));
-  return {
-    ...result,
-    items: stripItems(result.items) ?? [],
-    merged: stripItems(result.merged) ?? [],
-    ...(result.extras
-      ? {
-          extras: {
-            ...result.extras,
-            ...(result.extras.kdbOnly
-              ? { kdbOnly: stripItems(result.extras.kdbOnly) }
-              : {}),
-          },
-        }
-      : {}),
-  };
+  return runUnifiedProductsForPublicDelivery(
+    input,
+    DEFAULT_UNIFIED_SOURCE_LOADERS,
+    { captureCatalogProvenance: captureDefaultCatalogProvenance },
+    (result) => ({
+      ...result,
+      items: stripItems(result.items) ?? [],
+      merged: stripItems(result.merged) ?? [],
+      ...(result.extras
+        ? {
+            extras: {
+              ...result.extras,
+              ...(result.extras.kdbOnly
+                ? { kdbOnly: stripItems(result.extras.kdbOnly) }
+                : {}),
+            },
+          }
+        : {}),
+    }),
+  );
 }
 
 type UnifiedLookupTarget = {

@@ -280,6 +280,53 @@ describe("bounded unified catalog snapshot store", () => {
     store.dispose();
   });
 
+  it("guards final success and failure across repeated teardown generations", async () => {
+    const store = createStore();
+    let successOperationStarted = false;
+    const staleSuccess = store.runInCurrentTeardownGeneration(() => {
+      successOperationStarted = true;
+      queueMicrotask(() => store.clear());
+      return Promise.resolve("stale-success");
+    });
+    expect(successOperationStarted).toBe(true);
+    await expect(staleSuccess).rejects.toMatchObject({ name: "AbortError" });
+    await expect(store.runInCurrentTeardownGeneration(() => Promise.resolve("generation-one")))
+      .resolves.toBe("generation-one");
+
+    const originalError = new Error("stale-error");
+    const staleFailure = store.runInCurrentTeardownGeneration(() => {
+      queueMicrotask(() => store.dispose());
+      return Promise.reject(originalError);
+    });
+    const failureOutcome = staleFailure.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    );
+    const failureResult = await failureOutcome;
+    expect(failureResult).toEqual({
+      status: "rejected",
+      error: expect.objectContaining({ name: "AbortError" }),
+    });
+    if (failureResult.status !== "rejected") throw new Error("expected guarded rejection");
+    expect(failureResult.error).not.toBe(originalError);
+    await expect(store.runInCurrentTeardownGeneration(() => Promise.resolve("generation-two")))
+      .resolves.toBe("generation-two");
+    store.dispose();
+  });
+
+  it("preserves no-teardown completion and does not retroactively invalidate a settled promise", async () => {
+    const store = createStore();
+    const completed = await store.runInCurrentTeardownGeneration(() => Promise.resolve("completed"));
+    const originalError = new Error("original-error");
+    const failure = store.runInCurrentTeardownGeneration(() => Promise.reject(originalError));
+
+    expect(completed).toBe("completed");
+    await expect(failure).rejects.toBe(originalError);
+    store.clear();
+    expect(completed).toBe("completed");
+    store.dispose();
+  });
+
   it("aborts and removes in-flight work when the store is cleared", async () => {
     const store = createStore();
     const started = deferred<AbortSignal>();
@@ -497,6 +544,150 @@ describe("bounded unified catalog snapshot store", () => {
       activeSubscriberCount: 0,
     }));
     store.dispose();
+  });
+
+  it.each(["clear", "dispose"] as const)(
+    "aborts late shared-success subscribers after %s removes the settled entry from the map",
+    async (teardownMethod) => {
+      const store = createStore();
+      const started = deferred<AbortSignal>();
+      const buildResult = deferredThenable<string>();
+      const build = vi.fn((signal: AbortSignal) => {
+        started.resolve(signal);
+        return buildResult.promise;
+      });
+      const first = store.runSharedBuild({ signature: `late-success-${teardownMethod}`, build });
+      const firstOutcome = first.then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      );
+      const lateAttached = deferred<void>();
+      let lateSubscribers: Promise<string>[] = [];
+      let inFlightBuildCountBeforeTeardown = -1;
+
+      await started.promise;
+      await buildResult.attached;
+      buildResult.fulfill("old-success");
+      queueMicrotask(() => {
+        queueMicrotask(() => {
+          inFlightBuildCountBeforeTeardown = store.stats().inFlightBuildCount;
+          if (teardownMethod === "clear") store.clear();
+          else store.dispose();
+        });
+        lateSubscribers = Array.from({ length: 2 }, () => store.runSharedBuild({
+          signature: `late-success-${teardownMethod}`,
+          build,
+        }));
+        lateAttached.resolve();
+      });
+
+      await lateAttached.promise;
+      const rawLateSuccesses: string[] = [];
+      const lateSettlementCounts = [0, 0];
+      const lateOutcomes = lateSubscribers.map((subscriber, index) => subscriber.then(
+        (value) => {
+          rawLateSuccesses.push(value);
+          return { status: "fulfilled" as const, value };
+        },
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      ).finally(() => {
+        lateSettlementCounts[index] += 1;
+      }));
+
+      expect(await firstOutcome).toEqual({ status: "fulfilled", value: "old-success" });
+      expect(await Promise.all(lateOutcomes)).toEqual([
+        { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+        { status: "rejected", error: expect.objectContaining({ name: "AbortError" }) },
+      ]);
+      expect(inFlightBuildCountBeforeTeardown).toBe(0);
+      expect(rawLateSuccesses).toEqual([]);
+      expect(lateSettlementCounts).toEqual([1, 1]);
+      expect(build).toHaveBeenCalledTimes(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+      store.dispose();
+    },
+  );
+
+  it("aborts a late shared-rejection subscriber after clear removes the settled entry from the map", async () => {
+    const store = createStore();
+    const started = deferred<AbortSignal>();
+    const buildResult = deferredThenable<string>();
+    const expectedError = new Error("late-raw-failure");
+    const build = vi.fn((signal: AbortSignal) => {
+      started.resolve(signal);
+      return buildResult.promise;
+    });
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+    const first = store.runSharedBuild({ signature: "late-rejection-clear", build });
+    const firstOutcome = first.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    );
+    const lateAttached = deferred<void>();
+    let lateSubscriber: Promise<string> | undefined;
+    let inFlightBuildCountBeforeTeardown = -1;
+    let lateSettlementCount = 0;
+    const originalErrorDeliveries: unknown[] = [];
+
+    try {
+      await started.promise;
+      await buildResult.attached;
+      buildResult.reject(expectedError);
+      queueMicrotask(() => {
+        queueMicrotask(() => {
+          inFlightBuildCountBeforeTeardown = store.stats().inFlightBuildCount;
+          store.clear();
+        });
+        lateSubscriber = store.runSharedBuild({ signature: "late-rejection-clear", build });
+        lateAttached.resolve();
+      });
+
+      await lateAttached.promise;
+      if (!lateSubscriber) throw new Error("expected late subscriber");
+      const lateOutcome = lateSubscriber.then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (error: unknown) => {
+          if (error === expectedError) originalErrorDeliveries.push(error);
+          return { status: "rejected" as const, error };
+        },
+      ).finally(() => {
+        lateSettlementCount += 1;
+      });
+
+      const firstResult = await firstOutcome;
+      const lateResult = await lateOutcome;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(firstResult).toEqual({ status: "rejected", error: expectedError });
+      expect(lateResult).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      if (lateResult.status !== "rejected") throw new Error("expected late subscriber rejection");
+      expect(lateResult.error).not.toBe(expectedError);
+      expect(inFlightBuildCountBeforeTeardown).toBe(0);
+      expect(originalErrorDeliveries).toEqual([]);
+      expect(lateSettlementCount).toBe(1);
+      expect(build).toHaveBeenCalledTimes(1);
+      expect(unhandledRejections).toEqual([]);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+      await Promise.allSettled([firstOutcome, ...(lateSubscriber ? [lateSubscriber] : [])]);
+      store.dispose();
+    }
   });
 
   it("keeps an immediate same-signature retry isolated from old queued reactions", async () => {

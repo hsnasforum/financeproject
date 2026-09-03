@@ -110,6 +110,7 @@ function createAbortAwareBuildPromise<R>(
 
 type CatalogSnapshotInFlightEntry = {
   signature: string;
+  generation: number;
   controller: AbortController;
   promise: Promise<unknown>;
   activeSubscribers: number;
@@ -129,6 +130,7 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
   private timer: TimerHandle | null = null;
   private retainedRows = 0;
   private estimatedBytes = 0;
+  private teardownGeneration = 0;
 
   constructor(private readonly config: CatalogSnapshotStoreConfig<T>) {
     assertPositiveInteger("ttlMs", config.ttlMs);
@@ -218,6 +220,7 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
       const promise = createAbortAwareBuildPromise(controller, input.build);
       const createdEntry: CatalogSnapshotInFlightEntry = {
         signature: input.signature,
+        generation: this.teardownGeneration,
         controller,
         promise,
         activeSubscribers: 0,
@@ -233,6 +236,36 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
     }
 
     return this.subscribeToSharedBuild<R>(entry, input.callerSignal);
+  }
+
+  runInCurrentTeardownGeneration<R>(
+    operation: () => Promise<R>,
+    callerSignal?: AbortSignal,
+  ): Promise<R> {
+    const generation = this.teardownGeneration;
+    if (callerSignal?.aborted) return Promise.reject(createAbortError());
+
+    let operationPromise: Promise<R>;
+    try {
+      operationPromise = operation();
+    } catch (error) {
+      operationPromise = Promise.reject(error);
+    }
+
+    return operationPromise.then(
+      (value) => {
+        if (generation !== this.teardownGeneration || callerSignal?.aborted) {
+          throw createAbortError();
+        }
+        return value;
+      },
+      (error: unknown) => {
+        if (generation !== this.teardownGeneration || callerSignal?.aborted) {
+          throw createAbortError();
+        }
+        throw error;
+      },
+    );
   }
 
   delete(id: string): boolean {
@@ -271,6 +304,9 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
   }
 
   clear(): void {
+    this.teardownGeneration = this.teardownGeneration === Number.MAX_SAFE_INTEGER
+      ? 0
+      : this.teardownGeneration + 1;
     for (const entry of this.inFlightBuilds.values()) {
       entry.invalidatedByTeardown = true;
       entry.controller.abort();
@@ -324,7 +360,11 @@ export class BoundedCatalogSnapshotStore<T extends CatalogSnapshotValue> {
         finishCaller(() => reject(createAbortError()));
       };
       const finishFromEntry = (complete: () => void) => {
-        if (entry.invalidatedByTeardown || entry.controller.signal.aborted) {
+        if (
+          entry.generation !== this.teardownGeneration
+          || entry.invalidatedByTeardown
+          || entry.controller.signal.aborted
+        ) {
           finishCaller(() => reject(createAbortError()));
           return;
         }

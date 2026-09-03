@@ -912,6 +912,361 @@ describe("unified source loaders", () => {
     }
   });
 
+  it("aborts completed first-page cache delivery when clear runs before the public promise settles", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "CACHED-FIRST-1",
+          sourceId: "finlife",
+          externalKey: "CACHED-FIRST-1",
+          providerName: "완료캐시은행",
+        }),
+        product({
+          stableId: "CACHED-FIRST-2",
+          sourceId: "finlife",
+          externalKey: "CACHED-FIRST-2",
+          providerName: "완료캐시은행",
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const query = baseInput({ includeSources: ["finlife"], provider: "완료캐시은행", limit: 1 });
+    const runtime = { catalogSnapshotStore: store };
+    const originalGetBySignature = store.getBySignature.bind(store);
+    let clearOnCompletedRead = false;
+    let teardownWindow: { snapshotCount: number; settlementCount: number } | undefined;
+    let settlementCount = 0;
+    let deliveredCursor: string | null | undefined;
+    vi.spyOn(store, "getBySignature").mockImplementation((signature) => {
+      const entry = originalGetBySignature(signature);
+      if (clearOnCompletedRead && entry) {
+        clearOnCompletedRead = false;
+        queueMicrotask(() => {
+          teardownWindow = {
+            snapshotCount: store.stats().snapshotCount,
+            settlementCount,
+          };
+          store.clear();
+        });
+      }
+      return entry;
+    });
+
+    try {
+      const first = await getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+      const staleCursor = first.pageInfo.nextCursor;
+      expect(staleCursor).toEqual(expect.any(String));
+      expect(store.stats().snapshotCount).toBe(1);
+
+      clearOnCompletedRead = true;
+      const pending = getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+      const outcome = pending.then(
+        (value) => {
+          deliveredCursor = value.pageInfo.nextCursor;
+          return { status: "fulfilled" as const, value };
+        },
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      ).finally(() => {
+        settlementCount += 1;
+      });
+
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(teardownWindow).toEqual({ snapshotCount: 1, settlementCount: 0 });
+      expect(deliveredCursor).toBeUndefined();
+      expect(settlementCount).toBe(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      if (!staleCursor) throw new Error("expected completed snapshot cursor");
+      await expect(getUnifiedProductsWithLoaders({
+        ...query,
+        cursor: staleCursor,
+      }, { finlife }, runtime)).rejects.toMatchObject({ code: "CURSOR_EXPIRED" });
+
+      const retry = await getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+      const retryCursor = retry.pageInfo.nextCursor;
+      expect(retry.items.map((item) => item.stableId)).toEqual(["CACHED-FIRST-1"]);
+      expect(retryCursor).toEqual(expect.any(String));
+      expect(retryCursor).not.toBe(staleCursor);
+      if (!retryCursor) throw new Error("expected retry cursor");
+      const retryNextPage = await getUnifiedProductsWithLoaders({
+        ...query,
+        cursor: retryCursor,
+      }, { finlife }, runtime);
+      expect(retryNextPage.items.map((item) => item.stableId)).toEqual(["CACHED-FIRST-2"]);
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it("aborts completed cursor-page delivery when clear runs before the public promise settles", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 2,
+      items: [
+        product({
+          stableId: "CACHED-CURSOR-1",
+          sourceId: "finlife",
+          externalKey: "CACHED-CURSOR-1",
+          providerName: "커서캐시은행",
+        }),
+        product({
+          stableId: "CACHED-CURSOR-2",
+          sourceId: "finlife",
+          externalKey: "CACHED-CURSOR-2",
+          providerName: "커서캐시은행",
+        }),
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 200, sourceId: "finlife" },
+    });
+    const query = baseInput({ includeSources: ["finlife"], provider: "커서캐시은행", limit: 1 });
+    const runtime = { catalogSnapshotStore: store };
+    const originalGetById = store.getById.bind(store);
+    let clearOnCompletedRead = false;
+    let teardownWindow: { snapshotCount: number; settlementCount: number } | undefined;
+    let settlementCount = 0;
+    const deliveredItemIds: string[] = [];
+    vi.spyOn(store, "getById").mockImplementation((id) => {
+      const entry = originalGetById(id);
+      if (clearOnCompletedRead && entry) {
+        clearOnCompletedRead = false;
+        queueMicrotask(() => {
+          teardownWindow = {
+            snapshotCount: store.stats().snapshotCount,
+            settlementCount,
+          };
+          store.clear();
+        });
+      }
+      return entry;
+    });
+
+    try {
+      const first = await getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+      const cursor = first.pageInfo.nextCursor;
+      if (!cursor) throw new Error("expected completed snapshot cursor");
+
+      clearOnCompletedRead = true;
+      const pending = getUnifiedProductsWithLoaders({ ...query, cursor }, { finlife }, runtime);
+      const outcome = pending.then(
+        (value) => {
+          deliveredItemIds.push(...value.items.map((item) => item.stableId));
+          return { status: "fulfilled" as const, value };
+        },
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      ).finally(() => {
+        settlementCount += 1;
+      });
+
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(teardownWindow).toEqual({ snapshotCount: 1, settlementCount: 0 });
+      expect(deliveredItemIds).toEqual([]);
+      expect(settlementCount).toBe(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+      await expect(getUnifiedProductsWithLoaders({ ...query, cursor }, { finlife }, runtime))
+        .rejects.toMatchObject({ code: "CURSOR_EXPIRED" });
+      expect(finlife.query).toHaveBeenCalledTimes(1);
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it("aborts a resource-limit result when clear runs after shared cleanup but before public delivery", async () => {
+    const store = createCatalogSnapshotStore({ maxRetainedRows: 1 });
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({
+        stableId: "RESOURCE-FINAL-1",
+        sourceId: "finlife",
+        externalKey: "RESOURCE-FINAL-1",
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    const kdb = createLoader("datago_kdb", {
+      count: 1,
+      items: [product({
+        stableId: "RESOURCE-FINAL-2",
+        sourceId: "datago_kdb",
+        externalKey: "RESOURCE-FINAL-2",
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "datago_kdb" },
+    });
+    const loaders = { finlife, datago_kdb: kdb };
+    const runtime = { catalogSnapshotStore: store };
+    const originalRunSharedBuild = store.runSharedBuild.bind(store);
+    let clearOnFinalDelivery = true;
+    let preparedResult: Awaited<ReturnType<typeof getUnifiedProductsWithLoaders>> | undefined;
+    let teardownWindow: { inFlightBuildCount: number; settlementCount: number } | undefined;
+    let settlementCount = 0;
+    let deliveredPartialReason: string | undefined;
+    vi.spyOn(store, "runSharedBuild").mockImplementation(<R>(input: CatalogSnapshotSharedBuildInput<R>) => {
+      const shared = originalRunSharedBuild(input);
+      if (!clearOnFinalDelivery) return shared;
+      clearOnFinalDelivery = false;
+      return shared.then((value) => {
+        preparedResult = value as Awaited<ReturnType<typeof getUnifiedProductsWithLoaders>>;
+        queueMicrotask(() => {
+          teardownWindow = {
+            inFlightBuildCount: store.stats().inFlightBuildCount,
+            settlementCount,
+          };
+          store.clear();
+        });
+        return value;
+      });
+    });
+
+    try {
+      const pending = getUnifiedProductsWithLoaders(baseInput({ limit: 1 }), loaders, runtime);
+      const outcome = pending.then(
+        (value) => {
+          deliveredPartialReason = value.pageInfo.partialReasons?.[0]?.code;
+          return { status: "fulfilled" as const, value };
+        },
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      ).finally(() => {
+        settlementCount += 1;
+      });
+
+      expect(await outcome).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      expect(preparedResult?.pageInfo).toEqual(expect.objectContaining({
+        nextCursor: null,
+        partial: true,
+        partialReasons: [expect.objectContaining({ code: "CURSOR_UNAVAILABLE_RESOURCE_LIMIT" })],
+      }));
+      expect(teardownWindow).toEqual({ inFlightBuildCount: 0, settlementCount: 0 });
+      expect(deliveredPartialReason).toBeUndefined();
+      expect(settlementCount).toBe(1);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      await expect(getUnifiedProductsWithLoaders(baseInput({ limit: 1 }), loaders, runtime))
+        .resolves.toEqual(expect.objectContaining({
+          pageInfo: expect.objectContaining({
+            nextCursor: null,
+            partialReasons: [expect.objectContaining({ code: "CURSOR_UNAVAILABLE_RESOURCE_LIMIT" })],
+          }),
+        }));
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+      expect(kdb.query).toHaveBeenCalledTimes(2);
+    } finally {
+      store.dispose();
+    }
+  });
+
+  it("aborts the original service error when clear runs after shared cleanup but before public delivery", async () => {
+    const store = createCatalogSnapshotStore();
+    const finlife = createLoader("finlife", {
+      count: 1,
+      items: [product({
+        stableId: "FAILURE-FINAL-RETRY",
+        sourceId: "finlife",
+        externalKey: "FAILURE-FINAL-RETRY",
+        providerName: "최종오류은행",
+      })],
+      pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
+    });
+    vi.mocked(finlife.query).mockRejectedValueOnce(new Error("final raw failure"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const runtime = { catalogSnapshotStore: store };
+    const query = baseInput({ includeSources: ["finlife"], provider: "최종오류은행", limit: 1 });
+    const originalRunSharedBuild = store.runSharedBuild.bind(store);
+    let clearOnFinalDelivery = true;
+    let preparedError: unknown;
+    let teardownWindow: { inFlightBuildCount: number; settlementCount: number } | undefined;
+    let settlementCount = 0;
+    const originalErrorDeliveries: unknown[] = [];
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+    vi.spyOn(store, "runSharedBuild").mockImplementation(<R>(input: CatalogSnapshotSharedBuildInput<R>) => {
+      const shared = originalRunSharedBuild(input);
+      if (!clearOnFinalDelivery) return shared;
+      clearOnFinalDelivery = false;
+      return shared.then(
+        (value) => value,
+        (error: unknown) => {
+          preparedError = error;
+          queueMicrotask(() => {
+            teardownWindow = {
+              inFlightBuildCount: store.stats().inFlightBuildCount,
+              settlementCount,
+            };
+            store.clear();
+          });
+          throw error;
+        },
+      );
+    });
+
+    try {
+      const pending = getUnifiedProductsWithLoaders(query, { finlife }, runtime);
+      const outcome = pending.then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (error: unknown) => {
+          if (error === preparedError) originalErrorDeliveries.push(error);
+          return { status: "rejected" as const, error };
+        },
+      ).finally(() => {
+        settlementCount += 1;
+      });
+
+      const result = await outcome;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(result).toEqual({
+        status: "rejected",
+        error: expect.objectContaining({ name: "AbortError" }),
+      });
+      if (result.status !== "rejected") throw new Error("expected service rejection");
+      expect(result.error).not.toBe(preparedError);
+      expect(teardownWindow).toEqual({ inFlightBuildCount: 0, settlementCount: 0 });
+      expect(originalErrorDeliveries).toEqual([]);
+      expect(settlementCount).toBe(1);
+      expect(unhandledRejections).toEqual([]);
+      expect(store.stats()).toEqual(expect.objectContaining({
+        snapshotCount: 0,
+        inFlightBuildCount: 0,
+        activeSubscriberCount: 0,
+      }));
+
+      await expect(getUnifiedProductsWithLoaders(query, { finlife }, runtime)).resolves.toEqual(
+        expect.objectContaining({
+          items: [expect.objectContaining({ stableId: "FAILURE-FINAL-RETRY" })],
+        }),
+      );
+      expect(finlife.query).toHaveBeenCalledTimes(2);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+      consoleError.mockRestore();
+      store.dispose();
+    }
+  });
+
   it("prioritizes clear over a queued real service build failure", async () => {
     const store = createCatalogSnapshotStore();
     const finlife = createLoader("finlife", {

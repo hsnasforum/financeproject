@@ -245,6 +245,44 @@ describe("GET /api/products/unified catalog snapshot singleflight integration", 
     }));
   });
 
+  it("returns 499 when teardown wins completed-cache delivery before getUnifiedProducts settles", async () => {
+    const { firstFinlifePageStarted, releaseFirstFinlifePage } = configurePaginatedSources();
+    const initial = callRoute(new Request(firstPageUrl));
+    await firstFinlifePageStarted.promise;
+    releaseFirstFinlifePage.resolve();
+
+    const initialResponse = await initial;
+    expect(initialResponse.status).toBe(200);
+    const completedCursor = initialResponse.json.data?.pageInfo?.nextCursor;
+    expect(completedCursor).toBeTruthy();
+    expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+      snapshotCount: 1,
+      inFlightBuildCount: 0,
+      activeSubscriberCount: 0,
+    }));
+
+    const pending = callRoute(new Request(firstPageUrl));
+    queueMicrotask(() => resetUnifiedCatalogSnapshotStoreForTests());
+    const response = await pending;
+
+    expect(response.status).toBe(499);
+    expect(response.json.error?.code).toBe("REQUEST_ABORTED");
+    expect(initialResponse.status).toBe(200);
+    expect(initialResponse.json.data?.pageInfo?.nextCursor).toBe(completedCursor);
+    const expiredCursorResponse = await callRoute(new Request(
+      `${firstPageUrl}&cursor=${encodeURIComponent(String(completedCursor))}`,
+    ));
+    expect(expiredCursorResponse.status).toBe(410);
+    expect(expiredCursorResponse.json.error?.code).toBe("CURSOR_EXPIRED");
+    expect(mocked.finlifeQuery).toHaveBeenCalledTimes(2);
+    expect(mocked.kdbQuery).toHaveBeenCalledTimes(2);
+    expect(getUnifiedCatalogSnapshotStoreStats()).toEqual(expect.objectContaining({
+      snapshotCount: 0,
+      inFlightBuildCount: 0,
+      activeSubscriberCount: 0,
+    }));
+  });
+
   it("returns 499 only to the aborted HTTP caller while the shared build completes", async () => {
     const { firstFinlifePageStarted, releaseFirstFinlifePage } = configurePaginatedSources();
     const firstController = new AbortController();
