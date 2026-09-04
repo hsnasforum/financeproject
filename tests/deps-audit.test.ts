@@ -14,6 +14,48 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
 });
 
+async function createAuditFixture(prefix: string) {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  tempDirs.push(cwd);
+  await fs.writeFile(path.join(cwd, "pnpm-lock.yaml"), `
+lockfileVersion: '9.0'
+packages:
+  'plain@1.0.0': {}
+`, "utf8");
+  return cwd;
+}
+
+function cleanAuditResponse() {
+  return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+}
+
+function createNetworkError(code: string) {
+  const error = new TypeError("fetch failed") as TypeError & { cause?: unknown };
+  error.cause = Object.assign(new Error("socket failure"), { code });
+  return error;
+}
+
+function createImmediateTimeoutSignal() {
+  const controller = new AbortController();
+  queueMicrotask(() => controller.abort(new DOMException("The operation was aborted due to timeout", "TimeoutError")));
+  return controller.signal;
+}
+
+function rejectWhenAborted(signal: AbortSignal, rejectionName: "AbortError" | "TimeoutError" = "TimeoutError") {
+  return new Promise<Response>((_resolve, reject) => {
+    const rejectTimeout = () => {
+      reject(rejectionName === "AbortError"
+        ? new DOMException("The operation was aborted", "AbortError")
+        : signal.reason);
+    };
+    if (signal.aborted) {
+      rejectTimeout();
+      return;
+    }
+    signal.addEventListener("abort", rejectTimeout, { once: true });
+  });
+}
+
 describe("dependency bulk advisory audit", () => {
   it("builds a deduplicated payload from pnpm lockfile package keys", () => {
     const payload = buildBulkAdvisoryPayload(`
@@ -131,5 +173,301 @@ packages:
 
     expect(result.ok).toBe(false);
     expect(result.advisories).toHaveLength(1);
+  });
+
+  it("retries a timed-out attempt with a fresh signal and identical request body", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-timeout-success-");
+    const requests: Array<{ body: string; signal: AbortSignal }> = [];
+    const delays: number[] = [];
+
+    const result = await runDependencyAudit({
+      cwd,
+      maxAttempts: 2,
+      attemptTimeoutMs: 30_000,
+      retryDelaysMs: [1_000],
+      timeoutSignalFactory: () => createImmediateTimeoutSignal(),
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async (_url: URL | RequestInfo, init?: RequestInit) => {
+        const signal = init?.signal;
+        if (!(signal instanceof AbortSignal)) throw new Error("missing request signal");
+        requests.push({ body: String(init?.body), signal });
+        if (requests.length === 1) return rejectWhenAborted(signal, "AbortError");
+        return cleanAuditResponse();
+      },
+    });
+
+    expect(result).toEqual({ ok: true, packageCount: 1, versionCount: 1, advisories: [] });
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.body).toBe(requests[1]?.body);
+    expect(requests[0]?.signal).not.toBe(requests[1]?.signal);
+    expect(requests[0]?.signal.aborted).toBe(true);
+    expect(delays).toEqual([1_000]);
+  });
+
+  it("retries a recognized network transport error and then succeeds", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-network-success-");
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    const result = await runDependencyAudit({
+      cwd,
+      maxAttempts: 2,
+      retryDelaysMs: [1_000],
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        if (fetchCalls === 1) throw createNetworkError("ECONNRESET");
+        return cleanAuditResponse();
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetchCalls).toBe(2);
+    expect(delays).toEqual([1_000]);
+  });
+
+  it("retries HTTP 503 and then succeeds", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-503-success-");
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    const result = await runDependencyAudit({
+      cwd,
+      maxAttempts: 2,
+      retryDelaysMs: [1_000],
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return fetchCalls === 1
+          ? new Response("temporarily unavailable", { status: 503 })
+          : cleanAuditResponse();
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetchCalls).toBe(2);
+    expect(delays).toEqual([1_000]);
+  });
+
+  it("stops after three timeout attempts with bounded delays", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-timeout-exhausted-");
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    await expect(runDependencyAudit({
+      cwd,
+      maxAttempts: 3,
+      retryDelaysMs: [1_000, 2_000],
+      timeoutSignalFactory: () => createImmediateTimeoutSignal(),
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async (_url: URL | RequestInfo, init?: RequestInit) => {
+        fetchCalls += 1;
+        const signal = init?.signal;
+        if (!(signal instanceof AbortSignal)) throw new Error("missing request signal");
+        return rejectWhenAborted(signal);
+      },
+    })).rejects.toThrow(/attempts=3 lastReason=timeout/);
+
+    expect(fetchCalls).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+  });
+
+  it("stops after three retryable HTTP 500 responses", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-500-exhausted-");
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    await expect(runDependencyAudit({
+      cwd,
+      maxAttempts: 3,
+      retryDelaysMs: [1_000, 2_000],
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return new Response("server error", { status: 500 });
+      },
+    })).rejects.toThrow(/attempts=3 lastReason=http_500.*status=500/);
+
+    expect(fetchCalls).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+  });
+
+  it.each([400, 403, 410, 429])("fails fast for HTTP %s", async (status) => {
+    const cwd = await createAuditFixture(`finance-deps-audit-${status}-`);
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    await expect(runDependencyAudit({
+      cwd,
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return new Response("request rejected", { status });
+      },
+    })).rejects.toThrow(new RegExp(`attempts=1 lastReason=http_${status}.*status=${status}`));
+
+    expect(fetchCalls).toBe(1);
+    expect(delays).toEqual([]);
+  });
+
+  it("fails fast on malformed JSON without retrying", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-invalid-json-");
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    await expect(runDependencyAudit({
+      cwd,
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return new Response("not-json", { status: 200 });
+      },
+    })).rejects.toThrow(/attempts=1 lastReason=invalid_json.*not valid JSON/);
+
+    expect(fetchCalls).toBe(1);
+    expect(delays).toEqual([]);
+  });
+
+  it("returns an advisory result without retrying or losing advisory details", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-advisory-fast-");
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    const result = await runDependencyAudit({
+      cwd,
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return new Response(JSON.stringify({
+          plain: [{
+            severity: "high",
+            title: "unsafe dependency",
+            vulnerable_versions: "1.x",
+            url: "https://example.test/advisory",
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      advisories: [{
+        packageName: "plain",
+        severity: "high",
+        title: "unsafe dependency",
+        vulnerableVersions: "1.x",
+        url: "https://example.test/advisory",
+      }],
+    });
+    expect(fetchCalls).toBe(1);
+    expect(delays).toEqual([]);
+  });
+
+  it("fails fast on an invalid bulk response contract", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-invalid-contract-");
+    const delays: number[] = [];
+    let fetchCalls = 0;
+
+    await expect(runDependencyAudit({
+      cwd,
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return new Response(JSON.stringify({ plain: {} }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    })).rejects.toThrow(/attempts=1 lastReason=invalid_response.*must be an array/);
+
+    expect(fetchCalls).toBe(1);
+    expect(delays).toEqual([]);
+  });
+
+  it("bounds a synchronous recognized network throw but fails fast on programmer errors", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-sync-throw-");
+    const networkDelays: number[] = [];
+    let networkFetchCalls = 0;
+
+    const result = await runDependencyAudit({
+      cwd,
+      maxAttempts: 2,
+      retryDelaysMs: [1_000],
+      sleepImpl: async (delay: number) => {
+        networkDelays.push(delay);
+      },
+      fetchImpl: () => {
+        networkFetchCalls += 1;
+        if (networkFetchCalls === 1) throw createNetworkError("EAI_AGAIN");
+        return Promise.resolve(cleanAuditResponse());
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(networkFetchCalls).toBe(2);
+    expect(networkDelays).toEqual([1_000]);
+
+    const programmerDelays: number[] = [];
+    let programmerFetchCalls = 0;
+    await expect(runDependencyAudit({
+      cwd,
+      sleepImpl: async (delay: number) => {
+        programmerDelays.push(delay);
+      },
+      fetchImpl: () => {
+        programmerFetchCalls += 1;
+        throw new TypeError("programmer failure");
+      },
+    })).rejects.toThrow(/attempts=1 lastReason=request_error.*programmer failure/);
+
+    expect(programmerFetchCalls).toBe(1);
+    expect(programmerDelays).toEqual([]);
+  });
+
+  it("logs retry classification and final attempts without request or registry secrets", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-logging-");
+    const logs: string[] = [];
+    let fetchCalls = 0;
+
+    await runDependencyAudit({
+      cwd,
+      env: { NPM_CONFIG_REGISTRY: "https://registry.npmjs.org?token=secret-value" },
+      maxAttempts: 2,
+      retryDelaysMs: [1_000],
+      sleepImpl: async () => {},
+      logger: (message: string) => logs.push(message),
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        if (fetchCalls === 1) throw createNetworkError("UND_ERR_SOCKET");
+        return cleanAuditResponse();
+      },
+    });
+
+    expect(logs[0]).toBe("[deps:audit] attempt=1/2");
+    expect(logs[1]).toMatch(
+      /^\[deps:audit\] RETRY attempt=1\/2 reason=network elapsedMs=\d+ retrying=true nextDelayMs=1000$/,
+    );
+    expect(logs[2]).toBe("[deps:audit] attempt=2/2");
+    expect(logs[3]).toBe("[deps:audit] checked packages=1 versions=1 advisories=0 attempts=2");
+    expect(logs.join("\n")).not.toContain("secret-value");
+    expect(logs.join("\n")).not.toContain(JSON.stringify({ plain: ["1.0.0"] }));
   });
 });
