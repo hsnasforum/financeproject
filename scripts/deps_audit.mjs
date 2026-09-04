@@ -7,7 +7,7 @@ import { load as loadYaml } from "js-yaml";
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const BULK_ADVISORY_PATH = "/-/npm/v1/security/advisories/bulk";
 const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_ATTEMPT_TIMEOUT_MS = 30_000;
+const DEFAULT_ATTEMPT_TIMEOUT_MS = 90_000;
 const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000];
 const RETRYABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);
 const RETRYABLE_NETWORK_CODES = new Set([
@@ -74,12 +74,13 @@ function describeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createAuditFailure(message, attempts, lastReason, cause) {
+function createAuditFailure(message, attempts, lastPhase, lastReason, cause) {
   const error = new Error(
-    `attempts=${attempts} lastReason=${lastReason} ${message}`,
+    `attempts=${attempts} lastPhase=${lastPhase} lastReason=${lastReason} ${message}`,
     cause === undefined ? undefined : { cause },
   );
   error.attempts = attempts;
+  error.lastPhase = lastPhase;
   error.lastReason = lastReason;
   return error;
 }
@@ -113,15 +114,15 @@ function elapsedSince(startedAt) {
   return Math.max(0, Date.now() - startedAt);
 }
 
-function logRetry(logger, { attempt, maxAttempts, reason, elapsedMs, nextDelayMs }) {
+function logRetry(logger, { attempt, maxAttempts, phase, reason, elapsedMs, nextDelayMs }) {
   logger(
-    `[deps:audit] RETRY attempt=${attempt}/${maxAttempts} reason=${reason} elapsedMs=${elapsedMs} retrying=true nextDelayMs=${nextDelayMs}`,
+    `[deps:audit] RETRY attempt=${attempt}/${maxAttempts} phase=${phase} reason=${reason} elapsedMs=${elapsedMs} retrying=true nextDelayMs=${nextDelayMs}`,
   );
 }
 
-function logStop(logger, { attempt, maxAttempts, reason, elapsedMs }) {
+function logStop(logger, { attempt, maxAttempts, phase, reason, elapsedMs }) {
   logger(
-    `[deps:audit] STOP attempt=${attempt}/${maxAttempts} reason=${reason} elapsedMs=${elapsedMs} retrying=false nextDelayMs=0`,
+    `[deps:audit] STOP attempt=${attempt}/${maxAttempts} phase=${phase} reason=${reason} elapsedMs=${elapsedMs} retrying=false nextDelayMs=0`,
   );
 }
 
@@ -243,24 +244,26 @@ export async function runDependencyAudit(options = {}) {
         signal,
       });
     } catch (error) {
+      const phase = "fetch";
       const reason = classifyTransientFailure(error, signal) ?? "request_error";
       const elapsedMs = elapsedSince(startedAt);
       const canRetry = reason !== "request_error" && attempt < maxAttempts;
       if (canRetry) {
         const nextDelayMs = retryDelaysMs[attempt - 1];
-        logRetry(logger, { attempt, maxAttempts, reason, elapsedMs, nextDelayMs });
+        logRetry(logger, { attempt, maxAttempts, phase, reason, elapsedMs, nextDelayMs });
         await sleepImpl(nextDelayMs);
         continue;
       }
 
-      logStop(logger, { attempt, maxAttempts, reason, elapsedMs });
+      logStop(logger, { attempt, maxAttempts, phase, reason, elapsedMs });
       const message = reason === "timeout"
         ? `bulk advisory request timed out after ${attemptTimeoutMs}ms: ${describeError(error)}`
         : `bulk advisory request failed before receiving a response: ${describeError(error)}`;
-      throw createAuditFailure(message, attempt, reason, error);
+      throw createAuditFailure(message, attempt, phase, reason, error);
     }
 
     if (!response.ok) {
+      const phase = "http_status";
       const statusReason = Number.isInteger(response.status) ? `http_${response.status}` : "http_unknown";
       let detail = "";
       let detailError;
@@ -273,15 +276,16 @@ export async function runDependencyAudit(options = {}) {
       const canRetry = RETRYABLE_HTTP_STATUSES.has(response.status) && attempt < maxAttempts;
       if (canRetry) {
         const nextDelayMs = retryDelaysMs[attempt - 1];
-        logRetry(logger, { attempt, maxAttempts, reason: statusReason, elapsedMs, nextDelayMs });
+        logRetry(logger, { attempt, maxAttempts, phase, reason: statusReason, elapsedMs, nextDelayMs });
         await sleepImpl(nextDelayMs);
         continue;
       }
 
-      logStop(logger, { attempt, maxAttempts, reason: statusReason, elapsedMs });
+      logStop(logger, { attempt, maxAttempts, phase, reason: statusReason, elapsedMs });
       throw createAuditFailure(
         `bulk advisory request failed status=${response.status}${detail ? ` detail=${detail}` : ""}`,
         attempt,
+        phase,
         statusReason,
         detailError,
       );
@@ -292,11 +296,12 @@ export async function runDependencyAudit(options = {}) {
       responsePayload = await response.json();
     } catch (error) {
       const reason = classifyTransientFailure(error, signal) ?? "invalid_json";
+      const phase = reason === "invalid_json" ? "response_parse" : "response_body";
       const elapsedMs = elapsedSince(startedAt);
       const canRetry = reason !== "invalid_json" && attempt < maxAttempts;
       if (canRetry) {
         const nextDelayMs = retryDelaysMs[attempt - 1];
-        logRetry(logger, { attempt, maxAttempts, reason, elapsedMs, nextDelayMs });
+        logRetry(logger, { attempt, maxAttempts, phase, reason, elapsedMs, nextDelayMs });
         await sleepImpl(nextDelayMs);
         continue;
       }
@@ -304,6 +309,7 @@ export async function runDependencyAudit(options = {}) {
       logStop(logger, {
         attempt,
         maxAttempts,
+        phase,
         reason,
         elapsedMs,
       });
@@ -312,7 +318,7 @@ export async function runDependencyAudit(options = {}) {
         : reason === "network"
           ? `bulk advisory response body failed: ${describeError(error)}`
           : "bulk advisory response is not valid JSON";
-      throw createAuditFailure(message, attempt, reason, error);
+      throw createAuditFailure(message, attempt, phase, reason, error);
     }
 
     let advisories;
@@ -322,10 +328,11 @@ export async function runDependencyAudit(options = {}) {
       logStop(logger, {
         attempt,
         maxAttempts,
+        phase: "response_parse",
         reason: "invalid_response",
         elapsedMs: elapsedSince(startedAt),
       });
-      throw createAuditFailure(describeError(error), attempt, "invalid_response", error);
+      throw createAuditFailure(describeError(error), attempt, "response_parse", "invalid_response", error);
     }
 
     logger(

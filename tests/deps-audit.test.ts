@@ -179,6 +179,7 @@ packages:
     const cwd = await createAuditFixture("finance-deps-audit-timeout-success-");
     const requests: Array<{ body: string; signal: AbortSignal }> = [];
     const delays: number[] = [];
+    const logs: string[] = [];
 
     const result = await runDependencyAudit({
       cwd,
@@ -186,6 +187,7 @@ packages:
       attemptTimeoutMs: 30_000,
       retryDelaysMs: [1_000],
       timeoutSignalFactory: () => createImmediateTimeoutSignal(),
+      logger: (message: string) => logs.push(message),
       sleepImpl: async (delay: number) => {
         delays.push(delay);
       },
@@ -204,6 +206,7 @@ packages:
     expect(requests[0]?.signal).not.toBe(requests[1]?.signal);
     expect(requests[0]?.signal.aborted).toBe(true);
     expect(delays).toEqual([1_000]);
+    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*phase=fetch reason=timeout .*nextDelayMs=1000/));
   });
 
   it("retries when a successful response body times out and then succeeds", async () => {
@@ -245,7 +248,7 @@ packages:
     expect(delays).toEqual([1_000]);
     expect(requests[0]?.signal).not.toBe(requests[1]?.signal);
     expect(requests[0]?.body).toBe(requests[1]?.body);
-    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*reason=timeout .*nextDelayMs=1000/));
+    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*phase=response_body reason=timeout .*nextDelayMs=1000/));
   });
 
   it("retries a successful response body network failure and then succeeds", async () => {
@@ -285,7 +288,7 @@ packages:
     expect(fetchCalls).toBe(2);
     expect(bodyParses).toBe(2);
     expect(delays).toEqual([1_000]);
-    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*reason=network .*nextDelayMs=1000/));
+    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*phase=response_body reason=network .*nextDelayMs=1000/));
   });
 
   it("stops after three successful-response body timeouts", async () => {
@@ -317,12 +320,12 @@ packages:
           },
         } as Response;
       },
-    })).rejects.toThrow(/attempts=3 lastReason=timeout.*response body timed out/);
+    })).rejects.toThrow(/attempts=3 lastPhase=response_body lastReason=timeout.*response body timed out/);
 
     expect(fetchCalls).toBe(3);
     expect(bodyParses).toBe(3);
     expect(delays).toEqual([1_000, 2_000]);
-    expect(logs).toContainEqual(expect.stringMatching(/STOP attempt=3\/3 reason=timeout .*retrying=false/));
+    expect(logs).toContainEqual(expect.stringMatching(/STOP attempt=3\/3 phase=response_body reason=timeout .*retrying=false/));
   });
 
   it("retries a recognized network transport error and then succeeds", async () => {
@@ -352,12 +355,14 @@ packages:
   it("retries HTTP 503 and then succeeds", async () => {
     const cwd = await createAuditFixture("finance-deps-audit-503-success-");
     const delays: number[] = [];
+    const logs: string[] = [];
     let fetchCalls = 0;
 
     const result = await runDependencyAudit({
       cwd,
       maxAttempts: 2,
       retryDelaysMs: [1_000],
+      logger: (message: string) => logs.push(message),
       sleepImpl: async (delay: number) => {
         delays.push(delay);
       },
@@ -372,18 +377,23 @@ packages:
     expect(result.ok).toBe(true);
     expect(fetchCalls).toBe(2);
     expect(delays).toEqual([1_000]);
+    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*phase=http_status reason=http_503 .*nextDelayMs=1000/));
   });
 
   it("stops after three timeout attempts with bounded delays", async () => {
     const cwd = await createAuditFixture("finance-deps-audit-timeout-exhausted-");
     const delays: number[] = [];
+    const timeouts: number[] = [];
+    const logs: string[] = [];
     let fetchCalls = 0;
 
     await expect(runDependencyAudit({
       cwd,
-      maxAttempts: 3,
-      retryDelaysMs: [1_000, 2_000],
-      timeoutSignalFactory: () => createImmediateTimeoutSignal(),
+      timeoutSignalFactory: (timeoutMs: number) => {
+        timeouts.push(timeoutMs);
+        return createImmediateTimeoutSignal();
+      },
+      logger: (message: string) => logs.push(message),
       sleepImpl: async (delay: number) => {
         delays.push(delay);
       },
@@ -393,10 +403,12 @@ packages:
         if (!(signal instanceof AbortSignal)) throw new Error("missing request signal");
         return rejectWhenAborted(signal);
       },
-    })).rejects.toThrow(/attempts=3 lastReason=timeout/);
+    })).rejects.toThrow(/attempts=3 lastPhase=fetch lastReason=timeout/);
 
     expect(fetchCalls).toBe(3);
     expect(delays).toEqual([1_000, 2_000]);
+    expect(timeouts).toEqual([90_000, 90_000, 90_000]);
+    expect(logs).toContainEqual(expect.stringMatching(/STOP attempt=3\/3 phase=fetch reason=timeout .*retrying=false/));
   });
 
   it("stops after three retryable HTTP 500 responses", async () => {
@@ -415,7 +427,7 @@ packages:
         fetchCalls += 1;
         return new Response("server error", { status: 500 });
       },
-    })).rejects.toThrow(/attempts=3 lastReason=http_500.*status=500/);
+    })).rejects.toThrow(/attempts=3 lastPhase=http_status lastReason=http_500.*status=500/);
 
     expect(fetchCalls).toBe(3);
     expect(delays).toEqual([1_000, 2_000]);
@@ -435,7 +447,7 @@ packages:
         fetchCalls += 1;
         return new Response("request rejected", { status });
       },
-    })).rejects.toThrow(new RegExp(`attempts=1 lastReason=http_${status}.*status=${status}`));
+    })).rejects.toThrow(new RegExp(`attempts=1 lastPhase=http_status lastReason=http_${status}.*status=${status}`));
 
     expect(fetchCalls).toBe(1);
     expect(delays).toEqual([]);
@@ -444,10 +456,12 @@ packages:
   it("fails fast on malformed JSON without retrying", async () => {
     const cwd = await createAuditFixture("finance-deps-audit-invalid-json-");
     const delays: number[] = [];
+    const logs: string[] = [];
     let fetchCalls = 0;
 
     await expect(runDependencyAudit({
       cwd,
+      logger: (message: string) => logs.push(message),
       sleepImpl: async (delay: number) => {
         delays.push(delay);
       },
@@ -455,10 +469,11 @@ packages:
         fetchCalls += 1;
         return new Response("not-json", { status: 200 });
       },
-    })).rejects.toThrow(/attempts=1 lastReason=invalid_json.*not valid JSON/);
+    })).rejects.toThrow(/attempts=1 lastPhase=response_parse lastReason=invalid_json.*not valid JSON/);
 
     expect(fetchCalls).toBe(1);
     expect(delays).toEqual([]);
+    expect(logs).toContainEqual(expect.stringMatching(/STOP attempt=1\/3 phase=response_parse reason=invalid_json .*retrying=false/));
   });
 
   it("returns an advisory result without retrying or losing advisory details", async () => {
@@ -501,10 +516,12 @@ packages:
   it("fails fast on an invalid bulk response contract", async () => {
     const cwd = await createAuditFixture("finance-deps-audit-invalid-contract-");
     const delays: number[] = [];
+    const logs: string[] = [];
     let fetchCalls = 0;
 
     await expect(runDependencyAudit({
       cwd,
+      logger: (message: string) => logs.push(message),
       sleepImpl: async (delay: number) => {
         delays.push(delay);
       },
@@ -515,10 +532,11 @@ packages:
           headers: { "content-type": "application/json" },
         });
       },
-    })).rejects.toThrow(/attempts=1 lastReason=invalid_response.*must be an array/);
+    })).rejects.toThrow(/attempts=1 lastPhase=response_parse lastReason=invalid_response.*must be an array/);
 
     expect(fetchCalls).toBe(1);
     expect(delays).toEqual([]);
+    expect(logs).toContainEqual(expect.stringMatching(/STOP attempt=1\/3 phase=response_parse reason=invalid_response .*retrying=false/));
   });
 
   it("bounds a synchronous recognized network throw but fails fast on programmer errors", async () => {
@@ -555,7 +573,7 @@ packages:
         programmerFetchCalls += 1;
         throw new TypeError("programmer failure");
       },
-    })).rejects.toThrow(/attempts=1 lastReason=request_error.*programmer failure/);
+    })).rejects.toThrow(/attempts=1 lastPhase=fetch lastReason=request_error.*programmer failure/);
 
     expect(programmerFetchCalls).toBe(1);
     expect(programmerDelays).toEqual([]);
@@ -582,7 +600,7 @@ packages:
 
     expect(logs[0]).toBe("[deps:audit] attempt=1/2");
     expect(logs[1]).toMatch(
-      /^\[deps:audit\] RETRY attempt=1\/2 reason=network elapsedMs=\d+ retrying=true nextDelayMs=1000$/,
+      /^\[deps:audit\] RETRY attempt=1\/2 phase=fetch reason=network elapsedMs=\d+ retrying=true nextDelayMs=1000$/,
     );
     expect(logs[2]).toBe("[deps:audit] attempt=2/2");
     expect(logs[3]).toBe("[deps:audit] checked packages=1 versions=1 advisories=0 attempts=2");
