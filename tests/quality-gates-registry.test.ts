@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { load as loadYaml } from "js-yaml";
 import { describe, expect, it } from "vitest";
 import {
   PLANNING_AUTH_CHECK_TEST_FILES,
@@ -10,6 +11,13 @@ import {
 function read(filePath: string): string {
   return fs.readFileSync(filePath, "utf8");
 }
+
+type Workflow = {
+  jobs: Record<string, {
+    "timeout-minutes": number;
+    steps: Array<{ name: string; run?: string }>;
+  }>;
+};
 
 describe("quality gate registry", () => {
   it("keeps release and planning v2 complete runners on the shared registry", () => {
@@ -92,6 +100,9 @@ describe("quality gate registry", () => {
 
   it("keeps CI from duplicating release registry gates outside release:verify", () => {
     const ciSource = read(".github/workflows/ci.yml");
+    const ci = loadYaml(ciSource) as Workflow;
+    const verify = ci.jobs.verify;
+    const preflight = QUALITY_GATE_SUITES["release:verify"].preflightRequired;
 
     expect(ciSource).toContain("Required Gate - Release Verify (quality gate registry)");
     expect(ciSource).toContain("pnpm release:verify");
@@ -99,6 +110,23 @@ describe("quality gate registry", () => {
     expect(ciSource).not.toContain("Planning V2 Regression Gate");
     expect(ciSource).not.toContain("run: pnpm planning:v2:guard");
     expect(ciSource).not.toContain("run: pnpm planning:v2:regress");
+    expect(ciSource).not.toContain("run: pnpm deps:audit");
+    expect(preflight.filter((id) => id === "deps:audit")).toHaveLength(1);
+    expect(getQualityGate("deps:audit")).toMatchObject({
+      id: "deps:audit",
+      tier: "required",
+      script: "deps:audit",
+    });
+    expect(verify["timeout-minutes"]).toBe(40);
+    expect(verify.steps).toContainEqual({
+      name: "Required Gate - Release Verify (quality gate registry)",
+      run: "pnpm release:verify",
+    });
+    expect(verify.steps).toContainEqual({ name: "Build", run: "pnpm build" });
+    expect(verify.steps).toContainEqual({
+      name: "Desktop artifact provenance gate",
+      run: expect.stringContaining("pnpm planning:v2:desktop:build -- --no-next-build"),
+    });
   });
 
   it("keeps planning route coverage discovery-based instead of fixed counts or proxy lists", () => {
