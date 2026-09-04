@@ -8,6 +8,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PLAYWRIGHT_INSTALL_ATTEMPTS: "1"
+  PLAYWRIGHT_INSTALL_TIMEOUT_MS: "900000"
+
 jobs:
   verify:
     runs-on: ubuntu-latest

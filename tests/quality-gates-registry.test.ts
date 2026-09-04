@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { load as loadYaml } from "js-yaml";
 import { describe, expect, it } from "vitest";
+import { parseInstallConfig } from "../scripts/playwright_install_chromium.mjs";
 import {
   PLANNING_AUTH_CHECK_TEST_FILES,
   QUALITY_GATE_SUITES,
@@ -13,9 +14,11 @@ function read(filePath: string): string {
 }
 
 type Workflow = {
+  env?: Record<string, string>;
   jobs: Record<string, {
     "timeout-minutes": number;
-    steps: Array<{ name: string; run?: string }>;
+    env?: Record<string, string>;
+    steps: Array<{ name: string; run?: string; env?: Record<string, string> }>;
   }>;
 };
 
@@ -127,6 +130,35 @@ describe("quality gate registry", () => {
       name: "Desktop artifact provenance gate",
       run: expect.stringContaining("pnpm planning:v2:desktop:build -- --no-next-build"),
     });
+  });
+
+  it.each([
+    { file: "ci.yml", timeouts: { verify: 40 } },
+    { file: "e2e-smoke.yml", timeouts: { core_flows: 35, dart_index_present: 30, dart_index_missing: 30 } },
+  ])("keeps one bounded Chromium install per required job in $file", ({ file, timeouts }) => {
+    const workflow = loadYaml(read(`.github/workflows/${file}`)) as Workflow;
+
+    expect(Object.keys(workflow.jobs).sort()).toEqual(Object.keys(timeouts).sort());
+    expect(workflow.env).toMatchObject({
+      PLAYWRIGHT_INSTALL_ATTEMPTS: "1",
+      PLAYWRIGHT_INSTALL_TIMEOUT_MS: "900000",
+    });
+    for (const [jobId, timeout] of Object.entries(timeouts)) {
+      const job = workflow.jobs[jobId];
+      const installs = job.steps.filter((step) => step.run === "pnpm e2e:install:chromium");
+      expect(job["timeout-minutes"]).toBe(timeout);
+      expect(installs).toHaveLength(1);
+      expect(installs[0]).toEqual({
+        name: expect.stringContaining("Install Playwright Chromium"),
+        run: "pnpm e2e:install:chromium",
+      });
+      expect(parseInstallConfig([], {
+        NODE_ENV: "test",
+        ...workflow.env,
+        ...job.env,
+        ...installs[0].env,
+      })).toMatchObject({ attempts: 1, timeoutMs: 900_000 });
+    }
   });
 
   it("keeps planning route coverage discovery-based instead of fixed counts or proxy lists", () => {
