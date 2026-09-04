@@ -206,6 +206,125 @@ packages:
     expect(delays).toEqual([1_000]);
   });
 
+  it("retries when a successful response body times out and then succeeds", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-body-timeout-success-");
+    const requests: Array<{ body: string; signal: AbortSignal }> = [];
+    const delays: number[] = [];
+    const logs: string[] = [];
+    let bodyParses = 0;
+
+    const result = await runDependencyAudit({
+      cwd,
+      maxAttempts: 2,
+      attemptTimeoutMs: 30_000,
+      retryDelaysMs: [1_000],
+      timeoutSignalFactory: () => createImmediateTimeoutSignal(),
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      logger: (message: string) => logs.push(message),
+      fetchImpl: async (_url: URL | RequestInfo, init?: RequestInit) => {
+        const signal = init?.signal;
+        if (!(signal instanceof AbortSignal)) throw new Error("missing request signal");
+        requests.push({ body: String(init?.body), signal });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => {
+            bodyParses += 1;
+            if (bodyParses === 1) return rejectWhenAborted(signal);
+            return {};
+          },
+        } as Response;
+      },
+    });
+
+    expect(result).toEqual({ ok: true, packageCount: 1, versionCount: 1, advisories: [] });
+    expect(requests).toHaveLength(2);
+    expect(bodyParses).toBe(2);
+    expect(delays).toEqual([1_000]);
+    expect(requests[0]?.signal).not.toBe(requests[1]?.signal);
+    expect(requests[0]?.body).toBe(requests[1]?.body);
+    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*reason=timeout .*nextDelayMs=1000/));
+  });
+
+  it("retries a successful response body network failure and then succeeds", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-body-network-success-");
+    const delays: number[] = [];
+    const logs: string[] = [];
+    let fetchCalls = 0;
+    let bodyParses = 0;
+
+    const result = await runDependencyAudit({
+      cwd,
+      maxAttempts: 2,
+      retryDelaysMs: [1_000],
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      logger: (message: string) => logs.push(message),
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => {
+            bodyParses += 1;
+            if (bodyParses === 1) {
+              const error = new TypeError("terminated") as TypeError & { cause?: unknown };
+              error.cause = Object.assign(new Error("socket failure"), { code: "UND_ERR_SOCKET" });
+              throw error;
+            }
+            return {};
+          },
+        } as Response;
+      },
+    });
+
+    expect(result).toEqual({ ok: true, packageCount: 1, versionCount: 1, advisories: [] });
+    expect(fetchCalls).toBe(2);
+    expect(bodyParses).toBe(2);
+    expect(delays).toEqual([1_000]);
+    expect(logs).toContainEqual(expect.stringMatching(/RETRY .*reason=network .*nextDelayMs=1000/));
+  });
+
+  it("stops after three successful-response body timeouts", async () => {
+    const cwd = await createAuditFixture("finance-deps-audit-body-timeout-exhausted-");
+    const delays: number[] = [];
+    const logs: string[] = [];
+    let fetchCalls = 0;
+    let bodyParses = 0;
+
+    await expect(runDependencyAudit({
+      cwd,
+      maxAttempts: 3,
+      retryDelaysMs: [1_000, 2_000],
+      timeoutSignalFactory: () => createImmediateTimeoutSignal(),
+      sleepImpl: async (delay: number) => {
+        delays.push(delay);
+      },
+      logger: (message: string) => logs.push(message),
+      fetchImpl: async (_url: URL | RequestInfo, init?: RequestInit) => {
+        fetchCalls += 1;
+        const signal = init?.signal;
+        if (!(signal instanceof AbortSignal)) throw new Error("missing request signal");
+        return {
+          ok: true,
+          status: 200,
+          json: async () => {
+            bodyParses += 1;
+            return rejectWhenAborted(signal);
+          },
+        } as Response;
+      },
+    })).rejects.toThrow(/attempts=3 lastReason=timeout.*response body timed out/);
+
+    expect(fetchCalls).toBe(3);
+    expect(bodyParses).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+    expect(logs).toContainEqual(expect.stringMatching(/STOP attempt=3\/3 reason=timeout .*retrying=false/));
+  });
+
   it("retries a recognized network transport error and then succeeds", async () => {
     const cwd = await createAuditFixture("finance-deps-audit-network-success-");
     const delays: number[] = [];

@@ -64,6 +64,12 @@ function isRetryableNetworkFailure(error) {
   return hasRetryableNetworkCode(error);
 }
 
+function classifyTransientFailure(error, signal) {
+  if (isTimeoutFailure(error, signal)) return "timeout";
+  if (isRetryableNetworkFailure(error)) return "network";
+  return null;
+}
+
 function describeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -237,11 +243,7 @@ export async function runDependencyAudit(options = {}) {
         signal,
       });
     } catch (error) {
-      const reason = isTimeoutFailure(error, signal)
-        ? "timeout"
-        : isRetryableNetworkFailure(error)
-          ? "network"
-          : "request_error";
+      const reason = classifyTransientFailure(error, signal) ?? "request_error";
       const elapsedMs = elapsedSince(startedAt);
       const canRetry = reason !== "request_error" && attempt < maxAttempts;
       if (canRetry) {
@@ -289,13 +291,28 @@ export async function runDependencyAudit(options = {}) {
     try {
       responsePayload = await response.json();
     } catch (error) {
+      const reason = classifyTransientFailure(error, signal) ?? "invalid_json";
+      const elapsedMs = elapsedSince(startedAt);
+      const canRetry = reason !== "invalid_json" && attempt < maxAttempts;
+      if (canRetry) {
+        const nextDelayMs = retryDelaysMs[attempt - 1];
+        logRetry(logger, { attempt, maxAttempts, reason, elapsedMs, nextDelayMs });
+        await sleepImpl(nextDelayMs);
+        continue;
+      }
+
       logStop(logger, {
         attempt,
         maxAttempts,
-        reason: "invalid_json",
-        elapsedMs: elapsedSince(startedAt),
+        reason,
+        elapsedMs,
       });
-      throw createAuditFailure("bulk advisory response is not valid JSON", attempt, "invalid_json", error);
+      const message = reason === "timeout"
+        ? `bulk advisory response body timed out after ${attemptTimeoutMs}ms: ${describeError(error)}`
+        : reason === "network"
+          ? `bulk advisory response body failed: ${describeError(error)}`
+          : "bulk advisory response is not valid JSON";
+      throw createAuditFailure(message, attempt, reason, error);
     }
 
     let advisories;
