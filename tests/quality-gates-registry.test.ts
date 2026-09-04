@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { load as loadYaml } from "js-yaml";
+import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { parseInstallConfig } from "../scripts/playwright_install_chromium.mjs";
 import {
@@ -8,6 +8,10 @@ import {
   getQualityGate,
   renderQualityGateCommand,
 } from "../scripts/quality_gates.mjs";
+
+const { load: loadYaml } = createRequire(import.meta.url)("js-yaml") as {
+  load: (source: string) => unknown;
+};
 
 function read(filePath: string): string {
   return fs.readFileSync(filePath, "utf8");
