@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseInstallConfig } from "../scripts/playwright_install_chromium.mjs";
 import {
@@ -22,9 +23,62 @@ type Workflow = {
   jobs: Record<string, {
     "timeout-minutes": number;
     env?: Record<string, string>;
-    steps: Array<{ name: string; run?: string; env?: Record<string, string> }>;
+    steps: Array<{
+      name: string;
+      uses?: string;
+      with?: Record<string, string | number>;
+      run?: string;
+      env?: Record<string, string>;
+    }>;
   }>;
 };
+
+function readWorkflows(): Array<{ file: string; workflow: Workflow }> {
+  return fs.readdirSync(".github/workflows")
+    .filter((file) => /\.ya?ml$/.test(file))
+    .sort()
+    .map((file) => ({ file, workflow: loadYaml(read(`.github/workflows/${file}`)) as Workflow }));
+}
+
+function pnpmVersionIssues(workflows: ReturnType<typeof readWorkflows>): string[] {
+  const issues: string[] = [];
+  let setupCount = 0;
+  for (const { file, workflow } of workflows) {
+    for (const [jobId, job] of Object.entries(workflow.jobs)) {
+      for (const [index, step] of (job.steps ?? []).entries()) {
+        if (!step.uses?.startsWith("pnpm/action-setup@")) continue;
+        setupCount += 1;
+        const location = `${file}/${jobId}/steps[${index}] (${step.name})`;
+        const manifestInput = step.with?.package_json_file ?? "package.json";
+        if (typeof manifestInput !== "string" || manifestInput.includes("${{")) {
+          issues.push(`${location}: cannot statically resolve package_json_file=${manifestInput}`);
+          continue;
+        }
+        const manifestPath = path.relative(process.cwd(), path.resolve(manifestInput));
+        if (manifestPath.startsWith(`..${path.sep}`) || path.isAbsolute(manifestPath)) {
+          issues.push(`${location}: package_json_file is outside the repository: ${manifestInput}`);
+          continue;
+        }
+        try {
+          const source = read(manifestPath);
+          const manifest = (/\.ya?ml$/.test(manifestPath) ? loadYaml(source) : JSON.parse(source)) as {
+            packageManager?: string;
+          };
+          const version = manifest.packageManager?.match(/^pnpm@([^+]+)(?:\+.*)?$/)?.[1];
+          if (!version) {
+            issues.push(`${location}: ${manifestInput} must declare a pnpm packageManager`);
+          } else if (step.with?.version !== version) {
+            issues.push(`${location}: version=${String(step.with?.version)} must equal ${manifestInput} packageManager version=${version}`);
+          }
+        } catch (error) {
+          issues.push(`${location}: cannot read package_json_file=${manifestInput}: ${String(error)}`);
+        }
+      }
+    }
+  }
+  if (setupCount === 0) issues.push("No pnpm/action-setup steps discovered");
+  return issues;
+}
 
 describe("quality gate registry", () => {
   it("keeps release and planning v2 complete runners on the shared registry", () => {
@@ -163,6 +217,81 @@ describe("quality gate registry", () => {
         ...installs[0].env,
       })).toMatchObject({ attempts: 1, timeoutMs: 900_000 });
     }
+  });
+
+  it.each(["ci.yml", "e2e-smoke.yml"])("pins the existing toolchain without changing Node 20 in %s", (file) => {
+    const workflow = loadYaml(read(`.github/workflows/${file}`)) as Workflow;
+    const pkg = JSON.parse(read("package.json")) as { packageManager?: string };
+    const pins = {
+      "actions/checkout": "df4cb1c069e1874edd31b4311f1884172cec0e10",
+      "pnpm/action-setup": "0ebf47130e4866e96fce0953f49152a61190b271",
+      "actions/setup-node": "a0853c24544627f65ddf259abe73b1d18a591444",
+    };
+
+    expect(pkg.packageManager).toBe("pnpm@9.15.9");
+    for (const job of Object.values(workflow.jobs)) {
+      for (const [action, sha] of Object.entries(pins)) {
+        const steps = job.steps.filter((step) => step.uses?.startsWith(`${action}@`));
+        expect(steps).toHaveLength(1);
+        expect(steps[0].uses).toBe(`${action}@${sha}`);
+      }
+      expect(job.steps.find((step) => step.name === "Setup pnpm")?.with).toEqual({
+        version: "9.15.9",
+      });
+      expect(job.steps.find((step) => step.name === "Setup Node.js")?.with).toEqual({
+        "node-version": "20",
+        cache: "pnpm",
+        "cache-dependency-path": "pnpm-lock.yaml",
+      });
+    }
+  });
+
+
+  it("aligns every discovered pnpm setup input with its packageManager", () => {
+    expect(pnpmVersionIssues(readWorkflows())).toEqual([]);
+  });
+
+  it.each(["release.yml", "daily-refresh.yml", "rules-tune-pr.yml"])(
+    "rejects a remaining major-only pnpm input in %s",
+    (file) => {
+      const workflows = readWorkflows();
+      const workflow = workflows.find((entry) => entry.file === file)!.workflow;
+      const step = Object.values(workflow.jobs)
+        .flatMap((job) => job.steps ?? [])
+        .find((entry) => entry.uses?.startsWith("pnpm/action-setup@"))!;
+      expect(step.with).toBeDefined();
+      step.with!.version = 9;
+      const issues = pnpmVersionIssues(workflows);
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toContain(`${file}/`);
+      expect(issues[0]).toContain("version=9 must equal package.json packageManager version=");
+    },
+  );
+
+  it("allows jobs without pnpm while checking a static manifest path", () => {
+    const workflow = loadYaml(read(".github/workflows/release.yml")) as Workflow;
+    expect(workflow.jobs.publish.steps.some((step) => step.uses?.startsWith("pnpm/action-setup@"))).toBe(false);
+    const step = workflow.jobs.verify_and_package.steps
+      .find((entry) => entry.uses?.startsWith("pnpm/action-setup@"))!;
+    step.with!.package_json_file = "./package.json";
+    expect(pnpmVersionIssues([{ file: "release.yml", workflow }])).toEqual([]);
+  });
+
+  it.each(["${{ inputs.manifest }}", "missing-package.json"])(
+    "reports an unresolved pnpm manifest instead of skipping %s",
+    (manifest) => {
+      const workflow = loadYaml(read(".github/workflows/release.yml")) as Workflow;
+      const step = workflow.jobs.verify_and_package.steps
+        .find((entry) => entry.uses?.startsWith("pnpm/action-setup@"))!;
+      step.with!.package_json_file = manifest;
+      expect(pnpmVersionIssues([{ file: "release.yml", workflow }])).toEqual([
+        expect.stringContaining("release.yml/verify_and_package/steps[1] (Setup pnpm): cannot"),
+      ]);
+    },
+  );
+
+  it("does not pass pnpm alignment when no setup steps are discovered", () => {
+    expect(pnpmVersionIssues([])).toEqual(["No pnpm/action-setup steps discovered"]);
   });
 
   it("keeps planning route coverage discovery-based instead of fixed counts or proxy lists", () => {
