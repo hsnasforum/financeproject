@@ -1,5 +1,7 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
+import { parseInstallConfig } from "../scripts/playwright_install_chromium.mjs";
 import {
   PLANNING_AUTH_CHECK_TEST_FILES,
   QUALITY_GATE_SUITES,
@@ -7,9 +9,22 @@ import {
   renderQualityGateCommand,
 } from "../scripts/quality_gates.mjs";
 
+const { load: loadYaml } = createRequire(import.meta.url)("js-yaml") as {
+  load: (source: string) => unknown;
+};
+
 function read(filePath: string): string {
   return fs.readFileSync(filePath, "utf8");
 }
+
+type Workflow = {
+  env?: Record<string, string>;
+  jobs: Record<string, {
+    "timeout-minutes": number;
+    env?: Record<string, string>;
+    steps: Array<{ name: string; run?: string; env?: Record<string, string> }>;
+  }>;
+};
 
 describe("quality gate registry", () => {
   it("keeps release and planning v2 complete runners on the shared registry", () => {
@@ -92,6 +107,9 @@ describe("quality gate registry", () => {
 
   it("keeps CI from duplicating release registry gates outside release:verify", () => {
     const ciSource = read(".github/workflows/ci.yml");
+    const ci = loadYaml(ciSource) as Workflow;
+    const verify = ci.jobs.verify;
+    const preflight = QUALITY_GATE_SUITES["release:verify"].preflightRequired;
 
     expect(ciSource).toContain("Required Gate - Release Verify (quality gate registry)");
     expect(ciSource).toContain("pnpm release:verify");
@@ -99,6 +117,52 @@ describe("quality gate registry", () => {
     expect(ciSource).not.toContain("Planning V2 Regression Gate");
     expect(ciSource).not.toContain("run: pnpm planning:v2:guard");
     expect(ciSource).not.toContain("run: pnpm planning:v2:regress");
+    expect(ciSource).not.toContain("run: pnpm deps:audit");
+    expect(preflight.filter((id) => id === "deps:audit")).toHaveLength(1);
+    expect(getQualityGate("deps:audit")).toMatchObject({
+      id: "deps:audit",
+      tier: "required",
+      script: "deps:audit",
+    });
+    expect(verify["timeout-minutes"]).toBe(40);
+    expect(verify.steps).toContainEqual({
+      name: "Required Gate - Release Verify (quality gate registry)",
+      run: "pnpm release:verify",
+    });
+    expect(verify.steps).toContainEqual({ name: "Build", run: "pnpm build" });
+    expect(verify.steps).toContainEqual({
+      name: "Desktop artifact provenance gate",
+      run: expect.stringContaining("pnpm planning:v2:desktop:build -- --no-next-build"),
+    });
+  });
+
+  it.each([
+    { file: "ci.yml", timeouts: { verify: 40 } },
+    { file: "e2e-smoke.yml", timeouts: { core_flows: 35, dart_index_present: 30, dart_index_missing: 30 } },
+  ])("keeps one bounded Chromium install per required job in $file", ({ file, timeouts }) => {
+    const workflow = loadYaml(read(`.github/workflows/${file}`)) as Workflow;
+
+    expect(Object.keys(workflow.jobs).sort()).toEqual(Object.keys(timeouts).sort());
+    expect(workflow.env).toMatchObject({
+      PLAYWRIGHT_INSTALL_ATTEMPTS: "1",
+      PLAYWRIGHT_INSTALL_TIMEOUT_MS: "900000",
+    });
+    for (const [jobId, timeout] of Object.entries(timeouts)) {
+      const job = workflow.jobs[jobId];
+      const installs = job.steps.filter((step) => step.run === "pnpm e2e:install:chromium");
+      expect(job["timeout-minutes"]).toBe(timeout);
+      expect(installs).toHaveLength(1);
+      expect(installs[0]).toEqual({
+        name: expect.stringContaining("Install Playwright Chromium"),
+        run: "pnpm e2e:install:chromium",
+      });
+      expect(parseInstallConfig([], {
+        NODE_ENV: "test",
+        ...workflow.env,
+        ...job.env,
+        ...installs[0].env,
+      })).toMatchObject({ attempts: 1, timeoutMs: 900_000 });
+    }
   });
 
   it("keeps planning route coverage discovery-based instead of fixed counts or proxy lists", () => {

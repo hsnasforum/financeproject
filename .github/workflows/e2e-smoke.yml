@@ -8,6 +8,10 @@ concurrency:
   group: e2e-smoke-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PLAYWRIGHT_INSTALL_ATTEMPTS: "1"
+  PLAYWRIGHT_INSTALL_TIMEOUT_MS: "900000"
+
 jobs:
   core_flows:
     runs-on: ubuntu-latest
