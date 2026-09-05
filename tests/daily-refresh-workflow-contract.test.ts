@@ -1,10 +1,31 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   DAILY_REFRESH_APPROVED_PR_PATHS,
   DAILY_REFRESH_DIAGNOSTIC_ARTIFACT_PATHS,
 } from "../scripts/daily_refresh_contract.mjs";
+
+const { load: loadYaml } = createRequire(import.meta.url)("js-yaml") as {
+  load: (source: string) => unknown;
+};
+
+type DailyWorkflow = {
+  jobs: {
+    refresh: {
+      steps: Array<{ name: string; uses?: string; with?: { version?: string | number } }>;
+    };
+  };
+};
+
+function expectExactPnpmContract(workflow: DailyWorkflow, packageManager: string | undefined): void {
+  const setup = workflow.jobs.refresh.steps.find((step) => step.name === "Setup pnpm");
+  expect(setup?.uses).toBe("pnpm/action-setup@v6");
+  expect(setup?.with?.version).toBe("9.15.9");
+  expect(packageManager).toBe("pnpm@9.15.9");
+  expect(setup?.with?.version).toBe(packageManager?.slice("pnpm@".length));
+}
 
 function extractAddPaths(source: string): string[] {
   const marker = "          add-paths: |\n";
@@ -43,7 +64,7 @@ function extractStepBlock(source: string, name: string): string {
 }
 
 describe("daily refresh workflow contract", () => {
-  it("pins pnpm 9 before the Node 20 pnpm cache and frozen install", () => {
+  it("pins exact pnpm 9.15.9 before the Node 20 pnpm cache and frozen install", () => {
     const workflow = fs.readFileSync(
       path.join(process.cwd(), ".github", "workflows", "daily-refresh.yml"),
       "utf-8",
@@ -66,7 +87,8 @@ describe("daily refresh workflow contract", () => {
 
     const setupPnpmBlock = extractStepBlock(workflow, "Setup pnpm");
     expect(setupPnpmBlock).toContain("uses: pnpm/action-setup@v6");
-    expect(setupPnpmBlock).toMatch(/\n\s+version: 9\s*$/m);
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as { packageManager?: string };
+    expectExactPnpmContract(loadYaml(workflow) as DailyWorkflow, pkg.packageManager);
 
     const setupNodeBlock = extractStepBlock(workflow, "Setup Node");
     expect(setupNodeBlock).toContain("uses: actions/setup-node@v5");
@@ -81,6 +103,34 @@ describe("daily refresh workflow contract", () => {
     expect(workflow).not.toContain("corepack enable");
     expect(workflow).toContain("workflow_dispatch: {}");
     expect(workflow).toMatch(/\n  schedule:\n\s+- cron:/);
+  });
+
+  it.each([
+    { label: "numeric major", version: 9, packageManager: "pnpm@9.15.9" },
+    { label: "string major", version: "9", packageManager: "pnpm@9.15.9" },
+    { label: "other patch", version: "9.15.10", packageManager: "pnpm@9.15.9" },
+    { label: "missing version", version: undefined, packageManager: "pnpm@9.15.9" },
+    { label: "manifest mismatch", version: "9.15.9", packageManager: "pnpm@9.15.10" },
+    { label: "matching but unapproved versions", version: "9.15.10", packageManager: "pnpm@9.15.10" },
+  ])("rejects $label in the exact pnpm contract", ({ version, packageManager }) => {
+    const workflow = loadYaml(fs.readFileSync(".github/workflows/daily-refresh.yml", "utf8")) as DailyWorkflow;
+    const setup = workflow.jobs.refresh.steps.find((step) => step.name === "Setup pnpm")!;
+    if (version === undefined) delete setup.with!.version;
+    else setup.with!.version = version;
+    expect(() => expectExactPnpmContract(workflow, packageManager)).toThrow();
+  });
+
+  it.each(['"9.15.9"', "9.15.9"])("accepts the parsed exact pnpm version %s", (version) => {
+    const workflow = loadYaml(`
+jobs:
+  refresh:
+    steps:
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${version}
+`) as DailyWorkflow;
+    expect(() => expectExactPnpmContract(workflow, "pnpm@9.15.9")).not.toThrow();
   });
 
   it("fails closed before creating a pull request and uses only approved tracked paths", () => {
