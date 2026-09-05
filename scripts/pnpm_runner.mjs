@@ -1,15 +1,30 @@
 import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
-export function pnpmCommandCandidates(platform = process.platform) {
-  return platform === "win32"
-    ? [
-        { command: "pnpm.cmd", args: [] },
-        { command: "corepack.cmd", args: ["pnpm"] },
-      ]
-    : [
-        { command: "pnpm", args: [] },
-        { command: "corepack", args: ["pnpm"] },
-      ];
+export function pnpmCommandCandidates(platform = process.platform, options = {}) {
+  if (platform === "win32") {
+    const execPath = options.execPath ?? process.execPath;
+    const corepackPnpmPath = options.corepackPnpmPath
+      ?? path.join(path.dirname(execPath), "node_modules", "corepack", "dist", "pnpm.js");
+    const pathExists = options.pathExists ?? fs.existsSync;
+    return [
+      ...(pathExists(corepackPnpmPath)
+        ? [{ command: execPath, args: [corepackPnpmPath], execution: "windows-node-js" }]
+        : []),
+      { command: "pnpm.cmd", args: [] },
+      { command: "corepack.cmd", args: ["pnpm"] },
+    ];
+  }
+  return [
+    { command: "pnpm", args: [] },
+    { command: "corepack", args: ["pnpm"] },
+  ];
+}
+
+export function pnpmSpawnOptions(candidate, options = {}) {
+  // Direct Node execution preserves argv boundaries that cmd.exe would split.
+  return candidate.execution === "windows-node-js" ? { ...options, shell: false } : { ...options };
 }
 
 export function isCommandNotFound(error) {
@@ -26,7 +41,7 @@ export function runPnpmSync(args, options = {}, runner = spawnSync) {
 
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index];
-    const result = runner(candidate.command, [...candidate.args, ...args], options);
+    const result = runner(candidate.command, [...candidate.args, ...args], pnpmSpawnOptions(candidate, options));
     lastResult = result;
     if (isCommandNotFound(result.error) && index + 1 < candidates.length) continue;
     return result;
@@ -41,9 +56,9 @@ function spawnOnce(candidate, args, options, mode) {
     let stdout = "";
     let stderr = "";
     const { onStdout, onStderr, ...spawnOptions } = options;
-    const child = spawn(candidate.command, [...candidate.args, ...args], mode === "buffered"
+    const child = spawn(candidate.command, [...candidate.args, ...args], pnpmSpawnOptions(candidate, mode === "buffered"
       ? spawnOptions
-      : { stdio: "inherit", ...spawnOptions });
+      : { stdio: "inherit", ...spawnOptions }));
 
     const finish = (payload) => {
       if (settled) return;
@@ -115,7 +130,7 @@ export function startPnpm(args, options = {}) {
   return new Promise((resolve, reject) => {
     const start = (candidateIndex = 0) => {
       const candidate = candidates[candidateIndex];
-      const child = spawn(candidate.command, [...candidate.args, ...args], options);
+      const child = spawn(candidate.command, [...candidate.args, ...args], pnpmSpawnOptions(candidate, options));
       let settled = false;
 
       const finish = (fn, value) => {

@@ -1,10 +1,12 @@
 import { spawnSync } from "node:child_process";
+import * as childProcess from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createReleaseArtifactProvenance,
+  detectPnpmVersion,
   verifyReleaseArtifactProvenance,
 } from "../scripts/release_artifact_provenance.mjs";
 import {
@@ -17,6 +19,18 @@ import {
 const roots: string[] = [];
 const SOURCE_SHA = "a".repeat(40);
 const TAG = "v1.0.4";
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawnSync: vi.fn(actual.spawnSync) };
+});
+
+function pnpmProcessResult(overrides: Record<string, unknown> = {}) {
+  return {
+    pid: 17, output: [null, "9.15.9\n", ""], stdout: "9.15.9\n", stderr: "",
+    status: 0, signal: null, ...overrides,
+  } as ReturnType<typeof spawnSync>;
+}
 
 function makeRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-release-provenance-"));
@@ -86,12 +100,113 @@ async function createFixture(root: string) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const root of roots.splice(0, roots.length)) {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
 describe("release artifact provenance", () => {
+  it("detects pnpm through the platform-aware runner and trims stdout", () => {
+    const run = vi.fn(() => pnpmProcessResult({ stdout: " 9.15.9-fixture \r\n" }));
+    expect(detectPnpmVersion(run as unknown as Parameters<typeof detectPnpmVersion>[0])).toBe("9.15.9-fixture");
+    expect(run).toHaveBeenCalledExactlyOnceWith(["--version"], {
+      encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"],
+    });
+  });
+
+  it.each([
+    { label: "nonzero", result: { status: 7, stdout: "9.15.9\n" } },
+    { label: "empty stdout", result: { status: 0, stdout: "" } },
+    { label: "whitespace stdout", result: { status: 0, stdout: " \r\n" } },
+    { label: "null stdout", result: { status: 0, stdout: null } },
+    { label: "spawn error", result: { status: null, error: Object.assign(new Error("fixture EACCES"), { code: "EACCES" }) } },
+  ])("rejects detector $label instead of fabricating a version", ({ result }) => {
+    const run = vi.fn(() => pnpmProcessResult(result));
+    expect(() => detectPnpmVersion(run as unknown as Parameters<typeof detectPnpmVersion>[0])).toThrowError("release provenance could not resolve pnpm version");
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists the detected process stdout into the returned and written release manifest", async () => {
+    const root = makeRoot();
+    const seeded = await seedArtifact(root);
+    const paths = releasePaths(root);
+    const nativeSpawn = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+    const pnpmCalls: unknown[][] = [];
+    const spy = vi.spyOn(childProcess, "spawnSync");
+    spy.mockImplementation(((command: string, args: string[], options: Record<string, unknown>) => {
+      if (args.length === 1 && args[0] === "--version") {
+        pnpmCalls.push([command, args, options]);
+        return pnpmProcessResult({ stdout: " 9.15.9-b2-detected \n" });
+      }
+      return nativeSpawn.spawnSync(command, args, options);
+    }) as typeof childProcess.spawnSync);
+
+    const manifest = await createReleaseArtifactProvenance({
+      artifactDir: seeded.artifactDir, ...paths, sourceSha: SOURCE_SHA, tag: TAG,
+    });
+
+    expect(pnpmCalls).toEqual([[
+      "pnpm", ["--version"], { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
+    ]]);
+    expect(manifest.toolchain.pnpm).toBe("9.15.9-b2-detected");
+    const written = JSON.parse(fs.readFileSync(paths.manifestPath, "utf-8"));
+    expect(written.toolchain.pnpm).toBe("9.15.9-b2-detected");
+    await expect(verifyReleaseArtifactProvenance({
+      manifestPath: paths.manifestPath, sourceSha: SOURCE_SHA, tag: TAG,
+    })).resolves.toMatchObject({ ok: true });
+  });
+
+  it("keeps explicit pnpmVersion precedence without invoking the detector process", async () => {
+    const root = makeRoot();
+    const seeded = await seedArtifact(root);
+    const paths = releasePaths(root);
+    const nativeSpawn = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+    const probe = vi.fn();
+    vi.spyOn(childProcess, "spawnSync").mockImplementation(((
+      command: string, args: string[], options: Record<string, unknown>,
+    ) => {
+      if (args.length === 1 && args[0] === "--version") {
+        probe();
+        throw new Error("explicit version must not probe pnpm");
+      }
+      return nativeSpawn.spawnSync(command, args, options);
+    }) as typeof childProcess.spawnSync);
+
+    const manifest = await createReleaseArtifactProvenance({
+      artifactDir: seeded.artifactDir, ...paths, sourceSha: SOURCE_SHA, tag: TAG,
+      pnpmVersion: "9.15.9-explicit",
+    });
+
+    expect(probe).not.toHaveBeenCalled();
+    expect(manifest.toolchain.pnpm).toBe("9.15.9-explicit");
+    expect(JSON.parse(fs.readFileSync(paths.manifestPath, "utf-8")).toolchain.pnpm).toBe("9.15.9-explicit");
+  });
+
+  it.each([
+    { label: "nonzero", result: { status: 7, stdout: "9.15.9\n" } },
+    { label: "empty stdout", result: { status: 0, stdout: "" } },
+  ])("propagates detector $label through real release creation", async ({ result }) => {
+    const root = makeRoot();
+    const seeded = await seedArtifact(root);
+    const paths = releasePaths(root);
+    const nativeSpawn = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+    const probe = vi.fn(() => pnpmProcessResult(result));
+    vi.spyOn(childProcess, "spawnSync").mockImplementation(((
+      command: string, args: string[], options: Record<string, unknown>,
+    ) => {
+      if (args.length === 1 && args[0] === "--version") return probe();
+      return nativeSpawn.spawnSync(command, args, options);
+    }) as typeof childProcess.spawnSync);
+
+    await expect(createReleaseArtifactProvenance({
+      artifactDir: seeded.artifactDir, ...paths, sourceSha: SOURCE_SHA, tag: TAG,
+    })).rejects.toThrowError("release provenance could not resolve pnpm version");
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(fs.existsSync(paths.manifestPath)).toBe(false);
+    // Archive/inventory may already exist; no transactional rollback is claimed.
+  });
+
   it("creates the archive itself and links source, toolchain, inventory, and checksums", async () => {
     const root = makeRoot();
     const fixture = await createFixture(root);

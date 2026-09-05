@@ -12,6 +12,7 @@ import {
   listArtifactFiles,
   readDesktopManifest,
 } from "./planning_v2_desktop_provenance.mjs";
+import { runPnpmSync } from "./pnpm_runner.mjs";
 
 export const RELEASE_PROVENANCE_SCHEMA_VERSION = 1;
 export const RELEASE_PROVENANCE_KIND = "planning-v2-desktop-release";
@@ -237,8 +238,8 @@ async function createArchive(artifactDir, archivePath) {
   return requirePlainFile(archivePath, "release archive");
 }
 
-function detectPnpmVersion() {
-  const result = spawnSync("pnpm", ["--version"], {
+export function detectPnpmVersion(run = runPnpmSync) {
+  const result = run(["--version"], {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
   });

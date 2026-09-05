@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { isCommandNotFound, pnpmCommandCandidates } from "./pnpm_runner.mjs";
+import { isCommandNotFound, pnpmCommandCandidates, pnpmSpawnOptions } from "./pnpm_runner.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const cwd = process.cwd();
@@ -41,12 +41,12 @@ async function runWorker(args) {
   const runBuild = (candidateIndex = 0) => {
     const candidate = candidates[candidateIndex];
     let fallbackStarted = false;
-    const child = spawn(candidate.command, [...candidate.args, "build"], {
+    const child = spawn(candidate.command, [...candidate.args, "build"], pnpmSpawnOptions(candidate, {
       cwd,
       env: process.env,
       shell: process.platform === "win32",
       stdio: ["ignore", logFd, logFd],
-    });
+    }));
 
     child.on("error", (error) => {
       if (isCommandNotFound(error) && candidateIndex + 1 < candidates.length) {

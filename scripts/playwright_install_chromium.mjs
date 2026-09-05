@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
-import { isCommandNotFound, pnpmCommandCandidates } from "./pnpm_runner.mjs";
+import { isCommandNotFound, pnpmCommandCandidates, pnpmSpawnOptions } from "./pnpm_runner.mjs";
 
 const INSTALL_ARGS = ["exec", "playwright", "install", "--with-deps", "chromium"];
 const DEFAULT_ATTEMPTS = 2;
@@ -90,13 +90,13 @@ function runCandidateWithTimeout(candidate, args, timeoutMs) {
     let settled = false;
     let timedOut = false;
 
-    const child = spawn(candidate.command, [...candidate.args, ...args], {
+    const child = spawn(candidate.command, [...candidate.args, ...args], pnpmSpawnOptions(candidate, {
       stdio: "inherit",
       shell: process.platform === "win32",
       detached: process.platform !== "win32",
       env: process.env,
       cwd: process.cwd(),
-    });
+    }));
 
     const timeout = setTimeout(() => {
       timedOut = true;
