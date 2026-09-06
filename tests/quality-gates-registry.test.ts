@@ -49,6 +49,9 @@ function pnpmVersionIssues(workflows: ReturnType<typeof readWorkflows>): string[
         if (!step.uses?.startsWith("pnpm/action-setup@")) continue;
         setupCount += 1;
         const location = `${file}/${jobId}/steps[${index}] (${step.name})`;
+        if (step.uses !== "pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86") {
+          issues.push(`${location}: uses=${step.uses} must equal the reviewed pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86`);
+        }
         const manifestInput = step.with?.package_json_file ?? "package.json";
         if (typeof manifestInput !== "string" || manifestInput.includes("${{")) {
           issues.push(`${location}: cannot statically resolve package_json_file=${manifestInput}`);
@@ -224,7 +227,7 @@ describe("quality gate registry", () => {
     const pkg = JSON.parse(read("package.json")) as { packageManager?: string };
     const pins = {
       "actions/checkout": "df4cb1c069e1874edd31b4311f1884172cec0e10",
-      "pnpm/action-setup": "0ebf47130e4866e96fce0953f49152a61190b271",
+      "pnpm/action-setup": "0977fd99725f1db4007ccb2928dbb4e90d06cc86",
       "actions/setup-node": "a0853c24544627f65ddf259abe73b1d18a591444",
     };
 
@@ -247,8 +250,25 @@ describe("quality gate registry", () => {
   });
 
 
-  it("aligns every discovered pnpm setup input with its packageManager", () => {
+  it("pins every discovered pnpm setup and aligns its input with packageManager", () => {
     expect(pnpmVersionIssues(readWorkflows())).toEqual([]);
+  });
+
+  it.each(readWorkflows().flatMap(({ file, workflow }) =>
+    Object.entries(workflow.jobs).flatMap(([jobId, job]) =>
+      (job.steps ?? []).flatMap((step, index) => step.uses?.startsWith("pnpm/action-setup@")
+        ? ["0ebf47130e4866e96fce0953f49152a61190b271", "v6", "0000000000000000000000000000000000000000"]
+          .map((ref) => ({ file, jobId, index, ref }))
+        : []),
+    ),
+  ))("rejects $ref at $file/$jobId/steps[$index]", ({ file, jobId, index, ref }) => {
+    const workflows = readWorkflows();
+    const workflow = workflows.find((entry) => entry.file === file)!.workflow;
+    workflow.jobs[jobId].steps[index].uses = `pnpm/action-setup@${ref}`;
+    expect(pnpmVersionIssues(workflows)).toEqual([
+      expect.stringContaining(`${file}/${jobId}/steps[${index}]`),
+    ]);
+    expect(pnpmVersionIssues(workflows)[0]).toContain("must equal the reviewed pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86");
   });
 
   it.each(["release.yml", "daily-refresh.yml", "rules-tune-pr.yml"])(

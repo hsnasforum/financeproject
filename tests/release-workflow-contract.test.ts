@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const APPROVED_ACTION_USES = new Set([
   "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
-  "pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271",
+  "pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86",
   "actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444",
   "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
   "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
