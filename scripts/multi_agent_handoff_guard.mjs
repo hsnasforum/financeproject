@@ -3,6 +3,8 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const trackedOnlyPaths = [
+  "AGENTS.md",
+  "multi_agent.md",
   ".codex/config.toml",
   ".codex/rules/default.rules",
   ".codex/skills/codex-agent-rules-maintenance/SKILL.md",
@@ -32,89 +34,45 @@ const trackedOnlyPaths = [
   "work/README.md",
 ];
 
+// 공통 계약을 한 곳에서 검사하고 각 역할은 그 계약을 참조한다.
+const nativeRoles = ["manager", "analyzer", "planner", "developer", "reviewer", "tester", "researcher", "documenter"];
+const cliRoles = ["lead", "planner", "researcher", "implementer", "reviewer", "validator", "documenter"];
 const coverageChecks = [
-  {
-    path: ".codex/agents/analyzer.toml",
-    patterns: [/\/work/, /사용(?:한)? skill/, /실행한 확인/, /미실행 검증 후보/],
-  },
-  {
-    path: ".codex/agents/manager.toml",
-    patterns: [/\/work/, /사용(?:한)? skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: ".codex/agents/developer.toml",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: ".codex/agents/documenter.toml",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: ".codex/agents/planner.toml",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: ".codex/agents/researcher.toml",
-    patterns: [/\/work/, /사용 skill/, /실행한 확인/, /미실행 내부 검증/],
-  },
-  {
-    path: ".codex/agents/reviewer.toml",
-    patterns: [/\/work/, /사용 skill/, /실행한 (검증|확인)/, /미실행 검증/],
-  },
-  {
-    path: ".codex/agents/tester.toml",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/common.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/lead.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/implementer.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/documenter.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/planner.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/researcher.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 확인/, /미실행 내부 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/reviewer.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 (검증|확인)/, /미실행 검증/],
-  },
-  {
-    path: "scripts/prompts/multi-agent/validator.md",
-    patterns: [/\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/],
-  },
+  { path: "multi_agent.md", patterns: [/^## 위임과 소유권$/m, /^## 검증 게이트 단일 기준$/m, /^## Handoff와 기록$/m, /\/work/, /사용 skill/, /실행한 검증/, /미실행 검증/, /기준 workspace·revision/, /공유 자원 소유권/] },
+  ...nativeRoles.map((role) => ({ path: `.codex/agents/${role}.toml`, patterns: [/AGENTS\.md/, /multi_agent\.md/, /Handoff/, /반환:/] })),
+  { path: "scripts/prompts/multi-agent/common.md", patterns: [/AGENTS\.md/, /multi_agent\.md/, /Handoff/, /agents\.enabled=false/] },
+  ...cliRoles.map((role) => ({ path: `scripts/prompts/multi-agent/${role}.md`, patterns: [/multi_agent\.md/, /Handoff/, /반환:/] })),
 ];
 
+const roleProfiles = {
+  manager: ["gpt-6.1-sol", "max", "read-only"],
+  analyzer: ["gpt-6.1-sol", "max", "read-only"],
+  researcher: ["gpt-6.1-sol", "max", "read-only"],
+  tester: ["gpt-6.1-sol", "max", "workspace-write"],
+  documenter: ["gpt-6.1-sol", "max", "workspace-write"],
+  planner: ["gpt-6.1-sol", "max", "read-only"],
+  developer: ["gpt-6.1-sol", "max", "workspace-write"],
+  reviewer: ["gpt-6.1-sol", "max", "read-only"],
+};
+
+function assignment(key, value) {
+  return new RegExp(`^${key} = "${value.replaceAll(".", "\\.")}"$`, "m");
+}
+
 const profileChecks = [
-  { path: ".codex/agents/manager.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "high"$/m] },
-  { path: ".codex/agents/analyzer.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "xhigh"$/m] },
-  { path: ".codex/agents/planner.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "xhigh"$/m] },
-  { path: ".codex/agents/developer.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "xhigh"$/m] },
-  { path: ".codex/agents/reviewer.toml", patterns: [/^model = "gpt-5\.6-sol"$/m, /^model_reasoning_effort = "high"$/m] },
-  { path: ".codex/agents/tester.toml", patterns: [/^model = "gpt-5\.6-terra"$/m, /^model_reasoning_effort = "high"$/m] },
-  { path: ".codex/agents/researcher.toml", patterns: [/^model = "gpt-5\.6-terra"$/m, /^model_reasoning_effort = "high"$/m] },
-  { path: ".codex/agents/documenter.toml", patterns: [/^model = "gpt-5\.6-terra"$/m, /^model_reasoning_effort = "high"$/m] },
-  { path: "scripts/run_codex_multi_agent.sh", patterns: [/CODEX_DEMANDING_MODEL:-gpt-5\.6-sol/, /CODEX_READ_HEAVY_MODEL:-gpt-5\.6-terra/, /model_reasoning_effort/] },
+  { path: ".codex/config.toml", section: "", patterns: [assignment("model", "gpt-6-astra"), assignment("model_reasoning_effort", "ultra"), /^project_doc_max_bytes = 32768$/m] },
+  { path: ".codex/config.toml", section: "agents", patterns: [/^enabled = true$/m, /^max_concurrent_threads_per_session = 6$/m, /^max_depth = 1$/m, /^job_max_runtime_seconds = 1800$/m, assignment("default_subagent_model", "gpt-6.1-sol"), assignment("default_subagent_reasoning_effort", "max")] },
+  ...Object.entries(roleProfiles).map(([role, [model, effort, sandbox]]) => ({
+    path: `.codex/agents/${role}.toml`,
+    patterns: [assignment("model", model), assignment("model_reasoning_effort", effort), assignment("sandbox_mode", sandbox), assignment("approval_policy", "on-request")],
+  })),
+  { path: "scripts/run_codex_multi_agent.sh", patterns: [/CODEX_LEAD_MODEL:-gpt-6-astra/, /CODEX_DEMANDING_MODEL:-gpt-6\.1-sol/, /CODEX_READ_HEAVY_MODEL:-gpt-6\.1-sol/, /CODEX_LEAD_EFFORT:-ultra/, /CODEX_DEMANDING_EFFORT:-max/, /CODEX_READ_HEAVY_EFFORT:-max/, /agents\.enabled=false/, /model_reasoning_effort/] },
 ];
 
 const skillDefinitionChecks = [
   {
     path: ".codex/skills/codex-agent-rules-maintenance/SKILL.md",
-    patterns: [/^name: codex-agent-rules-maintenance$/m, /^description: .+$/m, /^## Workflow$/m, /^## Verification$/m],
+    patterns: [/^name: codex-agent-rules-maintenance$/m, /^description: .+$/m, /^When model or routing changes, align only the affected surfaces:$/m, /^Validate the changed surface, not the whole app:$/m],
   },
   {
     path: ".codex/skills/codex-agent-rules-maintenance/agents/openai.yaml",
@@ -334,12 +292,25 @@ for (const check of coverageChecks) {
   }
 }
 
+function profileText(text, section) {
+  if (section === undefined) return text;
+  let current = "";
+  const selected = [];
+  for (const line of text.split(/\r?\n/)) {
+    const header = /^\[([^\[\]]+)\]$/.exec(line.trim());
+    if (header) current = header[1];
+    else if (/^\[/.test(line.trim())) current = null;
+    else if (current === section) selected.push(line);
+  }
+  return selected.join("\n");
+}
+
 for (const check of profileChecks) {
   if (!fs.existsSync(check.path)) continue;
-  const text = fs.readFileSync(check.path, "utf8");
+  const text = profileText(fs.readFileSync(check.path, "utf8"), check.section);
   for (const pattern of check.patterns) {
     if (!pattern.test(text)) {
-      issues.push(`missing GPT-5.6 agent profile ${String(pattern)} -> ${check.path}`);
+      issues.push(`invalid active harness profile ${String(pattern)} -> ${check.path}`);
     }
   }
 }

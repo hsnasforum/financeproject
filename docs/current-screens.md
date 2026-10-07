@@ -1,6 +1,6 @@
 # 현재 제공 화면/기능 카탈로그 (v1.0 RC)
 
-기준일: 2026-07-12
+기준일: 2026-08-24
 기준 소스: `src/app/**/page.tsx`
 최근 검증: page route 95개, `pnpm planning:current-screens:guard`, `pnpm planning:ssot:check`
 
@@ -68,6 +68,7 @@
 
 ## 경계 메모
 - `/planning/reports`, `/planning/reports/[id]`, `/planning/runs`는 공식 planning run/report 경로다.
+- `/settings/recovery`는 production 사용자에게 브라우저 화면 설정 초기화와 백업 복원·데이터 소스 상태 진입만 제공한다. Dev unlock, 서버 tmp 삭제, 오프라인 스크립트 실행은 공개 복구 화면에 노출하지 않는다.
 - `/report`는 legacy redirect 경로이며 공식 planning report 경로와 구분해서 다룬다.
 - `/report` 진입은 현재 `/planning/reports` 또는 `/planning/reports?runId=...`로 `permanentRedirect` 된다.
 - `/compare`, `/products/deposit`, `/products/saving`, `/planning/v3/transactions`도 route policy에서 공개 redirect entry와 canonical destination을 별도로 유지한다.
@@ -127,6 +128,7 @@
 - `/planning/v3/start`, `/planning/v3/news*`, `/planning/v3/journal`, `/planning/v3/exposure`, `/planning/v3/scenarios`, raw `/planning/v3/batches`, `/planning/v3/batches/[id]`, `/planning/v3/import/csv`, `/planning/v3/drafts*`, `/planning/v3/accounts`는 current official entry policy 밖의 non-entry/internal 또는 onboarding wrapper 후보로 둔다.
 
 ## Ops/Admin 화면 (Local-only Ops / local-only 또는 packaged runtime)
+- `src/middleware.ts`가 `src/app`과 같은 레벨에서 production 보안 헤더와 local-only 경계를 적용한다. 피드백 관리 및 `/ops/*`, `/api/ops/*`는 prefetch 헤더가 있어도 가드를 통과해야 한다.
 - 아래 피드백 관리 2개 경로는 개발 local-ops 전용이며 packaged production 지원 범위에 포함하지 않는다.
 - `/feedback/list` (개발 로컬 직접 연결 + Dev unlock 피드백 관리 capability 필요, production 404)
 - `/feedback/[id]` (개발 로컬 직접 연결 + Dev unlock 피드백 관리 capability 필요, production 404)
@@ -164,11 +166,15 @@
 - `/api/dev/*`는 production에서 공통 차단(404)된다.
 - 현재 코드에는 production 예외가 없다. `/api/dev/unlock`도 development local-ops에서만 사용하며 packaged production에서는 404를 유지한다.
 - exact `POST /api/feedback`은 public 피드백 접수 경로이며 same-origin 요청만 허용하고 성공 시 `{ ok: true }`만 반환한다.
+- `POST /api/planning/v2/feedback`은 `/planning` workspace의 구조화 피드백 접수 경로다. same-origin·CSRF와 routeAuth current-user scope를 요구하며, 성공한 피드백은 현재 사용자의 planning data namespace에 저장한다. `/api/ops/feedback/planning`은 개발용 관리 API로 남기고 production 404를 유지한다.
+- `/api/settings/backup/status|export|export/finalize|preview|restore`는 desktop-local production의 사용자 백업 경로다. middleware와 route 양쪽에서 로컬 호스트·인증을 먼저 확인하고, same-origin·vault CSRF를 추가 검증한다. export/finalize JSON은 인증 성공 후 최대 32KiB만 읽고, 백업 다운로드만으로는 변경분 기준을 옮기지 않는다. 사용자가 파일 저장을 확인한 뒤 서명 receipt를 finalize해야 checkpoint가 확정된다. vault format v2 full 백업은 현재 사용자 profile/run과 Planning v3 13-owner whitelist를 암호화하며 shared assumptions·ops policy는 제외한다. 복원 요청은 제한된 multipart 크기와 같은 파일·암호로 발급한 preview token을 확인한 뒤에만 실행하고, Planning v3는 replace에서만 반영한다. 기존 `/api/dev/backup/*`는 개발 전용 404 경계를 유지한다.
+- `/api/ops/backup/export|export/finalize`도 development local-ops에서 로컬 호스트·same-origin·현재 사용자 인증을 먼저 확인하고 같은 32KiB JSON·서명 receipt·저장 확인 후 checkpoint 계약을 적용한다. production에서는 `/api/ops/*` 경계에 따라 404를 유지한다.
 - standalone `/api/diagnostics/snapshot` GET은 공개·로컬 공통으로 제공하지 않는다. `/feedback`은 이 route를 fetch·cache하거나 진단 번들을 다운로드하지 않으며, `POST /api/feedback`은 client-supplied snapshot과 `x-page-url`·`x-local-state-summary`를 신뢰하지 않고 서버 내부의 최소 진단 정보만 선택적으로 저장한다. 진단 생성 실패는 피드백 본문 저장을 막지 않으며, 피드백 관리 API의 권한과 admin DTO 경계는 그대로 유지한다.
 - `/api/feedback/list`, `/api/feedback/recent`, `/api/feedback/[id]`는 피드백 관리 API다. development 로컬 직접 연결과 Dev unlock capability를 요구하며 production에서는 404를 반환한다.
 - `/api/gov24/sync`와 `/api/sync/smoke`는 HTTP job 실행을 지원하지 않는다. development/test는 로컬 운영 명령 안내와 함께 403, production은 404를 반환하며 실제 실행은 문서화된 CLI/scheduler 경계만 사용한다.
-- `/api/auth/*`는 Auth.js 로그인/콜백/session route로 취급한다. 이 phase의 provider는 GitHub/Google OAuth만 활성화하며, Credentials/Email provider는 후속 phase로 둔다. `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` 또는 `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` 묶음이 없으면 해당 provider는 비활성화된다. Prisma adapter는 Auth.js 테이블 마이그레이션 후 `AUTH_PRISMA_ADAPTER_ENABLED=true`에서만 활성화한다.
-- `/api/planning/*`는 production에서 항상 인증을 요구한다. production에서는 `PLANNING_AUTH_REQUIRED=false`를 설정해도 middleware와 routeAuth가 Auth.js session cookie 또는 내부 신뢰 auth header가 없는 요청을 401로 차단한다. 신뢰 auth header가 비활성화됐거나 원격 요청에서 쓰이면 403으로 차단한다. local/dev에서 임시 fallback을 쓰려면 `PLANNING_AUTH_REQUIRED=false`를 명시해야 한다. route handler에서는 routeAuth 계층의 current-user scope를 사용해 저장소 접근을 현재 사용자 경계 안에서 수행하고, public meta는 `meta.userId`와 `meta.authSource` 키를 유지한다.
+- `/api/public/disclosure/corpcodes/status`와 `/api/public/disclosure/corpcodes/search`는 corpCodes 파일 존재 여부(`exists`)와 실제 파싱 가능 여부(`usable`)를 구분한다. 파일이 없거나 손상된 경우 모두 409로 핵심 흐름을 안전하게 제한하되, 각각 `CORPCODES_INDEX_MISSING`과 `CORPCODES_INDEX_INVALID`로 원인을 구분한다.
+- `/api/auth/*`는 일반 웹의 Auth.js 로그인/콜백/session route로 취급한다. 이 phase의 provider는 GitHub/Google OAuth만 활성화하며, Credentials/Email provider는 후속 phase로 둔다. `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` 또는 `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` 묶음이 없으면 해당 provider는 비활성화된다. Prisma adapter는 Auth.js 테이블 마이그레이션 후 `AUTH_PRISMA_ADAPTER_ENABLED=true`에서만 활성화한다. 검증된 desktop-local에서는 외부 OAuth handler를 호출하지 않으며 `GET /api/auth/signin`만 `/planning`의 로컬 세션 확인으로 돌리고 나머지는 404로 처리한다. runtime/loopback 신뢰 경계 위반은 각각 503/403이며 이 복구 이동은 인증을 부여하지 않는다.
+- `/api/planning/*`는 production에서 항상 인증을 요구한다. desktop-local은 검증된 launcher session으로만 기존 `users/default`를 사용한다. 일반 production 웹에서는 `PLANNING_AUTH_REQUIRED=false`를 설정해도 middleware와 routeAuth가 Auth.js session cookie 또는 내부 신뢰 auth header가 없는 요청을 401로 차단한다. 신뢰 auth header가 비활성화됐거나 원격 요청에서 쓰이면 403으로 차단한다. local/dev에서 임시 fallback을 쓰려면 `PLANNING_AUTH_REQUIRED=false`를 명시해야 한다. route handler에서는 routeAuth 계층의 current-user scope를 사용해 저장소 접근을 현재 사용자 경계 안에서 수행하고, public meta는 `meta.userId`와 `meta.authSource` 키를 유지한다.
 - `/api/planning/run`과 `/api/planning/v2/run`은 `/api/planning/v2/runs`의 deprecated alias다. 제거 또는 redirect 전환은 telemetry/access log와 사용처 확인 후 별도 결정한다.
 - `/api/planner/compute`는 legacy planner 계산 API지만 개인 재무 입력을 받으므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다. `/api/planner/assumptions`는 저장소를 쓰지 않는 외부 가정값 조회 보조 API로 유지한다.
 - `/api/recommend`는 추천 입력과 planning context를 받는 계산 API이므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 기존 추천 trace/source meta에 `meta.userId`와 `meta.authSource`를 함께 유지한다.

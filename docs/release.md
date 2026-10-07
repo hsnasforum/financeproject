@@ -36,6 +36,7 @@
 - `planning:v2:regress`는 전용 planning e2e data dir를 매번 새로 만들어 shared `.data/planning-e2e` 오염을 피합니다.
 - `planning:postgres:readiness`는 SQLite runtime schema와 PostgreSQL target schema를 검증하고 `tmp/planning-postgres-readiness/`에 manifest, exported files, dry-run apply plan, checksum evidence를 남깁니다.
 - CI는 `pnpm release:verify`를 registry suite의 primary gate로 사용하며, 이 suite에 포함된 `planning:v2:guard`와 `planning:v2:regress`를 별도 step에서 다시 실행하지 않습니다.
+- Tag release의 게시용 desktop artifact는 Windows에서 빌드하며, 설치본 manifest의 OS·CPU·Node ABI를 검증한 뒤 임시 설치 경로에서 실제 기본 DB 초기화와 production/desktop smoke를 통과해야 provenance를 생성합니다.
 - 설치본 검증은 `release:verify` 내부 gate가 아닙니다. Tag release workflow가 `release:verify → artifact build/install → production smoke → desktop smoke` 순서의 companion 단계를 소유합니다.
 
 선택:
@@ -245,7 +246,7 @@
 2. 태그 커밋은 원격 기본 브랜치의 조상이어야 하며, checkout SHA·로컬 태그·원격 태그가 모두 같은 커밋을 가리켜야 합니다.
 3. `pnpm release:verify`가 통과한 뒤 같은 checkout에서 Planning v2 desktop artifact를 한 번만 빌드합니다.
 4. 검증 전후에 tracked/untracked 변경과 desktop 빌더가 복사하는 source root의 ignored 파일이 없어야 합니다.
-5. 릴리즈에는 태그가 포함된 archive, inventory, manifest 3개만 게시합니다. manifest에는 source SHA, package/tag, Node·pnpm·OS·architecture, desktop manifest·lockfile·artifact checksum, archive·inventory checksum과 file count를 기록합니다.
+5. 릴리즈에는 Windows native job이 설치·production smoke·desktop smoke까지 통과시킨 태그 포함 archive, inventory, manifest 3개만 게시합니다. manifest에는 source SHA, package/tag, Node·pnpm·OS·architecture, desktop manifest의 Node ABI·lockfile·artifact checksum, archive·inventory checksum과 file count를 기록합니다.
 6. 게시 직전에 원격 태그와 다운로드한 provenance를 다시 검증합니다. 같은 태그의 GitHub Release가 이미 있으면 자동 덮어쓰기하지 않고 실패합니다.
 
 자동화 권한은 검증·패키징 job의 `contents: read`와 게시 job의 `contents: write`로 분리합니다. 실제 tag push와 Release 생성은 운영 변경이므로 이 절차를 검증할 때 임의 태그를 만들지 않습니다.

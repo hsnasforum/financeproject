@@ -82,7 +82,15 @@ namespace가 활성화된 다중 사용자 모드에서는 호출자가 `userId`
 }
 ```
 
-v1은 현재 고정한 사용자 namespace의 owner와 runtime-shared owner를 함께 선언하는 `active-namespace-and-runtime-shared` archive만 정의합니다. 이 값은 다른 사용자 namespace까지 포함한 전체 runtime backup을 뜻하지 않습니다. user-only, shared-only, 모든 사용자 포함 archive는 같은 형식의 암묵적 부분집합으로 만들지 않으며 별도 제품·보안 결정을 거쳐 새 scope를 추가합니다.
+standalone owner archive v1은 현재 고정한 사용자 namespace의 owner와 runtime-shared owner를 함께 선언하는 `active-namespace-and-runtime-shared` archive를 기본으로 정의합니다. 이 값은 다른 사용자 namespace까지 포함한 전체 runtime backup을 뜻하지 않습니다. shared-only나 모든 사용자 포함 archive는 같은 형식의 암묵적 부분집합으로 만들지 않습니다.
+
+사용자 설정 화면의 planning data vault format v2는 이 실험용 owner archive 전체를 노출하지 않고, 내부 manifest에 별도 `active-user-v3` scope를 사용합니다. 이 scope는 인증된 현재 사용자에게 귀속되는 13개 v3 owner만 exact-set으로 허용하며 `v3.indicators`, `v3.legacy-transactions`, stable raw owner와 다른 사용자의 namespace를 거부합니다. canonical 위치와 registry에 명시된 legacy 위치만 수집하고, 각 파일은 outer vault manifest와 owner checksum·schema validator를 모두 통과해야 합니다.
+
+- `/settings/backup`은 사용자 scope라 shared assumptions·ops policy를 내보내거나 복원하지 않습니다.
+- full 백업만 `active-user-v3` snapshot을 포함합니다. delta는 v3 변경 journal이 없으므로 stable profile/run 변경분 전용입니다.
+- v3 raw snapshot은 semantic merge를 제공하지 않습니다. merge에서는 현재 v3 파일을 보존하고 경고하며, replace에서만 현재 사용자의 13개 owner target을 snapshot한 뒤 교체합니다.
+- replace journal과 snapshot은 현재 사용자 디렉터리 아래에 두고, recovery 시 현재 사용자 target allowlist 밖의 경로가 기록되어 있으면 복원 전에 fail-closed합니다.
+- 이 경로는 `/settings/backup`의 암호화 planning data vault 복원에만 해당합니다. 개발용 `v3:restore --apply` 차단은 계속 유지됩니다.
 
 각 owner record는 `ownerId`, `schemaVersion`, `logicalPath`, `namespace`, `required`, `emptyAllowed`, `fileCount`, `totalBytes`, `checksum`, `files`를 가집니다. 파일 record는 portable relative POSIX path, byte size, SHA-256을 기록합니다.
 

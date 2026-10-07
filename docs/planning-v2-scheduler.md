@@ -13,6 +13,11 @@
   - 정책 파일이 있으면 파일 값이 우선이고, 파일이 없을 때 ENV 기본값을 사용합니다.
 - 권장 시간대: `Asia/Seoul`
 - 서버 cron 없이 로컬 스케줄러(Task Scheduler/cron)에서 CLI를 직접 실행합니다.
+- Scheduler와 각 mutating package script는 Desktop runtime과 같은 writer lease를
+  사용합니다. 예약 시간에는 Desktop 앱을 먼저 종료해야 하며, 앱이 실행 중이면
+  중복 쓰기 대신 실패 이벤트와 non-zero exit code를 남깁니다.
+- 설치형 production data를 대상으로 할 때는 scheduler 환경의
+  `PLANNING_DATA_DIR`을 앱과 같은 local Planning root로 명시합니다.
 - 두 스크립트(`ops:refresh-assumptions`, `planning:run:monthly`)는 HTTP가 아니라 서버 모듈을 직접 호출합니다.
 - Vault가 잠겨 있으면 즉시 실패하고 `code=LOCKED`로 종료합니다(종료코드 2).
 - 운영 기준:
