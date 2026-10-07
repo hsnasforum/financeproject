@@ -21,7 +21,7 @@ type DailyWorkflow = {
 
 function expectExactPnpmContract(workflow: DailyWorkflow, packageManager: string | undefined): void {
   const setup = workflow.jobs.refresh.steps.find((step) => step.name === "Setup pnpm");
-  expect(setup?.uses).toBe("pnpm/action-setup@v6");
+  expect(setup?.uses).toBe("pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86");
   expect(setup?.with?.version).toBe("9.15.9");
   expect(packageManager).toBe("pnpm@9.15.9");
   expect(setup?.with?.version).toBe(packageManager?.slice("pnpm@".length));
@@ -86,7 +86,7 @@ describe("daily refresh workflow contract", () => {
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
 
     const setupPnpmBlock = extractStepBlock(workflow, "Setup pnpm");
-    expect(setupPnpmBlock).toContain("uses: pnpm/action-setup@v6");
+    expect(setupPnpmBlock).toContain("uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86");
     const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as { packageManager?: string };
     expectExactPnpmContract(loadYaml(workflow) as DailyWorkflow, pkg.packageManager);
 
@@ -126,7 +126,7 @@ jobs:
   refresh:
     steps:
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with:
           version: ${version}
 `) as DailyWorkflow;

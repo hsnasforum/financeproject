@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const APPROVED_ACTION_USES = new Set([
   "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
-  "pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271",
+  "pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86",
   "actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444",
   "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
   "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
@@ -29,12 +29,19 @@ describe("tag release workflow contract", () => {
     const verifyJob = section(workflow, "  verify_and_package:\n", "\n  publish:\n");
     const requiredGate = verifyJob.indexOf("run: pnpm release:verify");
     const desktopBuild = verifyJob.indexOf("run: pnpm planning:v2:desktop:build");
+    const desktopInstall = verifyJob.indexOf("cmd.exe /d /c install.cmd");
+    const prodSmoke = verifyJob.indexOf("planning:v2:prod:smoke");
+    const desktopSmoke = verifyJob.indexOf("planning:v2:desktop:smoke");
+    const desktopUninstall = verifyJob.indexOf("cmd.exe /d /c uninstall.cmd");
     const provenance = verifyJob.indexOf("--mode=create");
     const upload = verifyJob.indexOf("actions/upload-artifact@");
 
     expect(workflow).toContain('- "v*.*.*"');
     expect(workflow).toContain("permissions: {}\n");
     expect(verifyJob).toContain("permissions:\n      contents: read");
+    expect(verifyJob).toContain("runs-on: windows-latest");
+    expect(verifyJob).toContain("timeout-minutes: 75");
+    expect(verifyJob).toContain("shell: bash");
     expect(verifyJob).toContain("fetch-depth: 0");
     expect(verifyJob).toContain("fetch-tags: true");
     expect(verifyJob).toContain("persist-credentials: true");
@@ -42,11 +49,22 @@ describe("tag release workflow contract", () => {
     expect(verifyJob.match(/release_tag_guard\.mjs/g)).toHaveLength(3);
     expect(requiredGate).toBeGreaterThan(0);
     expect(desktopBuild).toBeGreaterThan(requiredGate);
-    expect(provenance).toBeGreaterThan(desktopBuild);
+    expect(desktopInstall).toBeGreaterThan(desktopBuild);
+    expect(prodSmoke).toBeGreaterThan(desktopInstall);
+    expect(desktopSmoke).toBeGreaterThan(prodSmoke);
+    expect(desktopUninstall).toBeGreaterThan(desktopSmoke);
+    expect(verifyJob).toContain("PLANNING_DESKTOP_INSTALL_DIR");
+    expect(verifyJob).toContain("PLANNING_DESKTOP_SKIP_SHORTCUTS");
+    expect(verifyJob).not.toContain("PLANNING_DESKTOP_SKIP_INSTALL");
+    expect(verifyJob).toContain("--use-installed-database");
+    expect(verifyJob).toContain("desktop uninstall left package binaries behind");
+    expect(verifyJob).toContain("desktop uninstall removed the SQLite database");
+    expect(provenance).toBeGreaterThan(desktopUninstall);
     expect(upload).toBeGreaterThan(provenance);
     expect(verifyJob).not.toContain("rsync");
     expect(verifyJob).not.toContain("dereference");
     expect(verifyJob).not.toContain("tar -czf");
+    expect(verifyJob).not.toContain("apt-get");
   });
 
   it("publishes only the downloaded verified bundle with minimal write permission", () => {
