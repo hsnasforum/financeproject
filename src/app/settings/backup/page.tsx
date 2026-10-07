@@ -1,22 +1,26 @@
-import { headers } from "next/headers";
 import { BackupClient } from "@/components/BackupClient";
-import { requireCurrentPlanningUser } from "@/lib/planning/auth/currentUser";
+import { PlanningAuthRequiredState } from "@/components/planning/PlanningAuthRequiredState";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+import { isPlanningAuthError } from "@/lib/planning/auth/currentUser";
+import { withCurrentPlanningPageUser } from "@/lib/planning/server/pageAuth";
+
+export const metadata = PUBLIC_PAGE_METADATA["/settings/backup"];
 
 export const dynamic = "force-dynamic";
 
-function requestFromHeaders(incoming: Headers): Request {
-  return new Request("https://settings.invalid/settings/backup", { headers: incoming });
-}
-
-async function resolveBackupOwnerId(): Promise<string | null> {
-  try {
-    const currentUser = await requireCurrentPlanningUser(requestFromHeaders(await headers()));
-    return currentUser.id;
-  } catch {
-    return null;
-  }
+async function resolveBackupOwnerId(): Promise<string> {
+  return withCurrentPlanningPageUser((currentUser) => currentUser.id);
 }
 
 export default async function BackupSettingsPage() {
-  return <BackupClient ownerId={await resolveBackupOwnerId()} />;
+  let ownerId: string;
+  try {
+    ownerId = await resolveBackupOwnerId();
+  } catch (error) {
+    if (isPlanningAuthError(error)) {
+      return <PlanningAuthRequiredState error={error} callbackPath="/settings/backup" />;
+    }
+    throw error;
+  }
+  return <BackupClient ownerId={ownerId} />;
 }

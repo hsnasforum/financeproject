@@ -5,6 +5,8 @@ import crypto from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as backupExportPOST } from "../../../src/app/api/ops/backup/export/route";
+import { POST as backupExportFinalizePOST } from "../../../src/app/api/ops/backup/export/finalize/route";
+import { POST as settingsBackupExportFinalizePOST } from "../../../src/app/api/settings/backup/export/finalize/route";
 import { POST as backupPreviewPOST } from "../../../src/app/api/ops/backup/preview/route";
 import { POST as backupRestorePOST } from "../../../src/app/api/ops/backup/restore/route";
 import { decodeZip, encodeZip } from "../../../src/lib/ops/backup/zipCodec";
@@ -27,6 +29,11 @@ import {
   createBackupPreviewToken,
   resetBackupPreviewTokensForTests,
 } from "../../../src/lib/ops/backup/previewToken";
+import {
+  __BACKUP_EXPORT_RECEIPT_TTL_MS_FOR_TESTS,
+  finalizeBackupExportReceipt,
+  resetBackupExportReceiptsForTests,
+} from "../../../src/lib/ops/backup/backupExportReceipt";
 import { listOpsAuditEvents } from "../../../src/lib/ops/securityAuditLog";
 import { configureVaultPassphrase, lockVault, resetVaultRuntimeForTests } from "../../../src/lib/planning/security/vaultState";
 
@@ -136,6 +143,13 @@ function localHeaders(csrf = "csrf-token", host = LOCAL_HOST, extra?: HeadersIni
   };
 }
 
+function localJsonHeaders(csrf = "csrf-token", host = LOCAL_HOST, extra?: Record<string, string>): HeadersInit {
+  return localHeaders(csrf, host, {
+    "content-type": "application/json",
+    ...(extra ?? {}),
+  });
+}
+
 function captureBackupPreviewSessionCookie(response: Response): void {
   const setCookie = response.headers.get("set-cookie") ?? "";
   const sessionMatch = new RegExp(`${BACKUP_PREVIEW_SESSION_COOKIE}=([^;,]+)`, "u").exec(setCookie);
@@ -148,6 +162,38 @@ function hashSha256(bytes: Buffer): string {
 
 function previewReceiptStorePath(): string {
   return path.join(env.PLANNING_DATA_DIR as string, "ops", "backup", "preview-receipts.json");
+}
+
+function exportReceiptStorePath(): string {
+  return path.join(env.PLANNING_DATA_DIR as string, "ops", "backup", "export-receipts.json");
+}
+
+function exportReceiptFrom(response: Response): string {
+  const receipt = response.headers.get("x-planning-backup-export-receipt")?.trim() ?? "";
+  expect(receipt).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u);
+  return receipt;
+}
+
+async function finalizeOpsExport(
+  receipt: string,
+  options?: { csrf?: string; extraHeaders?: HeadersInit },
+): Promise<Response> {
+  const csrf = options?.csrf ?? "csrf-token";
+  return backupExportFinalizePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export/finalize`, {
+    method: "POST",
+    headers: localHeaders(csrf, LOCAL_HOST, {
+      "content-type": "application/json",
+      ...(options?.extraHeaders ?? {}),
+    }),
+    body: JSON.stringify({ csrf, receipt }),
+  }));
+}
+
+async function consumeAndFinalizeOpsExport(response: Response): Promise<void> {
+  const receipt = exportReceiptFrom(response);
+  await response.arrayBuffer();
+  const finalized = await finalizeOpsExport(receipt);
+  expect(finalized.status).toBe(200);
 }
 
 function expectNoRawBackupErrorMessage(message: string | undefined): void {
@@ -444,6 +490,42 @@ function makeDeltaZipWithEntries(entries: Map<string, Buffer>): Buffer {
   ]);
 }
 
+type ManifestIntegrityMutation = "missing" | "hash" | "size" | "unexpected";
+
+async function makeManifestIntegrityMismatchZip(mutation: ManifestIntegrityMutation): Promise<{
+  path: string;
+  zip: Buffer;
+}> {
+  const entries = await decodeZip(makeRestoreZipWithAprDecimalProfile(), {
+    maxEntries: 50,
+    maxTotalBytes: 1024 * 1024,
+  });
+  const profilePath = "profiles/normalize-profile.json";
+  const manifestBytes = entries.get("manifest.json");
+  if (!manifestBytes) throw new Error("test manifest missing");
+  const manifest = JSON.parse(manifestBytes.toString("utf-8")) as {
+    files: Record<string, { sha256: string; sizeBytes: number }>;
+  };
+  let affectedPath = profilePath;
+
+  if (mutation === "missing") {
+    entries.delete(profilePath);
+  } else if (mutation === "hash") {
+    manifest.files[profilePath].sha256 = "0".repeat(64);
+  } else if (mutation === "size") {
+    manifest.files[profilePath].sizeBytes += 1;
+  } else {
+    affectedPath = "profiles/unexpected-profile.json";
+    entries.set(affectedPath, Buffer.from("{}\n", "utf-8"));
+  }
+
+  entries.set("manifest.json", Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf-8"));
+  return {
+    path: affectedPath,
+    zip: encodeZip([...entries.entries()].map(([entryPath, bytes]) => ({ path: entryPath, bytes }))),
+  };
+}
+
 describe.sequential("ops backup API", () => {
   let root = "";
 
@@ -467,6 +549,7 @@ describe.sequential("ops backup API", () => {
     env.PLANNING_OPS_AUDIT_PATH = path.join(root, "ops", "audit", "events.ndjson");
     await resetVaultRuntimeForTests();
     await resetBackupPreviewTokensForTests();
+    await resetBackupExportReceiptsForTests();
 
     await createProfile({
       name: "backup profile",
@@ -535,6 +618,7 @@ describe.sequential("ops backup API", () => {
   afterEach(async () => {
     await resetVaultRuntimeForTests();
     await resetBackupPreviewTokensForTests();
+    await resetBackupExportReceiptsForTests();
     backupPreviewSessionCookie = "";
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
@@ -587,7 +671,7 @@ describe.sequential("ops backup API", () => {
   it("exports encrypted backup and excludes secret file patterns", async () => {
     const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -616,6 +700,252 @@ describe.sequential("ops backup API", () => {
     expect(merged.includes("GITHUB_TOKEN=")).toBe(false);
   });
 
+  it("keeps the delta checkpoint unchanged until a saved file is explicitly finalized", async () => {
+    const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(fullResponse.status).toBe(200);
+    exportReceiptFrom(fullResponse);
+    await fullResponse.arrayBuffer();
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    await expect(fs.promises.stat(syncStatePath)).rejects.toMatchObject({ code: "ENOENT" });
+    const pendingStore = JSON.parse(await fs.promises.readFile(exportReceiptStorePath(), "utf-8")) as {
+      receipts?: Record<string, { status?: string }>;
+      version?: number;
+    };
+    expect(pendingStore.version).toBe(1);
+    expect(Object.values(pendingStore.receipts ?? {})).toHaveLength(1);
+    expect(Object.values(pendingStore.receipts ?? {})[0]?.status).toBe("pending");
+
+    const repeatedResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "delta",
+      }),
+    }));
+    expect(repeatedResponse.status).toBe(200);
+    exportReceiptFrom(repeatedResponse);
+    const repeatedEncrypted = Buffer.from(await repeatedResponse.arrayBuffer());
+    const repeatedZip = await decryptPlanningDataVaultArchive(repeatedEncrypted, "backup-passphrase");
+    const repeatedEntries = await decodeZip(repeatedZip, {
+      maxEntries: 5000,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    expect(repeatedEntries.has("runs/backup-run-1/run.json")).toBe(true);
+    await expect(fs.promises.stat(syncStatePath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("finalizes a pending export once and keeps duplicate confirmation idempotent", async () => {
+    const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(response.status).toBe(200);
+    const receipt = exportReceiptFrom(response);
+    await response.arrayBuffer();
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    await expect(fs.promises.stat(syncStatePath)).rejects.toMatchObject({ code: "ENOENT" });
+
+    const firstFinalize = await finalizeOpsExport(receipt);
+    const firstPayload = await firstFinalize.json() as { ok?: boolean; data?: { status?: string } };
+    expect(firstFinalize.status).toBe(200);
+    expect(firstPayload).toMatchObject({ ok: true, data: { status: "committed" } });
+    const checkpointAfterFirst = await fs.promises.readFile(syncStatePath, "utf-8");
+
+    const duplicateFinalize = await finalizeOpsExport(receipt);
+    const duplicatePayload = await duplicateFinalize.json() as { ok?: boolean; data?: { status?: string } };
+    expect(duplicateFinalize.status).toBe(200);
+    expect(duplicatePayload).toMatchObject({ ok: true, data: { status: "already-finalized" } });
+    expect(await fs.promises.readFile(syncStatePath, "utf-8")).toBe(checkpointAfterFirst);
+  });
+
+  it("rejects an expired export receipt without advancing the checkpoint", async () => {
+    const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({ csrf: "csrf-token", passphrase: "backup-passphrase", mode: "full" }),
+    }));
+    expect(response.status).toBe(200);
+    const receipt = exportReceiptFrom(response);
+    await response.arrayBuffer();
+
+    const result = await finalizeBackupExportReceipt({
+      nowMs: Date.now() + __BACKUP_EXPORT_RECEIPT_TTL_MS_FOR_TESTS + 1,
+      receipt,
+      scope: "ops",
+      userId: "default",
+    });
+    expect(result).toEqual({ ok: false, reason: "expired" });
+    await expect(fs.promises.stat(env.PLANNING_BACKUP_SYNC_STATE_PATH as string)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("fails export safely when the durable confirmation store cannot be written", async () => {
+    const response = await withBlockedReceiptStoreDir(() => backupExportPOST(new Request(
+      `${LOCAL_ORIGIN}/api/ops/backup/export`,
+      {
+        method: "POST",
+        headers: localJsonHeaders(),
+        body: JSON.stringify({ csrf: "csrf-token", passphrase: "backup-passphrase", mode: "full" }),
+      },
+    )));
+    const payload = await response.json() as { error?: { code?: string } };
+    expect(response.status).toBe(503);
+    expect(payload.error?.code).toBe("BACKUP_RECEIPT_STORE_UNAVAILABLE");
+    await expect(fs.promises.stat(env.PLANNING_BACKUP_SYNC_STATE_PATH as string)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("fails finalize safely when the durable confirmation store is corrupted", async () => {
+    const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({ csrf: "csrf-token", passphrase: "backup-passphrase", mode: "full" }),
+    }));
+    expect(response.status).toBe(200);
+    const receipt = exportReceiptFrom(response);
+    await response.arrayBuffer();
+    await fs.promises.writeFile(exportReceiptStorePath(), "{ broken-store", "utf-8");
+
+    const finalized = await finalizeOpsExport(receipt);
+    const payload = await finalized.json() as { error?: { code?: string } };
+    expect(finalized.status).toBe(503);
+    expect(payload.error?.code).toBe("BACKUP_RECEIPT_STORE_UNAVAILABLE");
+    await expect(fs.promises.stat(env.PLANNING_BACKUP_SYNC_STATE_PATH as string)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("does not move the checkpoint backward when an older pending export is confirmed later", async () => {
+    const olderResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({ csrf: "csrf-token", passphrase: "backup-passphrase", mode: "full" }),
+    }));
+    expect(olderResponse.status).toBe(200);
+    const olderReceipt = exportReceiptFrom(olderResponse);
+    await olderResponse.arrayBuffer();
+
+    await createRunFixture("backup-run-newer-export", "newer export run");
+    const newerResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({ csrf: "csrf-token", passphrase: "backup-passphrase", mode: "full" }),
+    }));
+    expect(newerResponse.status).toBe(200);
+    const newerReceipt = exportReceiptFrom(newerResponse);
+    await newerResponse.arrayBuffer();
+
+    const newerFinalize = await finalizeOpsExport(newerReceipt);
+    expect(newerFinalize.status).toBe(200);
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    const checkpointAfterNewer = await fs.promises.readFile(syncStatePath, "utf-8");
+
+    const olderFinalize = await finalizeOpsExport(olderReceipt);
+    const olderPayload = await olderFinalize.json() as { ok?: boolean; data?: { status?: string } };
+    expect(olderFinalize.status).toBe(200);
+    expect(olderPayload).toMatchObject({ ok: true, data: { status: "superseded" } });
+    expect(await fs.promises.readFile(syncStatePath, "utf-8")).toBe(checkpointAfterNewer);
+  });
+
+  it("binds export confirmation to the signed receipt, user, and backup scope", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    const aliceHeader = { "x-planning-user-id": "alice" };
+    const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders("csrf-token", LOCAL_HOST, aliceHeader),
+      body: JSON.stringify({ csrf: "csrf-token", passphrase: "backup-passphrase", mode: "full" }),
+    }));
+    expect(response.status).toBe(200);
+    const receipt = exportReceiptFrom(response);
+    await response.arrayBuffer();
+
+    const wrongUser = await finalizeOpsExport(receipt, {
+      extraHeaders: { "x-planning-user-id": "bob" },
+    });
+    expect(wrongUser.status).toBe(400);
+
+    const wrongScope = await settingsBackupExportFinalizePOST(new Request(
+      `${LOCAL_ORIGIN}/api/settings/backup/export/finalize`,
+      {
+        method: "POST",
+        headers: localHeaders("csrf-token", LOCAL_HOST, {
+          "content-type": "application/json",
+          ...aliceHeader,
+        }),
+        body: JSON.stringify({ csrf: "csrf-token", receipt }),
+      },
+    ));
+    expect(wrongScope.status).toBe(400);
+
+    const tamperedReceipt = `${receipt.slice(0, -1)}${receipt.endsWith("A") ? "B" : "A"}`;
+    const tampered = await finalizeOpsExport(tamperedReceipt, { extraHeaders: aliceHeader });
+    expect(tampered.status).toBe(400);
+
+    const valid = await finalizeOpsExport(receipt, { extraHeaders: aliceHeader });
+    const validPayload = await valid.json() as { ok?: boolean; data?: { status?: string } };
+    expect(valid.status).toBe(200);
+    expect(validPayload).toMatchObject({ ok: true, data: { status: "committed" } });
+  });
+
+  it.each([
+    ["without credentials", buildCookie()],
+    ["with a fake session cookie", `${buildCookie()}; authjs.session-token=fake-session`],
+  ])("rejects ops export %s before consuming JSON", async (_name, cookie) => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    const request = new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders("csrf-token", LOCAL_HOST, { cookie }),
+      body: JSON.stringify({ csrf: "csrf-token", passphrase: "backup-passphrase" }),
+    });
+
+    const response = await backupExportPOST(request);
+
+    expect(response.status).toBe(401);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it("rejects an oversized declared ops export body before reading it", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    const request = new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders("csrf-token", LOCAL_HOST, {
+        "content-length": String(32 * 1024 + 1),
+        "x-planning-user-id": "alice",
+      }),
+      body: "not-read",
+    });
+
+    const response = await backupExportPOST(request);
+
+    expect(response.status).toBe(413);
+    expect(request.bodyUsed).toBe(false);
+  });
+
   it("runs backup ops routes inside the current planning user scope for audit meta", async () => {
     env.PLANNING_AUTH_REQUIRED = "1";
     env.PLANNING_TRUST_AUTH_HEADERS = "1";
@@ -624,7 +954,7 @@ describe.sequential("ops backup API", () => {
 
     const exportResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders("csrf-token", LOCAL_HOST, authHeaders),
+      headers: localJsonHeaders("csrf-token", LOCAL_HOST, authHeaders),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -677,7 +1007,7 @@ describe.sequential("ops backup API", () => {
     const heapBefore = process.memoryUsage().heapUsed;
     const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders("csrf-token", LOCAL_HOST, { "accept-encoding": "gzip" }),
+      headers: localJsonHeaders("csrf-token", LOCAL_HOST, { "accept-encoding": "gzip" }),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -702,7 +1032,7 @@ describe.sequential("ops backup API", () => {
     await createLargeRunFixture("backup-run-large-preview", 5 * 1024 * 1024);
     const exportRes = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1107,7 +1437,7 @@ describe.sequential("ops backup API", () => {
 
     const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1199,6 +1529,35 @@ describe.sequential("ops backup API", () => {
     expect(errorRows.some((row) => row.meta?.code === "RESTORE_NOT_COMMITTED")).toBe(true);
   });
 
+  it.each([
+    ["missing", "백업 목록에는 있지만 실제 파일을 찾지 못했습니다"],
+    ["hash", "백업 파일의 무결성 확인값이 맞지 않습니다"],
+    ["size", "백업 파일 크기 정보가 실제와 다릅니다"],
+    ["unexpected", "백업 목록에 없는 파일이 포함되어 있어 건너뛰었습니다"],
+  ] as const)("keeps existing data when replace detects a %s manifest mismatch", async (mutation, message) => {
+    const beforeProfileIds = (await listProfiles())
+      .map((profile) => profile.id)
+      .sort((a, b) => a.localeCompare(b));
+    const archive = await makeManifestIntegrityMismatchZip(mutation);
+
+    const result = await restorePlanningDataVaultZip(archive.zip, {
+      mode: "replace",
+      maxEntries: 50,
+      maxBytes: 1024 * 1024,
+    });
+
+    expect(result.committed).toBe(false);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        entity: "restore",
+        path: archive.path,
+        message: `${message}: ${archive.path}`,
+      }),
+    ]));
+    expect((await listProfiles()).map((profile) => profile.id).sort((a, b) => a.localeCompare(b)))
+      .toEqual(beforeProfileIds);
+  });
+
   it("rolls back replace restore when a commit write fails", async () => {
     const beforeProfileIds = (await listProfiles())
       .map((profile) => profile.id)
@@ -1272,7 +1631,7 @@ describe.sequential("ops backup API", () => {
   it("exports delta backup with only changed run and updates sync state", async () => {
     const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1280,6 +1639,7 @@ describe.sequential("ops backup API", () => {
       }),
     }));
     expect(fullResponse.status).toBe(200);
+    await consumeAndFinalizeOpsExport(fullResponse);
 
     const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
     const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
@@ -1313,7 +1673,7 @@ describe.sequential("ops backup API", () => {
 
     const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1322,6 +1682,7 @@ describe.sequential("ops backup API", () => {
     }));
     expect(deltaResponse.status).toBe(200);
 
+    const deltaReceipt = exportReceiptFrom(deltaResponse);
     const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
     const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
     const entries = await decodeZip(zipBytes, {
@@ -1361,6 +1722,7 @@ describe.sequential("ops backup API", () => {
       mode: "offset",
       startOffset: firstState.lastJournalOffset,
     });
+    expect((await finalizeOpsExport(deltaReceipt)).status).toBe(200);
 
     const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
     const secondState = JSON.parse(secondStateRaw) as {
@@ -1387,10 +1749,10 @@ describe.sequential("ops backup API", () => {
     });
   });
 
-  it("does not export unchanged run from rolled back run-create journal transaction", async () => {
+  it("does not advance the delta checkpoint when encryption fails", async () => {
     const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1398,6 +1760,60 @@ describe.sequential("ops backup API", () => {
       }),
     }));
     expect(fullResponse.status).toBe(200);
+    await consumeAndFinalizeOpsExport(fullResponse);
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    const checkpointBeforeFailure = await fs.promises.readFile(syncStatePath, "utf-8");
+    const firstState = JSON.parse(checkpointBeforeFailure) as { lastExportAt?: string };
+    if (!firstState.lastExportAt) throw new Error("first export timestamp missing");
+
+    await createRunFixture("backup-run-after-failed-encryption", "delta after failed encryption", {
+      createdAt: firstState.lastExportAt,
+    });
+
+    const failedResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "",
+        mode: "delta",
+      }),
+    }));
+    expect(failedResponse.status).toBe(400);
+    expect(await fs.promises.readFile(syncStatePath, "utf-8")).toBe(checkpointBeforeFailure);
+
+    const retryResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "delta",
+      }),
+    }));
+    expect(retryResponse.status).toBe(200);
+    const encryptedBytes = Buffer.from(await retryResponse.arrayBuffer());
+    const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
+    const entries = await decodeZip(zipBytes, {
+      maxEntries: 5000,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    expect(entries.has("runs/backup-run-after-failed-encryption/run.json")).toBe(true);
+  });
+
+  it("does not export unchanged run from rolled back run-create journal transaction", async () => {
+    const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localJsonHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(fullResponse.status).toBe(200);
+    await consumeAndFinalizeOpsExport(fullResponse);
 
     const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
     const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
@@ -1438,7 +1854,7 @@ describe.sequential("ops backup API", () => {
 
     const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1488,7 +1904,7 @@ describe.sequential("ops backup API", () => {
   it("exports delta run when previous journal offset is stale after compaction", async () => {
     const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1496,6 +1912,7 @@ describe.sequential("ops backup API", () => {
       }),
     }));
     expect(fullResponse.status).toBe(200);
+    await consumeAndFinalizeOpsExport(fullResponse);
 
     const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
     const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
@@ -1534,7 +1951,7 @@ describe.sequential("ops backup API", () => {
 
     const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1543,6 +1960,7 @@ describe.sequential("ops backup API", () => {
     }));
     expect(deltaResponse.status).toBe(200);
 
+    const deltaReceipt = exportReceiptFrom(deltaResponse);
     const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
     const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
     const entries = await decodeZip(zipBytes, {
@@ -1579,6 +1997,7 @@ describe.sequential("ops backup API", () => {
       startOffset: 0,
       fallbackReason: "previous-offset-out-of-range",
     });
+    expect((await finalizeOpsExport(deltaReceipt)).status).toBe(200);
 
     const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
     const secondState = JSON.parse(secondStateRaw) as {
@@ -1603,7 +2022,7 @@ describe.sequential("ops backup API", () => {
   it("exports delta run when previous sync state lacks a journal boundary", async () => {
     const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1611,6 +2030,7 @@ describe.sequential("ops backup API", () => {
       }),
     }));
     expect(fullResponse.status).toBe(200);
+    await consumeAndFinalizeOpsExport(fullResponse);
 
     const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
     const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
@@ -1645,7 +2065,7 @@ describe.sequential("ops backup API", () => {
 
     const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1654,6 +2074,7 @@ describe.sequential("ops backup API", () => {
     }));
     expect(deltaResponse.status).toBe(200);
 
+    const deltaReceipt = exportReceiptFrom(deltaResponse);
     const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
     const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
     const entries = await decodeZip(zipBytes, {
@@ -1684,6 +2105,7 @@ describe.sequential("ops backup API", () => {
       startOffset: 0,
       fallbackReason: "previous-boundary-missing",
     });
+    expect((await finalizeOpsExport(deltaReceipt)).status).toBe(200);
 
     const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
     const secondState = JSON.parse(secondStateRaw) as {
@@ -1703,7 +2125,7 @@ describe.sequential("ops backup API", () => {
   it("exports delta run when previous journal boundary offset no longer matches sync offset", async () => {
     const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1711,6 +2133,7 @@ describe.sequential("ops backup API", () => {
       }),
     }));
     expect(fullResponse.status).toBe(200);
+    await consumeAndFinalizeOpsExport(fullResponse);
 
     const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
     const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
@@ -1754,7 +2177,7 @@ describe.sequential("ops backup API", () => {
 
     const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1763,6 +2186,7 @@ describe.sequential("ops backup API", () => {
     }));
     expect(deltaResponse.status).toBe(200);
 
+    const deltaReceipt = exportReceiptFrom(deltaResponse);
     const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
     const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
     const entries = await decodeZip(zipBytes, {
@@ -1793,6 +2217,7 @@ describe.sequential("ops backup API", () => {
       startOffset: 0,
       fallbackReason: "previous-boundary-mismatch",
     });
+    expect((await finalizeOpsExport(deltaReceipt)).status).toBe(200);
 
     const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
     const secondState = JSON.parse(secondStateRaw) as {
@@ -1812,7 +2237,7 @@ describe.sequential("ops backup API", () => {
   it("exports delta run when retained journal tail no longer matches previous boundary", async () => {
     const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1820,6 +2245,7 @@ describe.sequential("ops backup API", () => {
       }),
     }));
     expect(fullResponse.status).toBe(200);
+    await consumeAndFinalizeOpsExport(fullResponse);
 
     const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
     const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
@@ -1863,7 +2289,7 @@ describe.sequential("ops backup API", () => {
 
     const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
-      headers: localHeaders(),
+      headers: localJsonHeaders(),
       body: JSON.stringify({
         csrf: "csrf-token",
         passphrase: "backup-passphrase",
@@ -1872,6 +2298,7 @@ describe.sequential("ops backup API", () => {
     }));
     expect(deltaResponse.status).toBe(200);
 
+    const deltaReceipt = exportReceiptFrom(deltaResponse);
     const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
     const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
     const entries = await decodeZip(zipBytes, {
@@ -1910,6 +2337,7 @@ describe.sequential("ops backup API", () => {
     expect(manifest.syncState?.currentJournalBoundary?.offset).toBe(retainedEventCount);
     expect(manifest.syncState?.currentJournalBoundary?.tailHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(manifest.syncState?.currentJournalBoundary?.tailHash).not.toBe(staleTailHash);
+    expect((await finalizeOpsExport(deltaReceipt)).status).toBe(200);
 
     const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
     const secondState = JSON.parse(secondStateRaw) as {

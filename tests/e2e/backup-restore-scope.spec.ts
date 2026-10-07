@@ -1,176 +1,128 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const CHECKLIST_KEY = "finlife_planner_checklist_checked_v1";
-const SERVER_PATH = "tmp/user_feedback.json";
 
-function bundleFile(input: {
-  serverFiles?: Record<string, string | null>;
-  clientStorage?: Record<string, string | null>;
-}) {
+function bundleFile(clientStorage: Record<string, string | null>) {
   return {
     name: "backup-scope.json",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({
       version: 1,
       generatedAt: "2026-09-03T00:00:00.000Z",
-      serverFiles: input.serverFiles ?? {},
-      clientStorage: input.clientStorage ?? {},
+      serverFiles: {},
+      clientStorage,
     })),
   };
 }
 
+function browserPanel(page: Page) {
+  return page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "3) 브라우저 화면 설정 내보내기", exact: true }),
+  });
+}
+
 async function openBackupPage(page: Page) {
   await page.goto("/settings/backup");
-  await page.waitForLoadState("networkidle");
-  await expect(page.locator('input[type="file"]')).toBeEnabled();
+  await expect(browserPanel(page).locator('input[type="file"]')).toBeEnabled();
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.route("**/api/dev/backup/restore-point", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ ok: true, data: { exists: false, createdAt: null } }),
-    });
+  await page.route("**/api/settings/backup/status", async (route) => {
+    await route.fulfill({ json: { ok: true, csrfToken: "scope-csrf-fixture" } });
   });
 });
+
+async function mockEncryptedRestore(page: Page) {
+  const counts = { preview: 0, restore: 0 };
+  await page.route("**/api/settings/backup/preview", async (route) => {
+    counts.preview += 1;
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postData()).toContain("scope-csrf-fixture");
+    await route.fulfill({ json: {
+      ok: true,
+      previewToken: "scope-preview-fixture",
+      data: {
+        manifest: { kind: "planning-user-backup", formatVersion: 1, mode: "full", scope: "user" },
+        actual: { profiles: 1, runs: 0, totalFiles: 1, totalBytes: 32 },
+        ids: { profileIds: ["scope-profile-fixture"], runIds: [], snapshotIds: [] },
+        warnings: [],
+      },
+    } });
+  });
+  await page.route("**/api/settings/backup/restore", async (route) => {
+    counts.restore += 1;
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postData()).toContain("scope-preview-fixture");
+    expect(route.request().postData()).toContain("scope-csrf-fixture");
+    await route.fulfill({ json: {
+      ok: true,
+      data: { mode: "merge", imported: { profiles: 1 }, issues: [], warnings: [] },
+      message: "사용자 백업을 복원했습니다.",
+    } });
+  });
+  return counts;
+}
+
+async function restoreEncryptedFixture(page: Page) {
+  // Server responses are mocked here; crypto, owner and rollback are covered by API integration tests.
+  await page.getByLabel("복구 암호", { exact: true }).fill("scope-fixture-passphrase");
+  await page.getByTestId("ops-backup-file-input").setInputFiles({
+    name: "scope-fixture.enc",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("opaque encrypted backup transport fixture"),
+  });
+  await page.getByTestId("ops-backup-preview-button").click();
+  await expect(page.getByTestId("ops-backup-preview-card")).toBeVisible();
+  await page.getByTestId("ops-backup-restore-button").click();
+  const dialog = page.getByRole("dialog", { name: "복원 실행 확인" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "복원 시작", exact: true }).click();
+  await expect(page.getByTestId("ops-backup-restore-card")).toContainText("프로필: 1개");
+}
 
 test("browser-only restore neither requests server restore nor changes a legacy financial checklist", async ({ page }) => {
   const currentChecklist = JSON.stringify({ "R_DEBT_01-월 상환액 재산정": true });
-  const legacyChecklist = JSON.stringify({
-    "R_INSURANCE_01-보장 공백 확인": true,
-    "R_EMERGENCY_01-비상금 자동이체": false,
+  const legacyChecklist = JSON.stringify({ "R_INSURANCE_01-보장 공백 확인": true });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: CHECKLIST_KEY, value: currentChecklist,
   });
-  let serverRestoreRequests = 0;
-
-  await page.addInitScript(({ checklistKey, checklistValue }) => {
-    window.localStorage.setItem(checklistKey, checklistValue);
-  }, { checklistKey: CHECKLIST_KEY, checklistValue: currentChecklist });
-  await page.route("**/api/dev/backup/import", async (route) => {
-    serverRestoreRequests += 1;
-    await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ ok: false }) });
-  });
-
+  const counts = await mockEncryptedRestore(page);
   await openBackupPage(page);
-  await page.locator('input[type="file"]').setInputFiles(bundleFile({
-    clientStorage: {
-      products_shelf_v1: "[\"deposit-1\"]",
-      [CHECKLIST_KEY]: legacyChecklist,
-    },
+  const panel = browserPanel(page);
+  await panel.locator('input[type="file"]').setInputFiles(bundleFile({
+    products_shelf_v1: JSON.stringify(["deposit-1"]),
+    [CHECKLIST_KEY]: legacyChecklist,
   }));
-
-  const restoreButton = page.getByRole("button", { name: "브라우저 설정 복원 실행" });
-  await expect(restoreButton).toBeVisible();
-  await expect(page.getByRole("button", { name: /Restore Point 자동 생성/ })).toHaveCount(0);
-  await restoreButton.click();
-
-  await expect(page.getByText(/브라우저 설정 복원이 완료되었습니다/)).toBeVisible();
-  expect(serverRestoreRequests).toBe(0);
-  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("products_shelf_v1")))
-    .toBe("[\"deposit-1\"]");
-  expect(await page.evaluate((key) => window.localStorage.getItem(key), CHECKLIST_KEY)).toBe(currentChecklist);
-  await expect(page.getByText("Server Files", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Restore Point", { exact: true })).toHaveCount(1);
+  await panel.getByRole("button", { name: "브라우저 설정 복원", exact: true }).click();
+  await expect(panel.getByRole("status")).toContainText("브라우저 설정을 복원했습니다.");
+  expect(counts).toEqual({ preview: 0, restore: 0 });
+  expect(await page.evaluate(() => localStorage.getItem("products_shelf_v1"))).toBe(JSON.stringify(["deposit-1"]));
+  expect(await page.evaluate((key) => localStorage.getItem(key), CHECKLIST_KEY)).toBe(currentChecklist);
+  await expect(page.getByTestId("ops-backup-restore-card")).toHaveCount(0);
 });
 
 test("server-only restore makes no browser writes and reports only the server scope", async ({ page }) => {
-  let serverRestoreRequests = 0;
-  const originalShelf = "[\"existing\"]";
-
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("products_shelf_v1", value);
-  }, originalShelf);
-  await page.route("**/api/dev/backup/export", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ ok: true, data: { serverFiles: { [SERVER_PATH]: "[]" }, readFailed: [] } }),
-    });
-  });
-  await page.route("**/api/dev/backup/import", async (route) => {
-    serverRestoreRequests += 1;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        written: [SERVER_PATH],
-        skipped: [],
-        restorePointCreated: true,
-        validated: true,
-        rolledBack: false,
-        issues: [],
-      }),
-    });
-  });
-
+  const originalShelf = JSON.stringify(["existing"]);
+  await page.addInitScript((value) => localStorage.setItem("products_shelf_v1", value), originalShelf);
+  const counts = await mockEncryptedRestore(page);
   await openBackupPage(page);
-  await page.locator('input[type="file"]').setInputFiles(bundleFile({
-    serverFiles: { [SERVER_PATH]: "[{\"id\":1}]" },
-    clientStorage: { products_shelf_v1: "[\"replacement\"]" },
-  }));
-  await page.getByRole("checkbox", { name: /클라이언트 저장소 복원/ }).uncheck();
-
-  await expect(page.getByText("Restore Point는 선택한 서버 파일에만 적용됩니다.")).toBeVisible();
-  const restoreButton = page.getByRole("button", { name: "서버 파일 복원 실행 (Restore Point 자동 생성)" });
-  await expect(restoreButton).toBeVisible();
-  await restoreButton.click();
-  await expect(page.getByRole("button", { name: "서버 파일 복원 중..." })).toBeVisible();
-
-  await expect(page.getByText("서버 파일 검증과 복원이 완료되었습니다.", { exact: true })).toBeVisible();
-  await expect(page.getByText(/브라우저 설정 복원이 완료되었습니다/)).toHaveCount(0);
-  expect(serverRestoreRequests).toBe(1);
-  expect(await page.evaluate(() => window.localStorage.getItem("products_shelf_v1"))).toBe(originalShelf);
-  await expect(page.getByText("localStorage", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Server Files", { exact: true })).toBeVisible();
-  await expect(page.getByText("Restore Point", { exact: true })).toHaveCount(2);
+  await restoreEncryptedFixture(page);
+  expect(counts).toEqual({ preview: 1, restore: 1 });
+  expect(await page.evaluate(() => localStorage.getItem("products_shelf_v1"))).toBe(originalShelf);
+  await expect(browserPanel(page).getByRole("status")).toHaveCount(0);
 });
 
-test("combined restore shows browser and server outcomes separately", async ({ page }) => {
-  let serverRestoreRequests = 0;
-
-  await page.route("**/api/dev/backup/export", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ ok: true, data: { serverFiles: { [SERVER_PATH]: "[]" }, readFailed: [] } }),
-    });
-  });
-  await page.route("**/api/dev/backup/import", async (route) => {
-    serverRestoreRequests += 1;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        written: [SERVER_PATH],
-        skipped: [],
-        restorePointCreated: true,
-        validated: true,
-        rolledBack: false,
-        issues: [],
-      }),
-    });
-  });
-
+test("sequential server and browser restores show their outcomes separately", async ({ page }) => {
+  const counts = await mockEncryptedRestore(page);
   await openBackupPage(page);
-  await page.locator('input[type="file"]').setInputFiles(bundleFile({
-    serverFiles: { [SERVER_PATH]: "[{\"id\":1}]" },
-    clientStorage: { products_compare_ids_v1: "[\"deposit-1\"]" },
+  await restoreEncryptedFixture(page);
+  const panel = browserPanel(page);
+  await panel.locator('input[type="file"]').setInputFiles(bundleFile({
+    products_compare_ids_v1: JSON.stringify(["deposit-1"]),
   }));
-
-  await expect(page.getByText("Restore Point는 선택한 서버 파일에만 적용됩니다. 브라우저 설정은 포함되지 않습니다.")).toBeVisible();
-  const restoreButton = page.getByRole("button", {
-    name: "서버 파일·브라우저 설정 복원 실행 (서버 파일 Restore Point 자동 생성)",
-  });
-  await restoreButton.click();
-  await expect(page.getByRole("button", { name: "서버 파일·브라우저 설정 복원 중..." })).toBeVisible();
-
-  await expect(page.getByText(/서버 파일 검증과 브라우저 설정 복원이 완료되었습니다/)).toBeVisible();
-  expect(serverRestoreRequests).toBe(1);
-  await expect(page.getByText("localStorage", { exact: true })).toBeVisible();
-  await expect(page.getByText("Server Files", { exact: true })).toBeVisible();
-  await expect(page.getByText("Restore Point", { exact: true })).toHaveCount(2);
+  await panel.getByRole("button", { name: "브라우저 설정 복원", exact: true }).click();
+  await expect(panel.getByRole("status")).toContainText("브라우저 설정을 복원했습니다.");
+  await expect(page.getByTestId("ops-backup-restore-card")).toContainText("프로필: 1개");
+  expect(counts).toEqual({ preview: 1, restore: 1 });
+  expect(await page.evaluate(() => localStorage.getItem("products_compare_ids_v1"))).toBe(JSON.stringify(["deposit-1"]));
 });

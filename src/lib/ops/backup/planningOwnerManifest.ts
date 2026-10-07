@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
+  PLANNING_CURRENT_USER_V3_OWNER_IDS,
   PLANNING_DATA_OWNER_IDS,
   normalizePlanningOwnerLogicalPath,
   PlanningOwnerContractError,
@@ -12,6 +13,11 @@ export const PLANNING_OWNER_ARCHIVE_KIND = "planning-owner-vault";
 export const PLANNING_OWNER_ARCHIVE_FORMAT_VERSION = 1;
 export const PLANNING_OWNER_MANIFEST_PATH = "manifest.json";
 export const PLANNING_OWNER_ARCHIVE_SCOPE = "active-namespace-and-runtime-shared";
+export const PLANNING_OWNER_USER_V3_ARCHIVE_SCOPE = "active-user-v3";
+
+export type PlanningOwnerArchiveScope =
+  | typeof PLANNING_OWNER_ARCHIVE_SCOPE
+  | typeof PLANNING_OWNER_USER_V3_ARCHIVE_SCOPE;
 
 export type PlanningOwnerManifestFile = {
   path: string;
@@ -35,7 +41,7 @@ export type PlanningOwnerManifestEntry = {
 export type PlanningOwnerManifest = {
   kind: typeof PLANNING_OWNER_ARCHIVE_KIND;
   formatVersion: typeof PLANNING_OWNER_ARCHIVE_FORMAT_VERSION;
-  archiveScope: typeof PLANNING_OWNER_ARCHIVE_SCOPE;
+  archiveScope: PlanningOwnerArchiveScope;
   archiveId: string;
   generatedAt: string;
   appVersion: string;
@@ -76,7 +82,10 @@ const ManifestOwnerSchema = z.object({
 const ManifestSchema = z.object({
   kind: z.literal(PLANNING_OWNER_ARCHIVE_KIND),
   formatVersion: z.literal(PLANNING_OWNER_ARCHIVE_FORMAT_VERSION),
-  archiveScope: z.literal(PLANNING_OWNER_ARCHIVE_SCOPE),
+  archiveScope: z.enum([
+    PLANNING_OWNER_ARCHIVE_SCOPE,
+    PLANNING_OWNER_USER_V3_ARCHIVE_SCOPE,
+  ]),
   archiveId: z.string().regex(UUID_RE),
   generatedAt: z.string().refine((value) => {
     const timestamp = Date.parse(value);
@@ -160,11 +169,14 @@ function validateManifestOwners(
   manifest: PlanningOwnerManifest,
   resolvedOwners: readonly ResolvedPlanningDataOwner[],
 ): void {
-  const canonicalOwnerIds = new Set<string>(PLANNING_DATA_OWNER_IDS);
+  const expectedOwnerIds = manifest.archiveScope === PLANNING_OWNER_USER_V3_ARCHIVE_SCOPE
+    ? PLANNING_CURRENT_USER_V3_OWNER_IDS
+    : PLANNING_DATA_OWNER_IDS;
+  const canonicalOwnerIds = new Set<string>(expectedOwnerIds);
   const resolvedOwnerIds = new Set(resolvedOwners.map((owner) => owner.ownerId));
   if (
-    resolvedOwnerIds.size !== PLANNING_DATA_OWNER_IDS.length
-    || PLANNING_DATA_OWNER_IDS.some((ownerId) => !resolvedOwnerIds.has(ownerId))
+    resolvedOwnerIds.size !== expectedOwnerIds.length
+    || expectedOwnerIds.some((ownerId) => !resolvedOwnerIds.has(ownerId))
   ) {
     throw new PlanningOwnerContractError("MANIFEST_OWNER_REGISTRY_INCOMPLETE");
   }
@@ -255,6 +267,7 @@ export function buildPlanningOwnerManifest(input: {
   archiveId: string;
   generatedAt: string;
   appVersion: string;
+  archiveScope?: PlanningOwnerArchiveScope;
   resolvedOwners: readonly ResolvedPlanningDataOwner[];
   filesByOwner?: Readonly<Record<string, readonly PlanningOwnerManifestFile[]>>;
 }): PlanningOwnerManifest {
@@ -291,7 +304,7 @@ export function buildPlanningOwnerManifest(input: {
     manifest = ManifestSchema.parse({
       kind: PLANNING_OWNER_ARCHIVE_KIND,
       formatVersion: PLANNING_OWNER_ARCHIVE_FORMAT_VERSION,
-      archiveScope: PLANNING_OWNER_ARCHIVE_SCOPE,
+      archiveScope: input.archiveScope ?? PLANNING_OWNER_ARCHIVE_SCOPE,
       archiveId: input.archiveId,
       generatedAt: input.generatedAt,
       appVersion: input.appVersion,

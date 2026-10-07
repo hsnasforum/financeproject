@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { runPnpm } from "./pnpm_runner.mjs";
 import {
   DESKTOP_MANIFEST_KIND,
@@ -96,6 +97,10 @@ function toPosixPath(value) {
   return value.replace(/\\/g, "/");
 }
 
+function isPnpmVirtualStoreNodeModulesPath(value) {
+  return /(?:^|\/)node_modules\/\.pnpm\/[^/]+\/node_modules$/.test(toPosixPath(value));
+}
+
 function isPathWithin(rootPath, targetPath) {
   const relativePath = path.relative(rootPath, targetPath);
   return relativePath === "" || (
@@ -183,8 +188,7 @@ async function resolveVirtualStorePackageContext(directoryReal, sourceRootReal) 
   const contextRelativePath = toPosixPath(path.relative(sourceRootReal, nodeModulesDir));
   if (
     !isPathWithin(sourceRootReal, nodeModulesDir)
-    || !contextRelativePath.startsWith("node_modules/.pnpm/")
-    || !contextRelativePath.endsWith("/node_modules")
+    || !isPnpmVirtualStoreNodeModulesPath(contextRelativePath)
   ) {
     return null;
   }
@@ -428,15 +432,21 @@ async function materializeStandaloneEntry({
   });
 }
 
-async function copyStandaloneIfExists(source, destination) {
+async function copyStandaloneIfExists(source, destination, projectRoot) {
   const sourceStats = await lstatOrNull(source);
   if (!sourceStats) return false;
   if (sourceStats.isSymbolicLink() || !sourceStats.isDirectory()) {
     throw new Error(`desktop standalone source must be a non-symlink directory: ${source}`);
   }
-  const sourceRootReal = await fs.realpath(source);
+  const standaloneRootReal = await fs.realpath(source);
+  const sourceRootReal = process.platform === "win32"
+    ? await fs.realpath(projectRoot)
+    : standaloneRootReal;
+  if (!isPathWithin(sourceRootReal, standaloneRootReal)) {
+    throw new Error(`desktop standalone source escapes project root: ${source}`);
+  }
   await copyResolvedStandaloneEntry({
-    source: sourceRootReal,
+    source: standaloneRootReal,
     destination,
     sourceRootReal,
     relativePath: "",
@@ -445,6 +455,38 @@ async function copyStandaloneIfExists(source, destination) {
     stats: sourceStats,
   });
   return true;
+}
+
+async function copyRequiredPnpmPackage({ projectRoot, destinationNodeModulesDir, packageName }) {
+  const projectRootReal = await fs.realpath(projectRoot);
+  const source = path.join(projectRootReal, "node_modules", ...packageName.split("/"));
+  const sourceStats = await lstatOrNull(source);
+  if (!sourceStats) {
+    throw new Error(`required desktop package not found: node_modules/${packageName}`);
+  }
+  const sourceReal = await fs.realpath(source);
+  if (!isPathWithin(projectRootReal, sourceReal)) {
+    throw new Error(`required desktop package escapes project root: node_modules/${packageName}`);
+  }
+  const resolvedStats = await fs.lstat(sourceReal);
+  const packageContext = resolvedStats.isDirectory()
+    ? await resolveVirtualStorePackageContext(sourceReal, projectRootReal)
+    : null;
+  if (!packageContext || packageContext.packageName !== packageName) {
+    throw new Error(`required desktop package is not a verified pnpm package: node_modules/${packageName}`);
+  }
+  const destination = path.join(destinationNodeModulesDir, ...packageName.split("/"));
+  await fs.rm(destination, { recursive: true, force: true });
+  await copyResolvedStandaloneEntry({
+    source: sourceReal,
+    destination,
+    sourceRootReal: projectRootReal,
+    relativePath: `node_modules/${packageName}`,
+    activeDirectories: new Set(),
+    activePackages: new Map(),
+    stats: resolvedStats,
+    packageContext,
+  });
 }
 
 async function copyPrismaAssets(cwd, artifactDir) {
@@ -461,70 +503,101 @@ async function copyPrismaAssets(cwd, artifactDir) {
   return true;
 }
 
-function buildInstallSh() {
+export function buildInstallSh() {
   return `#!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-if [ ! -f .env.local ] && [ -f .env.local.example ]; then
-  cp .env.local.example .env.local
-fi
-pnpm install --frozen-lockfile
-printf "[planning:v2:desktop] install complete\\n"
+node scripts/planning_v2_desktop_verify.mjs --mode=pristine-install
+INSTALL_DIR="\${PLANNING_DESKTOP_INSTALL_DIR:-$HOME/planning-v2-desktop}"
+INSTALL_ARGS=()
+if [[ "\${PLANNING_DESKTOP_SKIP_INSTALL:-0}" == "1" ]]; then INSTALL_ARGS+=(--skip-install); fi
+if [[ "\${PLANNING_DESKTOP_SKIP_SHORTCUTS:-0}" == "1" ]]; then INSTALL_ARGS+=(--skip-shortcuts); fi
+node scripts/planning_v2_desktop_install.mjs --self-contained-source --from="$(pwd)" --to="$INSTALL_DIR" "\${INSTALL_ARGS[@]}"
+printf "[planning:v2:desktop] install complete target=%s\\n" "$INSTALL_DIR"
 `;
 }
 
-function buildRunSh() {
+export function buildRunSh() {
   return `#!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
 PORT="\${PORT:-3100}"
+unset DATABASE_URL PLANNING_APP_NAME PLANNING_DATA_DIR
 export PLANNING_PACKAGED_MODE="1"
 export PLANNING_RUNTIME_MODE="packaged"
-export PLANNING_APP_NAME="\${PLANNING_APP_NAME:-PlanningV2}"
+node scripts/planning_v2_desktop_verify.mjs --mode=runtime
 node scripts/planning_v2_desktop_launch.mjs --runtime prod --port "$PORT" --path "/planning"
 `;
 }
 
-function buildInstallCmd() {
+export function buildInstallCmd() {
   return `@echo off
 setlocal
 cd /d "%~dp0"
-if not exist ".env.local" if exist ".env.local.example" copy ".env.local.example" ".env.local" >nul
-pnpm install --frozen-lockfile
+node scripts/planning_v2_desktop_verify.mjs --mode=pristine-install
 if errorlevel 1 exit /b 1
-set TARGET=%CD%\\run.cmd
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $desktop = [Environment]::GetFolderPath('Desktop'); $programs = [Environment]::GetFolderPath('Programs'); $paths = @((Join-Path $desktop 'Planning v2.lnk'), (Join-Path $programs 'Planning v2.lnk')); foreach ($p in $paths) { $s = $ws.CreateShortcut($p); $s.TargetPath = '%TARGET%'; $s.WorkingDirectory = '%CD%'; $s.IconLocation = '%TARGET%'; $s.Save() }"
-echo [planning:v2:desktop] install complete
+if "%PLANNING_DESKTOP_INSTALL_DIR%"=="" (set "INSTALL_DIR=%USERPROFILE%\\planning-v2-desktop") else (set "INSTALL_DIR=%PLANNING_DESKTOP_INSTALL_DIR%")
+set "INSTALL_FLAGS="
+if "%PLANNING_DESKTOP_SKIP_INSTALL%"=="1" set "INSTALL_FLAGS=%INSTALL_FLAGS% --skip-install"
+if "%PLANNING_DESKTOP_SKIP_SHORTCUTS%"=="1" set "INSTALL_FLAGS=%INSTALL_FLAGS% --skip-shortcuts"
+node scripts/planning_v2_desktop_install.mjs --self-contained-source --from="%CD%" --to="%INSTALL_DIR%" %INSTALL_FLAGS%
+if errorlevel 1 exit /b 1
+echo [planning:v2:desktop] install complete target=%INSTALL_DIR%
 `;
 }
 
-function buildRunCmd() {
+export function buildRunCmd() {
   return `@echo off
 setlocal
 cd /d "%~dp0"
 if "%PORT%"=="" set PORT=3100
+set "DATABASE_URL="
+set "PLANNING_APP_NAME="
+set "PLANNING_DATA_DIR="
 set PLANNING_PACKAGED_MODE=1
 set PLANNING_RUNTIME_MODE=packaged
-if "%PLANNING_APP_NAME%"=="" set PLANNING_APP_NAME=PlanningV2
+node scripts/planning_v2_desktop_verify.mjs --mode=runtime
+if errorlevel 1 exit /b 1
 node scripts/planning_v2_desktop_launch.mjs --runtime prod --port %PORT% --path /planning
 `;
 }
 
-function buildUninstallSh() {
+export function buildUninstallSh() {
   return `#!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
 echo "[planning:v2:desktop] uninstall started (binaries only)"
-node scripts/planning_v2_desktop_uninstall.mjs --target "$(pwd)"
+node scripts/planning_v2_desktop_uninstall.mjs --target="$(pwd)" --keep-wrapper=uninstall.sh
+rm -- "$0"
 `;
 }
 
-function buildUninstallCmd() {
+export function buildUninstallCmd() {
   return `@echo off
 setlocal
 cd /d "%~dp0"
 echo [planning:v2:desktop] uninstall started (binaries only)
-node scripts/planning_v2_desktop_uninstall.mjs --target "%CD%"
+node scripts/planning_v2_desktop_uninstall.mjs --target="%CD%" --keep-wrapper=uninstall.cmd
+if errorlevel 1 exit /b 1
+(goto) 2>nul & del /f /q "%~f0"
+`;
+}
+
+function buildPortablePrismaConfig() {
+  return `const databaseUrl = (process.env.DATABASE_URL ?? "").trim();
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required for the packaged Prisma CLI");
+}
+
+export default {
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+  },
+  datasource: {
+    url: databaseUrl,
+  },
+};
 `;
 }
 
@@ -550,6 +623,7 @@ async function main() {
   await ensureFileExists(path.join(cwd, "scripts"));
   await ensureFileExists(path.join(cwd, "package.json"));
   await ensureFileExists(path.join(cwd, "pnpm-lock.yaml"));
+  await ensureFileExists(path.join(cwd, ".env.local.example"));
   for (const relativePath of REQUIRED_V3_ARTIFACT_FILES) {
     await ensureFileExists(path.join(cwd, relativePath));
   }
@@ -561,13 +635,23 @@ async function main() {
   await copyIfExists(path.join(cwd, "public"), path.join(artifactDir, "public"));
   await copyIfExists(path.join(cwd, "scripts"), path.join(artifactDir, "scripts"));
   await copyPrismaAssets(cwd, artifactDir);
+  await fs.writeFile(path.join(artifactDir, "prisma.config.mjs"), buildPortablePrismaConfig(), "utf8");
   await copyIfExists(path.join(cwd, "next.config.ts"), path.join(artifactDir, "next.config.ts"));
   await copyIfExists(path.join(cwd, "tsconfig.json"), path.join(artifactDir, "tsconfig.json"));
   await copyIfExists(path.join(cwd, "tsconfig.planning-v3.json"), path.join(artifactDir, "tsconfig.planning-v3.json"));
-  await copyIfExists(path.join(cwd, "middleware.ts"), path.join(artifactDir, "middleware.ts"));
-  await copyIfExists(path.join(cwd, ".env.local.example"), path.join(artifactDir, ".env.local.example"));
+  await fs.copyFile(path.join(cwd, ".env.local.example"), path.join(artifactDir, ".env.local.example"));
   const artifactStandaloneDir = path.join(artifactDir, ".next", "standalone");
-  await copyStandaloneIfExists(sourceStandaloneDir, artifactStandaloneDir);
+  await copyStandaloneIfExists(sourceStandaloneDir, artifactStandaloneDir, cwd);
+  await copyRequiredPnpmPackage({
+    projectRoot: cwd,
+    destinationNodeModulesDir: path.join(artifactStandaloneDir, "node_modules"),
+    packageName: "better-sqlite3",
+  });
+  await copyRequiredPnpmPackage({
+    projectRoot: cwd,
+    destinationNodeModulesDir: path.join(artifactStandaloneDir, "node_modules"),
+    packageName: "prisma",
+  });
   await copyIfExists(path.join(cwd, ".next", "static"), path.join(artifactDir, ".next", "static"));
   await copyIfExists(
     path.join(cwd, ".next", "static"),
@@ -602,6 +686,9 @@ async function main() {
     packageVersion,
     gitSha,
     lockfileSha256: lockfileDigest,
+    platform: process.platform,
+    arch: process.arch,
+    nodeAbi: process.versions.modules,
     builtAt: new Date().toISOString(),
     artifactChecksum,
     localOnlyDefault: true,
@@ -617,8 +704,11 @@ async function main() {
   process.stdout.write(`[planning:v2:desktop:build] artifact=${artifactDir}\n`);
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  process.stderr.write(`[planning:v2:desktop:build] failed\n${message}\n`);
-  process.exit(1);
-});
+const currentFile = fileURLToPath(import.meta.url);
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(currentFile)) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error);
+    process.stderr.write(`[planning:v2:desktop:build] failed\n${message}\n`);
+    process.exit(1);
+  });
+}

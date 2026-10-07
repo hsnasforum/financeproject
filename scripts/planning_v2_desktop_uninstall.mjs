@@ -1,36 +1,30 @@
-import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  assertDesktopInstallationIdentity,
+  removeDesktopBinariesPreservingState,
+} from "./planning_desktop_install_state.mjs";
+import {
+  assertDesktopInstallationStopped,
+  removeWindowsShortcuts,
+} from "./planning_v2_desktop_install.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function resolveWindowsDataBase(env = process.env) {
-  const localAppData = asString(env.LOCALAPPDATA);
-  const appData = asString(env.APPDATA);
-  if (localAppData) return localAppData;
-  if (appData) return appData;
-  return path.join(os.homedir(), "AppData", "Local");
-}
-
-function resolveDataDir(appName, env = process.env) {
-  const override = asString(env.PLANNING_DATA_DIR);
-  if (override) return path.resolve(process.cwd(), override);
-  if (process.platform === "win32") return path.resolve(resolveWindowsDataBase(env), appName);
-  if (process.platform === "darwin") return path.resolve(os.homedir(), "Library", "Application Support", appName);
-  return path.resolve(asString(env.XDG_DATA_HOME) || path.join(os.homedir(), ".local", "share"), appName);
-}
-
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const out = {
     target: path.join(os.homedir(), "planning-v2-desktop"),
     appName: "PlanningV2",
     shortcutName: "Planning v2",
     removeShortcuts: true,
     wipeData: false,
+    keepWrapper: "",
   };
-  for (const token of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
     if (token === "--no-shortcuts") {
       out.removeShortcuts = false;
       continue;
@@ -39,33 +33,40 @@ function parseArgs(argv) {
       out.wipeData = true;
       continue;
     }
-    if (!token.startsWith("--")) continue;
-    const [rawKey, ...rawRest] = token.slice(2).split("=");
-    const key = asString(rawKey);
-    const value = rawRest.join("=");
-    if (key === "target") out.target = asString(value) || out.target;
-    if (key === "app-name") out.appName = asString(value) || out.appName;
-    if (key === "shortcut-name") out.shortcutName = asString(value) || out.shortcutName;
+    if (!token.startsWith("--")) {
+      throw new Error(`unexpected uninstall argument: ${token}`);
+    }
+    const rawOption = token.slice(2);
+    const equalsIndex = rawOption.indexOf("=");
+    const key = asString(equalsIndex >= 0 ? rawOption.slice(0, equalsIndex) : rawOption);
+    if (!new Set(["target", "app-name", "shortcut-name", "keep-wrapper"]).has(key)) {
+      throw new Error(`unknown uninstall option: --${key || rawOption}`);
+    }
+    let value = equalsIndex >= 0 ? rawOption.slice(equalsIndex + 1) : "";
+    if (equalsIndex < 0) {
+      const nextValue = argv[index + 1];
+      if (!nextValue || nextValue.startsWith("--")) {
+        throw new Error(`--${key} requires a non-empty value`);
+      }
+      value = nextValue;
+      index += 1;
+    }
+    value = asString(value);
+    if (!value) throw new Error(`--${key} requires a non-empty value`);
+    if (key === "target") out.target = value;
+    if (key === "app-name") out.appName = value;
+    if (key === "shortcut-name") out.shortcutName = value;
+    if (key === "keep-wrapper") out.keepWrapper = value;
+  }
+  if (out.keepWrapper && !new Set(["uninstall.cmd", "uninstall.sh"]).has(out.keepWrapper)) {
+    throw new Error("--keep-wrapper must be uninstall.cmd or uninstall.sh");
   }
   return out;
 }
 
-async function removeIfExists(target) {
-  await fs.rm(target, { recursive: true, force: true }).catch(() => undefined);
-}
-
-async function removeWindowsShortcuts(shortcutName) {
-  const desktop = path.join(asString(process.env.USERPROFILE) || os.homedir(), "Desktop");
-  const startMenu = path.join(asString(process.env.APPDATA) || path.join(os.homedir(), "AppData", "Roaming"), "Microsoft", "Windows", "Start Menu", "Programs");
-  const fileName = `${shortcutName}.lnk`;
-  await removeIfExists(path.join(desktop, fileName));
-  await removeIfExists(path.join(startMenu, fileName));
-}
-
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+export async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
   const targetDir = path.resolve(process.cwd(), args.target);
-  const dataDir = resolveDataDir(args.appName);
 
   if (args.wipeData) {
     process.stderr.write("[planning:v2:desktop:uninstall] --wipe-data is not supported.\n");
@@ -74,19 +75,28 @@ async function main() {
     return;
   }
 
+  await assertDesktopInstallationIdentity(targetDir);
+  const installation = await assertDesktopInstallationStopped({ installDir: targetDir });
+
   if (args.removeShortcuts && process.platform === "win32") {
-    await removeWindowsShortcuts(args.shortcutName);
+    await removeWindowsShortcuts(args.shortcutName, { cwd: path.dirname(targetDir) });
   }
 
-  await removeIfExists(targetDir);
+  const preserved = await removeDesktopBinariesPreservingState(targetDir, {
+    preserveOwnedEntries: args.keepWrapper ? [args.keepWrapper] : [],
+  });
 
   process.stdout.write(`[planning:v2:desktop:uninstall] removed binaries=${targetDir}\n`);
-  process.stdout.write(`[planning:v2:desktop:uninstall] kept dataDir=${dataDir}\n`);
+  process.stdout.write(`[planning:v2:desktop:uninstall] preserved local state=${preserved.join(",") || "none"}\n`);
+  process.stdout.write(`[planning:v2:desktop:uninstall] kept dataDir=${installation.dataRoot}\n`);
   process.stdout.write("[planning:v2:desktop:uninstall] data wipe is manual via /ops/security reset.\n");
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  process.stderr.write(`[planning:v2:desktop:uninstall] failed\n${message}\n`);
-  process.exit(1);
-});
+const currentFile = fileURLToPath(import.meta.url);
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(currentFile)) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error);
+    process.stderr.write(`[planning:v2:desktop:uninstall] failed\n${message}\n`);
+    process.exit(1);
+  });
+}

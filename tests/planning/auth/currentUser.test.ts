@@ -8,6 +8,7 @@ import {
 import { withCurrentPlanningPageUser } from "../../../src/lib/planning/server/pageAuth";
 import { resolvePlanningUserId } from "../../../src/lib/planning/store/namespace";
 import { getScopedPlanningAuthSource } from "../../../src/lib/planning/store/userScope";
+import { PLANNING_RUNTIME_ATTESTATION } from "../../../src/lib/planning/deployment/runtimePolicy.mjs";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
@@ -27,6 +28,40 @@ function requestWithUser(userId: string, host = "localhost:3000"): Request {
       origin,
       referer: `${origin}/planning`,
       "x-planning-user-id": userId,
+    },
+  });
+}
+
+function desktopEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  return {
+    NODE_ENV: "production",
+    PLANNING_DEPLOYMENT_MODE: "desktop-local",
+    PLANNING_RUNTIME_BIND_HOST: "127.0.0.1",
+    PLANNING_PROXY_MODE: "none",
+    PLANNING_FORWARDED_HEADERS_TRUSTED: "false",
+    PLANNING_TRUST_AUTH_HEADERS: "false",
+    PLANNING_DESKTOP_IDENTITY_MODE: "desktop-local-session",
+    PLANNING_DESKTOP_IDENTITY_PROVENANCE: "launcher-process",
+    PLANNING_DESKTOP_IDENTITY_READY: "true",
+    PLANNING_PROCESS_MODEL: "single",
+    PLANNING_WRITER_EXCLUSIVITY: "data-root-exclusive",
+    PLANNING_SINGLE_USER_MODE: "true",
+    PLANNING_NAMESPACE_ENABLED: "false",
+    PLANNING_DATA_ROOT_KIND: "local",
+    PLANNING_DATABASE_PROVIDER: "sqlite",
+    PLANNING_DATABASE_CONNECTION: "file",
+    PLANNING_RUNTIME_ATTESTATION,
+    PLANNING_DESKTOP_SESSION_TOKEN: "s".repeat(43),
+    ...overrides,
+  } as NodeJS.ProcessEnv;
+}
+
+function desktopRequest(headers: Record<string, string> = {}): Request {
+  return new Request("http://127.0.0.1:3100/api/planning/profiles", {
+    headers: {
+      host: "127.0.0.1:3100",
+      cookie: `planning.desktop-session=${"s".repeat(43)}`,
+      ...headers,
     },
   });
 }
@@ -194,5 +229,38 @@ describe("planning current user", () => {
       userId: "default",
       authSource: "local-namespace",
     });
+  });
+
+  it("uses the launcher-established desktop session for users/default", async () => {
+    await expect(requireCurrentPlanningUser(desktopRequest(), desktopEnv())).resolves.toEqual({
+      id: "default",
+      source: "desktop-local-session",
+      authRequired: true,
+    });
+  });
+
+  it("rejects an expired desktop cookie instead of falling back to Auth.js", async () => {
+    await expect(requireCurrentPlanningUser(
+      desktopRequest({ cookie: "planning.desktop-session=expired" }),
+      desktopEnv({ AUTH_SECRET: "configured-but-not-a-desktop-identity" }),
+    )).rejects.toMatchObject({ code: "UNAUTHENTICATED", status: 401, recovery: "desktop-launcher" });
+  });
+
+  it("fails closed when desktop runtime attestation is absent", async () => {
+    await expect(requireCurrentPlanningUser(
+      desktopRequest(),
+      desktopEnv({ PLANNING_RUNTIME_ATTESTATION: undefined }),
+    )).rejects.toMatchObject({ code: "DEPLOYMENT_NOT_READY", status: 503 });
+  });
+
+  it.each([
+    ["forwarded headers", { "x-forwarded-for": "203.0.113.10" }],
+    ["raw identity headers", { "x-planning-user-id": "attacker" }],
+    ["host aliases", { host: "localhost:3100" }],
+  ])("rejects desktop-local %s", async (_label, headers) => {
+    await expect(requireCurrentPlanningUser(
+      desktopRequest(headers),
+      desktopEnv(),
+    )).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
   });
 });

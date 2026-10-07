@@ -13,6 +13,7 @@ const STORAGE_KEY_PREFIX = "planning:update-backup-reminder:dismissed:";
 
 export function BackupReminderBanner({ scope, appVersion, className = "" }: BackupReminderBannerProps) {
   const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}${scope}`, [scope]);
+  const backupHref = scope === "planning" ? "/settings/backup" : "/ops/backup";
   const [hidden, setHidden] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem(storageKey) === "1";
@@ -24,9 +25,9 @@ export function BackupReminderBanner({ scope, appVersion, className = "" }: Back
     <div className={`mx-auto mt-3 w-full max-w-6xl rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 ${className}`.trim()}>
       <div className="flex items-center justify-between gap-3">
         <p>
-          업데이트 전 백업 권장.{" "}
-          <Link className="font-semibold underline" href="/ops/backup">
-            /ops/backup
+          업데이트 전에는 재무 데이터 백업을 권장합니다.{" "}
+          <Link className="font-semibold underline" href={backupHref}>
+            백업 설정 보기
           </Link>
           {appVersion ? <span className="ml-2 text-xs text-amber-800">v{appVersion}</span> : null}
         </p>

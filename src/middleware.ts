@@ -1,5 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { isLocalRequest } from "./src/lib/dev/localRequest";
+import { NextResponse, type MiddlewareConfig, type NextRequest } from "next/server";
+import { isLocalRequest } from "./lib/dev/localRequest";
+import { evaluateDesktopSessionRequest } from "./lib/planning/deployment/desktopSession.mjs";
+import { isDesktopLocalDeploymentRequested } from "./lib/planning/deployment/runtimePolicy.mjs";
 
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const AUTH_SESSION_COOKIE_NAMES = [
@@ -7,10 +9,6 @@ const AUTH_SESSION_COOKIE_NAMES = [
   "__Secure-authjs.session-token",
   "next-auth.session-token",
   "__Secure-next-auth.session-token",
-];
-const PREFETCH_MATCHER = [
-  { type: "header" as const, key: "next-router-prefetch" },
-  { type: "header" as const, key: "purpose", value: "prefetch" },
 ];
 
 function buildContentSecurityPolicy(options?: { nonce?: string }): string {
@@ -81,6 +79,14 @@ function isPlanningApiPath(pathname: string): boolean {
   return pathname === "/api/planning" || pathname.startsWith("/api/planning/");
 }
 
+function isSettingsBackupApiPath(pathname: string): boolean {
+  return pathname === "/api/settings/backup" || pathname.startsWith("/api/settings/backup/");
+}
+
+function isPlanningProtectedApiPath(pathname: string): boolean {
+  return isPlanningApiPath(pathname) || isSettingsBackupApiPath(pathname);
+}
+
 function isFeedbackManagementPath(pathname: string): boolean {
   return pathname.startsWith("/feedback/") || pathname.startsWith("/api/feedback/");
 }
@@ -127,7 +133,11 @@ function isPlanningAuthRequired(): boolean {
 }
 
 function hasAuthSessionCookie(request: NextRequest): boolean {
-  return AUTH_SESSION_COOKIE_NAMES.some((name) => Boolean(request.cookies.get(name)?.value));
+  // Auth.js splits large session cookies into name.0, name.1, ... . The route
+  // still validates the session; this guard only checks for an auth signal.
+  return request.cookies.getAll().some(({ name, value }) => Boolean(value) && AUTH_SESSION_COOKIE_NAMES.some(
+    (baseName) => name === baseName || (name.startsWith(`${baseName}.`) && /^\d+$/.test(name.slice(baseName.length + 1))),
+  ));
 }
 
 function hasTrustedPlanningAuthHeader(request: NextRequest): boolean {
@@ -185,13 +195,13 @@ function notFoundResponse(request: NextRequest, contentSecurityPolicy: string): 
   return withSecurityHeaders(new NextResponse("Not found", { status: 404 }), contentSecurityPolicy);
 }
 
-function authRequiredResponse(contentSecurityPolicy: string): NextResponse {
+function authRequiredResponse(contentSecurityPolicy: string, message = "로그인이 필요합니다."): NextResponse {
   return withSecurityHeaders(NextResponse.json(
     {
       ok: false,
       error: {
         code: "UNAUTHENTICATED",
-        message: "로그인이 필요합니다.",
+        message,
       },
     },
     { status: 401 },
@@ -209,6 +219,26 @@ function authForbiddenResponse(contentSecurityPolicy: string, message: string): 
     },
     { status: 403 },
   ), contentSecurityPolicy);
+}
+
+function deploymentNotReadyResponse(contentSecurityPolicy: string): NextResponse {
+  return withSecurityHeaders(NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: "DEPLOYMENT_NOT_READY",
+        message: "데스크톱 로컬 실행 환경을 확인할 수 없습니다. 앱을 종료한 뒤 공식 실행 아이콘으로 다시 시작해 주세요.",
+      },
+    },
+    { status: 503 },
+  ), contentSecurityPolicy);
+}
+
+function desktopSessionForbiddenMessage(code: string): string {
+  if (code === "HOST_FORBIDDEN") return "데스크톱 앱은 127.0.0.1 호스트에서만 사용할 수 있습니다.";
+  if (code === "FORWARDED_HEADERS_FORBIDDEN") return "데스크톱 앱은 전달 프록시 헤더가 있는 요청을 허용하지 않습니다.";
+  if (code === "RAW_IDENTITY_HEADERS_FORBIDDEN") return "데스크톱 앱은 원시 사용자 식별 헤더를 허용하지 않습니다.";
+  return "데스크톱 로컬 요청을 신뢰할 수 없습니다.";
 }
 
 export function middleware(request: NextRequest) {
@@ -232,22 +262,43 @@ export function middleware(request: NextRequest) {
 
   const needsLocalOnly = isOpsPath(pathname)
     || isFeedbackManagementPath(pathname)
+    || isSettingsBackupApiPath(pathname)
     || isPlanningMutationPath(pathname, request.method)
     || (!isProduction && isDevOnlyPath(pathname));
   if (needsLocalOnly && !isLocalRequest(request)) {
     return blockResponse(request, contentSecurityPolicy);
   }
 
-  if (isPlanningApiPath(pathname)) {
+  if (isPlanningProtectedApiPath(pathname)) {
+    if (isDesktopLocalDeploymentRequested(process.env)) {
+      const desktopSession = evaluateDesktopSessionRequest(request, process.env);
+      if (!desktopSession.ok) {
+        if (desktopSession.code === "DEPLOYMENT_NOT_READY") {
+          return deploymentNotReadyResponse(contentSecurityPolicy);
+        }
+        if (desktopSession.code === "SESSION_REQUIRED") {
+          return authRequiredResponse(
+            contentSecurityPolicy,
+            "데스크톱 세션을 확인하지 못했습니다. 앱 실행 아이콘이나 시작 명령으로 다시 열어 주세요.",
+          );
+        }
+        return authForbiddenResponse(
+          contentSecurityPolicy,
+          desktopSessionForbiddenMessage(desktopSession.code),
+        );
+      }
+    }
+
     const trustedHeaderError = trustedPlanningAuthHeaderError(request);
-    if (trustedHeaderError) {
+    if (!isDesktopLocalDeploymentRequested(process.env) && trustedHeaderError) {
       return authForbiddenResponse(contentSecurityPolicy, trustedHeaderError);
     }
   }
 
   if (
     isPlanningAuthRequired()
-    && isPlanningApiPath(pathname)
+    && isPlanningProtectedApiPath(pathname)
+    && !isDesktopLocalDeploymentRequested(process.env)
     && !hasAuthSessionCookie(request)
     && !hasTrustedPlanningAuthHeader(request)
   ) {
@@ -273,9 +324,15 @@ export const config = {
   matcher: [
     { source: "/feedback/:path*" },
     { source: "/api/feedback/:path*" },
+    { source: "/ops/:path*" },
+    { source: "/api/ops/:path*" },
     {
       source: "/((?!_next/static|_next/image|favicon.ico).*)",
-      missing: PREFETCH_MATCHER,
+      // Next statically extracts this config; referenced constants are not supported.
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
     },
   ],
-};
+} satisfies MiddlewareConfig;

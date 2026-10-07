@@ -195,7 +195,7 @@ describe("Auth.js planning integration contract", () => {
 
   it("keeps planning auth required by default unless local fallback is explicit", () => {
     const currentUser = read("src/lib/planning/auth/currentUser.ts");
-    const middleware = read("middleware.ts");
+    const middleware = read("src/middleware.ts");
     const vitestConfig = read("vitest.config.ts");
     const envExample = read(".env.example");
     const currentScreens = read("docs/current-screens.md");
@@ -234,10 +234,17 @@ describe("Auth.js planning integration contract", () => {
 
   it("keeps the App Router auth route on the Node.js runtime", () => {
     const route = read("src/app/api/auth/[...nextauth]/route.ts");
+    const webHandlers = read("src/lib/auth/routeHandlers.ts");
 
-    expect(route).toContain('import { handlers } from "@/auth"');
+    expect(webHandlers).toContain('const { handlers } = await import("@/auth")');
     expect(route).toContain('export const runtime = "nodejs"');
-    expect(route).toContain("export const { GET, POST } = handlers");
+    expect(route).toContain("return handleWebAuthGet(request)");
+    expect(route).toContain("return handleWebAuthPost(request)");
+    expect(webHandlers).toContain("return handlers.GET(request)");
+    expect(webHandlers).toContain("return handlers.POST(request)");
+    expect(read("src/lib/auth/config.ts")).not.toContain("skipCSRFCheck");
+    expect(read("src/auth.ts")).not.toContain("skipCSRFCheck");
+    expect(webHandlers).not.toContain("skipCSRFCheck");
   });
 
   it("keeps Auth.js schema models and nullable legacy ownership columns in the active SQLite schema", () => {

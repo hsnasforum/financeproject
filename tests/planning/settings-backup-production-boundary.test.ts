@@ -1,0 +1,296 @@
+import fs from "node:fs";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { POST as exportPOST } from "../../src/app/api/settings/backup/export/route";
+import { POST as previewPOST } from "../../src/app/api/settings/backup/preview/route";
+import { POST as restorePOST } from "../../src/app/api/settings/backup/restore/route";
+import { GET as statusGET } from "../../src/app/api/settings/backup/status/route";
+
+const LOCAL_HOST = "127.0.0.1:3000";
+const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const ENV_KEYS = [
+  "ALLOW_REMOTE",
+  "PLANNING_DEPLOYMENT_MODE",
+  "PLANNING_AUTH_REQUIRED",
+  "PLANNING_TRUST_AUTH_HEADERS",
+  "PLANNING_NAMESPACE_ENABLED",
+  "PLANNING_SINGLE_USER_MODE",
+  "PLANNING_OPS_BACKUP_MAX_UPLOAD_BYTES",
+] as const;
+const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+
+function requestHeaders(extra: Record<string, string> = {}): HeadersInit {
+  return {
+    host: LOCAL_HOST,
+    origin: LOCAL_ORIGIN,
+    referer: `${LOCAL_ORIGIN}/settings/backup`,
+    "sec-fetch-site": "same-origin",
+    "x-planning-user-id": "backup-user",
+    ...extra,
+  };
+}
+
+function invalidCsrfFormRequest(pathname: string): Request {
+  const formData = new FormData();
+  formData.set("csrf", "body-token");
+  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+    method: "POST",
+    headers: requestHeaders({ cookie: "planning_vault_csrf=cookie-token" }),
+    body: formData,
+  });
+}
+
+describe("production settings backup boundary", () => {
+  beforeEach(() => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.ALLOW_REMOTE = "0";
+    delete process.env.PLANNING_DEPLOYMENT_MODE;
+    process.env.PLANNING_AUTH_REQUIRED = "1";
+    process.env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    process.env.PLANNING_NAMESPACE_ENABLED = "1";
+    process.env.PLANNING_SINGLE_USER_MODE = "0";
+    process.env.PLANNING_OPS_BACKUP_MAX_UPLOAD_BYTES = "1024";
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const key of ENV_KEYS) {
+      const value = originalEnv[key];
+      if (typeof value === "string") process.env[key] = value;
+      else delete process.env[key];
+    }
+  });
+
+  it("issues a user-scoped CSRF token in production instead of returning the dev-only 404", async () => {
+    const response = await statusGET(new Request(`${LOCAL_ORIGIN}/api/settings/backup/status`, {
+      headers: requestHeaders(),
+    }));
+    const payload = await response.json() as {
+      ok?: boolean;
+      csrfToken?: string;
+      meta?: { userId?: string; authSource?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.csrfToken).toBeTruthy();
+    expect(payload.meta).toEqual({
+      userId: "backup-user",
+      authSource: "trusted-header",
+    });
+    expect(response.headers.get("set-cookie")).toContain("planning_vault_csrf=");
+  });
+
+  it.each([
+    ["export", () => exportPOST(new Request(`${LOCAL_ORIGIN}/api/settings/backup/export`, {
+      method: "POST",
+      headers: requestHeaders({
+        cookie: "planning_vault_csrf=cookie-token",
+        "content-type": "application/json",
+      }),
+      body: JSON.stringify({ csrf: "body-token", passphrase: "test-passphrase" }),
+    }))],
+    ["preview", () => previewPOST(invalidCsrfFormRequest("/api/settings/backup/preview"))],
+    ["restore", () => restorePOST(invalidCsrfFormRequest("/api/settings/backup/restore"))],
+  ])("keeps %s enabled in production and fails closed on CSRF", async (_name, invoke) => {
+    const response = await invoke();
+    const payload = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(403);
+    expect(payload.error?.code).toBe("CSRF");
+  });
+
+  it.each([
+    ["preview", previewPOST, "/api/settings/backup/preview"],
+    ["restore", restorePOST, "/api/settings/backup/restore"],
+  ])("rejects remote %s requests before consuming multipart data", async (_name, handler, pathname) => {
+    const formData = new FormData();
+    formData.set("csrf", "body-token");
+    const request = new Request(`http://example.com${pathname}`, {
+      method: "POST",
+      headers: {
+        host: "example.com",
+        origin: "http://example.com",
+        referer: `http://example.com/settings/backup`,
+        "sec-fetch-site": "same-origin",
+        "x-planning-user-id": "backup-user",
+      },
+      body: formData,
+    });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(403);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it.each([
+    ["preview", previewPOST, "/api/settings/backup/preview"],
+    ["restore", restorePOST, "/api/settings/backup/restore"],
+  ])("rejects cross-origin %s requests before consuming multipart data", async (_name, handler, pathname) => {
+    const formData = new FormData();
+    formData.set("csrf", "body-token");
+    const request = new Request(`${LOCAL_ORIGIN}${pathname}`, {
+      method: "POST",
+      headers: requestHeaders({
+        origin: "https://attacker.example",
+        referer: "https://attacker.example/backup",
+        "sec-fetch-site": "cross-site",
+      }),
+      body: formData,
+    });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(403);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it.each([
+    ["preview", previewPOST, "/api/settings/backup/preview"],
+    ["restore", restorePOST, "/api/settings/backup/restore"],
+  ])("rejects unauthenticated %s requests before consuming multipart data", async (_name, handler, pathname) => {
+    const formData = new FormData();
+    formData.set("csrf", "body-token");
+    const request = new Request(`${LOCAL_ORIGIN}${pathname}`, {
+      method: "POST",
+      headers: {
+        host: LOCAL_HOST,
+        origin: LOCAL_ORIGIN,
+        referer: `${LOCAL_ORIGIN}/settings/backup`,
+        "sec-fetch-site": "same-origin",
+      },
+      body: formData,
+    });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(401);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it.each([
+    ["preview", previewPOST, "/api/settings/backup/preview"],
+    ["restore", restorePOST, "/api/settings/backup/restore"],
+  ])("rejects an oversized declared %s request before consuming its body", async (_name, handler, pathname) => {
+    const request = new Request(`${LOCAL_ORIGIN}${pathname}`, {
+      method: "POST",
+      headers: requestHeaders({
+        "content-type": "multipart/form-data; boundary=test-boundary",
+        "content-length": String(1024 + 256 * 1024 + 1),
+      }),
+      body: "not-read",
+    });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(413);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it.each([
+    ["without credentials", ""],
+    ["with a fake session cookie", "authjs.session-token=fake-session"],
+  ])("rejects export %s before consuming JSON", async (_name, authCookie) => {
+    const request = new Request(`${LOCAL_ORIGIN}/api/settings/backup/export`, {
+      method: "POST",
+      headers: {
+        host: LOCAL_HOST,
+        origin: LOCAL_ORIGIN,
+        referer: `${LOCAL_ORIGIN}/settings/backup`,
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json",
+        cookie: ["planning_vault_csrf=cookie-token", authCookie].filter(Boolean).join("; "),
+      },
+      body: JSON.stringify({ csrf: "cookie-token", passphrase: "test-passphrase" }),
+    });
+
+    const response = await exportPOST(request);
+
+    expect(response.status).toBe(401);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it("rejects an oversized declared export JSON request before consuming its body", async () => {
+    const request = new Request(`${LOCAL_ORIGIN}/api/settings/backup/export`, {
+      method: "POST",
+      headers: requestHeaders({
+        cookie: "planning_vault_csrf=cookie-token",
+        "content-type": "application/json",
+        "content-length": String(32 * 1024 + 1),
+      }),
+      body: "not-read",
+    });
+
+    const response = await exportPOST(request);
+
+    expect(response.status).toBe(413);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it("stops a streamed export JSON request after the 32 KiB limit", async () => {
+    const encoder = new TextEncoder();
+    const request = new Request(`${LOCAL_ORIGIN}/api/settings/backup/export`, {
+      method: "POST",
+      headers: requestHeaders({
+        cookie: "planning_vault_csrf=cookie-token",
+        "content-type": "application/json",
+      }),
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode("x".repeat(16 * 1024)));
+          controller.enqueue(encoder.encode("x".repeat(16 * 1024 + 1)));
+          controller.close();
+        },
+      }),
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    const response = await exportPOST(request);
+
+    expect(response.status).toBe(413);
+    expect(request.bodyUsed).toBe(true);
+  });
+
+  it("keeps the public settings UI off every dev-only backup and recovery endpoint", () => {
+    const backupClient = fs.readFileSync(path.join(process.cwd(), "src/components/OpsBackupClient.tsx"), "utf8");
+    const recoveryClient = fs.readFileSync(path.join(process.cwd(), "src/components/RecoveryClient.tsx"), "utf8");
+    const routeSources = ["export", "preview", "restore", "status"].map((segment) => fs.readFileSync(
+      path.join(process.cwd(), `src/app/api/settings/backup/${segment}/route.ts`),
+      "utf8",
+    ));
+    const finalizeRouteSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/settings/backup/export/finalize/route.ts"),
+      "utf8",
+    );
+
+    expect(backupClient).toContain("/api/settings/backup");
+    expect(backupClient).toContain('formData.set("previewToken", previewToken)');
+    expect(recoveryClient).not.toContain("/api/dev/");
+    expect(recoveryClient).not.toContain("DoctorSummaryCard");
+    for (const source of routeSources) {
+      expect(source).not.toContain("onlyDev");
+      expect(source).toContain("withPlanningRouteUser");
+      expect(source).toContain("assertLocalHost");
+      expect(source).toContain("assertSameOrigin");
+    }
+    expect(finalizeRouteSource).not.toContain("onlyDev");
+    expect(finalizeRouteSource).toContain("withPlanningRouteUser");
+    expect(finalizeRouteSource).toContain("readBoundedBackupJson");
+  });
+
+  it("requires an explicit saved-file confirmation instead of finalizing after blob receipt", () => {
+    const backupClient = fs.readFileSync(path.join(process.cwd(), "src/components/OpsBackupClient.tsx"), "utf8");
+    const exportHandlerStart = backupClient.indexOf("async function handleExport()");
+    const finalizeHandlerStart = backupClient.indexOf("async function handleFinalizeExport()");
+    expect(exportHandlerStart).toBeGreaterThanOrEqual(0);
+    expect(finalizeHandlerStart).toBeGreaterThan(exportHandlerStart);
+
+    const exportHandler = backupClient.slice(exportHandlerStart, finalizeHandlerStart);
+    expect(exportHandler).toContain("await response.blob()");
+    expect(exportHandler).toContain("setPendingExportConfirmation");
+    expect(exportHandler).not.toContain("/export/finalize");
+    expect(backupClient.slice(finalizeHandlerStart)).toContain("/export/finalize");
+    expect(backupClient).toContain("파일 저장을 확인했습니다");
+  });
+});
