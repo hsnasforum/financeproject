@@ -87,13 +87,17 @@ afterEach(() => {
 });
 
 describe("daily refresh ops contract", () => {
-  it("runs TypeScript-backed mjs refresh wrappers through the Node tsx loader", () => {
+  it("serializes TypeScript-backed refresh writers and preserves the Node tsx loader", () => {
     const parsed = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8")) as {
       scripts?: Record<string, string>;
     };
 
-    expect(parsed.scripts?.["news:refresh"]).toBe("node --import tsx scripts/news_refresh.mjs");
-    expect(parsed.scripts?.["indicators:refresh"]).toBe("node --import tsx scripts/indicators_refresh.mjs");
+    expect(parsed.scripts?.["news:refresh"]).toBe(
+      "node scripts/planning_writer_entry.mjs news:refresh -- node --import tsx scripts/news_refresh.mjs",
+    );
+    expect(parsed.scripts?.["indicators:refresh"]).toBe(
+      "node scripts/planning_writer_entry.mjs indicators:refresh -- node --import tsx scripts/indicators_refresh.mjs",
+    );
   });
 
   it("keeps FinLife if-stale refresh covering every tracked snapshot kind", () => {

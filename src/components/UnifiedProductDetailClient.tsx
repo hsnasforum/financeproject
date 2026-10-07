@@ -1,15 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import type { ProductFreshnessSummary } from "@/lib/sources/types";
+import { formatCatalogSourceAsOf, formatCatalogSourceName } from "@/lib/products/catalogExplorer";
 
 type UnifiedOption = {
   sourceId?: string;
@@ -44,6 +45,7 @@ type UnifiedItemResponse = {
   };
   meta?: {
     generatedAt?: string;
+    freshness?: ProductFreshnessSummary;
   };
   error?: {
     code?: string;
@@ -102,7 +104,7 @@ function ProductIdentifierDisclosure({
         <p>
           상품 식별자: <span className="font-mono break-all text-slate-700">{stableId}</span>
         </p>
-        <p>기준 확인 시각: {checkedAt}</p>
+        <p>화면 확인 시각: {checkedAt}</p>
       </div>
     </details>
   );
@@ -113,6 +115,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [item, setItem] = useState<UnifiedItem | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string>("");
+  const [freshness, setFreshness] = useState<ProductFreshnessSummary | null>(null);
   const [selectedOptionKey, setSelectedOptionKey] = useState<string>("");
   const [compareMessage, setCompareMessage] = useState("");
 
@@ -138,6 +141,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
         }
         setItem(json.data.item);
         setGeneratedAt(json.meta?.generatedAt ?? "");
+        setFreshness(json.meta?.freshness ?? null);
         const firstOption = json.data.item.options?.[0];
         const firstKey = firstOption ? optionKey(firstOption, 0) : "";
         setSelectedOptionKey(firstKey);
@@ -209,10 +213,37 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
           />
         ) : item ? (
           <>
+            {freshness ? (
+              <section
+                className={`rounded-2xl border px-5 py-4 ${freshness.overall === "fresh" ? "border-primary/15 bg-primary/5" : "border-amber-200 bg-amber-50"}`}
+                role={freshness.overall === "fresh" ? "status" : "alert"}
+                aria-live="polite"
+                data-testid="product-detail-freshness"
+              >
+                <p className={`text-sm font-black ${freshness.overall === "fresh" ? "text-navy" : "text-amber-900"}`}>
+                  {freshness.overall === "fresh"
+                    ? "원천 데이터가 설정된 갱신 주기 안에 있습니다."
+                    : "이 상품에는 오래됐거나 기준 시각을 확인하지 못한 원천 데이터가 포함되어 있습니다."}
+                </p>
+                <ul className="mt-2 space-y-1 text-xs font-medium leading-relaxed text-slate-600">
+                  {freshness.sources.map((source) => (
+                    <li key={`${source.sourceId}-${source.kind}`}>
+                      {formatCatalogSourceName(source.sourceId)} · 수집 기준 {formatCatalogSourceAsOf(source.sourceAsOf)}
+                      {source.fallbackUsed ? " · 대체/예시 데이터" : ""}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs font-medium leading-relaxed text-slate-600">
+                  실제 가입 전에는 금융회사의 최신 금리와 우대조건을 다시 확인해 주세요.
+                </p>
+              </section>
+            ) : null}
             <Card className="rounded-[2.5rem] p-8 shadow-sm">
               <div className="flex flex-wrap items-center gap-2 mb-6">
                 <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{formatKindLabel(item.kind)}</span>
-                <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">기준 확인 {formatDateTime(generatedAt || item.updatedAt)}</span>
+                <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                  수집 기준 {formatCatalogSourceAsOf(freshness?.sources[0]?.sourceAsOf ?? null)}
+                </span>
                 {(item.badges ?? []).map((badge) => (
                   <span key={`${item.stableId}-${badge}`} className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-navy">{badge}</span>
                 ))}
@@ -295,13 +326,11 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                       >
                         비교 후보 담기
                       </Button>
-                      <Link href="/products/compare" className="block">
-                        <Button variant="outline" className="w-full h-12 rounded-2xl border-slate-200 bg-white font-black text-slate-700 hover:bg-surface-muted">
-                          비교함에서 나란히 보기
-                        </Button>
-                      </Link>
+                      <ButtonLink href="/products/compare" variant="outline" className="block w-full h-12 rounded-2xl border-slate-200 bg-white font-black text-slate-700 hover:bg-surface-muted">
+                        비교함에서 나란히 보기
+                      </ButtonLink>
                       {compareMessage && (
-                        <p className="text-center text-xs font-black text-primary animate-in fade-in slide-in-from-top-1">{compareMessage}</p>
+                        <p role="status" aria-live="polite" className="text-center text-xs font-black text-primary animate-in fade-in slide-in-from-top-1">{compareMessage}</p>
                       )}
                     </div>
                   </Card>

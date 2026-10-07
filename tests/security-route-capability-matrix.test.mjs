@@ -8,6 +8,7 @@ import {
 } from "../scripts/security_route_guard_scan.mjs";
 import {
   CAPABILITY_AXES,
+  CAPABILITY_PROVIDERS,
   resolveMutationRouteContract,
 } from "../scripts/security_route_registry.mjs";
 
@@ -109,6 +110,28 @@ describe("security route mutation discovery", () => {
 });
 
 describe("security route capability matrix", () => {
+  it("requires the Auth.js protocol adapter response to be returned, not ignored", () => {
+    const root = makeRoot();
+    const routeFile = "src/app/api/auth/[...nextauth]/route.ts";
+    const resolved = resolveMutationRouteContract("POST", routeFile);
+    expect(resolved.ok).toBe(true);
+    expect(resolved.contract.profile).toBe("publicOrigin");
+    const provider = CAPABILITY_PROVIDERS.find((item) => item.module === "src/lib/auth/routeHandlers.ts");
+    expect(provider.provides).toEqual(capabilities({ originCsrf: true }));
+    write(root, provider.module, "export async function handleWebAuthPost() { return new Response(); }");
+    const custom = registry({ exactRoutes: [resolved.contract], providers: [provider] });
+    write(root, routeFile, `
+      import { handleWebAuthPost } from "@/lib/auth/routeHandlers";
+      export async function POST(request) { return handleWebAuthPost(request); }
+    `);
+    expect(scanMutationRouteCapabilities({ root, registry: custom }).issues).toEqual([]);
+    write(root, routeFile, `
+      import { handleWebAuthPost } from "@/lib/auth/routeHandlers";
+      export async function POST(request) { await handleWebAuthPost(request); return new Response(); }
+    `);
+    expect(scanMutationRouteCapabilities({ root, registry: custom }).issues.join("\n")).toContain("missing originCsrf");
+  });
+
   it("keeps authentication, authorization, locality, origin/CSRF, rate-limit, and audit as distinct axes", () => {
     expect(CAPABILITY_AXES).toEqual([
       "auth",

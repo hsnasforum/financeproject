@@ -23,7 +23,7 @@ const baseItem: RecommendItem = {
   finPrdtCd: "D001",
   providerName: "테스트은행",
   productName: "테스트예금",
-  finalScore: 81.25,
+  finalScore: 0.8125,
   selectedOption: {
     saveTrm: "12",
     termMonths: 12,
@@ -95,7 +95,7 @@ describe("recommend results view model", () => {
     });
   });
 
-  it("combines freshness, fallback, assumption, and trust cues", () => {
+  it("does not confuse recommendation compute mode with product-source fallback", () => {
     const sourceStatus: SourceStatusRow = {
       sourceId: "finlife",
       kind: "deposit",
@@ -117,11 +117,32 @@ describe("recommend results view model", () => {
       sourceStatusRow: sourceStatus,
     })).toMatchObject({
       freshnessStatus: "stale",
-      fallbackMode: "예시 데이터 기준",
       assumptionNotes: [
         "최고금리는 우대조건 충족을 가정합니다.",
         "예금자 보호 신호를 우선 확인합니다.",
       ],
+    });
+
+    expect(buildCardFreshnessMeta({
+      item: baseItem,
+      meta,
+      sourceStatusReady: true,
+      sourceStatusRow: sourceStatus,
+      sourceFreshness: {
+        sourceId: "finlife",
+        kind: "deposit",
+        sourceAsOf: "2026-07-10T00:00:00.000Z",
+        checkedAt: "2026-07-12T00:00:00.000Z",
+        ttlMs: 60_000,
+        ageMs: 120_000,
+        freshness: "sample",
+        fallbackUsed: true,
+        message: "화면 확인용 예시 데이터",
+      },
+    })).toMatchObject({
+      freshnessStatus: "empty",
+      fallbackMode: "예시 데이터 기준",
+      lastSyncedAt: "2026-07-10T00:00:00.000Z",
     });
 
     expect(buildTrustCues({
@@ -235,5 +256,37 @@ describe("recommend results view model", () => {
 
     expect(html).toContain("조건이 변경되어 이 결과는 이전 조회 기준입니다.");
     expect(html.match(/disabled=""/g)).toHaveLength(3);
+  });
+
+  it.each([
+    { finalScore: 0, displayed: "0.00%", ariaValue: "0" },
+    { finalScore: 0.85, displayed: "85.00%", ariaValue: "85" },
+    { finalScore: 1, displayed: "100.00%", ariaValue: "100" },
+  ])("renders normalized score $finalScore as percent", ({ finalScore, displayed, ariaValue }) => {
+    const item = attachUnifiedIds({
+      ok: true,
+      items: [{ ...baseItem, finalScore }],
+    }).items![0];
+    const html = renderToStaticMarkup(
+      <RecommendResultsPanel
+        result={{ ok: true, meta: baseMeta, items: [item] }}
+        feedback=""
+        resultProfile={recommendProfileDefaults()}
+        isStale={false}
+        planningActionContext={null}
+        sourceStatusRows={[]}
+        sourceStatusReady={false}
+        openDetailKey={null}
+        onOpenDetailKeyChange={vi.fn()}
+        onSave={vi.fn()}
+        onExportJson={vi.fn()}
+        onExportCsv={vi.fn()}
+        onAddCompare={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain(`>${displayed}</span>`);
+    expect(html).toContain(`aria-valuenow="${ariaValue}"`);
+    expect(html).toContain(`aria-valuetext="${displayed}"`);
   });
 });

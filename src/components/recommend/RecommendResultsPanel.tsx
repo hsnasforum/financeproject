@@ -20,7 +20,8 @@ import {
   type RecommendResponse,
 } from "@/lib/recommend/recommendResultsViewModel";
 import type { RecommendProfileNormalized } from "@/lib/schemas/recommendProfile";
-import type { SourceStatusRow } from "@/lib/sources/types";
+import type { ProductSourceFreshness, SourceStatusRow } from "@/lib/sources/types";
+import { formatCatalogSourceName } from "@/lib/products/catalogExplorer";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -38,6 +39,11 @@ type Props = {
   onExportCsv: () => void;
   onAddCompare: (unifiedId: string) => void;
 };
+
+function toScorePercent(finalScore: number): number {
+  if (!Number.isFinite(finalScore)) return 0;
+  return Math.min(100, Math.max(0, finalScore * 100));
+}
 
 export function RecommendResultsPanel({
   result,
@@ -70,6 +76,14 @@ export function RecommendResultsPanel({
     }
     return next;
   }, [sourceStatusRows]);
+  const capturedFreshnessMap = useMemo(() => {
+    const next = new Map<string, ProductSourceFreshness>();
+    for (const source of result.meta?.freshness?.sources ?? []) {
+      if (source.kind !== "deposit" && source.kind !== "saving") continue;
+      next.set(buildSourceStatusKey({ sourceId: source.sourceId, kind: source.kind }), source);
+    }
+    return next;
+  }, [result.meta?.freshness?.sources]);
 
   return (
     <div className="space-y-8" data-testid="recommend-results">
@@ -87,7 +101,13 @@ export function RecommendResultsPanel({
         </div>
         <div className="flex items-start gap-3">
           {feedback && (
-            <span className="text-xs font-bold text-primary animate-in fade-in duration-300">{feedback}</span>
+            <span
+              className="text-xs font-bold text-primary animate-in fade-in duration-300"
+              role="status"
+              aria-live="polite"
+            >
+              {feedback}
+            </span>
           )}
           <div className="space-y-2">
             <div className="flex gap-2">
@@ -157,12 +177,20 @@ export function RecommendResultsPanel({
           const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
           const detailProduct = buildDetailProduct(item);
           const detailInitialOption = buildDetailInitialOption(item);
-          const scorePct = Math.min(100, Math.max(0, item.finalScore));
+          const scorePct = toScorePercent(item.finalScore);
+          const capturedSources = (item.sourceIds ?? [item.sourceId])
+            .map((sourceId) => capturedFreshnessMap.get(buildSourceStatusKey({ sourceId, kind: item.kind })))
+            .filter((source): source is NonNullable<typeof source> => Boolean(source));
+          const capturedSource = [...capturedSources].sort((a, b) => {
+            const rank = { unavailable: 0, stale: 1, sample: 2, fresh: 3 } as const;
+            return rank[a.freshness] - rank[b.freshness];
+          })[0] ?? null;
           const freshnessMeta = buildCardFreshnessMeta({
             item,
             meta: result.meta,
-            sourceStatusReady,
+            sourceStatusReady: Boolean(result.meta?.freshness) || sourceStatusReady,
             sourceStatusRow: sourceStatusMap.get(buildSourceStatusKey(item)) ?? null,
+            sourceFreshness: capturedSource,
           });
           const trustCues = buildTrustCues({
             item,
@@ -183,7 +211,7 @@ export function RecommendResultsPanel({
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">매칭 점수</span>
-                  <span className="text-lg font-black text-primary tabular-nums">{item.finalScore.toFixed(2)}</span>
+                  <span className="text-lg font-black text-primary tabular-nums">{scorePct.toFixed(2)}%</span>
                 </div>
               </div>
 
@@ -210,7 +238,15 @@ export function RecommendResultsPanel({
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">점수 세부 분석</p>
                   <span className="text-[10px] font-black text-primary tabular-nums">{Math.round(scorePct)}%</span>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-surface-muted overflow-hidden">
+                <div
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
+                  role="progressbar"
+                  aria-label={`${item.productName} 매칭 점수`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={scorePct}
+                  aria-valuetext={`${scorePct.toFixed(2)}%`}
+                >
                   <CspSafeProgressBar fillClassName="text-primary" value={scorePct} />
                 </div>
               </div>
@@ -250,6 +286,15 @@ export function RecommendResultsPanel({
                           ? `기준 확인 ${formatKoreanDateTime(freshnessMeta.lastSyncedAt)}`
                           : "기준 확인 시각 정보가 아직 없습니다."}
                       </p>
+                    ) : null}
+                    {capturedSources.length > 1 ? (
+                      <ul className="space-y-1 text-[11px] font-bold leading-relaxed text-slate-600">
+                        {capturedSources.map((source) => (
+                          <li key={`${itemKey}-${source.sourceId}-${source.kind}`}>
+                            {formatCatalogSourceName(source.sourceId)} · {source.sourceAsOf ? formatKoreanDateTime(source.sourceAsOf) : "기준 시각 확인 안 됨"}
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                     {freshnessMeta.assumptionNotes.length > 0 ? (
                       <ul className="space-y-2">

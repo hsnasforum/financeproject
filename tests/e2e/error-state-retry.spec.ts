@@ -6,6 +6,37 @@ const canExercisePlanningAuthRequired = (
   && process.env.PLANNING_E2E_DISABLE_AUTH_HEADER === "1"
 );
 
+test("planning keeps corrupt profile reads in the error state after retry and reload", async ({ page }) => {
+  const message = "저장 데이터가 손상되었을 수 있습니다. 기존 파일을 보관하고, 저장 상태를 확인한 후 다시 시도해 주세요.";
+  let reads = 0;
+  let writes = 0;
+  await page.route("**/api/planning/v2/profiles", async route => {
+    if (route.request().method() !== "GET") {
+      writes += 1;
+      await route.abort();
+      return;
+    }
+    reads += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, error: { code: "STORAGE_CORRUPT", message } }),
+    });
+  });
+  await page.goto("/planning");
+  const error = page.getByTestId("planning-profiles-error-state");
+  await expect(error).toContainText(message);
+  await expect(page.getByText("저장된 프로필이 없습니다", { exact: true })).toHaveCount(0);
+  const initialReads = reads;
+  await error.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect.poll(() => reads).toBeGreaterThan(initialReads);
+  await expect(error).toContainText(message);
+  await page.reload();
+  await expect(error).toContainText(message);
+  await expect(error.locator('a[href="/ops/doctor"]')).toHaveCount(0);
+  expect(writes).toBe(0);
+});
+
 test("benefits exposes the default retry action and reruns the failed request", async ({ page }) => {
   let requestCount = 0;
   await page.route("**/api/public/benefits/search?**", async (route) => {

@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import {
   logPruneSummary,
@@ -12,6 +11,8 @@ import {
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
 import { ensureStandaloneRuntimeAssets } from "./standalone_runtime_assets.mjs";
 import { assertPlanningStorageMode } from "./planning_storage_mode_guard.mjs";
+import { verifyPlanningDesktopRuntimeStartup } from "./planning_runtime_startup.mjs";
+import { spawnRegisteredPlanningWriterChild } from "./planning_writer_child.mjs";
 
 const FORCED_HOST = "127.0.0.1";
 const DEFAULT_PORT = 3100;
@@ -29,6 +30,7 @@ function parsePort(value, fallback = DEFAULT_PORT) {
 function parseCliArgs(argv) {
   let overridePort;
   let scanRange = DEFAULT_SCAN_RANGE;
+  let strictPort = false;
   const passthroughArgs = [];
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -53,10 +55,14 @@ function parseCliArgs(argv) {
       }
       continue;
     }
+    if (arg === "--strict-port") {
+      strictPort = true;
+      continue;
+    }
     passthroughArgs.push(arg);
   }
 
-  return { overridePort, scanRange, passthroughArgs };
+  return { overridePort, scanRange, strictPort, passthroughArgs };
 }
 
 function canListen({ host, port, timeoutMs = 1_200 }) {
@@ -111,7 +117,7 @@ function reserveRandomPort(host) {
   });
 }
 
-async function pickPort({ preferredPort, scanRange, host }) {
+async function pickPort({ preferredPort, scanRange, host, strictPort }) {
   let lastError = null;
   for (let offset = 0; offset <= scanRange; offset += 1) {
     const candidate = preferredPort + offset;
@@ -119,8 +125,10 @@ async function pickPort({ preferredPort, scanRange, host }) {
     const listened = await canListen({ host, port: candidate });
     if (listened.ok) return candidate;
     lastError = listened.error;
+    if (strictPort) break;
   }
 
+  if (strictPort) throw lastError ?? new Error(`port ${preferredPort} is unavailable`);
   const randomPort = await reserveRandomPort(host);
   if (typeof randomPort === "number" && randomPort > 0) return randomPort;
   throw lastError ?? new Error("no available port");
@@ -187,7 +195,7 @@ function resolveStandaloneServer(cwd = process.cwd()) {
 }
 
 async function main() {
-  const { overridePort, scanRange, passthroughArgs } = parseCliArgs(process.argv.slice(2));
+  const { overridePort, scanRange, strictPort, passthroughArgs } = parseCliArgs(process.argv.slice(2));
   const standaloneRuntime = resolveStandaloneServer(process.cwd());
   const nextBin = resolveNextBin(process.cwd());
 
@@ -196,6 +204,12 @@ async function main() {
     process.exit(2);
     return;
   }
+
+  await verifyPlanningDesktopRuntimeStartup({
+    cwd: process.cwd(),
+    env: process.env,
+    bindHost: FORCED_HOST,
+  });
 
   if (standaloneRuntime) {
     logPruneSummary(
@@ -226,7 +240,7 @@ async function main() {
   }
 
   const preferredPort = parsePort(overridePort ?? process.env.PORT, DEFAULT_PORT);
-  const port = await pickPort({ preferredPort, scanRange, host: FORCED_HOST });
+  const port = await pickPort({ preferredPort, scanRange, host: FORCED_HOST, strictPort });
 
   const env = sanitizeInheritedColorEnv(process.env);
   delete env.HOSTNAME;
@@ -255,15 +269,25 @@ async function main() {
     console.log(
       `[next_prod_safe] mode=standalone distDir=${standaloneRuntime.distDir} server=${standaloneRuntime.serverPath}`,
     );
-    child = spawn(process.execPath, [standaloneRuntime.serverPath, ...passthroughArgs], {
-      stdio: "inherit",
+    child = await spawnRegisteredPlanningWriterChild({
+      dataRoot: env.PLANNING_WRITER_DATA_ROOT,
+      capability: env.PLANNING_WRITER_LEASE_CAPABILITY,
+      command: process.execPath,
+      args: [standaloneRuntime.serverPath, ...passthroughArgs],
+      cwd: process.cwd(),
       env,
+      detached: false,
     });
   } else {
     console.log(`[next_prod_safe] mode=next-start nextBin=${nextBin}`);
-    child = spawn(process.execPath, [nextBin, "start", "-H", FORCED_HOST, "-p", String(port), ...passthroughArgs], {
-      stdio: "inherit",
+    child = await spawnRegisteredPlanningWriterChild({
+      dataRoot: env.PLANNING_WRITER_DATA_ROOT,
+      capability: env.PLANNING_WRITER_LEASE_CAPABILITY,
+      command: process.execPath,
+      args: [nextBin, "start", "-H", FORCED_HOST, "-p", String(port), ...passthroughArgs],
+      cwd: process.cwd(),
       env,
+      detached: false,
     });
   }
 

@@ -101,6 +101,7 @@ export type RecommendDetailProduct = {
 
 export type RecommendedItem = {
   sourceId: UnifiedSourceId;
+  sourceIds?: UnifiedSourceId[];
   kind: RecommendKind;
   finPrdtCd: string;
   providerName: string;

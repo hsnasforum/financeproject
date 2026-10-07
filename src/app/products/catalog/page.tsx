@@ -281,8 +281,8 @@ export default function ProductsCatalogPage() {
       <div className="sticky top-0 z-30 mb-10 space-y-4">
         <Card className="rounded-[2.5rem] p-8 shadow-lg backdrop-blur-md bg-white/95 border-slate-100">
           <div className="flex flex-col gap-8">
-            <div className="flex flex-wrap items-center justify-between gap-6">
-              <div className="space-y-2">
+            <div className="flex flex-col items-stretch gap-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="w-full space-y-2 sm:w-auto">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">상품군 선택</p>
                 <SegmentedTabs
                   options={[
@@ -294,9 +294,9 @@ export default function ProductsCatalogPage() {
                 />
               </div>
               
-              <div className="flex-1 min-w-[320px] space-y-2">
+              <div className="w-full min-w-0 space-y-2 sm:min-w-[320px] sm:flex-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">키워드 검색</p>
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                   <SearchPill
                     className="h-12 w-full rounded-2xl"
                     placeholder="은행명 또는 상품명으로 비교 후보를 좁혀 보세요"
@@ -305,7 +305,7 @@ export default function ProductsCatalogPage() {
                     onClear={() => setQ("")}
                     isLoading={loading && rows.length === 0}
                   />
-                  <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-navy/20" onClick={() => applySearch()} disabled={loading}>
+                  <Button variant="primary" className="h-12 w-full rounded-2xl px-5 font-black shadow-md shadow-navy/20 sm:w-auto sm:px-8" onClick={() => applySearch()} disabled={loading}>
                     {loading ? "조회 중" : "조건으로 조회"}
                   </Button>
                 </div>
@@ -324,26 +324,30 @@ export default function ProductsCatalogPage() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-8 border-t border-slate-50 pt-6">
-              <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-col items-stretch gap-6 border-t border-slate-50 pt-6 lg:flex-row lg:items-end">
+              <div className="grid w-full min-w-0 gap-4 sm:grid-cols-2 lg:max-w-xl lg:flex-1">
                 <FilterField
                   label="기간"
+                  labelPosition="vertical"
                   unit="개월"
                   placeholder="전체"
                   value={termMonths}
+                  wrapperClassName="w-full min-w-0"
                   onChange={(e) => setTermMonths(e.target.value)}
                 />
 
                 <FilterField
                   label="최소 금리"
+                  labelPosition="vertical"
                   unit="% 이상"
                   placeholder="0.0"
                   value={minRate}
+                  wrapperClassName="w-full min-w-0"
                   onChange={(e) => setMinRate(e.target.value)}
                 />
               </div>
               
-              <div className="ml-auto flex items-center gap-8">
+              <div className="flex w-full flex-wrap items-center justify-between gap-4 lg:ml-auto lg:w-auto lg:justify-end">
                 {samplebankVisible ? (
                   <label className="flex cursor-pointer items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">
                     <input
@@ -436,7 +440,11 @@ export default function ProductsCatalogPage() {
       ) : null}
 
       {compareNotice && (
-        <div className="mb-8 rounded-2xl border border-primary/10 bg-primary/10 p-4 text-center animate-in fade-in slide-in-from-top-2">
+        <div
+          className="mb-8 rounded-2xl border border-primary/10 bg-primary/10 p-4 text-center animate-in fade-in slide-in-from-top-2"
+          role="status"
+          aria-live="polite"
+        >
           <p className="text-sm font-black text-navy">{compareNotice}</p>
           <p className="mt-2 text-[11px] font-medium leading-relaxed text-navy/80">
             지금은 후보를 담아 두는 단계이며, 나란히 다시 보는 일은 비교 화면에서 이어집니다.

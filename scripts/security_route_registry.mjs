@@ -79,6 +79,15 @@ export const CAPABILITY_PROFILES = Object.freeze({
 
 export const EXACT_MUTATION_ROUTES = Object.freeze([
   Object.freeze({
+    id: "authjs-web-protocol",
+    method: "POST",
+    file: "src/app/api/auth/[...nextauth]/route.ts",
+    risk: "high",
+    effect: "auth-protocol",
+    audience: "public-web-authentication",
+    profile: "publicOrigin",
+  }),
+  Object.freeze({
     id: "feedback-public-submit",
     method: "POST",
     file: "src/app/api/feedback/route.ts",
@@ -94,6 +103,60 @@ export const EXACT_MUTATION_ROUTES = Object.freeze([
     risk: "medium",
     effect: "ops-write",
     audience: "signed-local-ops",
+    profile: "signedLocalOps",
+  }),
+  Object.freeze({
+    id: "ops-backup-export",
+    method: "POST",
+    file: "src/app/api/ops/backup/export/route.ts",
+    risk: "medium",
+    effect: "authenticated-ops-backup-export",
+    audience: "authenticated-local-ops",
+    profile: "signedLocalOps",
+  }),
+  Object.freeze({
+    id: "ops-backup-export-finalize",
+    method: "POST",
+    file: "src/app/api/ops/backup/export/finalize/route.ts",
+    risk: "medium",
+    effect: "authenticated-ops-backup-checkpoint",
+    audience: "authenticated-local-ops",
+    profile: "signedLocalOps",
+  }),
+  Object.freeze({
+    id: "settings-backup-export",
+    method: "POST",
+    file: "src/app/api/settings/backup/export/route.ts",
+    risk: "medium",
+    effect: "authenticated-user-backup-export",
+    audience: "authenticated-local-user",
+    profile: "signedLocalOps",
+  }),
+  Object.freeze({
+    id: "settings-backup-export-finalize",
+    method: "POST",
+    file: "src/app/api/settings/backup/export/finalize/route.ts",
+    risk: "medium",
+    effect: "authenticated-user-backup-checkpoint",
+    audience: "authenticated-local-user",
+    profile: "signedLocalOps",
+  }),
+  Object.freeze({
+    id: "settings-backup-preview",
+    method: "POST",
+    file: "src/app/api/settings/backup/preview/route.ts",
+    risk: "medium",
+    effect: "authenticated-user-backup-preview",
+    audience: "authenticated-local-user",
+    profile: "signedLocalOps",
+  }),
+  Object.freeze({
+    id: "settings-backup-restore",
+    method: "POST",
+    file: "src/app/api/settings/backup/restore/route.ts",
+    risk: "high",
+    effect: "authenticated-user-data-restore",
+    audience: "authenticated-local-user",
     profile: "signedLocalOps",
   }),
   Object.freeze({
@@ -200,6 +263,13 @@ export const FAMILY_MUTATION_ROUTES = Object.freeze([
 ]);
 
 export const CAPABILITY_PROVIDERS = Object.freeze([
+  Object.freeze({
+    module: "src/lib/auth/routeHandlers.ts",
+    symbols: Object.freeze(["handleWebAuthPost"]),
+    enforcement: "wrapper",
+    // Auth.js owns CSRF / OAuth state and PKCE validation, not an app same-origin gate.
+    provides: capabilities({ originCsrf: true }),
+  }),
   Object.freeze({
     module: "src/lib/planning/api/routeAuth.ts",
     symbols: Object.freeze(["withPlanningRouteUser"]),

@@ -48,6 +48,8 @@ describe("E2E inventory contract", () => {
     expect(source).toContain("forceIsolatedPlanningData: true");
     expect(source).toContain("env.PORT || portFromBaseUrl(configuredBaseUrl)");
     expect(source).toContain("env = isolated.env");
+    expect(source).toContain("preparePlanningSmokeDatabase");
+    expect(source).toContain("env.DATABASE_URL = smokeDatabase.databaseUrl");
     expect(source).toContain("await isolated.cleanup()");
     expect(pkg.scripts?.e2e).toContain("--workers=1");
     expect(pkg.scripts?.e2e).toContain("--debug-pages");

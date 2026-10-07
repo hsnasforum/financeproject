@@ -92,4 +92,33 @@ test("home savings entry keeps its label, query, active tab, and responsive widt
   expect(new URL(page.url()).searchParams.get("kind")).toBe("saving");
   await expect(page.getByRole("heading", { name: "통합 상품 탐색" })).toBeVisible();
   await expect(page.getByRole("button", { name: "정기적금", exact: true }).locator('span[aria-hidden="true"]')).toHaveCount(1);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const catalogSearch = page.getByPlaceholder("은행명 또는 상품명으로 비교 후보를 좁혀 보세요");
+  const catalogSubmit = page.getByRole("button", { name: "조건으로 조회", exact: true });
+  await expect(catalogSearch).toBeVisible();
+  await expect(catalogSubmit).toBeVisible();
+  expect(await catalogSearch.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(250);
+  expect(await catalogSubmit.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(250);
+  const catalogLayout = await page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const offenders = [...document.querySelectorAll("body *")]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName,
+          className: typeof element.className === "string" ? element.className : "",
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+        };
+      })
+      .filter((entry) => entry.left < -1 || entry.right > viewportWidth + 1)
+      .slice(0, 10);
+    return {
+      clientWidth: viewportWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      offenders,
+    };
+  });
+  expect(catalogLayout.scrollWidth, JSON.stringify(catalogLayout.offenders)).toBeLessThanOrEqual(catalogLayout.clientWidth + 1);
 });

@@ -25,6 +25,7 @@ import {
   applyDepositProtectionOnViews,
   buildStableUnifiedId,
   integrateCanonicalWithMatches,
+  isUnifiedCatalogItemEligible,
   mergeUnifiedCatalogRows,
   stripUnifiedRecentSortAt,
   type DepositProtectionMode,
@@ -1225,8 +1226,11 @@ async function getUnifiedProductsWithLoadersInternal(
     throw new Error("모든 상품 데이터 소스를 불러오지 못했습니다.");
   }
 
+  const eligibleItems = (merged as UnifiedMergeItem[]).filter((item) => (
+    isUnifiedCatalogItemEligible({ item, kind })
+  ));
   const deduped = mergeUnifiedCatalogRows({
-    items: merged,
+    items: eligibleItems,
     sort,
   }) as UnifiedProductView[];
   const protectedItems = kind === "deposit"

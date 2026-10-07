@@ -1,4 +1,5 @@
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { defineConfig } from "@playwright/test";
 import { sanitizePlaywrightColorEnv } from "./scripts/runtime_color_env.mjs";
 
@@ -24,14 +25,20 @@ function parsePortFromBaseUrl(value: string): number | null {
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : parsePortFromBaseUrl(configuredBaseUrl) ?? 3126;
 const baseURL = explicitBaseUrl || `http://127.0.0.1:${PORT}`;
+const webServerMode = (process.env.E2E_WEB_SERVER_MODE || "development").trim().toLowerCase();
+const resolvedWebServerMode = webServerMode === "production" ? "production" : "development";
 const disablePlanningE2EAuthHeader = (process.env.PLANNING_E2E_DISABLE_AUTH_HEADER ?? "").trim() === "1";
 const planningE2EUserId = (
-  disablePlanningE2EAuthHeader
+  disablePlanningE2EAuthHeader || resolvedWebServerMode === "production"
     ? ""
     : (process.env.PLANNING_E2E_USER_ID || (externalBaseUrl ? "" : "playwright-local"))
 ).trim();
-const webServerMode = (process.env.E2E_WEB_SERVER_MODE || "development").trim().toLowerCase();
-const resolvedWebServerMode = webServerMode === "production" ? "production" : "development";
+const desktopSessionToken = resolvedWebServerMode === "production"
+  ? (process.env.PLANNING_E2E_DESKTOP_SESSION_TOKEN || randomBytes(32).toString("base64url"))
+  : "";
+if (desktopSessionToken && !process.env.PLANNING_E2E_DESKTOP_SESSION_TOKEN) {
+  process.env.PLANNING_E2E_DESKTOP_SESSION_TOKEN = desktopSessionToken;
+}
 const headlessFlag = (process.env.PW_HEADLESS || "").trim().toLowerCase();
 const resolvedHeadless = headlessFlag
   ? !(headlessFlag === "0" || headlessFlag === "false" || headlessFlag === "no")
@@ -41,7 +48,7 @@ const playwrightDistDir = resolvedWebServerMode === "production"
   ? ".next"
   : (process.env.PLAYWRIGHT_DIST_DIR || `.next-e2e-${PORT}`).trim();
 const playwrightTsconfigPath = (process.env.PLAYWRIGHT_TSCONFIG_PATH || "tsconfig.playwright.json").trim();
-const playwrightDevHost = (process.env.PLAYWRIGHT_DEV_HOST || "0.0.0.0").trim();
+const playwrightDevHost = (process.env.PLAYWRIGHT_DEV_HOST || "127.0.0.1").trim();
 const playwrightDevCommand = playwrightDevHost
   ? `node scripts/next_dev_safe.mjs --webpack --host ${playwrightDevHost} --port ${PORT} --strict-port`
   : `node scripts/next_dev_safe.mjs --webpack --port ${PORT} --strict-port`;
@@ -76,6 +83,13 @@ function buildWebServerEnv(): Record<string, string> {
     PLANNING_VAULT_CONFIG_PATH: process.env.PLANNING_VAULT_CONFIG_PATH || path.join(e2ePlanningRoot, "security", "vault.json"),
     PLANNING_MIGRATION_STATE_PATH: process.env.PLANNING_MIGRATION_STATE_PATH || path.join(e2ePlanningRoot, "migrations", "migrationState.json"),
     PLANNING_MIGRATION_SNAPSHOT_DIR: process.env.PLANNING_MIGRATION_SNAPSHOT_DIR || path.join(e2ePlanningRoot, "migrations", "snapshots"),
+    ...(resolvedWebServerMode === "production" ? {
+      PLANNING_E2E_DESKTOP_SESSION_TOKEN: desktopSessionToken,
+      PLANNING_SINGLE_USER_MODE: "true",
+      PLANNING_NAMESPACE_ENABLED: "false",
+      PLANNING_TRUST_AUTH_HEADERS: "false",
+      PLANNING_FORWARDED_HEADERS_TRUSTED: "false",
+    } : {}),
     ...(planningE2EUserId ? { PLANNING_TRUST_AUTH_HEADERS: process.env.PLANNING_TRUST_AUTH_HEADERS || "1" } : {}),
     HOSTNAME: process.env.HOSTNAME || "127.0.0.1",
     PORT: String(PORT),
@@ -103,7 +117,11 @@ export default defineConfig({
   use: {
     baseURL,
     ...(typeof resolvedHeadless === "boolean" ? { headless: resolvedHeadless } : {}),
-    ...(planningE2EUserId ? { extraHTTPHeaders: { "x-planning-user-id": planningE2EUserId } } : {}),
+    ...(desktopSessionToken
+      ? { extraHTTPHeaders: { cookie: `planning.desktop-session=${desktopSessionToken}` } }
+      : planningE2EUserId
+        ? { extraHTTPHeaders: { "x-planning-user-id": planningE2EUserId } }
+        : {}),
     trace: "retain-on-failure",
   },
   ...(externalBaseUrl
@@ -111,7 +129,7 @@ export default defineConfig({
     : {
         webServer: {
           command: resolvedWebServerMode === "production"
-            ? `node scripts/next_prod_safe.mjs --port ${PORT}`
+            ? `node scripts/planning_v2_desktop_launch.mjs --runtime prod --port ${PORT} --no-open`
             : playwrightDevCommand,
           url: baseURL,
           reuseExistingServer,

@@ -447,6 +447,7 @@ export function getRecommendAssumptions(rateMode: UserRecommendProfile["rateMode
 
 type RecommendCandidate = {
   sourceId: RecommendedItem["sourceId"];
+  sourceIds?: RecommendedItem["sourceIds"];
   product: NormalizedProduct;
   badges?: string[];
   extraReasons?: string[];
@@ -499,7 +500,7 @@ export function recommendCandidates(input: {
   const rateMin = rates.length ? Math.min(...rates) : 0;
   const rateMax = rates.length ? Math.max(...rates) : 0;
 
-  const scored = candidates.map(({ sourceId, product, badges, extraReasons, selected }) => {
+  const scored = candidates.map(({ sourceId, sourceIds, product, badges, extraReasons, selected }) => {
     const termMonths = selected.termMonths as number;
     const rateScore = normalizeRate(selected.appliedRate, rateMin, rateMax);
     const termFit = clamp01(1 - Math.abs(termMonths - profile.preferredTerm) / 36);
@@ -520,6 +521,7 @@ export function recommendCandidates(input: {
 
     return {
       sourceId,
+      sourceIds: sourceIds ?? [sourceId],
       kind,
       finPrdtCd: product.fin_prdt_cd,
       providerName,

@@ -114,6 +114,12 @@ function toSavedRunProfile(profile: StoredProfile): SavedRunProfile {
   };
 }
 
+function formatStoredPurposeLabel(purpose: StoredProfile["purpose"]): string {
+  if (purpose === "emergency") return "단기 비상금";
+  if (purpose === "long-term") return "장기 저축";
+  return "목돈 마련";
+}
+
 function buildExportRun(
   ownerId: RecommendOwnerId,
   snapshot: RecommendResultSnapshot,
@@ -140,6 +146,8 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   const [formIssues, setFormIssues] = useState<Issue[]>([]);
   const [sourceStatusRows, setSourceStatusRows] = useState<SourceStatusRow[]>([]);
   const [sourceStatusReady, setSourceStatusReady] = useState(false);
+  const [deletedStoredResult, setDeletedStoredResult] = useState<StoredRecommendResult | null>(null);
+  const [recentHistoryNotice, setRecentHistoryNotice] = useState("");
   const [weightNormalizationNotice, setWeightNormalizationNotice] = useState("");
   const lastStoredRef = useRef<StoredRecommendResult | null>(null);
   const autoRunTriggeredRef = useRef(false);
@@ -229,6 +237,8 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
       });
       localStorage.setItem(recommendResultStorageKey(ownerId), JSON.stringify(currStored));
       setLastStored(currStored);
+      setDeletedStoredResult(null);
+      setRecentHistoryNotice("");
       lastStoredRef.current = currStored;
       setResultSnapshot({ profile: resultProfile, response: json });
       setFormIssues([]);
@@ -355,6 +365,19 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
       };
     }
 
+    if (result.meta?.freshness) {
+      sourceStatusAbortRef.current?.abort();
+      let active = true;
+      void Promise.resolve().then(() => {
+        if (!active) return;
+        setSourceStatusRows([]);
+        setSourceStatusReady(true);
+      });
+      return () => {
+        active = false;
+      };
+    }
+
     sourceStatusAbortRef.current?.abort();
     const controller = new AbortController();
     sourceStatusAbortRef.current = controller;
@@ -454,6 +477,44 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
     addCompareIdToStorage(unifiedId, compareStoreConfig.max);
     setFeedback("상품이 비교함에 담겼습니다.");
     setTimeout(() => setFeedback(""), 3000);
+  }
+
+  function deleteRecentHistory() {
+    const stored = parseStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>(
+      ownerId,
+      localStorage.getItem(recommendResultStorageKey(ownerId)),
+    );
+    const ownedStored = stored && isRecommendOwner(ownerId, stored.meta?.userId) ? stored : null;
+    if (!ownedStored) {
+      setLastStored(null);
+      lastStoredRef.current = null;
+      setDeletedStoredResult(null);
+      setRecentHistoryNotice("현재 계정에서 삭제할 최근 추천 결과를 찾지 못했습니다.");
+      return;
+    }
+    setDeletedStoredResult(ownedStored);
+    localStorage.removeItem(recommendResultStorageKey(ownerId));
+    setLastStored(null);
+    lastStoredRef.current = null;
+    setRecentHistoryNotice("현재 계정의 최근 추천 결과를 삭제했습니다. 한 번 되돌릴 수 있습니다.");
+  }
+
+  function undoRecentHistoryDelete() {
+    if (!deletedStoredResult) return;
+    const ownedStored = parseStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>(
+      ownerId,
+      JSON.stringify(deletedStoredResult),
+    );
+    if (!ownedStored || !isRecommendOwner(ownerId, ownedStored.meta?.userId)) {
+      setDeletedStoredResult(null);
+      setRecentHistoryNotice("삭제한 최근 추천 결과의 사용자 정보를 확인하지 못해 복원하지 않았습니다.");
+      return;
+    }
+    localStorage.setItem(recommendResultStorageKey(ownerId), JSON.stringify(ownedStored));
+    setLastStored(ownedStored);
+    lastStoredRef.current = ownedStored;
+    setDeletedStoredResult(null);
+    setRecentHistoryNotice("현재 계정의 최근 추천 결과를 복원했습니다.");
   }
 
   function updateWeight(key: keyof StoredProfile["weights"], value: number) {
@@ -714,16 +775,44 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
         </div>
       )}
 
-      {lastStored && (
+      {(lastStored || deletedStoredResult || recentHistoryNotice) && (
         <Card className="mt-12 rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
+          <div className="mb-6 flex items-center justify-between gap-4">
             <SubSectionHeader title="지난 추천 히스토리" className="mb-0" />
-            <Button size="sm" variant="ghost" className="text-xs text-slate-400 font-bold hover:text-rose-500" onClick={() => {
-              localStorage.removeItem(recommendResultStorageKey(ownerId));
-              setLastStored(null);
-            }}>기록 삭제</Button>
+            {lastStored ? (
+              <Button
+                size="sm"
+                type="button"
+                variant="ghost"
+                className="text-xs text-slate-400 font-bold hover:text-rose-500"
+                onClick={deleteRecentHistory}
+                aria-label={`${formatKoreanDateTime(lastStored.savedAt)} ${formatStoredPurposeLabel(lastStored.profile.purpose)} 최근 추천 결과 삭제`}
+              >
+                기록 삭제
+              </Button>
+            ) : null}
           </div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">마지막 저장일: <span className="text-slate-600 ml-1 tabular-nums">{formatKoreanDateTime(lastStored.savedAt)}</span></p>
+          {lastStored ? (
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              마지막 저장일: <span className="text-slate-600 ml-1 tabular-nums">{formatKoreanDateTime(lastStored.savedAt)}</span>
+            </p>
+          ) : null}
+          {recentHistoryNotice ? (
+            <div role="status" aria-live="polite" className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-primary">
+              <span>{recentHistoryNotice}</span>
+              {deletedStoredResult ? (
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={undoRecentHistoryDelete}
+                  aria-label="최근 추천 결과 삭제 되돌리기"
+                >
+                  되돌리기
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </Card>
       )}
     </PageShell>

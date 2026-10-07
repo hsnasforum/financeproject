@@ -516,7 +516,8 @@ test("Gov24 aborts active status and simple-find requests when the page unmounts
   await expect(page.getByRole("heading", { name: "보조금24" })).toHaveCount(0);
 });
 
-test("Gov24 ignores stale status and search responses that resolve after newer requests", async ({ page }) => {
+for (const staleStatusResponse of ["success", "error"] as const) {
+test(`Gov24 ignores stale ${staleStatusResponse} status and search responses that resolve after newer requests`, async ({ page }) => {
   await installControlledGov24Timer(page);
   await page.addInitScript(() => {
     type Resolver = (response: Response) => void;
@@ -618,14 +619,18 @@ test("Gov24 ignores stale status and search responses that resolve after newer r
   await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
   await expect(page.getByText("333건", { exact: true }).first()).toBeVisible();
 
-  await page.evaluate(() => (
-    window as typeof window & {
+  await page.evaluate((responseKind) => {
+    const deferredWindow = window as typeof window & {
       __resolveGov24StatusError: (requestNumber: number) => void;
-    }
-  ).__resolveGov24StatusError(2));
+      __resolveGov24Status: (requestNumber: number, state: "ready" | "syncing", total: number) => void;
+    };
+    if (responseKind === "success") deferredWindow.__resolveGov24Status(2, "syncing", 222);
+    else deferredWindow.__resolveGov24StatusError(2);
+  }, staleStatusResponse);
   await settleFrame();
   await expect(page.getByText("기준 데이터 확인됨", { exact: true })).toBeVisible();
   await expect(page.getByText("333건", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("222건", { exact: true })).toHaveCount(0);
   await expect(page.getByTestId("gov24-status-retrying")).toHaveCount(0);
   await expect(page.getByTestId("gov24-status-failed")).toHaveCount(0);
   await expect.poll(() => gov24TimerCount(page)).toBe(0);
@@ -651,3 +656,4 @@ test("Gov24 ignores stale status and search responses that resolve after newer r
   await expect(page.getByText("최신 혜택", { exact: true })).toBeVisible();
   await expect(page.getByText("오래된 혜택", { exact: true })).toHaveCount(0);
 });
+}

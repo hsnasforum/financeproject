@@ -1,5 +1,8 @@
 import { HousingAffordClient } from "@/components/HousingAffordClient";
 import { parseAffordInit } from "@/lib/housing/affordQuery";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/housing/afford"];
 
 type AffordPageSearchParams = {
   incomeNet?: string | string[];

@@ -11,10 +11,12 @@ import type {
 } from "@/lib/recommend/types";
 import type { RecommendProfileNormalized } from "@/lib/schemas/recommendProfile";
 import type { SourceStatusRow } from "@/lib/sources/types";
+import type { ProductFreshnessSummary, ProductSourceFreshness } from "@/lib/sources/types";
 
 export type RecommendItem = {
   unifiedId: string;
   sourceId: string;
+  sourceIds?: string[];
   kind: "deposit" | "saving";
   finPrdtCd: string;
   providerName: string;
@@ -84,6 +86,7 @@ export type RecommendResponse = {
       stageInference?: RecommendPlanningHandoff["summary"]["stage"] | "disabled";
       inferenceSource?: "planning-summary" | "planning-context" | "none";
     };
+    freshness?: ProductFreshnessSummary;
   };
   message?: string;
   items?: RecommendItem[];
@@ -365,15 +368,6 @@ export function formatFreshnessStatusLabel(status: RecommendFreshnessStatus): st
   }
 }
 
-function formatFallbackModeLabel(mode?: string | null): string | null {
-  if (!mode) return null;
-  const normalized = mode.trim().toUpperCase();
-  if (normalized === "CACHE") return "캐시 기준";
-  if (normalized === "REPLAY") return "재생 데이터 기준";
-  if (normalized === "MOCK") return "예시 데이터 기준";
-  return `${mode} 기준`;
-}
-
 function buildAssumptionNotes(
   item: RecommendItem,
   meta: RecommendResponse["meta"] | undefined,
@@ -397,12 +391,25 @@ export function buildCardFreshnessMeta(input: {
   meta: RecommendResponse["meta"] | undefined;
   sourceStatusReady: boolean;
   sourceStatusRow: SourceStatusRow | null;
+  sourceFreshness?: ProductSourceFreshness | null;
 }): RecommendCardFreshnessMeta | null {
-  const { item, meta, sourceStatusReady, sourceStatusRow } = input;
-  const fallbackMode = formatFallbackModeLabel(meta?.fallback?.mode);
+  const { item, meta, sourceStatusReady, sourceStatusRow, sourceFreshness } = input;
+  const fallbackMode = sourceFreshness?.fallbackUsed
+    ? (sourceFreshness.freshness === "sample" ? "예시 데이터 기준" : "대체 데이터 기준")
+    : null;
   const assumptionNotes = buildAssumptionNotes(item, meta);
-  const freshnessStatus = sourceStatusReady ? deriveFreshnessStatus(sourceStatusRow) : undefined;
-  const lastSyncedAt = sourceStatusReady ? sourceStatusRow?.lastSyncedAt ?? null : undefined;
+  const freshnessStatus = sourceFreshness
+    ? sourceFreshness.freshness === "fresh"
+      ? "ok"
+      : sourceFreshness.freshness === "stale"
+        ? "stale"
+        : sourceFreshness.freshness === "unavailable"
+          ? "error"
+          : "empty"
+    : sourceStatusReady ? deriveFreshnessStatus(sourceStatusRow) : undefined;
+  const lastSyncedAt = sourceFreshness
+    ? sourceFreshness.sourceAsOf
+    : sourceStatusReady ? sourceStatusRow?.lastSyncedAt ?? null : undefined;
 
   if (!sourceStatusReady && !fallbackMode && assumptionNotes.length === 0) return null;
 

@@ -2,7 +2,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
+import { randomBytes } from "node:crypto";
+import {
+  createIsolatedPlanningV2E2EOptions,
+  createPlanningDesktopE2EEnvironment,
+} from "./planning_v2_e2e_isolation.mjs";
+import { preparePlanningSmokeDatabase } from "./planning_smoke_database.mjs";
 import { sanitizePlaywrightColorEnv } from "./runtime_color_env.mjs";
 
 const commandCandidates = process.platform === "win32"
@@ -61,12 +66,14 @@ function setRuntime(value) {
     process.exit(1);
   }
   env.E2E_WEB_SERVER_MODE = normalized;
-  if (
-    normalized === "production"
-    && !String(env.PLANNING_NAMESPACE_ENABLED ?? "").trim()
-    && !String(env.PLANNING_SINGLE_USER_MODE ?? "").trim()
-  ) {
-    env.PLANNING_NAMESPACE_ENABLED = "true";
+  if (normalized === "production") {
+    env.PLANNING_E2E_DESKTOP_SESSION_TOKEN = String(
+      env.PLANNING_E2E_DESKTOP_SESSION_TOKEN || randomBytes(32).toString("base64url"),
+    );
+    env.PLANNING_SINGLE_USER_MODE = "true";
+    env.PLANNING_NAMESPACE_ENABLED = "false";
+    env.PLANNING_TRUST_AUTH_HEADERS = "false";
+    env.PLANNING_FORWARDED_HEADERS_TRUSTED = "false";
   }
 }
 
@@ -136,6 +143,23 @@ const isolated = await createIsolatedPlanningV2E2EOptions(env, {
   forceIsolatedPlanningData: true,
 });
 env = isolated.env;
+if (env.E2E_WEB_SERVER_MODE === "production") {
+  try {
+    const smokeDatabase = await preparePlanningSmokeDatabase({
+      appDir: process.cwd(),
+      databasePath: path.join(path.dirname(isolated.planningDataDir), "database", "finance.db"),
+    });
+    env = createPlanningDesktopE2EEnvironment(env, {
+      databaseUrl: smokeDatabase.databaseUrl,
+      planningDataDir: isolated.planningDataDir,
+      sessionToken: env.PLANNING_E2E_DESKTOP_SESSION_TOKEN,
+    });
+    env.DATABASE_URL = smokeDatabase.databaseUrl;
+  } catch (error) {
+    await isolated.cleanup();
+    throw error;
+  }
+}
 console.log(
   `[playwright_with_webserver_debug] isolated port=${isolated.port} distDir=${isolated.distDir} planningDataDir=${isolated.planningDataDir}`,
 );

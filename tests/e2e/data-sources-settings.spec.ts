@@ -11,6 +11,11 @@ test("data sources page shows readonly health and reflects recent ping result in
 
   await page.goto("/settings/data-sources");
 
+  await expect(page.getByTestId("data-source-overview")).toBeVisible({ timeout: 30_000 });
+
+  const impactDisclosure = page.getByTestId("data-source-disclosure-impact");
+  await impactDisclosure.locator(":scope > summary").click();
+
   const dartHealthBlock = page.getByTestId("data-source-impact-health-dart");
   await expect(dartHealthBlock).toBeVisible({ timeout: 30_000 });
   await expect(dartHealthBlock).toContainText("운영 최신 기준", { timeout: 30_000 });
@@ -22,6 +27,8 @@ test("data sources page shows readonly health and reflects recent ping result in
   await expect(planningHealthBlock).toContainText("운영 최신 기준", { timeout: 30_000 });
   await expect(planningHealthBlock).toContainText(/최신 동기화|최신 스냅샷 없음|스냅샷 읽기 실패/, { timeout: 30_000 });
 
+  const operationsDisclosure = page.getByTestId("data-source-disclosure-operations");
+  await operationsDisclosure.locator(":scope > summary").click();
   const dartMetaBlock = page.getByTestId("data-source-impact-meta-dart");
   if (await dartMetaBlock.isVisible().catch(() => false)) {
     await expect(dartMetaBlock).toContainText("health API 집계", { timeout: 30_000 });
@@ -33,6 +40,8 @@ test("data sources page shows readonly health and reflects recent ping result in
   const housingRecentBlock = page.getByTestId("data-source-impact-ping-housing");
   await expect(housingRecentBlock).toContainText("아직 최근 연결 확인이 없습니다", { timeout: 30_000 });
 
+  const primaryDisclosure = page.getByTestId("data-source-disclosure-primary");
+  await primaryDisclosure.locator(":scope > summary").click();
   const salesCard = page.getByTestId("data-source-card-MOLIT_SALES");
   await salesCard.getByRole("button", { name: "연결 테스트" }).click();
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { LoadingState } from "@/components/ui/LoadingState";
 
@@ -149,9 +149,7 @@ export function VaultLockScreenClient({ scope }: VaultLockScreenClientProps) {
               암호 설정 후 시작
             </Button>
           )}
-          <Link href="/ops/security">
-            <Button size="sm" type="button" variant="outline">보안 설정 화면</Button>
-          </Link>
+          <ButtonLink href="/ops/security" size="sm" variant="outline">보안 설정 화면</ButtonLink>
         </div>
       </Card>
     </div>

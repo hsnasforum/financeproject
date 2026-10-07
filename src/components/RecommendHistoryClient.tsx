@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -19,6 +19,7 @@ import {
   exportRunJson,
   listRuns,
   removeRun,
+  saveRun,
   type SavedRecommendRun,
   type SavedRunItem,
 } from "@/lib/recommend/savedRunsStore";
@@ -233,6 +234,7 @@ export function RecommendHistoryClient({
   const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
   const [compareTopN, setCompareTopN] = useState<2 | 3 | 4>(3);
   const [notice, setNotice] = useState("");
+  const [undoRuns, setUndoRuns] = useState<SavedRecommendRun[] | null>(null);
 
   const activeRun = useMemo(() => runs.find((run) => run.runId === activeRunId) ?? runs[0] ?? null, [activeRunId, runs]);
 
@@ -270,15 +272,31 @@ export function RecommendHistoryClient({
   }
 
   function removeOne(runId: string) {
+    const snapshot = listRuns(ownerId);
+    const removedRun = snapshot.find((run) => run.runId === runId);
+    if (!removedRun) return;
+    setUndoRuns([removedRun]);
     removeRun(ownerId, runId);
     refresh();
-    setNotice("실행 기록을 삭제했습니다.");
+    setNotice(`${formatDateTime(removedRun.savedAt)} ${formatPurposeLabel(removedRun.profile.purpose)} 추천 기록을 삭제했습니다.`);
   }
 
   function clearAll() {
+    const snapshot = listRuns(ownerId);
+    if (snapshot.length === 0) return;
+    setUndoRuns(snapshot);
     clearRuns(ownerId);
     refresh();
-    setNotice("모든 실행 기록을 삭제했습니다.");
+    setNotice(`현재 계정의 추천 기록 ${snapshot.length}건을 모두 삭제했습니다.`);
+  }
+
+  function undoLastDelete() {
+    if (!undoRuns) return;
+    for (const run of undoRuns) saveRun(ownerId, run);
+    const restoredCount = undoRuns.length;
+    setUndoRuns(null);
+    refresh();
+    setNotice(`마지막 삭제를 되돌려 현재 계정의 추천 기록 ${restoredCount}건을 복원했습니다.`);
   }
 
   function exportOneJson(run: SavedRecommendRun) {
@@ -312,9 +330,7 @@ export function RecommendHistoryClient({
           title="추천 비교 기록"
           description="저장해 둔 추천 결과를 다시 읽고, 필요할 때만 다음 비교나 플래닝 근거 확인으로 이어 가는 기록 화면입니다."
           action={
-            <Link href="/recommend">
-              <Button variant="primary" className="rounded-full">새 추천 비교 열기</Button>
-            </Link>
+            <ButtonLink href="/recommend" variant="primary" className="rounded-full">새 추천 비교 열기</ButtonLink>
           }
         />
 
@@ -330,10 +346,11 @@ export function RecommendHistoryClient({
                 size="sm"
                 onClick={clearAll}
                 disabled={runs.length === 0}
+                aria-label="현재 계정의 추천 기록 전체 삭제"
                 variant="outline"
                 className="rounded-xl h-9 border-rose-200 text-rose-700 hover:bg-rose-50 font-bold"
               >
-                전체 삭제
+                현재 계정 기록 전체 삭제
               </Button>
             </div>
             <div className="flex items-center gap-3">
@@ -344,7 +361,27 @@ export function RecommendHistoryClient({
           <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">
             이 기록은 확정 답안을 저장하는 곳이 아니라, 조건이나 시점을 바꿔 다시 본 결과를 비교해 보는 용도입니다.
           </p>
-          {notice ? <p className="mt-4 text-xs font-bold text-primary bg-primary/5 px-3 py-2 rounded-lg inline-block">{notice}</p> : null}
+          {notice ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-primary/5 px-3 py-2 text-xs font-bold text-primary"
+            >
+              <span>{notice}</span>
+              {undoRuns ? (
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  className="h-8 bg-white px-3 text-[11px]"
+                  onClick={undoLastDelete}
+                  aria-label="마지막 추천 기록 삭제 되돌리기"
+                >
+                  되돌리기
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </Card>
 
         <section className="grid gap-6 lg:grid-cols-2">
@@ -364,6 +401,7 @@ export function RecommendHistoryClient({
                 {runs.map((run) => {
                   const selected = selectedRunIds.includes(run.runId);
                   const active = activeRun?.runId === run.runId;
+                  const accessibleRunLabel = `${formatDateTime(run.savedAt)} ${formatPurposeLabel(run.profile.purpose)} 추천 기록`;
                   const planningRunId = run.profile.planning?.runId?.trim() ?? "";
                   let planningReportHref = "";
                   if (planningRunId) {
@@ -386,14 +424,29 @@ export function RecommendHistoryClient({
                               className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                               checked={selected}
                               onChange={() => toggleRunSelection(run.runId)}
+                              aria-label={`${accessibleRunLabel} 비교 선택`}
                             />
                             비교 선택
                           </label>
                           <div className="flex items-center gap-1">
-                            <Button size="sm" type="button" onClick={() => setActiveRunId(run.runId)} variant="ghost" className="h-7 text-[11px] font-bold">
+                            <Button
+                              size="sm"
+                              type="button"
+                              onClick={() => setActiveRunId(run.runId)}
+                              variant="ghost"
+                              className="h-7 text-[11px] font-bold"
+                              aria-label={`${accessibleRunLabel} 상세 열기`}
+                            >
                               상세 열기
                             </Button>
-                            <Button size="sm" type="button" onClick={() => removeOne(run.runId)} variant="ghost" className="h-7 text-[11px] font-bold text-rose-600 hover:bg-rose-50">
+                            <Button
+                              size="sm"
+                              type="button"
+                              onClick={() => removeOne(run.runId)}
+                              variant="ghost"
+                              className="h-7 text-[11px] font-bold text-rose-600 hover:bg-rose-50"
+                              aria-label={`${accessibleRunLabel} 삭제`}
+                            >
                               삭제
                             </Button>
                           </div>
@@ -528,15 +581,14 @@ export function RecommendHistoryClient({
                         상위 {compareTopN}개 비교 후보 담기
                       </Button>
                       {activePlanningRunId ? (
-                        <Link href={activePlanningReportHref}>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl h-9 px-4 font-black border-white/30 bg-white/10 text-white hover:bg-white/20"
-                          >
-                            저장 당시 플래닝 보기
-                          </Button>
-                        </Link>
+                        <ButtonLink
+                          href={activePlanningReportHref}
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl h-9 px-4 font-black border-white/30 bg-white/10 text-white hover:bg-white/20"
+                        >
+                          저장 당시 플래닝 보기
+                        </ButtonLink>
                       ) : null}
                     </div>
                   </div>
@@ -605,23 +657,28 @@ export function RecommendHistoryClient({
             />
           ) : (
             <div className="space-y-8">
-              <div className="rounded-[2rem] bg-primary/10 p-8 border border-primary/10 flex flex-wrap items-end justify-between gap-6">
+              <div
+                className="grid gap-6 rounded-[2rem] border border-primary/10 bg-primary/10 p-5 sm:p-8 xl:grid-cols-[1fr_auto] xl:items-end"
+                data-testid="recommend-history-compare-summary"
+              >
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2">Comparison Analysis</p>
-                  <h3 className="text-xl font-black text-navy tracking-tight">
-                    {formatDateTime(diff.previous.savedAt)} <span className="mx-2 text-primary/30">→</span> {formatDateTime(diff.current.savedAt)}
+                  <h3 className="grid gap-1 text-lg font-black tracking-tight text-navy sm:text-xl md:grid-cols-[1fr_auto_1fr] md:items-center">
+                    <span className="break-words">{formatDateTime(diff.previous.savedAt)}</span>
+                    <span className="text-primary/30" aria-hidden="true">→</span>
+                    <span className="break-words">{formatDateTime(diff.current.savedAt)}</span>
                   </h3>
                 </div>
-                <div className="flex gap-4">
-                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-primary/10 min-w-[100px]">
+                <div className="grid w-full grid-cols-3 gap-2 sm:gap-4 xl:w-auto">
+                  <div className="rounded-2xl border border-primary/10 bg-white px-2 py-3 text-center shadow-sm sm:px-6">
                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">변경</p>
                     <p className="text-lg font-black text-primary">{diff.changed.length}<span className="text-xs ml-0.5">건</span></p>
                   </div>
-                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-primary/10 min-w-[100px]">
+                  <div className="rounded-2xl border border-primary/10 bg-white px-2 py-3 text-center shadow-sm sm:px-6">
                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">신규</p>
                     <p className="text-lg font-black text-primary">{diff.added.length}<span className="text-xs ml-0.5">건</span></p>
                   </div>
-                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-primary/10 min-w-[100px]">
+                  <div className="rounded-2xl border border-primary/10 bg-white px-2 py-3 text-center shadow-sm sm:px-6">
                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">제외</p>
                     <p className="text-lg font-black text-slate-400">{diff.removed.length}<span className="text-xs ml-0.5">건</span></p>
                   </div>

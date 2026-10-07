@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { isDebugEnabled, makeHttpError } from "../../../../../lib/http/apiError";
 import { isSamplebankProductId, isSamplebankPublicAccessAllowed } from "@/lib/products/samplebankPolicy";
 import { getUnifiedProductById, UnifiedInputError } from "@/lib/sources/unified";
+import { getProductFreshnessSummary } from "@/lib/sources/productFreshness";
+import type { UnifiedKind, UnifiedSourceId } from "@/lib/sources/types";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -53,6 +55,14 @@ export async function GET(request: Request) {
     }
 
     const generatedAt = new Date().toISOString();
+    const sourceIds = (item.sourceIds ?? [item.sourceId]).filter(
+      (sourceId): sourceId is UnifiedSourceId => sourceId === "finlife" || sourceId === "datago_kdb" || sourceId === "samplebank",
+    );
+    const freshness = await getProductFreshnessSummary({
+      kind: item.kind as UnifiedKind,
+      sourceIds,
+      checkedAt: generatedAt,
+    });
     return NextResponse.json({
       ok: true,
       data: {
@@ -60,6 +70,7 @@ export async function GET(request: Request) {
       },
       meta: {
         generatedAt,
+        freshness,
       },
     });
   } catch (error) {

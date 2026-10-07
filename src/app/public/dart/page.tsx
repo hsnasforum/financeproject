@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import { DartSearchClient } from "@/components/DartSearchClient";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/public/dart"];
 
 export default function DartPublicPage() {
   return (

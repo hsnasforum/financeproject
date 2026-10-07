@@ -1,5 +1,8 @@
 import { headers } from "next/headers";
 import { ProductListPage } from "@/components/ProductListPage";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/products/rent-house-loan"];
 
 export default async function RentHouseLoanProductsPage({
   searchParams,

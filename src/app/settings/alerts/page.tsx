@@ -1,6 +1,9 @@
 import { AlertRulesClient } from "@/components/AlertRulesClient";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+
+export const metadata = PUBLIC_PAGE_METADATA["/settings/alerts"];
 
 export default function AlertSettingsPage() {
   return (

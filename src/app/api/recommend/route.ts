@@ -21,6 +21,8 @@ import { getUnifiedProducts } from "@/lib/sources/unified";
 import { pushError } from "../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../lib/observability/trace";
 import { buildPublicDiagnosticMeta, logPublicApiDiagnostic, publicErrorMessage } from "@/lib/http/publicApiDiagnostics";
+import { applyProductSourceIssues, getProductFreshnessSummary } from "@/lib/sources/productFreshness";
+import type { ProductFreshnessSummary } from "@/lib/sources/types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -85,7 +87,7 @@ function withRecommendGuard(request: Request) {
 async function loadUnifiedCandidates(input: {
   kind: "deposit" | "saving";
   profile: UserRecommendProfile;
-}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
+}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string>; freshness: ProductFreshnessSummary }> {
   const sourceSet = new Set(input.profile.candidateSources ?? ["finlife", "datago_kdb"]);
   if (sourceSet.size === 0) sourceSet.add("finlife");
 
@@ -118,6 +120,11 @@ async function loadUnifiedCandidates(input: {
       rateMode: input.profile.rateMode,
     },
   });
+  const freshness = applyProductSourceIssues(await getProductFreshnessSummary({
+    kind: input.kind,
+    sourceIds: includeSources,
+  }), unified.sourceIssues);
+
   return {
     candidates: adapted.map((candidate) => ({
       sourceId: candidate.sourceId,
@@ -130,13 +137,14 @@ async function loadUnifiedCandidates(input: {
         .filter((candidate) => candidate.matchedDepositProtection)
         .map((candidate) => candidate.product.fin_prdt_cd),
     ),
+    freshness,
   };
 }
 
 async function getCandidates(input: {
   kind: "deposit" | "saving";
   profile: UserRecommendProfile;
-}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
+}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string>; freshness: ProductFreshnessSummary }> {
   return loadUnifiedCandidates({
     kind: input.kind,
     profile: input.profile,
@@ -239,6 +247,7 @@ export async function POST(request: Request) {
               planning: profile.planning ?? null,
               planningContext: profile.planningContext ?? null,
               planningLinkage,
+              freshness: candidateBundle.freshness,
               weights: profile.weights,
               weightNormalization,
               assumptions: {
@@ -306,6 +315,7 @@ export async function POST(request: Request) {
             planning: profile.planning ?? null,
             planningContext: profile.planningContext ?? null,
             planningLinkage,
+            freshness: candidateBundle.freshness,
             weights: recommendedBase.weights,
             weightNormalization,
             assumptions: {

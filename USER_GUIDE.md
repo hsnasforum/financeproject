@@ -1,127 +1,92 @@
-# USER GUIDE (5-minute start)
+# 사용자 가이드 — 5분 시작
 
-## 1) What this app does
-This app is a local-first finance workspace.
+## 1. 이 앱에서 할 수 있는 일
 
-Main use in `planning/v3`:
-- News digest/trends/scenarios from RSS-based pipeline
-- Indicator refresh/storage and scenario linkage
-- Exposure profile input (manual, explicit save)
-- Journal entries for decision notes
-- Local backup/restore/doctor/trim/migrate tools for `.data/**`
+Finance Project는 개인용 로컬 재무설계 워크스페이스입니다.
 
-Notes:
-- Data is stored locally under `.data/**`.
-- Some write APIs are local-only and CSRF-protected.
+- 현재 소득·지출·자산·부채를 입력해 참고 지표와 시나리오를 비교합니다.
+- 예금·적금 후보를 기간과 금리 조건으로 좁혀 봅니다.
+- 공공데이터와 DART 공시를 확인하고 데이터 기준일을 함께 점검합니다.
+- 결과는 확정 추천이나 투자·세무 자문이 아니라 현재 입력과 가정에 따른 참고 자료입니다.
 
-## 2) 5-minute start
-1. Install and run:
+공식 사용자 진입점은 `/planning`입니다. `/planning/v3/*`, `/ops/*`, `/dev/*`, `/debug/*`는 개발·운영·실험용 경로이며 일반 사용 시작 경로가 아닙니다.
+
+## 2. 5분 시작
+
+1. 의존성과 로컬 설정을 준비합니다.
+
 ```bash
 pnpm install
+cp .env.local.example .env.local
 pnpm dev
 ```
-2. Open local app:
-- `http://localhost:3100/planning/v3/start`
-3. Initialize core data:
-```bash
-pnpm news:refresh
-pnpm indicators:refresh
-```
-4. Open key pages:
-- News today: `http://localhost:3100/planning/v3/news`
-- News trends: `http://localhost:3100/planning/v3/news/trends`
-- Exposure profile: `http://localhost:3100/planning/v3/exposure`
-- Journal: `http://localhost:3100/planning/v3/journal`
 
-## 3) Pages overview (planning v3)
-- `/planning/v3/start`
-  - First-run checklist (read-only status)
-  - Verifies cache/profile/journal presence
-- `/planning/v3/news`
-  - Today digest + scenarios
-  - Manual refresh entry point
-- `/planning/v3/news/trends`
-  - Topic trends table view
-- `/planning/v3/news/explore`
-  - Search/filter view for recent items
-- `/planning/v3/news/alerts`
-  - Local alert inbox
-- `/planning/v3/news/settings`
-  - News source/topic override settings (explicit save)
-- `/planning/v3/exposure`
-  - Personal exposure profile (explicit save)
-- `/planning/v3/journal`
-  - Journal CRUD for observations/assumptions/options
+2. 브라우저에서 아래 주소를 엽니다.
 
-## 4) Backup and restore
-### Backup export
-Create a zip archive of v3 local data:
+- 홈: `http://localhost:3100`
+- 재무 설계: `http://localhost:3100/planning`
+
+3. `/planning`의 `간단 시작`에서 월 실수령, 고정지출, 목표를 입력합니다. 입력한 목표만 진단에 반영되며, 아래 목표 목록에서 추가·수정·삭제할 수 있습니다. 목표를 모두 삭제해 저장하면 다시 열어도 빈 목록이 유지됩니다.
+
+4. 미리보기를 확인한 뒤 프로필을 저장하고 첫 계산을 실행합니다.
+
+5. 저장된 결과는 `/planning/runs`와 `/planning/reports`에서 다시 확인합니다.
+
+설치형 production 앱은 `pnpm build` 후 `pnpm start`로 실행합니다. 기본 브라우저가
+자동으로 열리며, 현재 지원 범위는 같은 장치의 `127.0.0.1` Desktop Local 한
+사용자 모드입니다.
+
+## 3. 주요 사용자 화면
+
+- `/dashboard`: 최근 플랜, 비교 후보, 데이터 상태 요약
+- `/planning`: 프로필 입력, 시나리오 계산, 실행 기록 저장
+- `/recommend`: 저장된 플랜을 바탕으로 비교 후보 탐색
+- `/products/catalog`: 예금·적금 통합 상품 탐색
+- `/public/dart`: 기업 검색과 DART 공시 확인
+- `/settings/data-sources`: 데이터 연결 여부와 기준일 확인
+- `/settings/backup`: 현재 사용자의 재무설계 기록 암호화 백업·복원과 브라우저 화면 설정 백업
+- `/settings/recovery`: 브라우저 화면 설정 초기화와 복구 경로 안내
+
+## 4. 데이터와 백업
+
+- 개인 재무 데이터는 로컬 저장소와 사용자 범위 안에서 관리됩니다.
+- 데이터 소스가 설정됐더라도 최근 확인 기록이나 기준일이 없으면 `연결됨` 또는 `최신`으로 간주하지 않습니다.
+- 외부 데이터가 없거나 오래됐을 때도 입력·저장 흐름은 유지되지만, 해당 데이터는 핵심 판단 근거로 사용하지 마세요.
+- 업데이트 전에는 `/settings/backup`에서 전체 암호화 백업을 내려받아 보관하세요. 여기에는 현재 사용자의 프로필·실행 기록과 Planning v3 계좌·거래·분류 데이터가 포함되고, 공용 가정·운영 정책과 브라우저 화면 설정은 포함되지 않습니다.
+- 다운로드가 시작된 뒤 실제 파일이 저장됐는지 확인하고 `파일 저장을 확인했습니다`를 눌러 주세요. 이 확인 전에는 변경분 백업의 기준 시점이 이동하지 않아 같은 내용이 다음 변경분 백업에 다시 포함될 수 있습니다.
+- 복원은 같은 파일과 암호로 미리보기를 확인한 뒤에만 실행됩니다. `merge`는 현재 기록을 유지하지만 Planning v3 데이터는 건너뛰며, Planning v3까지 백업 시점으로 되돌리려면 미리보기 범위를 확인한 후 `replace`를 선택해야 합니다.
+- 백업 암호를 잊으면 파일을 복원할 수 없습니다. 백업 파일과 암호를 같은 위치에 보관하지 마세요.
+
+개발·운영용 v3 데이터 보관 명령은 아래와 같습니다.
+
 ```bash
 pnpm v3:export
-```
-Optional output path:
-```bash
-pnpm v3:export -- --out=.data/exports/my-v3-backup.zip
-```
-
-### Restore validation (preview only)
-Preview/validate archive structure and schemas:
-```bash
 pnpm v3:restore -- --in=.data/exports/v3-data-backup-YYYYMMDDHHMMSS.zip
-```
-
-Restore apply is temporarily disabled and exits with `V3_RESTORE_APPLY_DISABLED` until owner-aware staging, checksums, and rollback are implemented. Do not bypass this protection by manually renaming or copying `.data` or `PLANNING_DATA_DIR`.
-
-### Health check and maintenance
-```bash
-pnpm v3:doctor
-pnpm v3:trim            # preview
-pnpm v3:trim -- --apply # apply retention trim
-pnpm v3:migrate         # preview
-pnpm v3:migrate -- --apply
-```
-
-## 5) Troubleshooting
-### A) `403` on planning v3 APIs
-Common cause:
-- Accessing from non-local host, or missing same-origin/CSRF requirements on write routes.
-
-Check:
-- Use `http://localhost:3100` or `http://127.0.0.1:3100`.
-- WSL에서 dev 서버가 `Bind: host=::`로 시작되면 `http://[::1]:3100`도 같은 로컬 경로입니다.
-- Windows 브라우저에서 localhost forwarding이 막히면 터미널의 `Open (LAN)` URL을 사용합니다.
-- Trigger write actions from app UI (not cross-origin clients).
-
-### B) News page shows no data
-Run refresh first:
-```bash
-pnpm news:refresh
-```
-Then reload:
-- `/planning/v3/start`
-- `/planning/v3/news`
-
-### C) Indicator-based fields show `Unknown`
-Common cause:
-- Indicator series not refreshed yet, or insufficient history.
-
-Run:
-```bash
-pnpm indicators:refresh
-```
-
-### D) Refresh/CLI exits with error
-Run doctor to identify invalid local files:
-```bash
 pnpm v3:doctor
 ```
-If needed, restore from backup archive (dry-run first).
 
-### E) Build issues before deploy
+위 개발·운영용 `v3:restore --apply`는 현재 `V3_RESTORE_APPLY_DISABLED`로 차단되어 있습니다. 사용자 화면의 암호화 백업 v2 복원은 별도의 현재 사용자 owner whitelist와 rollback 경계를 사용합니다. `.data` 또는 `PLANNING_DATA_DIR`을 직접 복사하거나 이름을 바꿔 우회하지 마세요.
+
+## 5. 문제 해결
+
+### 로그인이 필요하다고 표시되는 경우
+
+- Desktop Local production에서는 앱을 `pnpm start` 또는 설치 바로가기로 실행해야 합니다. URL만 직접 열거나 `next_prod_safe.mjs`를 직접 실행하면 세션이 만들어지지 않습니다.
+- 브라우저 cookie를 지웠거나 다른 브라우저 프로필에서 기존 instance를 열었다면, 실행 중인 상태에서 `pnpm start` 또는 설치 바로가기를 한 번 더 실행합니다. 기존 앱의 로컬 broker가 새 one-shot session을 발급하며 앱을 종료할 필요는 없습니다.
+- 개인 로컬 실행은 `127.0.0.1` loopback 주소를 사용합니다. `dev:lan`, 원격 주소, reverse proxy에서는 Desktop Local session을 사용하지 않습니다.
+
+### 데이터가 없거나 오래됐다고 표시되는 경우
+
+- `/settings/data-sources`에서 `설정됨`, `최근 확인 없음`, `오래됨`, `확인 실패` 상태를 구분해 확인합니다.
+- DART 기업 인덱스와 상품 데이터는 표시된 기준일을 확인한 뒤 사용합니다.
+- 일부 소스가 실패해도 다른 검색과 저장 기능은 계속 사용할 수 있습니다.
+
+### 빌드 또는 실행 문제가 있는 경우
+
 ```bash
+pnpm lint
 pnpm test
 pnpm build
 ```
 
----
-Scope of this guide is current implemented behavior only.
+화면 경로의 단일 기준 문서는 `docs/current-screens.md`입니다.

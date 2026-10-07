@@ -11,20 +11,26 @@ import {
 } from "../src/lib/dev/devGuards";
 
 function buildRequest(input?: {
+  urlHost?: string;
   host?: string;
+  forwardedHost?: string;
+  forwardedFor?: string;
   origin?: string;
   referer?: string;
   cookie?: string;
   fetchSite?: string;
 }): Request {
-  const host = input?.host ?? "localhost:3000";
+  const urlHost = input?.urlHost ?? input?.host ?? "localhost:3000";
+  const host = input?.host ?? urlHost;
   const headers = new Headers();
   headers.set("host", host);
+  if (input?.forwardedHost) headers.set("x-forwarded-host", input.forwardedHost);
+  if (input?.forwardedFor) headers.set("x-forwarded-for", input.forwardedFor);
   if (input?.origin) headers.set("origin", input.origin);
   if (input?.referer) headers.set("referer", input.referer);
   if (input?.cookie) headers.set("cookie", input.cookie);
   if (input?.fetchSite) headers.set("sec-fetch-site", input.fetchSite);
-  return new Request(`http://${host}/api/dev/test`, { method: "POST", headers });
+  return new Request(`http://${urlHost}/api/dev/test`, { method: "POST", headers });
 }
 
 function expectGuard403(fn: () => void, code: string): void {
@@ -42,6 +48,17 @@ function expectGuard403(fn: () => void, code: string): void {
 describe("dev guards", () => {
   it("blocks non-local host", () => {
     expectGuard403(() => assertLocalHost(buildRequest({ host: "evil.com" })), "LOCAL_ONLY");
+  });
+
+  it("blocks spoofed loopback Host and x-forwarded-host values", () => {
+    expectGuard403(
+      () => assertLocalHost(buildRequest({ urlHost: "evil.com", host: "localhost:3000" })),
+      "LOCAL_ONLY",
+    );
+    expectGuard403(
+      () => assertLocalHost(buildRequest({ host: "evil.com", forwardedHost: "localhost:3000" })),
+      "LOCAL_ONLY",
+    );
   });
 
   it("blocks origin mismatch", () => {
@@ -82,13 +99,13 @@ describe("dev guards", () => {
     assertSameOrigin(request);
   });
 
-  it("accepts 0.0.0.0 as local same-origin alias", () => {
+  it("rejects 0.0.0.0 as a local request identity", () => {
     const request = buildRequest({
       host: "0.0.0.0:3000",
       origin: "http://localhost:3000",
     });
-    assertLocalHost(request);
-    assertSameOrigin(request);
+    expectGuard403(() => assertLocalHost(request), "LOCAL_ONLY");
+    expectGuard403(() => assertSameOrigin(request), "ORIGIN_MISMATCH");
   });
 
   it("accepts same-origin fetch-site when origin headers are missing", () => {
@@ -126,6 +143,25 @@ describe("dev guards", () => {
     const json = response ? await response.json() as { ok?: boolean; error?: { code?: string } } : null;
     expect(json?.ok).toBe(false);
     expect(json?.error?.code).toBe("LOCAL_ONLY");
+  });
+
+  it("guardDevReadRequest can require both strict local access and Dev unlock", async () => {
+    const locked = guardDevReadRequest(buildRequest({ host: "localhost:3000" }), {
+      requireUnlock: true,
+      strictLocal: true,
+    });
+    expect(locked?.status).toBe(403);
+    const lockedJson = locked ? await locked.json() as { error?: { code?: string } } : null;
+    expect(lockedJson?.error?.code).toBe("UNAUTHORIZED");
+
+    const unlocked = guardDevReadRequest(buildRequest({
+      host: "localhost:3000",
+      cookie: "dev_action=1",
+    }), {
+      requireUnlock: true,
+      strictLocal: true,
+    });
+    expect(unlocked).toBeNull();
   });
 
   it("guardDevMutationRequest enforces same-origin and optional csrf", async () => {

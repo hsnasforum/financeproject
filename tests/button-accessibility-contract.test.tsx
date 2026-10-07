@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 import { Button } from "@/components/ui/Button";
 
 const GLOBALS_CSS = fs.readFileSync("src/app/globals.css", "utf-8");
-const DART_SEARCH_SOURCE = fs.readFileSync("src/components/DartSearchClient.tsx", "utf-8");
+const DART_SEARCH_SOURCE = [
+  "src/components/DartSearchClient.tsx",
+  "src/components/dart/DartSearchPanel.tsx",
+].map((filePath) => fs.readFileSync(filePath, "utf-8")).join("\n");
 
 function readHexToken(name: string): string {
   const match = GLOBALS_CSS.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`));

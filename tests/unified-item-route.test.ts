@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocked = vi.hoisted(() => ({
   getUnifiedProductById: vi.fn(),
   UnifiedInputError: class UnifiedInputError extends Error {},
+  getProductFreshnessSummary: vi.fn(),
+}));
+
+vi.mock("@/lib/sources/productFreshness", () => ({
+  getProductFreshnessSummary: mocked.getProductFreshnessSummary,
 }));
 
 vi.mock("@/lib/sources/unified", () => ({
@@ -26,6 +31,15 @@ describe("GET /api/products/unified/item", () => {
 
   beforeEach(() => {
     mocked.getUnifiedProductById.mockReset();
+    mocked.getProductFreshnessSummary.mockReset();
+    mocked.getProductFreshnessSummary.mockResolvedValue({
+      checkedAt: "2026-08-26T03:00:00.000Z",
+      overall: "stale",
+      sources: [
+        { sourceId: "finlife", kind: "deposit", sourceAsOf: "2026-06-22T15:58:01.146Z", checkedAt: "2026-08-26T03:00:00.000Z", ttlMs: 1, ageMs: 2, freshness: "stale", fallbackUsed: false, message: "stale" },
+        { sourceId: "datago_kdb", kind: "deposit", sourceAsOf: "2026-06-28T10:31:26.167Z", checkedAt: "2026-08-26T03:00:00.000Z", ttlMs: 1, ageMs: 2, freshness: "stale", fallbackUsed: false, message: "stale" },
+      ],
+    });
     setEnv("NODE_ENV", "test");
   });
 
@@ -65,7 +79,7 @@ describe("GET /api/products/unified/item", () => {
     const json = await res.json() as {
       ok?: boolean;
       data?: { item?: { stableId?: string; productName?: string } };
-      meta?: { generatedAt?: string };
+      meta?: { generatedAt?: string; freshness?: { sources?: Array<{ sourceAsOf?: string | null }> } };
     };
 
     expect(res.status).toBe(200);
@@ -73,6 +87,10 @@ describe("GET /api/products/unified/item", () => {
     expect(json.data?.item?.stableId).toBe("P-001");
     expect(json.data?.item?.productName).toBe("테스트 예금");
     expect(typeof json.meta?.generatedAt).toBe("string");
+    expect(json.meta?.freshness?.sources?.map((source) => source.sourceAsOf)).toEqual([
+      "2026-06-22T15:58:01.146Z",
+      "2026-06-28T10:31:26.167Z",
+    ]);
     expect(mocked.getUnifiedProductById).toHaveBeenCalledWith({ id: "P-001", includeTimestamps: true });
   });
 
