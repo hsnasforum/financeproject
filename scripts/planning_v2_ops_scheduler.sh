@@ -3,7 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-LOG_DIR="${REPO_DIR}/.data/planning/ops/logs"
+if [[ "${PLANNING_WRITER_ENTRYPOINT_ID:-}" != "planning:v2:ops:scheduler" || -z "${PLANNING_WRITER_LEASE_CAPABILITY:-}" ]]; then
+  cd "${REPO_DIR}"
+  exec node scripts/planning_writer_entry.mjs planning:v2:ops:scheduler -- bash "$0" "$@"
+fi
+LOG_DIR="${PLANNING_DATA_DIR}/ops/logs"
 SCHEDULER_EVENT_LOG="${LOG_DIR}/scheduler.ndjson"
 
 mkdir -p "${LOG_DIR}"
@@ -65,7 +69,7 @@ run_mode() {
       run_cmd "${PNPM_BIN} planning:v2:ops:safety:regress" >> "${LOG_DIR}/ops.log" 2>> "${LOG_DIR}/ops.err"
       ;;
     monthly)
-      run_cmd "${PNPM_BIN} ops:refresh-assumptions" >> "${LOG_DIR}/monthly.log" 2>> "${LOG_DIR}/monthly.err"
+      run_cmd "${PNPM_BIN} ops:refresh-assumptions" >> "${LOG_DIR}/monthly.log" 2>> "${LOG_DIR}/monthly.err" || return $?
       run_cmd "${PNPM_BIN} planning:run:monthly" >> "${LOG_DIR}/monthly.log" 2>> "${LOG_DIR}/monthly.err"
       ;;
     prune)
@@ -86,7 +90,9 @@ run_health_guard() {
 STARTED_AT="$(iso_now_utc)"
 EXIT_CODE=0
 MESSAGE="completed"
-if ! run_mode; then
+if run_mode; then
+  :
+else
   EXIT_CODE=$?
   MESSAGE="failed"
 fi

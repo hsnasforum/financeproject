@@ -289,6 +289,43 @@ export async function getBatchTxnOverrides(batchId: unknown): Promise<Record<str
   return sortedObject(state.items);
 }
 
+export async function deleteBatchTxnOverrides(batchId: unknown): Promise<void> {
+  assertServerOnly();
+  const safeBatchId = normalizeBatchId(batchId);
+  const filePath = resolveBatchOverridesPath(safeBatchId);
+  await withTxnOverridesWriteLock(filePath, async () => {
+    const state = await readBatchState(safeBatchId, filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "transaction overrides storage contains invalid items");
+    }
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if (!isStorageNotFoundError(error)) throw toStorageWriteError(error, filePath);
+    }
+  });
+}
+
+export async function restoreBatchTxnOverrides(
+  batchId: unknown,
+  snapshot: Readonly<Record<string, TxnOverride>>,
+): Promise<void> {
+  assertServerOnly();
+  if (Object.keys(snapshot).length === 0) return;
+  const safeBatchId = normalizeBatchId(batchId);
+  const filePath = resolveBatchOverridesPath(safeBatchId);
+  await withTxnOverridesWriteLock(filePath, async () => {
+    const state = await readBatchState(safeBatchId, filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "transaction overrides storage contains invalid items");
+    }
+    await writeBatchState(filePath, {
+      version: 1,
+      items: sortedObject({ ...snapshot, ...state.items }),
+    });
+  });
+}
+
 // Legacy unscoped bridge / internal-dev path.
 export async function listLegacyUnscopedTxnOverrides(): Promise<Record<string, TxnOverride>> {
   assertServerOnly();

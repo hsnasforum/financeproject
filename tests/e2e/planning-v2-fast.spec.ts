@@ -77,20 +77,18 @@ test("/planner/legacy redirects to /planning", async ({ page }) => {
   await expect(page).toHaveURL(/\/planning$/, { timeout: 30_000 });
 });
 
-test("/planning shows form by default and hides raw JSON until Advanced toggle", async ({ page }) => {
+test("/planning shows the beginner form and omits developer JSON controls by default", async ({ page }) => {
   await page.goto("/planning");
 
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
-  await expect(page.getByTestId("planning-json-editor")).toBeHidden();
+  await expect(page.getByTestId("planning-advanced-toggle")).toHaveCount(0);
+  await expect(page.getByTestId("planning-json-editor")).toHaveCount(0);
 
   await expect(page.getByTestId("snapshot-selector")).toBeVisible();
   const tagName = await page.getByTestId("planning-snapshot-select").evaluate((node) => node.tagName);
   expect(tagName).toBe("SELECT");
   await expect(page.locator('input[name="snapshotId"]')).toHaveCount(0);
   await expect(page.getByTestId("snapshot-stale-badge")).toBeVisible();
-
-  await page.getByTestId("planning-advanced-toggle").click();
-  await expect(page.getByTestId("planning-json-editor")).toBeVisible();
 });
 
 test("/planning/reports shows run-based dashboard by default and keeps embedded markdown manager hidden", async ({ page, request }) => {
@@ -138,7 +136,10 @@ test("key interactive controls expose accessible names", async ({ page, request 
   await page.goto("/planning");
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
   await expect(page.getByTestId("run-button")).toHaveAccessibleName("플래닝 실행·기록 저장");
-  await expect(page.getByTestId("planning-snapshot-ops-link")).toBeVisible();
+  await expect(page.getByTestId("planning-snapshot-ops-link")).toHaveCount(0);
+  await expect(
+    page.getByTestId("snapshot-selector").getByRole("link", { name: "데이터 상태 확인하기" }),
+  ).toBeVisible();
 
   await page.goto(
     `/planning/reports?runId=${encodeURIComponent(seeded.runId)}&profileId=${encodeURIComponent(seeded.profileId)}`,

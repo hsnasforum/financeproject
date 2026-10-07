@@ -145,7 +145,7 @@ const SearchResponseSchema = z.object({
   }),
   meta: z.object({
     userId: z.string().min(1),
-    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace", "desktop-local-session"]),
   }),
 });
 

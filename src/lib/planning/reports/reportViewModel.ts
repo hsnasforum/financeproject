@@ -810,6 +810,7 @@ function toGuideWarnings(rows: DashboardWarningAggRow[]): AggregatedWarningRow[]
 }
 
 function toGuideGoals(dto: ResultDtoV1): GoalStatusRow[] {
+  const commentsById = new Map(dto.goals.map((goal) => [goal.id, goal.comment]));
   return mapGoalStatus(dto.goals.map((goal) => ({
     goalId: goal.id,
     name: goal.title,
@@ -818,7 +819,10 @@ function toGuideGoals(dto: ResultDtoV1): GoalStatusRow[] {
     targetAmount: goal.targetKrw,
     currentAmount: goal.currentKrw,
     shortfall: goal.shortfallKrw,
-  })));
+  }))).map((goal) => ({
+    ...goal,
+    interpretation: asString(commentsById.get(goal.goalId)) || (goal.achieved ? "달성" : goal.interpretation),
+  }));
 }
 
 function toGuideTimelineRows(timelinePoints: TimelineRow[], dsrPct: number | undefined): TimelinePointRow[] {
@@ -905,7 +909,8 @@ function toActionRows(dto: ResultDtoV1, run: PlanningRunRecord | null): ReportAc
 function toScenarioRows(dto: ResultDtoV1, run: PlanningRunRecord | null): ReportScenarioRow[] {
   const scenarios = dto?.scenarios ? asRecord(dto.scenarios) : asRecord(run?.outputs?.scenarios);
   const table = asArray(scenarios.table);
-  const shortWhyByScenario = asRecord(scenarios.shortWhyByScenario);
+  // Canonical scenario tables flatten shortWhy; compact run metadata retains the IDs.
+  const shortWhyByScenario = asRecord(scenarios.shortWhyByScenario ?? run?.outputs?.scenarios?.shortWhyByScenario);
   return table.map((row, index) => {
     const record = asRecord(row);
     const id = asString(record.id) || `scenario-${index + 1}`;

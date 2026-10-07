@@ -1,6 +1,8 @@
 import { loadCanonicalProfile } from "../../v2/loadCanonicalProfile";
 import { type ProfileV2, PlanningV2ValidationError } from "../../v2/types";
 import { validateProfileV2 } from "../../v2/validate";
+import { type DraftProfileEvidence } from "../domain/draftTypes";
+import { profileDraftExpenseError } from "./profileDraftExpenseSemantics";
 import {
   type DraftPreflightChange,
   type DraftPreflightError,
@@ -12,6 +14,7 @@ type PreflightDraftPatchInput = {
   draftPatch: unknown;
   baseProfile?: ProfileV2;
   targetProfileId?: string;
+  evidence?: Partial<Pick<DraftProfileEvidence, "ymStats">>;
 };
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -196,6 +199,17 @@ export function preflightDraftPatch(input: PreflightDraftPatchInput): DraftPrefl
   const baseProfile = input.baseProfile ? loadCanonicalProfile(input.baseProfile).profile : createDefaultBaseProfile();
   const warnings: DraftPreflightMessage[] = [];
 
+  // A zero median can still hide a payment in one of the observed months.
+  // Observations do not identify a loan or authorize changes to its payment.
+  const observedMonths = input.evidence?.ymStats;
+  if (baseProfile.debts.length === 0 && Array.isArray(observedMonths)
+    && observedMonths.some((row) => row && Number.isFinite(row.debtExpenseKrw) && row.debtExpenseKrw > 0)) {
+    warnings.push({
+      code: "OBSERVED_DEBT_WITHOUT_PROFILE_DEBT",
+      message: "거래에서 부채상환이 관측됐지만 프로필에 부채가 없습니다. 적용 전 초안의 생활지출과 프로필의 부채 정보를 확인해 주세요.",
+    });
+  }
+
   if (!input.baseProfile) {
     warnings.push({
       code: "NO_BASE_PROFILE",
@@ -215,6 +229,8 @@ export function preflightDraftPatch(input: PreflightDraftPatchInput): DraftPrefl
   const rawChanges = sortChanges(diffJson(baseProfile, mergedProfile));
   const changes = input.baseProfile ? rawChanges : toAfterOnlyChanges(rawChanges);
   const errors = validateMergedProfile(mergedProfile);
+  const expenseError = profileDraftExpenseError(draftPatch, input.evidence);
+  if (expenseError) errors.push(expenseError);
 
   return {
     ok: errors.length < 1,
@@ -229,4 +245,3 @@ export function preflightDraftPatch(input: PreflightDraftPatchInput): DraftPrefl
     },
   };
 }
-

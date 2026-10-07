@@ -186,9 +186,10 @@ function keyFindings(plan: PlanResultV2, groupedWarnings: AggregatedWarning[]): 
     findings.push(`치명 경고 ${criticalWarnings.length}건: ${criticalWarnings.map((item) => item.code).join(", ")}`);
   }
 
-  const goalMissed = plan.goalStatus.filter((goal) => !goal.achieved && goal.targetMonth <= plan.timeline.length);
+  const goalMissed = plan.goalStatus.filter((goal) => goal.targetMonth <= plan.timeline.length
+    && (!goal.achieved || (goal.achievedMonth !== null && goal.achievedMonth > goal.targetMonth)));
   if (goalMissed.length > 0) {
-    findings.push(`목표 미달 ${goalMissed.length}건: ${goalMissed.map((goal) => goal.name).slice(0, 3).join(", ")}`);
+    findings.push(`목표 기한 미달 ${goalMissed.length}건: ${goalMissed.map((goal) => goal.name).slice(0, 3).join(", ")}`);
   }
 
   const worst = plan.timeline.reduce(
@@ -216,8 +217,11 @@ function goalStatusTableRows(plan: PlanResultV2): string[] {
     "| --- | --- | ---: | ---: | ---: |",
   ];
   for (const goal of plan.goalStatus.slice(0, LIMITS.goalsTop)) {
+    const achievedLabel = goal.achieved
+      ? (goal.achievedMonth !== null && goal.achievedMonth > goal.targetMonth ? "Y (기한 후)" : "Y")
+      : "N";
     rows.push(
-      `| ${sanitizeCell(goal.name)} | ${goal.achieved ? "Y" : "N"} | ${goal.progressPct.toFixed(1)}% | ${roundKrw(goal.shortfall).toLocaleString("ko-KR")} | ${goal.targetMonth} |`,
+      `| ${sanitizeCell(goal.name)} | ${achievedLabel} | ${goal.progressPct.toFixed(1)}% | ${roundKrw(goal.shortfall).toLocaleString("ko-KR")} | ${goal.targetMonth} |`,
     );
   }
   return rows;

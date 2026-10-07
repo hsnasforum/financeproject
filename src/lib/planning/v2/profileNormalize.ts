@@ -124,7 +124,7 @@ function normalizeDebtList(
     ));
     const repaymentType = debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing";
 
-    const minimumPaymentRaw = asNumber(debt.minimumPayment) ?? asNumber(debt.minimumPaymentKrw) ?? asNumber(debt.monthlyPaymentKrw);
+    const minimumPaymentRaw = asNumber(debt.minimumPayment) ?? asNumber(debt.minimumPaymentKrw) ?? asNumber(debt.monthlyPaymentKrw) ?? asNumber(debt.monthlyPayment);
     const minimumPayment = typeof minimumPaymentRaw === "number" && minimumPaymentRaw >= 0
       ? minimumPaymentRaw
       : estimateMinimumPayment(balance, aprPct, remainingMonths, repaymentType);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import EvidencePanel from "@/components/planning/EvidencePanel";
 import { REPORT_SECTION_IDS } from "@/lib/planning/navigation/sectionIds";
 import {
@@ -289,11 +289,13 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                       바로 확인하기
                     </Button>
                   ) : (
-                    <Link href={primaryAction.href} className="block">
-                      <Button className="w-full rounded-2xl h-12 font-black shadow-lg shadow-navy/10" variant="primary">
-                        바로 확인하기
-                      </Button>
-                    </Link>
+                    <ButtonLink
+                      href={primaryAction.href}
+                      className="w-full rounded-2xl h-12 font-black shadow-lg shadow-navy/10"
+                      variant="primary"
+                    >
+                      바로 확인하기
+                    </ButtonLink>
                   )}
                 </div>
               ) : null}

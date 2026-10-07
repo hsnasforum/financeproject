@@ -119,7 +119,7 @@ describe("SnapshotPicker interaction contract", () => {
     };
 
     let tree = renderPicker(props);
-    const detailsButton = findButton(tree, "Details");
+    const detailsButton = findButton(tree, "세부 정보");
     const closedPanel = findElement(tree, (element) => element.props.id === "snapshot-details-panel");
 
     expect(detailsButton).toBeDefined();
@@ -129,7 +129,7 @@ describe("SnapshotPicker interaction contract", () => {
     (detailsButton?.props as { onClick?: () => void }).onClick?.();
     tree = renderPicker(props);
 
-    const openButton = findButton(tree, "Details 닫기");
+    const openButton = findButton(tree, "세부 정보 닫기");
     const detailsPanel = findElement(tree, (element) => element.props.id === "snapshot-details-panel");
 
     expect(openButton).toBeDefined();
@@ -155,13 +155,14 @@ describe("SnapshotPicker interaction contract", () => {
     });
 
     const props: SnapshotPickerProps = {
+      advancedEnabled: true,
       items: { history: [historyItem] },
       onChange: () => undefined,
       value: { mode: "history", id: "snap-copy" },
     };
 
     let tree = renderPicker(props);
-    const copyButton = findButton(tree, "Copy snapshotId");
+    const copyButton = findButton(tree, "기준 데이터 ID 복사");
 
     expect(copyButton).toBeDefined();
     expect((copyButton?.props as { disabled?: boolean }).disabled).toBe(false);
@@ -186,13 +187,14 @@ describe("SnapshotPicker interaction contract", () => {
     vi.stubGlobal("navigator", {});
 
     const props: SnapshotPickerProps = {
+      advancedEnabled: true,
       items: { history: [historyItem] },
       onChange: () => undefined,
       value: { mode: "history", id: "snap-no-clipboard" },
     };
 
     let tree = renderPicker(props);
-    const copyButton = findButton(tree, "Copy snapshotId");
+    const copyButton = findButton(tree, "기준 데이터 ID 복사");
 
     expect(copyButton).toBeDefined();
 
@@ -218,13 +220,14 @@ describe("SnapshotPicker interaction contract", () => {
     });
 
     const props: SnapshotPickerProps = {
+      advancedEnabled: true,
       items: { history: [historyItem] },
       onChange: () => undefined,
       value: { mode: "history", id: "snap-copy-fail" },
     };
 
     let tree = renderPicker(props);
-    const copyButton = findButton(tree, "Copy snapshotId");
+    const copyButton = findButton(tree, "기준 데이터 ID 복사");
 
     expect(copyButton).toBeDefined();
 

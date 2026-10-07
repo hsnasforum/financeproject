@@ -202,7 +202,10 @@ function migrateProfilePayload(raw: unknown): {
     ? schemaVersion
     : (schemaVersion === 0 ? 1 : undefined);
 
-  const debtRows = asArray(source.debts).map((entry, index) => normalizeDebtAprPct(asRecord(entry), index));
+  const sourceDebts = source.debts === undefined && Array.isArray(source.liabilities)
+    ? source.liabilities
+    : source.debts;
+  const debtRows = asArray(sourceDebts).map((entry, index) => normalizeDebtAprPct(asRecord(entry), index));
   const debts = debtRows.map((entry) => entry.debt);
   const fixesApplied = debtRows.flatMap((entry) => entry.fixes);
 

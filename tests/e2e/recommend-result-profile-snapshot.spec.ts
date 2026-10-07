@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { recommendOwnerId, recommendOwnerStorageKey } from "../../src/lib/recommend/ownerNamespace";
 import { expect, test } from "./helpers/e2eTest";
 
 type RequestProfile = {
@@ -11,14 +12,12 @@ type RequestProfile = {
   weights: { rate: number; term: number; liquidity: number };
 };
 
-const SAVED_RUNS_KEY = "finance:recommend:v2:playwright-local:saved-runs";
-
-function responseFor(profile: RequestProfile) {
+function responseFor(profile: RequestProfile, owner: { userId: string; authSource: string }) {
   return {
     ok: true,
     meta: {
-      userId: "playwright-local",
-      authSource: "trusted-header",
+      userId: owner.userId,
+      authSource: owner.authSource,
       kind: profile.kind,
       topN: profile.topN,
       rateMode: profile.rateMode,
@@ -40,7 +39,7 @@ function responseFor(profile: RequestProfile) {
       finPrdtCd: "SNAPSHOT-1",
       providerName: "스냅샷은행",
       productName: "스냅샷예금",
-      finalScore: 80,
+      finalScore: 0.8,
       selectedOption: {
         saveTrm: "12",
         termMonths: 12,
@@ -61,6 +60,17 @@ function responseFor(profile: RequestProfile) {
 }
 
 test("recommend save and exports stay bound to the submitted profile snapshot", async ({ page }) => {
+  // Use the authenticated server owner in both development and packaged sessions.
+  await page.goto("/recommend");
+  const ownerResponse = await page.evaluate(async () => {
+    const response = await fetch("/api/planning/v2/profiles");
+    return { status: response.status, payload: await response.json() };
+  });
+  expect(ownerResponse.status).toBe(200);
+  const { meta: owner } = ownerResponse.payload as { meta: { userId: string; authSource: string } };
+  expect(owner.userId).toEqual(expect.any(String));
+  expect(owner.authSource).toEqual(expect.any(String));
+  const savedRunsKey = recommendOwnerStorageKey(recommendOwnerId(owner.userId), "saved-runs");
   const requests: RequestProfile[] = [];
   let downloadCount = 0;
   page.on("download", () => {
@@ -73,7 +83,7 @@ test("recommend save and exports stay bound to the submitted profile snapshot", 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(responseFor(profile)),
+      body: JSON.stringify(responseFor(profile, owner)),
     });
   });
   await page.route("**/api/sources/status", async (route) => {
@@ -109,7 +119,7 @@ test("recommend save and exports stay bound to the submitted profile snapshot", 
   await jsonButton.evaluate((button: HTMLButtonElement) => button.click());
   await csvButton.evaluate((button: HTMLButtonElement) => button.click());
   expect(downloadCount).toBe(0);
-  expect(await page.evaluate((key) => localStorage.getItem(key), SAVED_RUNS_KEY)).toBeNull();
+  expect(await page.evaluate((key) => localStorage.getItem(key), savedRunsKey)).toBeNull();
 
   await page.getByRole("button", { name: "기본값 복원" }).click();
   await expect(page.getByText("조건이 변경되어 이 결과는 이전 조회 기준입니다. 다시 조회한 뒤 저장하거나 내보내 주세요.", { exact: true })).toBeVisible();
@@ -123,7 +133,7 @@ test("recommend save and exports stay bound to the submitted profile snapshot", 
   await expect(csvButton).toBeEnabled();
 
   await saveButton.click();
-  const savedRuns = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "[]"), SAVED_RUNS_KEY) as Array<{
+  const savedRuns = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "[]"), savedRunsKey) as Array<{
     profile: { weights: RequestProfile["weights"] };
   }>;
   expect(savedRuns[0]?.profile.weights).toEqual(requests[1]?.weights);

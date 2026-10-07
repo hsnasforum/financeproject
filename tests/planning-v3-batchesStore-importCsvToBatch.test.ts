@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
 import {
   deleteBatch,
@@ -39,6 +40,7 @@ describe("planning v3 batchesStore/importCsvToBatch", () => {
     if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
     else delete env.PLANNING_DATA_DIR;
 
+    vi.restoreAllMocks();
     fs.rmSync(root, { recursive: true, force: true });
   });
 
@@ -368,6 +370,57 @@ describe("planning v3 batchesStore/importCsvToBatch", () => {
     expect(await getBatchMeta(imported.batchMeta.id)).toBeNull();
     expect(await getBatchTransactions(imported.batchMeta.id)).toEqual([]);
     expect(fs.existsSync(filePath)).toBe(false);
+  });
+
+  it("keeps the index and transaction file when transaction unlink is unavailable", async () => {
+    const imported = await importCsvToBatch({
+      csvText: ["date,amount,description", "2026-05-01,1000,a"].join("\n"),
+    });
+    const filePath = path.join(root, "planning-v3", "batches", `${imported.batchMeta.id}.ndjson`);
+    const rawBefore = fs.readFileSync(filePath, "utf-8");
+    const originalUnlink = fsPromises.unlink.bind(fsPromises);
+    vi.spyOn(fsPromises, "unlink").mockImplementation(async (candidate) => {
+      if (path.resolve(String(candidate)) === path.resolve(filePath)) {
+        throw Object.assign(new Error("injected unlink failure"), { code: "EACCES" });
+      }
+      return originalUnlink(candidate);
+    });
+
+    await expect(deleteBatch(imported.batchMeta.id)).rejects.toMatchObject({
+      name: "StorageUnavailableError",
+      code: "STORAGE_UNAVAILABLE",
+      filePath,
+    });
+
+    expect(await getBatchMeta(imported.batchMeta.id)).not.toBeNull();
+    expect(fs.readFileSync(filePath, "utf-8")).toBe(rawBefore);
+  });
+
+  it("restores the transaction file when index removal fails after unlink", async () => {
+    const imported = await importCsvToBatch({
+      csvText: ["date,amount,description", "2026-05-01,1000,a"].join("\n"),
+    });
+    const batchesDir = path.join(root, "planning-v3", "batches");
+    const indexPath = path.join(batchesDir, "index.json");
+    const filePath = path.join(batchesDir, `${imported.batchMeta.id}.ndjson`);
+    const rawBefore = fs.readFileSync(filePath, "utf-8");
+    const originalRename = fsPromises.rename.bind(fsPromises);
+    vi.spyOn(fsPromises, "rename").mockImplementation(async (oldPath, newPath) => {
+      if (path.resolve(String(newPath)) === path.resolve(indexPath)) {
+        throw Object.assign(new Error("injected index write failure"), { code: "EACCES" });
+      }
+      return originalRename(oldPath, newPath);
+    });
+
+    await expect(deleteBatch(imported.batchMeta.id)).rejects.toMatchObject({
+      name: "StorageUnavailableError",
+      code: "STORAGE_UNAVAILABLE",
+      filePath: indexPath,
+    });
+
+    expect(await getBatchMeta(imported.batchMeta.id)).not.toBeNull();
+    expect(fs.readFileSync(filePath, "utf-8")).toBe(rawBefore);
+    expect(await getBatchTransactions(imported.batchMeta.id)).toHaveLength(1);
   });
 
   it("has no console usage in PR60 store/service files", () => {

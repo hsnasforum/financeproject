@@ -46,6 +46,17 @@ describe("PlanningQuickStartGate", () => {
     expect(html).not.toContain("결과 저장");
   });
 
+  it("shows first-use draft inputs but folds them after a completed run without removing fields", () => {
+    const initial = renderToStaticMarkup(<PlanningQuickStartGate onApply={() => undefined} />);
+    const completed = renderToStaticMarkup(<PlanningQuickStartGate onApply={() => undefined} profileSyncState="saved" runDone />);
+    const details = (html: string) => html.match(/<details[^>]*data-testid="planning-quickstart-inputs"[^>]*>/)?.[0];
+    expect(details(initial)).toMatch(/\sopen(?:[=\s>])/);
+    expect(details(completed)).not.toMatch(/\sopen(?:[=\s>])/);
+    expect(completed).toContain("월 실수령액(원)");
+    expect(completed).toContain("목표까지 남은 개월");
+    expect(completed).toContain("저장된 리포트 확인");
+  });
+
   it("uses the warning confirmation CTA as the applied next-step summary", () => {
     expect(resolvePlanningQuickStartAppliedNextStepSummary({
       nextStepLabel: "먼저 실행 경고 확인",

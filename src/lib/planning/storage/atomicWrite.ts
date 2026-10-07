@@ -21,14 +21,19 @@ export async function atomicWriteFile(filePath: string, content: string | Uint8A
   const tmpPath = `${absPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let handle: fs.FileHandle | null = null;
   try {
-    handle = await fs.open(tmpPath, "w", 0o600);
-    await handle.writeFile(content);
-    await handle.sync();
-  } finally {
-    await handle?.close().catch(() => undefined);
+    try {
+      handle = await fs.open(tmpPath, "w", 0o600);
+      await handle.writeFile(content);
+      await handle.sync();
+    } finally {
+      await handle?.close().catch(() => undefined);
+    }
+    await fs.rename(tmpPath, absPath);
+  } catch (error) {
+    // A rejected replacement must not leave a partial profile (or its private data) behind.
+    await fs.unlink(tmpPath).catch(() => undefined);
+    throw error;
   }
-
-  await fs.rename(tmpPath, absPath);
   await fsyncDir(dirPath);
 }
 

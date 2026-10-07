@@ -15,6 +15,25 @@ function makeBaseProfile(): ProfileV2 {
 }
 
 describe("preflightDraftPatch", () => {
+  it.each([false, true])("warns for debt in any observed month even when its median is zero (base=%s)", (withBase) => {
+    const result = preflightDraftPatch({ draftPatch: {}, ...(withBase ? { baseProfile: makeBaseProfile() } : {}),
+      evidence: { ymStats: [0, 0, 500_000].map((debtExpenseKrw, index) => ({ ym: `2026-0${index + 1}`,
+        incomeKrw: 0, expenseKrw: debtExpenseKrw, fixedExpenseKrw: debtExpenseKrw, variableExpenseKrw: 0, debtExpenseKrw, transferKrw: 0 })) },
+    });
+    expect(result.ok).toBe(true); // Warnings remain reviewable, not a new write/validation gate.
+    expect(result.changes).toEqual([]);
+    expect(result.warnings.map((row) => row.code)).toContain("OBSERVED_DEBT_WITHOUT_PROFILE_DEBT");
+    expect(result.summary.warningCount).toBe(withBase ? 1 : 2);
+  });
+
+  it("does not add a debt warning for zero debt evidence", () => {
+    const baseProfile = makeBaseProfile();
+    const result = preflightDraftPatch({ draftPatch: {}, baseProfile, evidence: { ymStats: [{ ym: "2026-08",
+      incomeKrw: 0, expenseKrw: 0, fixedExpenseKrw: 0, variableExpenseKrw: 0, debtExpenseKrw: 0, transferKrw: 0 }] } });
+    expect(result.warnings).toEqual([]);
+    expect(baseProfile.debts).toEqual([]);
+  });
+
   it("builds deterministic changes with before/after when base profile exists", () => {
     const result = preflightDraftPatch({
       baseProfile: makeBaseProfile(),
@@ -98,4 +117,3 @@ describe("preflightDraftPatch", () => {
     expect(left).toStrictEqual(right);
   });
 });
-

@@ -3,6 +3,7 @@ import {
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
+import { planningStorageErrorResponse, planningProfileStorageErrorMessage } from "../../../../../lib/planning/api/storageErrorResponse";
 import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import {
   planningUserMeta,
@@ -78,7 +79,9 @@ export async function GET(request: Request) {
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;
-    const message = error instanceof Error ? error.message : "프로필 목록 조회에 실패했습니다.";
+    const storageError = planningStorageErrorResponse(error, undefined, { recoveryHref: null });
+    if (storageError) return storageError;
+    const message = planningProfileStorageErrorMessage(error, "프로필 목록 조회에 실패했습니다.");
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }
@@ -122,6 +125,8 @@ export async function POST(request: Request) {
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;
+    const storageError = planningStorageErrorResponse(error, undefined, { recoveryHref: null });
+    if (storageError) return storageError;
     if (error instanceof PlanningV2ValidationError) {
       const message = error.issues.map((issue) => `${issue.path}: ${issue.message}`).join(", ");
       appendProfileAudit({
@@ -135,7 +140,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const message = error instanceof Error ? error.message : "프로필 생성에 실패했습니다.";
+    const message = planningProfileStorageErrorMessage(error, "프로필 생성에 실패했습니다.");
     appendProfileAudit({
       event: "PLANNING_PROFILE_CREATE",
       route: "/api/planning/v2/profiles",

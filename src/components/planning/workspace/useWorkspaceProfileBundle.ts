@@ -391,7 +391,6 @@ export function useWorkspaceProfileBundle({
   initialSelectedProfileId,
   initialSelectedProfile = null,
   beginnerMode,
-  beginnerModeLoaded,
   isMountedRef,
   profileDeleteDialog,
   setProfileDeleteDialog,
@@ -638,25 +637,6 @@ export function useWorkspaceProfileBundle({
     if (!selectedProfileId || selectedProfile) return;
     void loadSelectedProfileRecord(selectedProfileId);
   }, [loadSelectedProfileRecord, selectedProfile, selectedProfileId]);
-
-  useEffect(() => {
-    if (!beginnerModeLoaded || !beginnerMode) return;
-    const context = beginnerGoalContext(profileForm);
-    const nextGoals = ensureBeginnerGoals(profileForm.goals, context);
-    if (nextGoals.length === profileForm.goals.length) return;
-
-    const nextForm = {
-      ...profileForm,
-      goals: nextGoals,
-    };
-    const localEditVersion = profileEditorLocalEditVersionRef.current;
-    const timeoutId = window.setTimeout(() => {
-      if (profileEditorLocalEditVersionRef.current !== localEditVersion) return;
-      applyLocalProfileEditorState(buildProfileJsonEditorState(nextForm, profileName));
-      clearPendingSuggestions();
-    }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [applyLocalProfileEditorState, beginnerMode, beginnerModeLoaded, clearPendingSuggestions, profileForm, profileName]);
 
   function toggleSuggestionCode(code: string, checked: boolean): void {
     setAcceptedSuggestionCodes((prev) => {

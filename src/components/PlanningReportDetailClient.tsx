@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import SavedReportBrief, { SAVED_REPORT_DETAILS_ID, isSavedReportInterpretable } from "@/components/planning/reports/SavedReportBrief";
+import { appendProfileIdQuery } from "@/lib/planning/profileScope";
 import CandidateComparisonSection from "@/components/planning/reports/CandidateComparisonSection";
 import ReportAdvancedRaw from "@/components/planning/reports/ReportAdvancedRaw";
 import {
@@ -183,19 +185,17 @@ export default function PlanningReportDetailClient({
     };
   }, [vm]);
 
-  const detailHelperText = report?.runId
-    ? report.recommendRunId
-      ? "선택한 실행의 저장 결과와 연결된 추천 비교 참조를 다시 읽는 상세 화면입니다. 아래 해석 가이드와 근거를 확인하고, 필요하면 추천 비교 기록이나 원문으로 이어가세요."
-      : "선택한 실행의 저장 결과를 다시 읽는 상세 화면입니다. 아래 해석 가이드와 근거를 확인하고, 필요하면 PDF나 원문으로 이어가세요."
-    : "저장해 둔 리포트를 다시 읽는 상세 화면입니다. 아래 해석 가이드와 근거를 확인하고, 필요하면 PDF나 원문으로 이어가세요.";
+  const resultHref = report?.runId
+    ? appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(report.runId)}${report.recommendRunId ? `&recommendRunId=${encodeURIComponent(report.recommendRunId)}` : ""}`, run?.profileId || "")
+    : "/planning/reports";
 
   return (
     <PageShell className="report-detail-root">
       <PageHeader
         title="플래닝 리포트 상세"
-        description="저장된 실행 결과를 다시 읽고, 필요한 근거와 후속 행동을 확인하는 상세 도착 화면입니다."
+        description="따로 보관한 리포트입니다. 원본 실행의 결과와 보관 당시 원문을 확인할 수 있습니다."
         action={(
-          <div className="no-print flex items-center gap-4">
+          <div className="no-print flex max-w-full flex-wrap items-center gap-3">
             {recommendHistoryHref ? (
               <Link className="text-sm font-black text-primary hover:text-navy transition-colors" href={recommendHistoryHref}>
                 추천 비교 기록으로 돌아가기
@@ -213,10 +213,6 @@ export default function PlanningReportDetailClient({
           </div>
         )}
       />
-      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
-        여기는 새 실행을 시작하는 곳이 아니라, 실행 기록 화면이나 저장된 리포트 목록에서 선택한 결과를 자세히 다시 읽는 상세 도착점입니다.
-      </p>
-
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -232,63 +228,38 @@ export default function PlanningReportDetailClient({
           <p className="text-sm font-black text-slate-400 uppercase tracking-widest">리포트를 찾을 수 없습니다</p>
         </Card>
       ) : (
-        <div className="mx-auto max-w-5xl space-y-10">
-          <Card className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
-            <div className="flex flex-wrap items-start justify-between gap-6 mb-8 border-b border-slate-50 pb-8">
-              <div>
-                <Badge variant="secondary" className="mb-3 px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white border-none">
-                  실행 기반 리포트
-                </Badge>
-                <h1 className="text-3xl font-black text-navy tracking-tight leading-tight">
-                  {report.runId ? "플래닝 실행 분석 결과" : "수동 생성 리포트"}
-                </h1>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">생성 시각</p>
-                <p className="text-sm font-black text-navy tabular-nums">{formatDateTime(report.createdAt)}</p>
-              </div>
+        <div className="mx-auto max-w-5xl space-y-6">
+          <section className="space-y-4 border-b border-slate-200 pb-5" data-testid="saved-report-record">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Badge variant="secondary">{report.kind === "manual" ? "수동 보관 리포트" : "실행 기반 리포트"}</Badge>
+              <p className="text-sm text-slate-600">보관 시각 {formatDateTime(report.createdAt)}</p>
             </div>
+            {report.runId ? <Link href={resultHref} className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline underline-offset-4">원본 진단 결과로 돌아가기</Link> : null}
+            <details className="rounded-lg border border-slate-200 p-4" data-testid="saved-report-identifiers">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">보관 식별 정보</summary>
+              <dl className="mt-3 space-y-3 break-all text-sm text-slate-600">
+                <div><dt>리포트 ID</dt><dd className="font-mono">{report.id}</dd></div>
+                {report.runId ? <div><dt>원본 실행 ID</dt><dd className="font-mono">{report.runId}</dd></div> : null}
+                {report.recommendRunId ? <div><dt>추천 실행 ID</dt><dd className="font-mono">{report.recommendRunId}</dd></div> : null}
+              </dl>
+            </details>
+          </section>
+          {run ? <SavedReportBrief run={run} vm={vm} /> : null}
 
-            <div className="mb-8 rounded-2xl border border-primary/10 bg-primary/10 px-5 py-4 text-sm font-bold leading-relaxed text-navy">
-              {detailHelperText}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">리포트 ID</p>
-                <p className="text-xs font-black text-slate-700 font-mono break-all">{report.id}</p>
-              </div>
-              {report.runId && (
-                <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">원본 실행 ID</p>
-                  <p className="text-xs font-black text-slate-700 font-mono break-all">{report.runId}</p>
-                </div>
-              )}
-              {report.recommendRunId && (
-                <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">추천 실행 ID</p>
-                  <p className="text-xs font-black text-slate-700 font-mono break-all">{report.recommendRunId}</p>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {interpretationProps ? (
-            <InterpretationGuide {...interpretationProps} />
+          {interpretationProps && isSavedReportInterpretable(run, vm) ? (
+            <details id={SAVED_REPORT_DETAILS_ID} className="scroll-mt-28 rounded-xl border border-slate-200 bg-white p-5" data-testid="report-interpretation-details">
+              <summary className="cursor-pointer py-1 text-base font-semibold text-navy">상세 해석·월급 운영안·계산 근거</summary>
+              <div className="mt-6"><InterpretationGuide {...interpretationProps} /></div>
+            </details>
           ) : (
             <Card className="rounded-[2.5rem] border-amber-100 bg-amber-50/30 p-10 text-center">
               <p className="text-sm font-bold text-amber-800 leading-relaxed">이 리포트는 시뮬레이션 데이터가 포함되지 않은 초기 리포트이거나 데이터가 부족하여 분석 가이드를 생성할 수 없습니다.</p>
             </Card>
           )}
 
-          {report.runId && (
-            <CandidateComparisonSection
-              runId={report.runId}
-              payload={recommendations}
-              payloadError={recsError}
-              payloadLoading={recsLoading}
-            />
-          )}
+          {report.runId && (recommendations || recsLoading || recsError) ? (
+            <CandidateComparisonSection runId={report.runId} payload={recommendations} payloadError={recsError} payloadLoading={recsLoading} />
+          ) : null}
 
           <div className="no-print space-y-6 pt-10">
             <SubSectionHeader

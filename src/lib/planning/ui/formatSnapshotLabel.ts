@@ -29,11 +29,11 @@ export function getSnapshotFreshness(staleDays?: number): SnapshotFreshness {
 export function formatSnapshotLabel(item: SnapshotLabelItem, kind: "latest" | "history" = "history"): string {
   const parts: string[] = [];
   if (kind === "latest") {
-    parts.push("LATEST");
+    parts.push("최신");
   } else {
     parts.push(item.id);
   }
-  if (item.asOf) parts.push(`asOf ${item.asOf}`);
+  if (item.asOf) parts.push(`기준일 ${item.asOf}`);
 
   const policyRate = fmtPct(item.korea?.policyRatePct);
   const cpi = fmtPct(item.korea?.cpiYoYPct);
@@ -41,7 +41,7 @@ export function formatSnapshotLabel(item: SnapshotLabelItem, kind: "latest" | "h
 
   if (kind === "latest") {
     if (policyRate) parts.push(`기준금리 ${policyRate}`);
-    if (cpi) parts.push(`CPI ${cpi}`);
+    if (cpi) parts.push(`소비자물가 ${cpi}`);
     if (deposit) parts.push(`예금 ${deposit}`);
   } else {
     if (policyRate || cpi) {
@@ -52,7 +52,7 @@ export function formatSnapshotLabel(item: SnapshotLabelItem, kind: "latest" | "h
   }
 
   if (typeof item.staleDays === "number" && Number.isFinite(item.staleDays)) {
-    parts.push(`(stale ${Math.max(0, Math.trunc(item.staleDays))}d)`);
+    parts.push(`${Math.max(0, Math.trunc(item.staleDays))}일 경과`);
   }
   return parts.join(" · ");
 }

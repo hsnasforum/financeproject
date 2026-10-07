@@ -1,5 +1,10 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { createPlanningDesktopE2EEnvironment } from "./planning_v2_e2e_isolation.mjs";
+import { preparePlanningSmokeDatabase } from "./planning_smoke_database.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -77,7 +82,7 @@ function waitForExit(child, timeoutMs) {
 }
 
 async function stopServer(child) {
-  if (child.killed) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
   if (process.platform !== "win32" && typeof child.pid === "number") {
     try {
       process.kill(-child.pid, "SIGTERM");
@@ -87,7 +92,7 @@ async function stopServer(child) {
   } else {
     child.kill("SIGTERM");
   }
-  const graceful = await waitForExit(child, 5_000);
+  const graceful = await waitForExit(child, 15_000);
   if (graceful) return;
 
   if (process.platform !== "win32" && typeof child.pid === "number") {
@@ -99,7 +104,7 @@ async function stopServer(child) {
   } else {
     child.kill("SIGKILL");
   }
-  await waitForExit(child, 2_000);
+  await waitForExit(child, 5_000);
 }
 
 async function waitForUrl(url, timeoutMs) {
@@ -129,6 +134,28 @@ async function fetchOk(url, label) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const appDir = path.resolve(args.appDir);
+  const smokeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "planning-prod-smoke-"));
+  const smokeDatabase = await preparePlanningSmokeDatabase({
+    appDir,
+    databasePath: path.join(smokeRoot, "database", "finance.db"),
+  });
+  const smokeEnv = createPlanningDesktopE2EEnvironment({
+    ...process.env,
+    NODE_ENV: "production",
+    PLANNING_AUTH_REQUIRED: "true",
+    PLANNING_DEPLOYMENT_MODE: "desktop-local",
+    PLANNING_FORWARDED_HEADERS_TRUSTED: "false",
+    PLANNING_NAMESPACE_ENABLED: "false",
+    PLANNING_SINGLE_USER_MODE: "true",
+    PLANNING_TRUST_AUTH_HEADERS: "false",
+  }, {
+    databaseUrl: smokeDatabase.databaseUrl,
+    planningDataDir: path.join(smokeRoot, "planning"),
+    sessionToken: randomBytes(32).toString("base64url"),
+  });
+  delete smokeEnv.DATABASE_URL;
+  delete smokeEnv.PLANNING_APP_NAME;
+  delete smokeEnv.PLANNING_DATA_DIR;
   let runtimePort = null;
   const baseUrl = () => {
     if (runtimePort === null) {
@@ -139,9 +166,16 @@ async function main() {
   const readinessPath = "/public/dart";
 
   let exited = null;
-  const server = spawn(process.execPath, ["scripts/next_prod_safe.mjs", "--port", String(args.port)], {
+  const server = spawn(process.execPath, [
+    "scripts/planning_v2_desktop_launch.mjs",
+    "--runtime",
+    "prod",
+    "--port",
+    String(args.port),
+    "--no-open",
+  ], {
     cwd: appDir,
-    env: process.env,
+    env: smokeEnv,
     detached: process.platform !== "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -198,10 +232,25 @@ async function main() {
     await fetchOk(`${baseUrl()}/next.svg`, "/next.svg");
     process.stdout.write("[planning:v2:prod:smoke] ok public asset reachable\n");
 
+    const productsResponse = await fetchOk(
+      `${baseUrl()}/api/products/unified?kind=deposit&limit=1`,
+      "/api/products/unified",
+    );
+    const productsPayload = await productsResponse.json();
+    if (productsPayload?.ok !== true || !Array.isArray(productsPayload?.data?.items)) {
+      throw new Error("/api/products/unified did not return the product catalog contract");
+    }
+    process.stdout.write("[planning:v2:prod:smoke] ok product catalog database contract\n");
+
+    const catalogResponse = await fetchOk(`${baseUrl()}/products/catalog`, "/products/catalog");
+    const catalogHtml = await catalogResponse.text();
+    assertContains(catalogHtml, "통합 상품 탐색", "/products/catalog");
+    process.stdout.write("[planning:v2:prod:smoke] ok /products/catalog render\n");
+
     const dataSourcesResponse = await fetchOk(`${baseUrl()}/settings/data-sources`, "/settings/data-sources");
     const dataSourcesHtml = await dataSourcesResponse.text();
     const requiredDataSourcesTexts = [
-      "데이터 소스 연동 상태",
+      "데이터 신뢰 및 연동 상태",
       "운영 최신 기준",
       "data-source-impact-health-dart",
       "data-source-impact-health-planning",
@@ -236,6 +285,7 @@ async function main() {
     process.stdout.write("[planning:v2:prod:smoke] PASS\n");
   } finally {
     await stopServer(server);
+    await fs.rm(smokeRoot, { recursive: true, force: true });
   }
 }
 

@@ -22,7 +22,7 @@ const DateParamSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const UserMetaSchema = z.object({
   userId: z.string().min(1),
-  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace", "desktop-local-session"]),
 });
 
 const DailyRoutineResponseSchema = z.object({

@@ -4,6 +4,7 @@ import {
   getBatchTxnOverrides as getStoredBatchTxnOverrides,
   upsertBatchTxnOverride as upsertStoredBatchTxnOverride,
 } from "../store/txnOverridesStore";
+import { withExistingCurrentUserBatchLifecycleMutation } from "./batchLifecycleMutation";
 
 export { TxnOverridesStoreInputError };
 
@@ -14,9 +15,13 @@ export async function getCurrentUserBatchTxnOverrides(batchId: string) {
 }
 
 export async function upsertCurrentUserBatchTxnOverride(input: BatchTxnOverrideUpsertCommand) {
-  return upsertStoredBatchTxnOverride(input);
+  return withExistingCurrentUserBatchLifecycleMutation(input.batchId, (batchId) => (
+    upsertStoredBatchTxnOverride({ ...input, batchId })
+  ));
 }
 
 export async function deleteCurrentUserBatchTxnOverride(input: { batchId: string; txnId: string }) {
-  return deleteStoredBatchTxnOverride(input);
+  return withExistingCurrentUserBatchLifecycleMutation(input.batchId, (batchId) => (
+    deleteStoredBatchTxnOverride({ ...input, batchId })
+  ));
 }

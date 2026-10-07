@@ -6,6 +6,8 @@ import {
   GET as overridesGET,
   POST as overridesPOST,
 } from "../src/app/api/planning/v3/batches/[id]/txn-overrides/route";
+import { runWithPlanningUserScope } from "../src/lib/planning/store/userScope";
+import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 
 const ENV_KEYS = [
   "NODE_ENV",
@@ -91,10 +93,26 @@ async function saveOverrideFixture(userId: string, kind: string, categoryId: str
   expect(response.status).toBe(200);
 }
 
+async function saveBatchFixture(userId: string): Promise<void> {
+  await runWithPlanningUserScope({ userId, authSource: "test" }, () => saveBatch({
+    id: BATCH_ID,
+    createdAt: "2026-08-25T00:00:00.000Z",
+    source: "csv",
+    rowCount: 1,
+  }, [{
+    batchId: BATCH_ID,
+    txnId: TXN_ID,
+    date: "2026-08-25",
+    amountKrw: -1000,
+    description: "fixture",
+    source: "csv",
+  }]));
+}
+
 describe("planning v3 batch txn-overrides API user scope", () => {
   let root = "";
 
-  beforeEach(() => {
+  beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-batch-txn-overrides-user-scope-"));
     restoreEnv();
     env.NODE_ENV = "test";
@@ -107,6 +125,8 @@ describe("planning v3 batch txn-overrides API user scope", () => {
     delete env.PLANNING_V3_TXN_OVERRIDES_PATH;
     delete env.AUTH_SECRET;
     delete env.NEXTAUTH_SECRET;
+    await saveBatchFixture("alice");
+    await saveBatchFixture("bob");
   });
 
   afterEach(() => {

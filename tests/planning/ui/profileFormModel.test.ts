@@ -89,6 +89,11 @@ describe("planning profileFormModel", () => {
 
     const form = profileToForm(profile, "헬퍼");
     const roundtripProfile = formToProfile(form);
+    expect(form.goals).toEqual([]);
+    expect(roundtripProfile.goals).toEqual([]);
+    const hydrated = hydrateProfileJsonEditorState(roundtripProfile, "헬퍼");
+    expect(hydrated.form.goals).toEqual([]);
+    expect(JSON.parse(hydrated.json).goals).toEqual([]);
     expect(roundtripProfile.birthYear).toBe(1994);
     expect(roundtripProfile.gender).toBe("F");
     expect(roundtripProfile.sido).toBe("서울특별시");
@@ -96,6 +101,21 @@ describe("planning profileFormModel", () => {
     expect(roundtripProfile.monthlyIncomeNet).toBe(profile.monthlyIncomeNet);
     expect(roundtripProfile.debts[0]?.id).toBe("loan-helper-1");
     expect(roundtripProfile.debts[0]?.aprPct).toBeCloseTo(5.1, 6);
+  });
+
+  it("keeps an omitted birthYear absent across the form boundary", () => {
+    const form = fromProfileJson({
+      monthlyIncomeNet: 4_800_000,
+      monthlyEssentialExpenses: 1_700_000,
+      monthlyDiscretionaryExpenses: 900_000,
+      liquidAssets: 2_300_000,
+      investmentAssets: 5_500_000,
+      debts: [],
+      goals: [],
+    }, "출생연도 없음");
+
+    expect(form.birthYear).toBeUndefined();
+    expect(formToProfile(form)).not.toHaveProperty("birthYear");
   });
 
   it("maps minimumPayment <-> monthlyPayment on form boundary", () => {

@@ -22,6 +22,7 @@ export type AssumptionsHealthWarningCode =
   | "SNAPSHOT_MISSING"
   | "SNAPSHOT_STALE"
   | "SNAPSHOT_VERY_STALE"
+  | "SNAPSHOT_SOURCE_WARNINGS"
   | "OPTIMISTIC_RETURN"
   | "OPTIMISTIC_RETURN_HIGH"
   | "RISK_ASSUMPTION_MISMATCH"
@@ -48,6 +49,8 @@ export function assumptionsHealthMessage(
       return `스냅샷 기준일이 오래되었습니다(${asDays(data?.days)}일). /ops/assumptions에서 동기화를 권장합니다.`;
     case "SNAPSHOT_VERY_STALE":
       return `스냅샷 기준일이 매우 오래되었습니다(${asDays(data?.days)}일). 결과가 왜곡될 수 있습니다.`;
+    case "SNAPSHOT_SOURCE_WARNINGS":
+      return `스냅샷 생성 과정에서 확인할 항목이 ${asDays(data?.warningsCount)}개 남아 있습니다. 일부 지표는 보조 출처나 기본 가정이 사용될 수 있으니 기준값을 확인해 주세요.`;
     case "OPTIMISTIC_RETURN":
       return `투자수익률 가정(${asPercent1(data?.investReturnPct)}%)이 높아 결과가 과대추정될 수 있습니다.`;
     case "OPTIMISTIC_RETURN_HIGH":

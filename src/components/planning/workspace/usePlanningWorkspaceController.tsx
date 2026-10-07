@@ -516,6 +516,7 @@ export function usePlanningWorkspaceController({
 
   const profile = {
     locale,
+    debugEnabled: featureFlags.debugEnabled,
     beginnerMode: execution.beginnerMode,
     loadingProfiles: profileBundle.loadingProfiles,
     profiles: profileBundle.profiles,
@@ -543,6 +544,7 @@ export function usePlanningWorkspaceController({
 
   const executionGroup = {
     locale,
+    debugEnabled: featureFlags.debugEnabled,
     beginnerMode: execution.beginnerMode,
     selectedProfileId: profileBundle.selectedProfileId,
     snapshotItemsWarning,
@@ -601,6 +603,7 @@ export function usePlanningWorkspaceController({
 
   const results = {
     locale,
+    debugEnabled: featureFlags.debugEnabled,
     optimizeCandidates,
     optimizeResult: runtimeState.optimizeResult,
     runResult: runtimeState.runResult,

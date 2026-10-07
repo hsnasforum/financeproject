@@ -57,7 +57,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
     "goalStatus": [
       {
         "achieved": true,
-        "achievedMonth": 4,
+        "achievedMonth": 5,
         "goalId": "goal-emergency-1",
         "onTrack": true,
         "progressPct": 100,
@@ -201,7 +201,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
     "goalStatus": [
       {
         "achieved": true,
-        "achievedMonth": 20,
+        "achievedMonth": 21,
         "goalId": "goal-emergency-3",
         "onTrack": true,
         "progressPct": 100,
@@ -209,7 +209,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 21,
+        "achievedMonth": 20,
         "goalId": "goal-travel-3",
         "onTrack": true,
         "progressPct": 100,
@@ -351,7 +351,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 5,
+        "achievedMonth": 6,
         "goalId": "goal-travel-5",
         "onTrack": true,
         "progressPct": 100,
@@ -502,7 +502,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
     "goalStatus": [
       {
         "achieved": true,
-        "achievedMonth": 6,
+        "achievedMonth": 7,
         "goalId": "goal-emergency-7",
         "onTrack": true,
         "progressPct": 100,
@@ -510,7 +510,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 7,
+        "achievedMonth": 6,
         "goalId": "goal-travel-7",
         "onTrack": true,
         "progressPct": 100,
@@ -646,7 +646,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
     "goalStatus": [
       {
         "achieved": true,
-        "achievedMonth": 8,
+        "achievedMonth": 9,
         "goalId": "goal-emergency-9",
         "onTrack": true,
         "progressPct": 100,
@@ -654,7 +654,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 9,
+        "achievedMonth": 8,
         "goalId": "goal-travel-9",
         "onTrack": true,
         "progressPct": 100,
@@ -722,7 +722,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
     "goalStatus": [
       {
         "achieved": true,
-        "achievedMonth": 4,
+        "achievedMonth": 5,
         "goalId": "goal-emergency-10",
         "onTrack": true,
         "progressPct": 100,
@@ -796,7 +796,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
     "goalStatus": [
       {
         "achieved": true,
-        "achievedMonth": 3,
+        "achievedMonth": 4,
         "goalId": "goal-emergency-11",
         "onTrack": true,
         "progressPct": 100,
@@ -947,7 +947,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 4,
+        "achievedMonth": 3,
         "goalId": "goal-travel-13",
         "onTrack": true,
         "progressPct": 100,
@@ -1099,7 +1099,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 10,
+        "achievedMonth": 9,
         "goalId": "goal-education-15",
         "onTrack": true,
         "progressPct": 100,
@@ -1392,7 +1392,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 5,
+        "achievedMonth": 4,
         "goalId": "goal-travel-19",
         "onTrack": true,
         "progressPct": 100,
@@ -1973,7 +1973,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
     "goalStatus": [
       {
         "achieved": true,
-        "achievedMonth": 5,
+        "achievedMonth": 6,
         "goalId": "goal-emergency-27",
         "onTrack": true,
         "progressPct": 100,
@@ -2123,7 +2123,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
       },
       {
         "achieved": true,
-        "achievedMonth": 3,
+        "achievedMonth": 2,
         "goalId": "goal-travel-29",
         "onTrack": true,
         "progressPct": 100,

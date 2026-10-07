@@ -3,6 +3,25 @@ import { LIMITS } from "../../../src/lib/planning/v2/limits";
 import { buildResultDtoV1, buildResultDtoV1FromRunRecord } from "../../../src/lib/planning/v2/resultDto";
 
 describe("buildResultDtoV1", () => {
+  it("keeps IDs, goal types and amounts together in the existing deadline/name display order", () => {
+    const goals = [
+      { goalId: "retire-late", name: "same", targetMonth: 24, targetAmount: 1_000, currentAmount: 100 },
+      { goalId: "emergency-early", name: "same", targetMonth: 12, targetAmount: 2_000, currentAmount: 500 },
+      { id: "other-early", name: "a", targetMonth: 12, targetAmount: 3_000, currentAmount: 900 },
+    ];
+    const before = structuredClone(goals);
+    const expected = [
+      { id: "other-early", title: "a", type: "lumpSum", targetKrw: 3_000, currentKrw: 900, shortfallKrw: 2_100 },
+      { id: "emergency-early", title: "same", type: "emergencyFund", targetKrw: 2_000, currentKrw: 500, shortfallKrw: 1_500 },
+      { id: "retire-late", title: "same", type: "retirement", targetKrw: 1_000, currentKrw: 100, shortfallKrw: 900 },
+    ];
+    for (const order of [goals, [...goals].reverse()]) {
+      const dto = buildResultDtoV1({ simulate: { goalsStatus: order } });
+      expect(dto.goals).toMatchObject(expected);
+    }
+    expect(goals).toEqual(before);
+  });
+
   it("calculates summary fields from simulate/debt/goals", () => {
     const dto = buildResultDtoV1({
       generatedAt: "2026-03-01T00:00:00.000Z",

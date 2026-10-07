@@ -44,10 +44,19 @@ export function mapSnapshotToScenarioExtrasV2(
     };
   }
 
+  const warnings: SnapshotScenarioExtrasMapping["warnings"] = [];
+  if (!isFiniteNumber(snapshot.korea.cpiYoYPct)) {
+    warnings.push({
+      code: "INFLATION_NOT_FROM_SNAPSHOT",
+      severity: "warn",
+      message: "스냅샷에 소비자물가 상승률이 없어 물가 가정은 기본값 또는 별도 입력값을 사용했습니다.",
+    });
+  }
+
   if (isFiniteNumber(snapshot.korea.newDepositAvgPct)) {
     return {
       extra: { cashReturnPct: normalizePct(snapshot.korea.newDepositAvgPct) },
-      warnings: [],
+      warnings,
     };
   }
 
@@ -55,7 +64,7 @@ export function mapSnapshotToScenarioExtrasV2(
     const proxyCashReturnPct = Math.max(0, normalizePct(snapshot.korea.cd91Pct - 0.5));
     return {
       extra: { cashReturnPct: proxyCashReturnPct },
-      warnings: [{
+      warnings: [...warnings, {
         code: "CASH_RETURN_PROXY_FROM_CD",
         severity: "info",
         message: "예금 평균금리가 없어 CD(91일)-0.5%p를 현금수익률 프록시로 사용했습니다.",
@@ -69,6 +78,10 @@ export function mapSnapshotToScenarioExtrasV2(
 
   return {
     extra: {},
-    warnings: [],
+    warnings: [...warnings, {
+      code: "CASH_RETURN_NOT_FROM_SNAPSHOT",
+      severity: "warn",
+      message: "스냅샷에 예금 평균금리와 대체 지표가 없어 현금수익률은 기본값 또는 별도 입력값을 사용했습니다.",
+    }],
   };
 }

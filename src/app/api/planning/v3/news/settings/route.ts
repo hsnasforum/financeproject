@@ -38,7 +38,7 @@ const SaveBodySchema = z.object({
 
 const UserMetaSchema = z.object({
   userId: z.string().min(1),
-  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace", "desktop-local-session"]),
 });
 
 const SettingsGetResponseSchema = z.object({

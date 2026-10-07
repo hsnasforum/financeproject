@@ -1,6 +1,7 @@
 import {
   createProfile as createStoredProfile,
   getProfile as getStoredProfile,
+  getProfileUpdateSnapshot as getStoredProfileUpdateSnapshot,
   listProfileMetas as listStoredProfileMetas,
 } from "../../store/profileStore";
 
@@ -16,6 +17,10 @@ export async function createCurrentUserProfile(
 
 export async function getCurrentUserProfile(id: string): Promise<ProfileRecord> {
   return getStoredProfile(id);
+}
+
+export async function getCurrentUserProfileUpdateSnapshot(id: string): Promise<Awaited<ReturnType<typeof getStoredProfileUpdateSnapshot>>> {
+  return getStoredProfileUpdateSnapshot(id);
 }
 
 export async function listCurrentUserProfileMetas(): Promise<Awaited<ReturnType<typeof listStoredProfileMetas>>> {

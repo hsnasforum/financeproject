@@ -1,5 +1,9 @@
 import { type APIRequestContext, type ConsoleMessage } from "@playwright/test";
 import { expect, test, type Page } from "./helpers/e2eTest";
+import { type ProfileV2 } from "../../src/lib/planning/v2/types";
+import { formatKrw } from "../../src/lib/planning/i18n/format";
+import { safeBuildReportVMFromRun } from "../../src/lib/planning/reports/reportViewModel";
+import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 
 const DEFAULT_RUN_INPUT = {
   horizonMonths: 120,
@@ -30,7 +34,7 @@ async function readDevCsrf(request: APIRequestContext): Promise<string> {
   return cookies.find((cookie) => cookie.name === "dev_csrf")?.value?.trim() ?? "";
 }
 
-async function createSeedProfile(request: APIRequestContext): Promise<string> {
+async function createSeedProfile(request: APIRequestContext, profileOverride?: ProfileV2): Promise<string> {
   const baseUrl = resolveBaseUrl();
   const csrf = await readDevCsrf(request);
   const response = await request.post("/api/planning/v2/profiles", {
@@ -41,7 +45,7 @@ async function createSeedProfile(request: APIRequestContext): Promise<string> {
     },
     data: {
       name: `실행 기록 상태 프로필 ${Date.now()}`,
-      profile: {
+      profile: profileOverride ?? {
         monthlyIncomeNet: 4_100_000,
         monthlyEssentialExpenses: 1_800_000,
         monthlyDiscretionaryExpenses: 600_000,
@@ -71,7 +75,7 @@ async function createSeedProfile(request: APIRequestContext): Promise<string> {
   return profileId;
 }
 
-async function createSeedRun(request: APIRequestContext, profileId: string, title: string): Promise<string> {
+async function createSeedRun(request: APIRequestContext, profileId: string, title: string, input = DEFAULT_RUN_INPUT): Promise<string> {
   const baseUrl = resolveBaseUrl();
   const csrf = await readDevCsrf(request);
   const response = await request.post("/api/planning/v2/runs", {
@@ -83,7 +87,7 @@ async function createSeedRun(request: APIRequestContext, profileId: string, titl
     data: {
       profileId,
       title,
-      input: DEFAULT_RUN_INPUT,
+      input,
       ...(csrf ? { csrf } : {}),
     },
   });
@@ -174,8 +178,141 @@ test("planning runs and reports pages render", async ({ page }) => {
 
   await gotoWithAbortRetry(page, "/planning/reports");
   await expect(page.getByRole("heading", { name: /플래닝 리포트|재무설계 리포트/i })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/저장된 (실행|상담) 결과를 다시 읽/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/(실행|상담) 기록 화면/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/저장된 진단에서 핵심 상태|저장한 재무 진단을 다시 확인/)).toBeVisible({ timeout: 30_000 });
+});
+
+test("planning reports show saved scenarios before actions and preserve no-scenario runs", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const profileId = await createSeedProfile(request);
+  try {
+    const runId = await createSeedRun(request, profileId, "시나리오 비교 확인");
+    const response = await request.get(`/api/planning/v2/runs/${encodeURIComponent(runId)}`, {
+      headers: { origin: resolveBaseUrl(), referer: `${resolveBaseUrl()}/planning/reports` },
+    });
+    expect(response.ok()).toBe(true);
+    const payload = await response.json() as { data: PlanningRunRecord };
+    // Test-only: the existing blob endpoint exposes the pre-compaction artifact for comparison.
+    const blobResponse = await request.get(`/api/planning/v2/runs/${encodeURIComponent(runId)}/blob/scenarios`, {
+      headers: { origin: resolveBaseUrl(), referer: `${resolveBaseUrl()}/planning/reports` },
+    });
+    expect(blobResponse.ok()).toBe(true);
+    const blob = await blobResponse.json() as { data: { shortWhyByScenario: Record<string, string[]> } };
+    const beforeMap = blob.data.shortWhyByScenario;
+    expect(beforeMap.conservative[0]).not.toBe(beforeMap.aggressive[0]);
+    expect(payload.data.outputs.scenarios?.shortWhyByScenario).toEqual(beforeMap);
+    expect(payload.data.outputs.scenarios?.ref).toHaveProperty("name", "scenarios");
+    expect(payload.data.outputs.scenarios?.ref).not.toHaveProperty("path");
+    expect(payload.data.outputs.scenarios).not.toHaveProperty("table");
+    const vm = safeBuildReportVMFromRun(payload.data).vm!;
+    expect(vm).not.toBeNull();
+    expect(vm.scenarioRows.map((row) => row.id)).toEqual(["base", "conservative", "aggressive"]);
+    for (const id of ["conservative", "aggressive"]) {
+      expect(vm.scenarioRows.find((row) => row.id === id)?.interpretation).toBe(beforeMap[id][0]);
+      expect(beforeMap[id][0]).not.toBe("기준 대비 순자산/경고 변화를 함께 확인하세요.");
+    }
+    await gotoWithAbortRetry(page, `/planning/reports?runId=${encodeURIComponent(runId)}`);
+    const comparison = page.getByTestId("report-scenario-comparison");
+    await expect(comparison).toBeVisible({ timeout: 30_000 });
+    for (const scenario of vm.scenarioRows) {
+      const row = page.getByTestId(`report-scenario-${scenario.id}`);
+      await expect(row).toContainText(scenario.title);
+      await expect(row).toContainText(formatKrw("ko-KR", scenario.endNetWorthKrw));
+      await expect(row).toContainText(scenario.interpretation);
+    }
+    const topActions = page.getByTestId("report-top-actions");
+    await expect(topActions).toBeVisible();
+    expect(vm.actionRows.length).toBeGreaterThan(0);
+    await expect(topActions).toContainText(vm.actionRows[0].title);
+    expect(await comparison.evaluate((element) => Boolean(element.compareDocumentPosition(document.querySelector('[data-testid="report-top-actions"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+    await comparison.screenshot({ path: test.info().outputPath("scenario-comparison.png") });
+    const brief = page.getByTestId("saved-report-brief");
+    const details = page.getByTestId("report-interpretation-details");
+    await expect(brief).toContainText("시나리오 비교 확인");
+    await expect(brief).toContainText("120개월");
+    await expect(details).not.toHaveAttribute("open");
+    const readRunIds = async () => {
+      const result = await request.get(`/api/planning/v2/runs?profileId=${profileId}&limit=200`, { headers: { origin: resolveBaseUrl(), referer: `${resolveBaseUrl()}/planning/reports` } });
+      expect(result.ok()).toBe(true);
+      return ((await result.json()).data as Array<{ id: string }>).map((run) => run.id).sort();
+    };
+    const beforeReadIds = await readRunIds();
+    const writes: string[] = [];
+    const candidateRequests: string[] = [];
+    const observeRead = (req: import("@playwright/test").Request) => {
+      if (new URL(req.url()).pathname.startsWith("/api/planning/") && !["GET", "HEAD"].includes(req.method())) writes.push(req.url());
+      if (new URL(req.url()).pathname === "/api/products/candidates") candidateRequests.push(req.url());
+    };
+    page.on("request", observeRead);
+    await brief.getByRole("button", { name: "상세 해석과 근거 보기" }).click();
+    await expect(details).toHaveAttribute("open", "");
+    await expect(details.locator(":scope > summary")).toBeFocused();
+    await expect(details.getByTestId("interpretation-guide")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(details).not.toHaveAttribute("open");
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+    await expect(details).toHaveAttribute("open", "");
+    await page.emulateMedia({ media: "print" });
+    await expect(details.getByTestId("interpretation-guide")).toBeVisible();
+    await expect(page.getByTestId("report-warnings-table")).toBeVisible();
+    await page.emulateMedia({ media: "screen" });
+    await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+    await expect(details).not.toHaveAttribute("open");
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: test.info().outputPath("report-after-desktop.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("combobox", { name: "보고 있는 실행" }).focus();
+    await expect(page.getByRole("combobox", { name: "보고 있는 실행" })).toBeFocused();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: test.info().outputPath("report-after-mobile.png"), fullPage: true });
+    await page.reload();
+    await expect(brief).toContainText("시나리오 비교 확인");
+    expect(await readRunIds()).toEqual(beforeReadIds);
+    expect(writes).toEqual([]);
+    expect(candidateRequests).toEqual([]);
+    page.off("request", observeRead);
+
+    const exported = await request.get(`/api/planning/reports/${encodeURIComponent(runId)}/export.html`);
+    expect(exported.ok()).toBe(true);
+    const exportHtml = await exported.text();
+    for (const scenario of vm.scenarioRows) {
+      const row = exportHtml.split(`<td>${scenario.title}</td>`)[1]?.split("</tr>")[0];
+      expect(row).toContain(scenario.interpretation);
+    }
+
+    const withoutScenarios = await createSeedRun(request, profileId, "시나리오 없이 행동 확인", { ...DEFAULT_RUN_INPUT, runScenarios: false });
+    await gotoWithAbortRetry(page, `/planning/reports?runId=${encodeURIComponent(withoutScenarios)}`);
+    await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
+    await expect(comparison).toHaveCount(0);
+    await expect(topActions).toBeVisible();
+    await expect(topActions).toContainText(vm.actionRows[0].title);
+  } finally {
+    await deleteSeedProfile(request, profileId);
+  }
+});
+
+test("planning reports preserve late goal achievement after saving and in HTML export", async ({ page, request }) => {
+  test.setTimeout(60_000);
+  const profileId = await createSeedProfile(request, {
+    monthlyIncomeNet: 100_000, monthlyEssentialExpenses: 0, monthlyDiscretionaryExpenses: 0,
+    liquidAssets: 0, investmentAssets: 0, debts: [],
+    goals: [{ id: "deadline-goal", name: "기한 확인 목표", targetAmount: 300_000, targetMonth: 2, priority: 3 }],
+  });
+  try {
+    const runId = await createSeedRun(request, profileId, "기한 후 달성 확인", {
+      ...DEFAULT_RUN_INPUT, horizonMonths: 3, runScenarios: false,
+      assumptionsOverride: { inflationPct: 0, investReturnPct: 0, cashReturnPct: 0 },
+    });
+    await gotoWithAbortRetry(page, `/planning/reports?runId=${encodeURIComponent(runId)}&profileId=${encodeURIComponent(profileId)}`);
+    await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("기한 후 달성", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    const exported = await request.get(`/api/planning/reports/${encodeURIComponent(runId)}/export.html`);
+    expect(exported.ok()).toBe(true);
+    expect(await exported.text()).toContain("기한 후 달성");
+  } finally {
+    await deleteSeedProfile(request, profileId);
+  }
 });
 
 test("planning runs no-selection fallback distinguishes empty history from next-step guidance", async ({ page, request }) => {
@@ -249,6 +386,8 @@ test("planning reports preserve compare and recommendation deep links", async ({
     await expect(page.locator("#report-run-selector")).toHaveValue(selectedRunId, { timeout: 30_000 });
     await expect(page.getByTestId("compare-toggle")).toHaveText("비교 닫기", { timeout: 30_000 });
     await expect(page.getByTestId("baseline-selector")).toHaveValue(baselineRunId, { timeout: 30_000 });
+    await expect(page.getByTestId("report-scenario-comparison")).toContainText("한 실행 안의 가정 변화");
+    await expect(page.getByTestId("report-run-comparison")).toContainText("서로 다른 저장 실행 A와 B");
 
     const recommendRunId = `recommend-deeplink-${Date.now()}`;
     const recommendHistoryHref = `/recommend/history?open=${encodeURIComponent(recommendRunId)}`;
@@ -287,6 +426,8 @@ test("planning reports preserve compare and recommendation deep links", async ({
       timeout: 30_000,
     });
     await expect(page.getByRole("link", { name: "추천 비교 기록으로 돌아가기" })).toHaveAttribute("href", recommendHistoryHref);
+    await expect(page.getByRole("link", { name: "원본 진단 결과로 돌아가기" })).toHaveAttribute("href", `/planning/reports?runId=${selectedRunId}&recommendRunId=${recommendRunId}&profileId=${profileId}`);
+    await page.getByTestId("saved-report-identifiers").locator("summary").click();
     await expect(page.getByText("추천 실행 ID")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(recommendRunId)).toBeVisible({ timeout: 30_000 });
     expect(hydration.messages).toEqual([]);
@@ -310,7 +451,8 @@ test("planning reports dashboard save handoff exposes a saved detail destination
     await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
 
     await page.getByTestId("report-save-button").click();
-    await expect(page.getByText(/저장된 리포트를 만들고/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("report-advanced-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByText(/리포트를 별도로 보관했습니다/)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/기본 리포트 화면은 여기서 계속 읽고/)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("link", { name: "저장된 상세 리포트 열기", exact: true })).toBeVisible({ timeout: 30_000 });
 
@@ -504,8 +646,26 @@ test("planning report detail reads as a saved-result destination after leaving r
     await expect(page.getByRole("heading", { name: "플래닝 리포트 상세", exact: true })).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByText(/실행 기록 화면이나 저장된 리포트 목록에서 선택한 결과를 자세히 다시 읽는 상세 도착점입니다/)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/선택한 실행의 저장 결과를 다시 읽는 상세 화면입니다/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("saved-report-record")).toBeVisible();
+    await expect(page.getByTestId("saved-report-brief")).toContainText(runTitle);
+    await expect(page.getByRole("link", { name: "원본 진단 결과로 돌아가기" })).toHaveAttribute("href", `/planning/reports?runId=${runId}&profileId=${profileId}`);
+    await expect(page.getByTestId("saved-report-identifiers")).not.toHaveAttribute("open");
+    await expect(page.locator("h1")).toHaveCount(1);
+    const details = page.getByTestId("report-interpretation-details");
+    await expect(details).not.toHaveAttribute("open");
+    await page.getByRole("button", { name: "상세 해석과 근거 보기" }).click();
+    await expect(details).toHaveAttribute("open", "");
+    await expect(details.locator(":scope > summary")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(details).not.toHaveAttribute("open");
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: test.info().outputPath("saved-detail-desktop.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: test.info().outputPath("saved-detail-mobile.png"), fullPage: true });
+
     await expect(page.getByRole("link", { name: "리포트 목록으로", exact: true })).toBeVisible({ timeout: 30_000 });
   } finally {
     await deleteSeedProfile(request, profileId);

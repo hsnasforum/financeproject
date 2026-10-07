@@ -63,7 +63,7 @@ export function useWorkspaceFeedbackSubmitAction({
 
     setFeedbackSubmitting(true);
     try {
-      const response = await fetch("/api/ops/feedback/planning", {
+      const response = await fetch("/api/planning/v2/feedback", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(withDevCsrf({

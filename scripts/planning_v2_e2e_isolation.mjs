@@ -22,6 +22,31 @@ function hasExplicitPlanningStorage(env) {
   ].some((key) => asString(env[key]));
 }
 
+export function createPlanningDesktopE2EEnvironment(baseEnv, options = {}) {
+  const databaseUrl = asString(options.databaseUrl);
+  const planningDataDir = asString(options.planningDataDir);
+  const sessionToken = asString(options.sessionToken);
+  if (!databaseUrl) {
+    throw new Error("planning desktop e2e database URL is required");
+  }
+  if (!planningDataDir) {
+    throw new Error("planning desktop e2e data directory is required");
+  }
+  if (!/^[A-Za-z0-9_-]{43,}$/.test(sessionToken)) {
+    throw new Error("planning desktop e2e session token must be a high-entropy base64url token");
+  }
+
+  const resolvedPlanningDataDir = path.resolve(planningDataDir);
+  const controlRoot = path.dirname(resolvedPlanningDataDir);
+  return {
+    ...baseEnv,
+    PLANNING_E2E_DESKTOP_DATABASE_URL: databaseUrl,
+    PLANNING_E2E_DESKTOP_DATA_DIR: resolvedPlanningDataDir,
+    PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE: path.join(controlRoot, "runtime", "e2e-bootstrap.url"),
+    PLANNING_E2E_DESKTOP_SESSION_TOKEN: sessionToken,
+  };
+}
+
 export async function createIsolatedPlanningV2E2EOptions(baseEnv = process.env, options = {}) {
   const defaultPort = toPort(options.defaultPort, 3226);
   const preferredPort = toPort(options.preferredPort ?? baseEnv.PORT, defaultPort);

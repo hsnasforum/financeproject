@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import {
   BodyActionLink,
@@ -14,6 +14,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
+import { PlanVsActualSection } from "./PlanVsActualSection";
 
 export type DraftDetail = {
   id: string;
@@ -100,6 +101,8 @@ type PreflightError = {
 type PreflightResult = {
   ok: boolean;
   targetProfileId?: string;
+  profileRevision?: string;
+  draftPatchHash?: string;
   changes: PreflightChange[];
   warnings: PreflightMessage[];
   errors: PreflightError[];
@@ -127,6 +130,7 @@ type Props = {
   initialDraft?: DraftDetail | null;
   initialMessage?: string;
   initialProfiles?: ProfileOption[];
+  initialProfileId?: string;
   initialPreflight?: PreflightResult | null;
   disableAutoLoad?: boolean;
 };
@@ -217,6 +221,7 @@ export function ProfileDraftDetailClient({
   initialDraft = null,
   initialMessage = "",
   initialProfiles = [],
+  initialProfileId = "",
   initialPreflight = null,
   disableAutoLoad = false,
 }: Props) {
@@ -224,31 +229,39 @@ export function ProfileDraftDetailClient({
   const [message, setMessage] = useState(initialMessage);
   const [draft, setDraft] = useState<DraftDetail | null>(initialDraft);
   const [profiles, setProfiles] = useState<ProfileOption[]>(initialProfiles);
-  const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [selectedProfileId, setSelectedProfileId] = useState(initialProfileId);
   const [copyMessage, setCopyMessage] = useState("");
   const [preflightRunning, setPreflightRunning] = useState(false);
   const [preflight, setPreflight] = useState<PreflightResult | null>(initialPreflight);
-  const [applyRunning, setApplyRunning] = useState(false);
+  const [runningApplyMode, setRunningApplyMode] = useState<"update" | "create" | null>(null);
+  const operationRunning = useRef(false);
+  const applyRunning = runningApplyMode !== null;
   const [applyResult, setApplyResult] = useState("");
   const normalizedSelectedProfileId = asString(selectedProfileId);
   const normalizedPreflightTargetProfileId = asString(preflight?.targetProfileId);
-  const preflightFailed = preflight?.ok === false;
+  const preflightFailed = preflight?.ok !== true;
   const preflightMatchesSelection = Boolean(preflight) && normalizedPreflightTargetProfileId === normalizedSelectedProfileId;
-  const preflightHasErrors = (preflight?.errors.length ?? 0) > 0;
-  const applyBlocked = applyRunning || preflightRunning || !preflight || preflightFailed || !preflightMatchesSelection || preflightHasErrors;
+  const preflightHasErrors = (preflight?.errors.length ?? 0) > 0 || (preflight?.summary.errorCount ?? 0) > 0;
+  const preflightHasRevision = Boolean(asString(preflight?.profileRevision) && asString(preflight?.draftPatchHash));
+  const applyBlocked = loading || applyRunning || preflightRunning || !preflight || preflightFailed || !preflightMatchesSelection || preflightHasErrors;
+  const updateBlocked = applyBlocked || !normalizedSelectedProfileId || !preflightHasRevision;
   const applyGuidance = !preflight
     ? "프리플라이트를 먼저 실행하면 이 기준으로 적용 가능 여부가 정리됩니다."
     : preflightFailed
-      ? "프리플라이트 실행이 실패했습니다. 같은 기준으로 다시 실행해 주세요."
+      ? preflight.errors[0]?.message ?? "프리플라이트 실행이 실패했습니다. 같은 기준으로 다시 실행해 주세요."
       : !preflightMatchesSelection
       ? "기준 프로필이 바뀌어 프리플라이트를 다시 실행해야 합니다."
       : preflightHasErrors
         ? "오류가 있어 아직 적용할 수 없습니다."
-        : preflight.summary.changedCount < 1
-          ? "변경 항목이 없어도 새 프로필은 생성됩니다. 그대로 적용할지 다시 확인해 주세요."
+        : normalizedSelectedProfileId && !preflightHasRevision && preflight.summary.warningCount < 1
+          ? "프로필 갱신을 위해 프리플라이트를 다시 실행해 주세요."
           : preflight.summary.warningCount > 0
             ? "경고를 확인한 뒤 적용할 수 있습니다."
-            : "오류 없음. 이 기준으로 프로필 생성(초안 적용)을 진행할 수 있습니다.";
+            : preflight.summary.changedCount < 1
+              ? "변경 항목이 없습니다. 새 프로필로 만들면 별도 프로필이 추가됩니다."
+              : normalizedSelectedProfileId
+                ? "오류 없음. 선택한 프로필의 월 소득과 지출을 갱신하거나 새 프로필로 만들 수 있습니다."
+                : "오류 없음. 새 프로필로 만들 수 있습니다. 기존 프로필을 갱신하려면 기준 프로필을 선택해 주세요.";
 
   const loadDetailData = useCallback(async (signal?: AbortSignal): Promise<DetailLoadResult> => {
     const [detailResponse, profilesResponse] = await Promise.all([
@@ -286,7 +299,8 @@ export function ProfileDraftDetailClient({
   }, []);
 
   const reloadDetail = useCallback(async () => {
-    if (disableAutoLoad) return;
+    if (disableAutoLoad || operationRunning.current) return;
+    operationRunning.current = true;
     setLoading(true);
     setMessage("");
     try {
@@ -297,6 +311,7 @@ export function ProfileDraftDetailClient({
       setProfiles([]);
       setMessage(DETAIL_LOAD_FAILED_MESSAGE);
     } finally {
+      operationRunning.current = false;
       setLoading(false);
     }
   }, [applyDetailLoadResult, disableAutoLoad, loadDetailData]);
@@ -368,8 +383,10 @@ export function ProfileDraftDetailClient({
   }
 
   async function runPreflight() {
-    if (!draft || preflightRunning) return;
+    if (!draft || loading || operationRunning.current) return;
+    operationRunning.current = true;
     setPreflightRunning(true);
+    setPreflight(null);
     setMessage("");
     setApplyResult("");
     try {
@@ -381,6 +398,7 @@ export function ProfileDraftDetailClient({
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          applyMode: normalizedSelectedProfileId ? "update" : "create",
           ...(selectedProfileId ? { profileId: selectedProfileId } : {}),
           ...(csrf ? { csrf } : {}),
         }),
@@ -396,13 +414,15 @@ export function ProfileDraftDetailClient({
       setPreflight(createFailedPreflight(normalizedSelectedProfileId));
       setMessage("프리플라이트 실행에 실패했습니다.");
     } finally {
+      operationRunning.current = false;
       setPreflightRunning(false);
     }
   }
 
-  async function applyProfileDraft() {
-    if (!draft || applyRunning) return;
-    setApplyRunning(true);
+  async function applyProfileDraft(applyMode: "update" | "create") {
+    if (!draft || operationRunning.current || (applyMode === "update" ? updateBlocked : applyBlocked)) return;
+    operationRunning.current = true;
+    setRunningApplyMode(applyMode);
     setApplyResult("");
     setMessage("");
 
@@ -415,7 +435,12 @@ export function ProfileDraftDetailClient({
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          applyMode,
           ...(selectedProfileId ? { profileId: selectedProfileId } : {}),
+          ...(applyMode === "update" ? {
+            expectedProfileRevision: preflight?.profileRevision,
+            expectedDraftPatchHash: preflight?.draftPatchHash,
+          } : {}),
           ...(csrf ? { csrf } : {}),
         }),
       });
@@ -424,17 +449,24 @@ export function ProfileDraftDetailClient({
         const serverMessage = isRecord(json) && isRecord(json.error)
           ? asString(json.error.message)
           : "";
-        setApplyResult(serverMessage || "프로필 생성에 실패했습니다.");
+        if (response.status === 409 && applyMode === "update") {
+          setPreflight(null);
+          setApplyResult(serverMessage || "프로필이 변경되어 preflight를 다시 확인해야 합니다.");
+        } else {
+          setApplyResult(serverMessage || (applyMode === "update" ? "프로필 갱신에 실패했습니다." : "프로필 생성에 실패했습니다."));
+        }
         return;
       }
 
-      const newProfileId = json.data.profileId;
-      setApplyResult("프로필 생성이 완료되어 planning 화면으로 이동합니다.");
-      window.location.href = `/planning?profileId=${encodeURIComponent(newProfileId)}`;
+      const appliedProfileId = json.data.profileId;
+      setPreflight(null);
+      setApplyResult(`${applyMode === "update" ? "프로필 갱신" : "프로필 생성"}이 완료되어 planning 화면으로 이동합니다.`);
+      window.location.href = `/planning?profileId=${encodeURIComponent(appliedProfileId)}`;
     } catch {
-      setApplyResult("프로필 생성에 실패했습니다.");
+      setApplyResult(applyMode === "update" ? "프로필 갱신에 실패했습니다." : "프로필 생성에 실패했습니다.");
     } finally {
-      setApplyRunning(false);
+      operationRunning.current = false;
+      setRunningApplyMode(null);
     }
   }
 
@@ -527,7 +559,7 @@ export function ProfileDraftDetailClient({
                 <Button data-testid="v3-draft-copy" onClick={() => { void handleCopy(); }} size="sm" type="button" variant="outline">
                   JSON 복사
                 </Button>
-                <Button onClick={() => { void reloadDetail(); }} size="sm" type="button" variant="outline">
+                <Button disabled={loading || preflightRunning || applyRunning} onClick={() => { void reloadDetail(); }} size="sm" type="button" variant="outline">
                   새로고침
                 </Button>
               </div>
@@ -541,11 +573,13 @@ export function ProfileDraftDetailClient({
               />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-700">
-                  기준 프로필 선택(읽기 전용)
+                  기준 프로필 선택
                   <select
                     className={bodyFieldClassName}
                     data-testid="v3-draft-base-profile-picker"
+                    disabled={loading || preflightRunning || applyRunning}
                     onChange={(event) => {
+                      if (loading || operationRunning.current) return;
                       setSelectedProfileId(event.currentTarget.value);
                       setPreflight(null);
                       setApplyResult("");
@@ -563,7 +597,7 @@ export function ProfileDraftDetailClient({
                 </label>
                 <Button
                   data-testid="v3-draft-run-preflight"
-                  disabled={preflightRunning}
+                  disabled={loading || preflightRunning || applyRunning}
                   onClick={() => {
                     void runPreflight();
                   }}
@@ -573,16 +607,30 @@ export function ProfileDraftDetailClient({
                   {preflightRunning ? "프리플라이트 실행 중..." : "프리플라이트 실행"}
                 </Button>
                 <Button
-                  data-testid="v3-draft-apply-profile"
-                  disabled={applyBlocked}
+                  data-testid="v3-draft-update-profile"
+                  disabled={updateBlocked}
                   onClick={() => {
-                    void applyProfileDraft();
+                    void applyProfileDraft("update");
                   }}
                   type="button"
                 >
-                  {applyRunning ? "프로필 생성 중..." : "프로필 생성(초안 적용)"}
+                  {runningApplyMode === "update" ? "프로필 갱신 중..." : "선택한 프로필 갱신"}
+                </Button>
+                <Button
+                  data-testid="v3-draft-apply-profile"
+                  disabled={applyBlocked}
+                  onClick={() => {
+                    void applyProfileDraft("create");
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  {runningApplyMode === "create" ? "프로필 생성 중..." : "새 프로필로 만들기"}
                 </Button>
               </div>
+              <p className="text-xs text-slate-600">
+                갱신은 선택한 프로필의 월 소득·필수지출·재량지출만 반영합니다. 자산, 부채, 목표와 나머지 설정은 유지됩니다.
+              </p>
               <p
                 className={`text-xs font-semibold ${preflightMatchesSelection && !preflightHasErrors ? "text-slate-600" : "text-amber-700"}`}
                 data-testid="v3-draft-apply-guidance"
@@ -662,6 +710,8 @@ export function ProfileDraftDetailClient({
                 <BodyEmptyState description="프리플라이트를 실행하면 적용을 막는 오류가 이 영역에 정리됩니다." title="아직 프리플라이트를 실행하지 않았습니다." />
               )}
             </Card>
+
+            <PlanVsActualSection key={`${draft.id}:${normalizedSelectedProfileId}`} profileId={normalizedSelectedProfileId} evidence={draft.evidence} />
 
             <Card className="space-y-3" data-testid="v3-preflight-warnings">
               <BodySectionHeading title="Warnings" />

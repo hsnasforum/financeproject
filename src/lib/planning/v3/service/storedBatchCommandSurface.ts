@@ -1,3 +1,4 @@
+import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { hasLegacyBatch } from "./transactionStore";
 import {
   getBatchMeta,
@@ -23,8 +24,8 @@ export async function getStoredBatchCommandSurfaceState(batchId: string): Promis
   // Read surfaces can synthesize a batch from stored rows only, but command routes
   // still need to distinguish indexed writer-owned batches from synthetic read-only ones.
   const [storedMeta, storedTransactions] = await Promise.all([
-    getBatchMeta(batchId).catch(() => null),
-    getBatchTransactions(batchId).catch(() => []),
+    getBatchMeta(batchId),
+    getBatchTransactions(batchId),
   ]);
   if (storedMeta) return "stored-meta";
   if (storedTransactions.length > 0) return "synthetic-stored-only";
@@ -37,7 +38,9 @@ export async function getStoredBatchAccountCommandSurfaceState(
   const commandSurface = await getStoredBatchCommandSurfaceState(batchId);
   if (commandSurface === "synthetic-stored-only") return commandSurface;
 
-  const legacyBatchExists = await hasLegacyBatch(batchId).catch(() => false);
+  const legacyBatchExists = isPlanningNamespaceEnabled()
+    ? false
+    : await hasLegacyBatch(batchId);
   if (!legacyBatchExists) {
     if (commandSurface === "stored-meta") return "stored-meta-only";
     return commandSurface;
@@ -53,7 +56,9 @@ export async function getStoredBatchAccountCommandSurfaceState(
 
 export async function getStoredBatchDeleteSurfaceState(batchId: string): Promise<StoredBatchDeleteSurfaceState> {
   const commandSurface = await getStoredBatchCommandSurfaceState(batchId);
-  const legacyBatchExists = await hasLegacyBatch(batchId).catch(() => false);
+  const legacyBatchExists = isPlanningNamespaceEnabled()
+    ? false
+    : await hasLegacyBatch(batchId);
   if (!legacyBatchExists) return commandSurface;
 
   // User-facing DELETE should not overstate removal when the legacy bridge still

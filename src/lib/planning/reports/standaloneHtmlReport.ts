@@ -51,6 +51,7 @@ export type StandaloneReportRenderInput = {
     currentAmount: number;
     shortfall: number;
     achieved: boolean;
+    comment?: string;
   }>;
   actions: Array<{
     title: string;
@@ -187,7 +188,7 @@ export function renderStandaloneHtml(input: StandaloneReportRenderInput): string
           <td class="right">${escapeHtml(formatMoney(goal.targetAmount))}</td>
           <td class="right">${escapeHtml(formatMoney(goal.currentAmount))}</td>
           <td class="right">${escapeHtml(formatMoney(goal.shortfall))}</td>
-          <td>${goal.achieved ? "달성" : "진행 중"}</td>
+          <td>${escapeHtml(goal.achieved ? goal.comment || "달성" : "진행 중")}</td>
         </tr>
       `)
       .join("")
