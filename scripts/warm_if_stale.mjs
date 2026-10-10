@@ -2,7 +2,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
+import { randomUUID } from "node:crypto";
 import { runPnpmSync } from "./pnpm_runner.mjs";
+import { normalizeExchangeQuoteDate, validateEximExchangeRows } from "../src/lib/publicApis/providers/exchangeNormalization.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ROOT = process.cwd();
@@ -56,18 +58,6 @@ function runStep(name, args) {
   return result.status === 0;
 }
 
-function parseExchangeAsOf(raw) {
-  if (!Array.isArray(raw) || raw.length === 0) return null;
-  const first = raw[0];
-  if (!first || typeof first !== "object") return null;
-  const date = first.deal_bas_dt ?? first.dealBasDt ?? first.asOf;
-  if (typeof date !== "string") return null;
-  const digits = date.replace(/[^0-9]/g, "");
-  if (/^\d{8}$/.test(digits)) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
-  return null;
-}
-
 function todayKstYYYYMMDD() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -81,7 +71,7 @@ function todayKstYYYYMMDD() {
   return `${y}${m}${d}`;
 }
 
-async function warmExchangeSnapshot() {
+async function warmExchangeSnapshot(date) {
   const apiKey = (process.env.EXIM_EXCHANGE_API_KEY ?? "").trim();
   const baseUrl = (process.env.EXIM_EXCHANGE_API_URL ?? "").trim();
   if (!apiKey || !baseUrl) {
@@ -91,14 +81,17 @@ async function warmExchangeSnapshot() {
 
   const keyParam = (process.env.EXIM_EXCHANGE_KEY_PARAM ?? "authkey").trim() || "authkey";
   const dataParam = (process.env.EXIM_EXCHANGE_DATA ?? "AP01").trim() || "AP01";
-  const date = todayKstYYYYMMDD();
-
-  const url = new URL(baseUrl);
-  url.searchParams.set(keyParam, apiKey);
-  url.searchParams.set("data", dataParam);
-  url.searchParams.set("searchdate", date);
+  if (dataParam !== "AP01") {
+    console.log("[warm] exchange: failed (EXIM_EXCHANGE_DATA must be AP01)");
+    return false;
+  }
 
   try {
+    const url = new URL(baseUrl);
+    url.searchParams.set(keyParam, apiKey);
+    url.searchParams.set("data", dataParam);
+    url.searchParams.set("searchdate", date);
+
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) {
       console.log(`[warm] exchange: failed (${res.status})`);
@@ -106,20 +99,33 @@ async function warmExchangeSnapshot() {
     }
     const text = await res.text();
     const raw = JSON.parse(text);
+    const validated = validateEximExchangeRows(raw, { requestedDate: date });
+    if (!validated) {
+      console.log("[warm] exchange: failed (invalid quotes or source date)");
+      return false;
+    }
 
     const snapshot = {
       generatedAt: new Date().toISOString(),
-      asOf: parseExchangeAsOf(raw),
-      rowCount: Array.isArray(raw) ? raw.length : 0,
+      asOf: validated.asOf,
+      rowCount: validated.rowCount,
     };
 
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const filePath = path.join(DATA_DIR, "exchange_snapshot.json");
-    fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2), "utf8");
+    const tempPath = `${filePath}.tmp-${process.pid}-${randomUUID()}`;
+    try {
+      fs.writeFileSync(tempPath, JSON.stringify(snapshot, null, 2), { encoding: "utf8", flag: "wx" });
+      fs.renameSync(tempPath, filePath);
+    } finally {
+      try { fs.rmSync(tempPath, { force: true }); } catch {
+        // Cleanup must not hide the original write/rename failure.
+      }
+    }
     console.log(`[warm] exchange: wrote ${path.relative(ROOT, filePath)}`);
     return true;
-  } catch (error) {
-    console.log(`[warm] exchange: failed (${error instanceof Error ? error.message : "unknown"})`);
+  } catch {
+    console.log("[warm] exchange: failed (request or response error)");
     return false;
   }
 }
@@ -127,6 +133,17 @@ async function warmExchangeSnapshot() {
 async function main() {
   const offline = process.argv.includes("--offline");
   const exchangeOnly = process.argv.includes("--exchange-only");
+  // Explicit historical dates must come from a verified source; never guess a business day.
+  const dateArgs = process.argv.slice(2).filter((arg) => arg === "--exchange-date" || arg.startsWith("--exchange-date="));
+  const explicitDate = dateArgs[0]?.slice("--exchange-date=".length);
+  const requestDate = explicitDate ?? todayKstYYYYMMDD();
+  if (dateArgs.length > 1 || !/^\d{8}$/.test(requestDate)
+    || !normalizeExchangeQuoteDate(requestDate) || requestDate > todayKstYYYYMMDD()) {
+    console.log("[warm] exchange: failed (exchange-date must be a valid nonfuture YYYYMMDD)");
+    process.exitCode = 1;
+    return;
+  }
+
 
   const finlifeDepositPath = path.join(DATA_DIR, "finlife_deposit_snapshot.json");
   const finlifeSavingPath = path.join(DATA_DIR, "finlife_saving_snapshot.json");
@@ -158,11 +175,11 @@ async function main() {
     }
   }
 
-  if (exchangeStale) {
+  if (exchangeStale || explicitDate !== undefined) {
     if (offline) {
       console.log("[warm] exchange: stale but offline mode, skip");
     } else {
-      ok = (await warmExchangeSnapshot()) && ok;
+      ok = (await warmExchangeSnapshot(requestDate)) && ok;
     }
   } else {
     console.log("[warm] exchange: fresh, skip");

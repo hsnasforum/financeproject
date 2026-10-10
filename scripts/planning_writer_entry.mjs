@@ -1,4 +1,6 @@
 import path from "node:path";
+import fs from "node:fs/promises";
+import { loadPlanningDesktopEnvironment, PLANNING_DESKTOP_RUNTIME_CONFIG_ENV_KEYS } from "./planning_v2_desktop_env.mjs";
 import {
   acquirePlanningWriterLease,
   verifyPlanningWriterLeaseCapability,
@@ -51,6 +53,24 @@ function signalChildGroup(child, signal) {
 
 async function main() {
   const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.writerId === "finlife:identity:migrate:apply") {
+    let managed = false;
+    try {
+      const stats = await fs.lstat(path.join(process.cwd(), "desktop-manifest.json"));
+      if (stats.isSymbolicLink() || !stats.isFile()) {
+        throw new Error("managed desktop manifest must be a regular file");
+      }
+      managed = true;
+    } catch (error) {
+      if (!error || typeof error !== "object" || error.code !== "ENOENT") throw error;
+    }
+    await loadPlanningDesktopEnvironment({
+      cwd: process.cwd(),
+      env: process.env,
+      authoritativeKeys: managed ? PLANNING_DESKTOP_RUNTIME_CONFIG_ENV_KEYS : [],
+    });
+    if (managed) process.env.NODE_ENV = "production";
+  }
   const planningRoot = resolvePlanningDataRoot({ cwd: process.cwd(), env: process.env });
   const controlRoot = resolvePlanningControlRoot({ cwd: process.cwd(), env: process.env });
   const [inspectedPlanning, inspected] = await Promise.all([

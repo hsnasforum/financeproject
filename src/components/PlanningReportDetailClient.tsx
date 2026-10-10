@@ -182,6 +182,7 @@ export default function PlanningReportDetailClient({
       outcomes: input.outcomes,
       summaryEvidence: input.summaryEvidence,
       monthlyOperatingGuide: vm.monthlyOperatingGuide,
+      policy: vm.reproducibility?.policy,
     };
   }, [vm]);
 

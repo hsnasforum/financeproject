@@ -15,7 +15,9 @@
 | `pnpm verify` | recommended / 광범위 점검 | dumps/schema/freshness/DART/security/lint/typecheck/test를 한 번에 묶은 넓은 검증입니다. release registry suite는 아닙니다. |
 | `pnpm planning:v2:complete` | required / planning v2 core | planning v2 static guard, security route scan, report/guide tests, smoke, fast e2e를 실행합니다. |
 | `pnpm release:verify` | release primary | `scripts/quality_gates.mjs` registry의 release suite를 순차 실행하는 primary gate입니다. |
-| `pnpm prisma:db:push` | setup / schema | Windows에서도 SQLite 파일을 먼저 안전하게 준비한 뒤 Prisma schema를 적용합니다. |
+| `pnpm prisma:db:push` | setup / schema | 새 빈 SQLite DB에만 schema를 적용합니다. 기존 준비된 DB는 검사만 하며 legacy/불완전 DB와 reset·data-loss·schema/config/URL override를 거부합니다. |
+| `pnpm finlife:identity:migrate` | maintenance / read-only | 기존 SQLite FINLIFE 식별 구조를 검사하며 DB를 변경하지 않습니다. |
+| `pnpm finlife:identity:migrate:apply` | maintenance / writer | 앱을 종료한 뒤 canonical writer lease·durable backup·transaction으로 명시적 migration을 적용합니다. 기존 ID·참조·사용자 데이터는 보존합니다. |
 
 ## PR 기본 게이트
 
@@ -42,6 +44,7 @@
 - DART: `pnpm dart:corpindex`, `pnpm dart:ensure-corpindex`, `pnpm dart:watch*`, `pnpm dart:rules:*`
 - FINLIFE/DataGo/Gov24: `pnpm finlife:sync*`, `pnpm finlife:inventory:report`, `pnpm datago:sync`, `pnpm products:sync`, `pnpm gov24:sync*`
 - freshness/warmup: `pnpm freshness:report`, `pnpm data:doctor`, `pnpm warm:if-stale`, `pnpm daily:refresh*`
+  - 공식 공시일을 확인한 환율 단독 수집: `pnpm warm:if-stale --exchange-only --exchange-date=YYYYMMDD`. 유효한 과거/당일 날짜를 정확히 한 번 조회하며 빈 응답에서 다른 날짜를 추정하지 않습니다. 명시 날짜는 기존 receipt가 fresh여도 조회합니다. [AP01 계약과 저장 범위](exim-exchange-contract.md)를 먼저 확인합니다.
 - 지원되는 freshness 명령(`freshness:report`, `freshness:release`, `data:doctor`, `verify`)은 모두
   `config/data-freshness-exceptions.json`을 단일 예외 기준으로 사용합니다. 예외는 `expiresAt` 직전까지만
   유효하고 그 시각부터 만료로 판정합니다.

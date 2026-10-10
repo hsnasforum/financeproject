@@ -45,6 +45,8 @@ const REQUIRED_RELEASE_ARTIFACT_FILES = [
   "scripts/planning_v2_desktop_verify.mjs",
   "scripts/pnpm_runner.mjs",
   "scripts/prisma_cli_safe.mjs",
+  "scripts/finlife_identity_migrate.mjs",
+  "src/lib/finlife/sqliteIdentityMigration.mjs",
   "src/lib/planning/deployment/runtimeDatabase.mjs",
   "src/lib/planning/deployment/runtimeRoot.mjs",
   "uninstall.cmd",

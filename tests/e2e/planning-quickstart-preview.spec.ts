@@ -222,10 +222,19 @@ async function enableQuickStartReviewFallback(page: import("@playwright/test").P
   });
 }
 
-test("planning quickstart previews before applying beginner draft", async ({ page }) => {
+test("planning quickstart previews before applying beginner draft", async ({ page: initialPage, context }) => {
+  let page = initialPage;
+  const browserErrors: string[] = [];
+  const observePage = (observedPage: import("@playwright/test").Page) => {
+    observedPage.on("pageerror", (error) => browserErrors.push(error.message));
+    observedPage.on("console", (message) => {
+      if (message.type() === "error") browserErrors.push(`${message.text()} (${message.location().url})`);
+    });
+  };
+  observePage(page);
+  context.on("page", observePage);
   await page.addInitScript(() => {
     window.localStorage.setItem("planning:v2:beginnerMode", "true");
-    window.localStorage.removeItem("planning:v2:selectedProfileId");
   });
 
   await page.goto("/dashboard");
@@ -299,11 +308,26 @@ test("planning quickstart previews before applying beginner draft", async ({ pag
   await expect(reportGoals.locator("tbody tr")).toHaveCount(1);
   expect(await readProfileRunIds(page, profileId)).toEqual(ids);
 
-  await page.goto(`/planning?profileId=${encodeURIComponent(profileId)}`);
+  const savedReportUrl = page.url();
+  await page.close();
+  page = await context.newPage();
+  await page.goto(savedReportUrl);
+  await expect(page.getByTestId("report-dashboard")).toBeVisible();
+  await expect(page.locator("#report-goals").getByRole("cell", { name: "전세자금", exact: true })).toBeVisible();
+  await expect(page.locator("#report-goals tbody tr")).toHaveCount(1);
+  await page.screenshot({ path: test.info().outputPath("planning-report-reopened.png"), fullPage: true });
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+
+  await page.goto("/dashboard");
+  await page.getByRole("navigation", { name: "데스크톱 주 메뉴" }).getByRole("link", { name: "재무진단", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
   const restoredStatus = page.getByTestId("planning-workspace-quickstart-status");
   await expect(restoredStatus).toContainText("프로필 저장 완료");
   await expect(restoredStatus).not.toContainText("미저장");
   const restoredForm = page.getByTestId("planning-profile-form");
+  await expect(restoredForm.getByLabel("월 실수령")).toHaveValue("3,200,000");
+  await expect(restoredForm.getByLabel("필수지출")).toHaveValue("1,700,000");
+  await expect(restoredForm.getByLabel("선택지출")).toHaveValue("0");
   await expect(restoredForm.getByLabel("목표 이름", { exact: true })).toHaveCount(1);
   await expect(restoredForm.getByLabel("목표 이름", { exact: true })).toHaveValue("전세자금");
   const reopenedProfile = await page.evaluate(async (id) => {
@@ -330,6 +354,27 @@ test("planning quickstart previews before applying beginner draft", async ({ pag
   }, profileId);
   expect(emptyGoals).toEqual([]);
   expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+
+  await page.close();
+  page = await context.newPage();
+  await page.goto("/planning");
+  const reopenedEmptyForm = page.getByTestId("planning-profile-form");
+  await expect(reopenedEmptyForm.getByText("등록된 목표가 없습니다.", { exact: true })).toBeVisible();
+  expect(await readSelectedProfileId(page)).toBe(profileId);
+  await expect(reopenedEmptyForm.getByLabel("월 실수령")).toHaveValue("3,200,000");
+  await expect(reopenedEmptyForm.getByLabel("필수지출")).toHaveValue("1,700,000");
+  await expect(reopenedEmptyForm.getByLabel("목표 이름", { exact: true })).toHaveCount(0);
+  const reopenedEmptyProfile = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(id)}`);
+    return (await response.json()).data.profile;
+  }, profileId);
+  expect(reopenedEmptyProfile).toEqual({ ...storedProfile, goals: [] });
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+  await test.info().attach("persistence-and-browser-errors", {
+    body: JSON.stringify({ storedProfile, reopenedProfile, reopenedEmptyProfile, runIds: ids, browserErrors }, null, 2),
+    contentType: "application/json",
+  });
+  expect(browserErrors).toEqual([]);
 });
 
 test("planning arrival with profileId query focuses the next-step run target", async ({ page }) => {

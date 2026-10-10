@@ -495,7 +495,7 @@
         {
           "path": "$.asOf",
           "types": [
-            "null"
+            "string"
           ]
         },
         {
@@ -711,7 +711,8 @@
         {
           "path": "$.items[].raw.dcls_end_day",
           "types": [
-            "null"
+            "null",
+            "string"
           ]
         },
         {

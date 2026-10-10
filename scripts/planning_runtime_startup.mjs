@@ -1,4 +1,5 @@
 import path from "node:path";
+import { assertFinlifeIdentityReady } from "../src/lib/finlife/sqliteIdentityMigration.mjs";
 import { verifyPlanningWriterLeaseCapability } from "../src/lib/planning/deployment/writerLease.mjs";
 import {
   inspectPlanningDataRoot,
@@ -61,6 +62,7 @@ export async function verifyPlanningDesktopRuntimeStartup(options = {}) {
   if (asString(env.DATABASE_URL) !== databaseLocation.databaseUrl) {
     throw new Error("desktop-local runtime requires the canonical platform-compatible SQLite DATABASE_URL from the launcher");
   }
+  const databaseIdentity = assertFinlifeIdentityReady({ cwd, databasePath: databaseLocation.databasePath });
   const databaseSchema = assertPlanningSqliteSchema({
     cwd,
     databasePath: databaseLocation.databasePath,
@@ -75,6 +77,7 @@ export async function verifyPlanningDesktopRuntimeStartup(options = {}) {
       ...database,
       ...databaseLocation,
       schema: databaseSchema,
+      identity: databaseIdentity,
     }),
   });
 }

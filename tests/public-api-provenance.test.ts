@@ -115,8 +115,8 @@ describe("public API provenance contract", () => {
     setEnv("PUBLIC_APIS_FALLBACK_TO_MOCK", "0");
     setEnv("API_CACHE_STORE", "memory");
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([
-      { cur_unit: "JPY(100)", deal_bas_r: "912.00", deal_bas_dt: "20260901" },
-      { cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "20260901" },
+      { result: 1, cur_unit: "JPY(100)", deal_bas_r: "912.00", deal_bas_dt: "20260901" },
+      { result: 1, cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "20260901" },
     ]), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -150,7 +150,7 @@ describe("public API provenance contract", () => {
   it.each([
     ["missing", undefined],
     ["invalid", "2026-02-30"],
-  ] as const)("does not invent a current date when the live FX row date is %s", async (_label, dealBasDate) => {
+  ] as const)("rejects a live FX row with %s date and no official success result", async (_label, dealBasDate) => {
     setEnv("KEXIM_API_KEY", "test-key");
     setEnv("KEXIM_FX_API_URL", "https://example.test/fx-kst-fallback");
     setEnv("PUBLIC_APIS_FALLBACK_TO_MOCK", "0");
@@ -164,10 +164,9 @@ describe("public API provenance contract", () => {
 
     const result = await getExchangeQuotes("20260901", ["USD"]);
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data).toEqual([]);
-    expect(result.meta.provenance.asOf).toBeUndefined();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("SCHEMA_MISMATCH");
   });
 
   it.each([
@@ -181,7 +180,7 @@ describe("public API provenance contract", () => {
     setEnv("KEXIM_FX_API_URL", "https://example.test/fx-invalid-unit");
     setEnv("PUBLIC_APIS_FALLBACK_TO_MOCK", "0");
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([
-      { cur_unit: currencyUnit, deal_bas_r: "912.00", deal_bas_dt: "20260901" },
+      { result: 1, cur_unit: currencyUnit, deal_bas_r: "912.00", deal_bas_dt: "20260901" },
     ]), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -189,9 +188,9 @@ describe("public API provenance contract", () => {
 
     const result = await getExchangeQuotes("20260901", ["JPY"]);
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data).toEqual([]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("SCHEMA_MISMATCH");
   });
 
   it("marks housing mock fallback as degraded provenance when the sales API key is missing", async () => {

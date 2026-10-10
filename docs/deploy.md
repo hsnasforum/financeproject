@@ -36,6 +36,13 @@ pnpm build
 pnpm start
 ```
 
+위 `prisma:db:push`는 새 빈 SQLite DB 초기화용입니다. 기존 DB는 준비 상태를 검사만 하며,
+FINLIFE legacy 식별 구조가 남아 있으면 중단합니다. 앱을 종료한 상태에서
+`corepack pnpm finlife:identity:migrate`로 읽기 전용 preflight를 수행하고, `required`이며
+차단 사유가 없을 때 `corepack pnpm finlife:identity:migrate:apply`로 적용합니다.
+적용은 app control root의 writer lease, durable SQLite 백업·receipt, transaction 경계를 사용합니다.
+reset·data-loss·schema/config/URL override로 기존 DB를 갱신하는 경로는 허용하지 않습니다.
+
 `pnpm start`와 `pnpm start:local`은 모두 desktop launcher로 수렴합니다. 런처는
 loopback bind, local filesystem, SQLite, deployment policy, writer lease를 먼저
 검증하고 one-shot bootstrap을 통해 browser에 `HttpOnly; SameSite=Strict` session
@@ -44,7 +51,7 @@ cookie를 설정합니다. `start:raw`와 `scripts/next_prod_safe.mjs` 직접 �
 
 `DATABASE_URL`은 앱 루트 기준 canonical 경로로 검증한 뒤 Prisma가 Windows에서도
 해석할 수 있는 같은 볼륨의 Windows 호환 절대 `file:` URL로 standalone child에 전달됩니다. DB 파일이 없거나 `prisma/schema.prisma`의 필수 테이블이
-누락되면 launcher는 포트를 열기 전에 실패합니다. `bootstrap:local`은 외부 상품
+누락되거나 FINLIFE 복합 식별키·유일성 index가 준비되지 않으면 launcher는 포트를 열기 전에 실패합니다. `bootstrap:local`은 외부 상품
 동기화까지 포함하므로 API key 없이 스키마만 준비할 때는 위 Prisma 두 명령을 사용합니다.
 
 설치 가능한 portable 아티팩트는 다음 명령으로 만듭니다.
@@ -70,6 +77,7 @@ Desktop launcher가 아래 runtime policy 값과 session token을 process 환경
 - `DATABASE_URL`은 비어 있거나 `file:` SQLite URL만 허용합니다.
 - Managed desktop에서는 `DATABASE_URL`, `PLANNING_DATA_DIR`, `PLANNING_APP_NAME`을 설치본 `.env.local`에 기록합니다. launcher·update·uninstall은 이 설치본 설정을 단일 기준으로 사용하고 호출 shell의 같은 이름 변수는 무시합니다.
 - Managed installer의 SQLite DB는 설치 폴더 내부에 있어야 하며 symlink/junction을 통한 외부 경로도 거부합니다.
+- 설치·업데이트의 app control root는 설치 폴더와 배포 원본 밖에 있어야 합니다. 내부 control root는 폴더 교체 시 lease·migration 백업도 이동하므로 복사 전에 거부하며, 기존 데이터를 안전하게 옮기는 별도 작업이 먼저 필요합니다.
 
 기능별 API key는 선택입니다. 누락 시 해당 데이터 소스 상태와 영향 안내를 표시하고
 핵심 Planning 흐름은 유지합니다.

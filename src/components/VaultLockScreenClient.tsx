@@ -89,11 +89,11 @@ export function VaultLockScreenClient({ scope }: VaultLockScreenClientProps) {
   }
 
   if (loading) {
-    return <LoadingState className="m-6" title="vault 상태를 확인하는 중입니다." />;
+    return <LoadingState testId="vault-loading-state" className="m-6" title="vault 상태를 확인하는 중입니다." />;
   }
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-10">
+    <div data-planning-navigation-state={scope === "planning" ? "/planning" : "/ops"} className="mx-auto max-w-xl px-4 py-10">
       <Card>
         <h1 className="text-lg font-black text-navy">Vault 잠금 상태</h1>
         <p className="mt-2 text-sm text-slate-600">

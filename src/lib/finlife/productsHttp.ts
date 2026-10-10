@@ -1,4 +1,4 @@
-import { ensureProductBest } from "@/lib/finlife/best";
+import { deriveBestFromOptions, ensureProductBest } from "@/lib/finlife/best";
 import { fetchLiveFinlifeDetailed } from "@/lib/finlife/fetchLive";
 import { singleflight } from "../cache/singleflight";
 import {
@@ -17,6 +17,7 @@ import { attachFallback, type FallbackMeta } from "@/lib/http/fallbackMeta";
 import { setCooldown, shouldCooldown } from "@/lib/http/rateLimitCooldown";
 import { statusFromExternalApiErrorCode } from "@/lib/publicApis/errorContract";
 import { buildSchemaMismatchError } from "@/lib/publicApis/schemaDrift";
+import { FinlifeIntegrityError, mergeFinlifeProducts, validateFinlifeResponse } from "./identity.mjs";
 
 type RouteResult = {
   status: number;
@@ -200,6 +201,29 @@ function parseBaseAndOptions(input: {
   topFinGrpNo: string;
   mode: "live" | "mock";
 }): { baseList: unknown[]; optionList: unknown[]; mismatch: FinlifeSourceResult["error"] | null } {
+  if (input.mode === "live") {
+    try {
+      validateFinlifeResponse(input.kind, input.raw, { pageNo: input.pageNo });
+    } catch (error) {
+      if (!(error instanceof FinlifeIntegrityError)) throw error;
+      return {
+        baseList: [],
+        optionList: [],
+        mismatch: error.code === "FINLIFE_UPSTREAM_FAILED" ? {
+          code: "LIVE_FETCH_FAILED",
+          message: "FINLIFE에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.",
+          diagnostics: { upstreamCode: extractPagingMeta(input.raw).errCd },
+        } : buildSchemaMismatchError({
+          source: "finlife",
+          stage: "extract_rows",
+          message: "FINLIFE 응답 형식이 바뀌어 데이터를 읽지 못했습니다. 잠시 후 다시 시도해주세요.",
+          raw: input.raw,
+          rowPathHints: ["result.baseList", "result.optionList"],
+          note: `kind=${input.kind};mode=${input.mode};pageNo=${input.pageNo};topFinGrpNo=${input.topFinGrpNo};reason=${error.message}`,
+        }),
+      };
+    }
+  }
   const root = isRecord(input.raw) ? input.raw : null;
   const result = root && isRecord(root.result) ? root.result : null;
   if (!result) {
@@ -299,7 +323,7 @@ function extractRowsAndPaging(input: {
     };
   }
   const { baseList, optionList } = parsedBase;
-  const normalized = normalizeFinlifeProducts({ baseList, optionList });
+  const normalized = normalizeFinlifeProducts({ baseList, optionList, kind: input.kind });
   const sliced = normalized.slice(0, input.pageSize);
 
   const pageMeta = extractPagingMeta(input.raw);
@@ -325,26 +349,14 @@ function extractRowsAndPaging(input: {
   };
 }
 
-function mergeProducts(rows: NormalizedProduct[]): NormalizedProduct[] {
-  const merged = new Map<string, NormalizedProduct>();
-  for (const item of rows) {
+function mergeProducts(rows: NormalizedProduct[], kind: FinlifeKind): NormalizedProduct[] {
+  const merged = mergeFinlifeProducts(rows, { kind });
+  for (const item of merged) {
+    const best = deriveBestFromOptions(item.options);
+    if (best) item.best = best;
     ensureProductBest(item);
-    const existing = merged.get(item.fin_prdt_cd);
-    if (!existing) {
-      merged.set(item.fin_prdt_cd, {
-        ...item,
-        options: [...item.options],
-      });
-      continue;
-    }
-    existing.options.push(...item.options);
-    if (!existing.kor_co_nm && item.kor_co_nm) existing.kor_co_nm = item.kor_co_nm;
-    if (!existing.fin_prdt_nm && item.fin_prdt_nm) existing.fin_prdt_nm = item.fin_prdt_nm;
-    if (!existing.fin_co_no && item.fin_co_no) existing.fin_co_no = item.fin_co_no;
-    if (!existing.best && item.best) existing.best = item.best;
-    ensureProductBest(existing);
   }
-  return [...merged.values()];
+  return merged;
 }
 
 function parseScanMode(searchParams: URLSearchParams): { scan: "page" | "all"; maxPages: number } {
@@ -390,6 +402,7 @@ function buildSchemaMismatchPayload(input: {
   error: FinlifeSourceResult["error"];
   fallback?: FallbackMeta;
 }): FinlifeSourceResult {
+  const upstreamFailure = input.error?.code === "LIVE_FETCH_FAILED";
   const payload: FinlifeSourceResult = {
     ok: false,
     mode: input.mode,
@@ -398,12 +411,12 @@ function buildSchemaMismatchPayload(input: {
       pageNo: input.pageNo,
       topFinGrpNo: input.topFinGrpNo,
       fallbackUsed: false,
-      message: "FINLIFE 응답 형식이 예상과 달라 데이터를 가져오지 못했습니다.",
+      message: upstreamFailure ? input.error?.message : "FINLIFE 응답 형식이 예상과 달라 데이터를 가져오지 못했습니다.",
     },
     data: [],
     error: input.error,
   };
-  return withFallback(payload, input.fallback ?? fallbackLive("schema_mismatch"));
+  return withFallback(payload, input.fallback ?? fallbackLive(upstreamFailure ? "upstream_failed" : "schema_mismatch"));
 }
 
 function buildHttpErrorPayload(input: {
@@ -781,7 +794,7 @@ export async function getFinlifeProductsForHttp(kind: FinlifeKind, request: Requ
           mode: "live",
         });
         if (one.mismatch) {
-          console.error("[finlife-route] schema mismatch", one.mismatch.diagnostics ?? {});
+          console.error("[finlife-route] response rejected", one.mismatch.diagnostics ?? {});
           const payload = buildSchemaMismatchPayload({
             kind,
             pageNo: currentPage,
@@ -797,7 +810,7 @@ export async function getFinlifeProductsForHttp(kind: FinlifeKind, request: Requ
               cacheKey,
               pageNo: currentPage,
               pageSize,
-              reason: "schema_mismatch",
+              reason: one.mismatch.code === "LIVE_FETCH_FAILED" ? "upstream_failed" : "schema_mismatch",
               upstream: {
                 upstreamStatus: live.status,
                 upstreamMs: live.elapsedMs,
@@ -821,7 +834,7 @@ export async function getFinlifeProductsForHttp(kind: FinlifeKind, request: Requ
         if (!one.paging.hasNext) break;
       }
 
-      const merged = mergeProducts(pageRows);
+      const merged = mergeProducts(pageRows, kind);
       const totalOptions = merged.reduce((sum, item) => sum + item.options.length, 0);
       payload = withFallback({
         ok: true,
@@ -861,7 +874,7 @@ export async function getFinlifeProductsForHttp(kind: FinlifeKind, request: Requ
         mode: "live",
       });
       if (one.mismatch) {
-        console.error("[finlife-route] schema mismatch", one.mismatch.diagnostics ?? {});
+        console.error("[finlife-route] response rejected", one.mismatch.diagnostics ?? {});
         const payload = buildSchemaMismatchPayload({
           kind,
           pageNo,
@@ -877,7 +890,7 @@ export async function getFinlifeProductsForHttp(kind: FinlifeKind, request: Requ
             cacheKey,
             pageNo,
             pageSize,
-            reason: "schema_mismatch",
+            reason: one.mismatch.code === "LIVE_FETCH_FAILED" ? "upstream_failed" : "schema_mismatch",
             upstream: {
               upstreamStatus: live.status,
               upstreamMs: live.elapsedMs,
@@ -938,6 +951,30 @@ export async function getFinlifeProductsForHttp(kind: FinlifeKind, request: Requ
       }),
     };
   } catch (error) {
+    if (error instanceof FinlifeIntegrityError) {
+      const payload = buildSchemaMismatchPayload({
+        kind,
+        pageNo,
+        topFinGrpNo,
+        mode: "live",
+        error: error.code === "FINLIFE_UPSTREAM_FAILED" ? {
+          code: "LIVE_FETCH_FAILED",
+          message: "FINLIFE에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.",
+        } : buildSchemaMismatchError({
+          source: "finlife",
+          stage: "normalize",
+          message: "FINLIFE 응답의 상품 정보가 일치하지 않아 데이터를 읽지 못했습니다.",
+          raw: null,
+          rowPathHints: ["result.baseList", "result.optionList"],
+          note: `kind=${kind};pageNo=${pageNo};reason=${error.message}`,
+        }),
+      });
+      return {
+        status: 502,
+        headers: buildHeaders("live", cacheDecision.state, "called"),
+        payload: attachDebugError(payload, { enabled: debug, cacheKey, pageNo, pageSize, reason: error.code === "FINLIFE_UPSTREAM_FAILED" ? "upstream_failed" : "schema_mismatch" }),
+      };
+    }
     const message = error instanceof Error ? error.message : "unknown";
     const parsedUpstream = parseUpstreamError(error);
     const upstreamStatus = parsedUpstream.status;

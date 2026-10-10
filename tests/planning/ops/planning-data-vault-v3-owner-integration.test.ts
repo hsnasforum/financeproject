@@ -1,3 +1,6 @@
+import { createAccount } from "../../../src/lib/planning/v3/store/accountsStore";
+import { importCsvToBatch } from "../../../src/lib/planning/v3/service/importCsvToBatch";
+import { upsertOverride } from "../../../src/lib/planning/v3/store/txnOverridesStore";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -185,6 +188,46 @@ describe.sequential("planning data vault current-user v3 owner integration", () 
       })
     ));
   }
+
+  it("exports and restores real account, CSV batch and category overrides without losing stored bytes", async () => {
+    const batch = await runWithPlanningUserScope({ userId: "alice", authSource: "test" }, async () => {
+      const account = await createAccount({ name: "합성 거래 계좌", kind: "checking" });
+      const imported = await importCsvToBatch({
+        csvText: "date,amount,description\n2026-08-01,5200000,salary\n2026-08-04,-500000,loan",
+        mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
+        options: { accountId: account.id },
+      });
+      for (const row of imported.transactions) {
+        await upsertOverride({ batchId: imported.batchMeta.id, txnId: row.txnId, categoryId: row.amountKrw > 0 ? "income" : "debt" });
+      }
+      return imported.batchMeta.id;
+    });
+    const exported = await buildAliceVault();
+    const entries = await decodeZip(exported.bytes, { maxEntries: 500, maxTotalBytes: 8 * 1024 * 1024 });
+    const storedBytes = new Map<string, Buffer>();
+    for (const [ownerId, logicalPath] of [
+      ["v3.accounts", "accounts.json"],
+      ["v3.batches", "batches/index.json"],
+      ["v3.batches", `batches/${batch}.ndjson`],
+      ["v3.transaction-overrides", `txn-overrides/${batch}.json`],
+    ] as const) {
+      const target = targetFor(owners, ownerId, logicalPath);
+      const bytes = fs.readFileSync(target);
+      storedBytes.set(target, bytes);
+      expect(entries.get(`planning-v3/payload/${ownerId}/${logicalPath}`)).toEqual(bytes);
+    }
+    writeJson(targetFor(owners, "v3.transaction-overrides", `txn-overrides/${batch}.json`), { version: 1, items: {} });
+    const restored = await runWithPlanningUserScope({ userId: "alice" }, () => restorePlanningDataVaultZip(exported.bytes, {
+      mode: "replace",
+      maxEntries: 500,
+      maxBytes: 8 * 1024 * 1024,
+      scope: "user",
+      userId: "alice",
+    }));
+    expect(restored.committed).toBe(true);
+    expect(restored.issues).toEqual([]);
+    for (const [target, bytes] of storedBytes) expect(fs.readFileSync(target)).toEqual(bytes);
+  });
 
   it("exports only the exact 13 current-user owners and excludes shared state", async () => {
     const exported = await buildAliceVault();

@@ -89,7 +89,8 @@ describe("stable report scenario to action flow", () => {
     const html = render(run);
     expect(html.indexOf('data-testid="saved-report-brief"')).toBeLessThan(html.indexOf('data-testid="report-summary-cards"'));
     const brief = renderToStaticMarkup(<SavedReportBrief run={run} vm={vm} />);
-    expect(brief).toContain(expected.verdict.headline);
+    expect(brief).toContain(expected.assessment.headline);
+    expect(brief).toContain(expected.assessment.basisLabel);
     expect(brief).toContain(expected.nextActions[0].title);
     expect(brief).toContain("24개월");
     expect(brief).toContain("2026-09-07");

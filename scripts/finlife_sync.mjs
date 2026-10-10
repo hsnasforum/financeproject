@@ -1,3 +1,4 @@
+import { FinlifeIntegrityError, validateFinlifeResponse, mergeFinlifeProducts } from "../src/lib/finlife/identity.mjs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import {
@@ -244,7 +245,10 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
   const replay = fromFile ? loadReplayDump(fromFile) : null;
   const replayKinds = replay?.kind ? [replay.kind] : kinds;
 
+  const failures = [];
   for (const kind of replayKinds) {
+    const startedAt = new Date().toISOString();
+    try {
     const groups = fromFile ? [] : (topFinGrpNo ? [topFinGrpNo] : parseGroups(kind));
     const pagesFetchedByGroup = {};
     const maxPageByGroup = {};
@@ -283,6 +287,7 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
             throw error;
           }
 
+          validateFinlifeResponse(kind, raw, { pageNo });
           const paging = parseFinlifePaging(raw);
           const lists = extractBaseAndOption(raw);
           if (pageNo === 1 && typeof paging.totalCount === "number") totalCount = paging.totalCount;
@@ -300,6 +305,9 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
           pageNo += 1;
         }
 
+        if (lastHasNextByGroup[group] === false && typeof totalCount === "number" && mergeFinlifeProducts(products, {kind}).length !== totalCount) {
+          throw new FinlifeIntegrityError("group product count mismatch");
+        }
         if (maxPageByGroup[group] === undefined) maxPageByGroup[group] = null;
         groupRows.push({ group, items: products, totalCount });
       }
@@ -367,7 +375,14 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
     console.log(`- db inventoryItems: ${dbSync.inventoryItems ?? "unavailable"}`);
     console.log(`- db inventoryDeltaItems: ${dbSync.inventoryDeltaItems ?? "unavailable"}`);
     console.log(`- db staleCandidateItems: ${dbSync.staleCandidateItems ?? "unavailable"}`);
+    } catch (error) {
+      const errorCode = error?.code === "FINLIFE_INTEGRITY_FAILED" || error?.phase === "integrity" ? "FINLIFE_INTEGRITY_FAILED" : "SYNC_FAILED";
+      failures.push({ kind, error });
+      if (!error?.phase) writeSyncAttempt(kind, { status: "failed", phase: errorCode === "FINLIFE_INTEGRITY_FAILED" ? "integrity" : "fetch", startedAt, updatedAt: new Date().toISOString(), errorCode });
+      console.error(`[finlife:sync] ${kind} failed (${errorCode}); previous snapshot preserved`);
+    }
   }
+  if (failures.length) throw new AggregateError(failures.map(row => row.error), `FINLIFE failed kinds: ${failures.map(row => row.kind).join(",")}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

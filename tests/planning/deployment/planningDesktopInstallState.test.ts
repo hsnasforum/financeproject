@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   assertDesktopInstallationIdentity,
@@ -24,9 +26,12 @@ import {
   DESKTOP_MANIFEST_FILENAME,
   DESKTOP_MANIFEST_KIND,
   DESKTOP_PROVENANCE_VERSION,
+  computeArtifactChecksum,
 } from "../../../scripts/planning_v2_desktop_provenance.mjs";
 import { parseArgs as parseDesktopUninstallArgs } from "../../../scripts/planning_v2_desktop_uninstall.mjs";
 import { formatPlanningSqliteDatabaseUrl } from "../../../src/lib/planning/deployment/runtimeDatabase.mjs";
+import { acquirePlanningWriterLease } from "../../../src/lib/planning/deployment/writerLease.mjs";
+import { createFinlifeLegacyFixture, snapshotDatabase } from "../../helpers/finlifeLegacyDatabase";
 
 const roots: string[] = [];
 
@@ -40,6 +45,59 @@ function write(root: string, relativePath: string, content: string): void {
   const filePath = path.join(root, relativePath);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content, "utf8");
+}
+
+async function migrationInstallFixture({ internalControlRoot = false, existing = true, databaseRelative = "prisma/dev.db" } = {}) {
+  const root = makeRoot();
+  const fromDir = path.join(root, "artifact");
+  const toDir = path.join(root, "installed");
+  const controlRoot = internalControlRoot ? path.join(toDir, "app-data") : path.join(root, "app-data");
+  write(fromDir, "package.json", JSON.stringify({ name: "finance", version: "1.4.0" }));
+  write(fromDir, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+  write(fromDir, ".env.local.example", `DATABASE_URL=file:./${databaseRelative}\nPLANNING_DATA_DIR=${path.join(controlRoot, "vault")}\n`);
+  write(fromDir, "prisma/schema.prisma", fs.readFileSync(path.join(process.cwd(), "prisma/schema.prisma"), "utf8"));
+  // A legacy update must never delegate schema changes to Prisma db push.
+  write(fromDir, "scripts/prisma_cli_safe.mjs", 'throw new Error("unexpected schema db push on existing database");\n');
+  const sqliteRoot = path.dirname(createRequire(import.meta.url).resolve("better-sqlite3/package.json"));
+  const bindingsRoot = path.dirname(createRequire(path.join(sqliteRoot, "package.json")).resolve("bindings/package.json"));
+  const uriRoot = path.dirname(createRequire(path.join(bindingsRoot, "package.json")).resolve("file-uri-to-path/package.json"));
+  for (const [packageName, packageRoot] of [["better-sqlite3", sqliteRoot], ["bindings", bindingsRoot], ["file-uri-to-path", uriRoot]]) {
+    fs.cpSync(packageRoot, path.join(fromDir, "node_modules", packageName), { recursive: true, dereference: true });
+  }
+  const checksum = await computeArtifactChecksum(fromDir);
+  write(fromDir, "desktop-manifest.json", JSON.stringify({
+    kind: DESKTOP_MANIFEST_KIND,
+    provenanceVersion: DESKTOP_PROVENANCE_VERSION,
+    version: "1.4.0",
+    packageVersion: "1.4.0",
+    gitSha: "a".repeat(40),
+    lockfileSha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(fromDir, "pnpm-lock.yaml"))).digest("hex"),
+    platform: process.platform,
+    arch: process.arch,
+    nodeAbi: process.versions.modules,
+    artifactChecksum: checksum,
+  }));
+  const databasePath = path.join(toDir, databaseRelative);
+  if (existing) {
+    write(toDir, "package.json", JSON.stringify({ name: "finance", version: "0.1.0" }));
+    write(toDir, ".env.local", `DATABASE_URL=file:./${databaseRelative}\nPLANNING_DATA_DIR=${path.join(controlRoot, "vault")}\n`);
+    write(toDir, "user-note.txt", "preserve user file\n");
+    createFinlifeLegacyFixture(databasePath);
+  }
+  return { root, fromDir, toDir, controlRoot, databasePath };
+}
+
+function runMigrationInstall(input: Awaited<ReturnType<typeof migrationInstallFixture>>) {
+  return spawnSync(process.execPath, [
+    path.join(process.cwd(), "scripts/planning_v2_desktop_install.mjs"),
+    "--self-contained-source", "--skip-install", "--skip-shortcuts",
+    `--from=${input.fromDir}`, `--to=${input.toDir}`,
+  ], {
+    cwd: process.cwd(),
+    env: { ...process.env, PLANNING_DATA_DIR: path.join(input.root, "ambient-wrong/vault") },
+    encoding: "utf8",
+    timeout: 15_000,
+  });
 }
 
 function seedDesktopInstallationIdentity(targetDir: string): void {
@@ -77,6 +135,89 @@ afterEach(() => {
 });
 
 describe("desktop installation state ownership", () => {
+  it("rejects a legacy database in an application-owned directory instead of treating the omitted stage file as new", async () => {
+    const input = await migrationInstallFixture({ databaseRelative: "src/private.sqlite" });
+    const before = fs.readFileSync(input.databasePath);
+    const sidecars = ["-wal", "-journal"].map((suffix) => `${input.databasePath}${suffix}`);
+    for (const sidecar of sidecars) fs.writeFileSync(sidecar, "fixture sidecar must be preserved");
+    const result = runMigrationInstall(input);
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(1);
+    expect(result.stderr).toContain("existing SQLite database was not preserved in installation stage");
+    expect(result.stderr).not.toContain("unexpected schema db push");
+    expect(fs.readFileSync(input.databasePath)).toEqual(before);
+    for (const sidecar of sidecars) expect(fs.readFileSync(sidecar, "utf8")).toBe("fixture sidecar must be preserved");
+    expect(JSON.parse(fs.readFileSync(path.join(input.toDir, "package.json"), "utf8")).version).toBe("0.1.0");
+    expect(fs.existsSync(path.join(input.controlRoot, "backups/finlife-identity"))).toBe(false);
+    expect(fs.existsSync(path.join(input.controlRoot, "runtime/writer-lease.json"))).toBe(false);
+    expect(fs.readdirSync(input.root).filter((entry) => entry.includes(".install-") || entry.includes(".backup-"))).toEqual([]);
+  });
+
+  it("migrates the staged legacy database while preserving IDs, references and a durable backup after activation", async () => {
+    const input = await migrationInstallFixture();
+    const before = snapshotDatabase(input.databasePath);
+    const sourceChecksum = await computeArtifactChecksum(input.fromDir);
+    const result = runMigrationInstall(input);
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
+    expect(snapshotDatabase(input.databasePath, { omitIdentity: true })).toEqual(before);
+    expect(fs.readFileSync(path.join(input.toDir, "user-note.txt"), "utf8")).toBe("preserve user file\n");
+    const backupRoot = path.join(input.controlRoot, "backups/finlife-identity");
+    const backupDirectories = fs.readdirSync(backupRoot);
+    expect(backupDirectories).toHaveLength(1);
+    const backupPath = path.join(backupRoot, backupDirectories[0], "before.sqlite");
+    expect(snapshotDatabase(backupPath)).toEqual(before);
+    expect(await computeArtifactChecksum(input.fromDir)).toEqual(sourceChecksum);
+    expect(fs.existsSync(path.join(input.controlRoot, "runtime/writer-lease.json"))).toBe(false);
+    const readyBytes = fs.readFileSync(input.databasePath);
+    const repeated = runMigrationInstall(input);
+    expect(repeated.status, `${repeated.stderr}\n${repeated.stdout}`).toBe(0);
+    expect(fs.readFileSync(input.databasePath)).toEqual(readyBytes);
+    expect(fs.readdirSync(backupRoot)).toEqual(backupDirectories);
+  });
+
+  it.each([true, false])("blocks installation copy when the configured control root has another writer (existing=%s)", async (existing) => {
+    const input = await migrationInstallFixture({ existing });
+    const before = existing ? fs.readFileSync(input.databasePath) : null;
+    const lease = await acquirePlanningWriterLease({ dataRoot: input.controlRoot, writerId: "runtime.desktop" });
+    try {
+      const result = runMigrationInstall(input);
+      expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(1);
+      expect(result.stderr).toContain("PLANNING_WRITER_LEASE_HELD");
+      if (before) expect(fs.readFileSync(input.databasePath)).toEqual(before);
+      else expect(fs.existsSync(input.toDir)).toBe(false);
+      expect(fs.readdirSync(input.root).filter((entry) => entry.includes(".install-") || entry.includes(".backup-"))).toEqual([]);
+    } finally {
+      await lease.release();
+    }
+  });
+
+  it("fails closed on ambiguous legacy rows and keeps the prior installation intact", async () => {
+    const input = await migrationInstallFixture();
+    const database = new Database(input.databasePath);
+    database.prepare('UPDATE "Product" SET raw=? WHERE id=40').run('{"fin_co_no":"0010002","fin_prdt_cd":"SHARED-CODE"}');
+    database.close();
+    const before = fs.readFileSync(input.databasePath);
+    const result = runMigrationInstall(input);
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(1);
+    expect(result.stderr).toContain("FINLIFE migration:");
+    expect(result.stderr).not.toContain("unexpected schema db push");
+    expect(fs.readFileSync(input.databasePath)).toEqual(before);
+    expect(JSON.parse(fs.readFileSync(path.join(input.toDir, "package.json"), "utf8")).version).toBe("0.1.0");
+    expect(fs.existsSync(path.join(input.controlRoot, "backups/finlife-identity"))).toBe(false);
+    expect(fs.existsSync(path.join(input.controlRoot, "runtime/writer-lease.json"))).toBe(false);
+    expect(fs.readdirSync(input.root).filter((entry) => entry.includes(".install-") || entry.includes(".backup-"))).toEqual([]);
+  });
+
+  it("rejects an installation-internal control root before copying or moving its lease and backup", async () => {
+    const input = await migrationInstallFixture({ internalControlRoot: true });
+    const before = fs.readFileSync(input.databasePath);
+    const result = runMigrationInstall(input);
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(1);
+    expect(result.stderr).toContain("control root must stay outside");
+    expect(fs.readFileSync(input.databasePath)).toEqual(before);
+    expect(fs.existsSync(path.join(input.controlRoot, "runtime/writer-lease.json"))).toBe(false);
+    expect(fs.readdirSync(input.root).filter((entry) => entry.includes(".install-") || entry.includes(".backup-"))).toEqual([]);
+  });
+
   it("uses only an installation-internal database and remaps an absolute target path into the stage", async () => {
     const root = makeRoot();
     const stageDir = path.join(root, "stage");

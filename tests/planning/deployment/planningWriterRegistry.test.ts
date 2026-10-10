@@ -16,10 +16,10 @@ afterEach(async () => {
   await Promise.all(cleanupRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
 });
 
-function runWriterWrapper(args: string[], env: NodeJS.ProcessEnv) {
+function runWriterWrapper(args: string[], env: NodeJS.ProcessEnv, cwd = process.cwd()) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/planning_writer_entry.mjs", ...args], {
-      cwd: process.cwd(),
+    const child = spawn(process.execPath, [path.join(process.cwd(), "scripts/planning_writer_entry.mjs"), ...args], {
+      cwd,
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -49,6 +49,57 @@ function runScheduler(args: string[], env: NodeJS.ProcessEnv) {
 }
 
 describe("planning writer registry", () => {
+  it("uses the installed authoritative environment and production root for the identity migration writer", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "planning-identity-writer-env-"));
+    cleanupRoots.push(root);
+    const cwd = path.join(root, "installed");
+    const controlRoot = path.join(root, "configured-control");
+    const markerPath = path.join(root, "writer-env.json");
+    await fs.mkdir(cwd);
+    await fs.writeFile(path.join(cwd, "desktop-manifest.json"), "{}\n");
+    await fs.writeFile(path.join(cwd, ".env.local"), `DATABASE_URL=file:./prisma/managed.db\nPLANNING_DATA_DIR=${path.join(controlRoot, "vault")}\nPLANNING_APP_NAME=ManagedIdentityFixture\n`);
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      NODE_ENV: "test",
+      DATABASE_URL: "file:./ambient-wrong.db",
+      PLANNING_DATA_DIR: path.join(root, "ambient-wrong", "vault"),
+      PLANNING_APP_NAME: "AmbientWrongApp",
+    };
+    const args = ["finlife:identity:migrate:apply", "--", process.execPath, "--input-type=module", "--eval",
+      `await import("node:fs/promises").then((fs) => fs.writeFile(${JSON.stringify(markerPath)}, JSON.stringify({databaseUrl:process.env.DATABASE_URL, planningRoot:process.env.PLANNING_DATA_DIR, controlRoot:process.env.PLANNING_WRITER_DATA_ROOT, nodeEnv:process.env.NODE_ENV})))`];
+    const lease = await acquirePlanningWriterLease({ dataRoot: controlRoot, writerId: "runtime.desktop" });
+    try {
+      const blocked = await runWriterWrapper(args, env, cwd);
+      expect(blocked.code).toBe(1);
+      expect(blocked.stderr).toContain("PLANNING_WRITER_LEASE_HELD");
+      await expect(fs.access(markerPath)).rejects.toThrow();
+    } finally {
+      await lease.release();
+    }
+    const allowed = await runWriterWrapper(args, env, cwd);
+    expect(allowed, allowed.stderr).toMatchObject({ code: 0 });
+    expect(JSON.parse(await fs.readFile(markerPath, "utf8"))).toEqual({
+      databaseUrl: "file:./prisma/managed.db",
+      planningRoot: path.join(controlRoot, "vault"),
+      controlRoot,
+      nodeEnv: "production",
+    });
+  });
+
+  it("keeps an explicit source-checkout database and planning root for the identity writer", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "planning-identity-source-env-"));
+    cleanupRoots.push(root);
+    const markerPath = path.join(root, "writer-env.json");
+    const planningRoot = path.join(root, "planning");
+    await fs.writeFile(path.join(root, ".env.local"), "DATABASE_URL=file:./configured.db\nPLANNING_DATA_DIR=./configured/vault\n");
+    const result = await runWriterWrapper([
+      "finlife:identity:migrate:apply", "--", process.execPath, "--input-type=module", "--eval",
+      `await import("node:fs/promises").then((fs) => fs.writeFile(${JSON.stringify(markerPath)}, JSON.stringify({databaseUrl:process.env.DATABASE_URL, planningRoot:process.env.PLANNING_DATA_DIR})))`,
+    ], { ...process.env, NODE_ENV: "test", DATABASE_URL: "file:./explicit.db", PLANNING_DATA_DIR: planningRoot }, root);
+    expect(result, result.stderr).toMatchObject({ code: 0 });
+    expect(JSON.parse(await fs.readFile(markerPath, "utf8"))).toEqual({ databaseUrl: "file:./explicit.db", planningRoot });
+  });
+
   it("routes every supported mutating package script through the canonical wrapper", async () => {
     const packageJson = JSON.parse(await fs.readFile("package.json", "utf8")) as {
       scripts: Record<string, string>;

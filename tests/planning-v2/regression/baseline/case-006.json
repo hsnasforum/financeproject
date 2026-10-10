@@ -5,7 +5,9 @@
     "simulate": {
       "endNetWorthKrw": 49301222,
       "worstCashKrw": 0,
-      "warnings": [],
+      "warnings": [
+        "GOAL_MISSED"
+      ],
       "goals": [
         {
           "id": "goal-emergency",

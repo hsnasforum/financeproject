@@ -73,6 +73,8 @@ async function seedArtifact(root: string, overrides: Record<string, unknown> = {
   write(artifactDir, "scripts/planning_v2_desktop_verify.mjs", "export {};\n");
   write(artifactDir, "scripts/pnpm_runner.mjs", "export {};\n");
   write(artifactDir, "scripts/prisma_cli_safe.mjs", "export {};\n");
+  write(artifactDir, "scripts/finlife_identity_migrate.mjs", "export {};\n");
+  write(artifactDir, "src/lib/finlife/sqliteIdentityMigration.mjs", "export {};\n");
   write(artifactDir, "src/lib/planning/deployment/runtimeDatabase.mjs", "export {};\n");
   write(artifactDir, "src/lib/planning/deployment/runtimeRoot.mjs", "export {};\n");
   write(artifactDir, "public/fixture.txt", "fixture\n");
@@ -369,6 +371,8 @@ describe("release artifact provenance", () => {
       { relativePath: "scripts/planning_desktop_install_state.mjs", mutation: "empty" },
       { relativePath: "scripts/planning_v2_desktop_uninstall.mjs", mutation: "missing" },
       { relativePath: "prisma.config.mjs", mutation: "empty" },
+      { relativePath: "scripts/finlife_identity_migrate.mjs", mutation: "missing" },
+      { relativePath: "src/lib/finlife/sqliteIdentityMigration.mjs", mutation: "empty" },
     ];
 
     for (const testCase of cases) {

@@ -2,9 +2,9 @@ import { ExternalApiError, fetchExternal } from "../../http/fetchExternal";
 import { type PublicApiResult } from "../contracts/types";
 import { buildSchemaMismatchError, safeEndpoint } from "../schemaDrift";
 import {
-  normalizeExchangeCurrencyUnit,
+  type EximExchangeContext,
   normalizeExchangeQuoteDate,
-  parseExchangeRate,
+  validateEximExchangeRows,
 } from "./exchangeNormalization";
 import { formatKstCompactDate } from "../../format/kstCalendarDate";
 
@@ -13,22 +13,6 @@ type NormalizedExchange = {
   base: "KRW";
   rates: Record<string, number>;
   rawMeta: { source: "EXIM"; baseUrl: string };
-};
-
-type EximRow = {
-  cur_unit?: unknown;
-  currency?: unknown;
-  curUnit?: unknown;
-  deal_bas_r?: unknown;
-  dealBasR?: unknown;
-  kftcDealBasR?: unknown;
-  ttb?: unknown;
-  tts?: unknown;
-  rate?: unknown;
-  baseRate?: unknown;
-  deal_bas_dt?: unknown;
-  dealBasDt?: unknown;
-  asOf?: unknown;
 };
 
 export function resolveExchangeBaseUrl(raw: string):
@@ -53,66 +37,15 @@ export function getKstTodayYYYYMMDD(now = new Date()): string {
   return formatKstCompactDate(now);
 }
 
-export function normalizeEximExchange(raw: unknown, baseUrl = ""): NormalizedExchange | null {
-  const rows = extractRows(raw);
-
-  if (rows.length === 0) return null;
-
-  const rates: Record<string, number> = {};
-  let asOf = "";
-
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const rec = row as EximRow;
-    const currencyRaw =
-      typeof rec.cur_unit === "string"
-        ? rec.cur_unit
-        : typeof rec.curUnit === "string"
-          ? rec.curUnit
-          : typeof rec.currency === "string"
-            ? rec.currency
-            : "";
-    if (!currencyRaw) continue;
-    const currency = normalizeExchangeCurrencyUnit(currencyRaw);
-    if (!currency) continue;
-
-    const rate = parseExchangeRate(rec.deal_bas_r ?? rec.dealBasR ?? rec.kftcDealBasR ?? rec.rate ?? rec.baseRate ?? rec.tts ?? rec.ttb);
-    if (rate === null) continue;
-    const rowAsOf = normalizeExchangeQuoteDate(rec.deal_bas_dt ?? rec.dealBasDt ?? rec.asOf);
-    if (!rowAsOf) continue;
-
-    rates[currency.code] = rate / currency.scale;
-    if (!asOf) {
-      asOf = rowAsOf;
-    }
-  }
-
-  if (Object.keys(rates).length === 0) return null;
-
+export function normalizeEximExchange(raw: unknown, baseUrl = "", context?: EximExchangeContext): NormalizedExchange | null {
+  const validated = validateEximExchangeRows(raw, context);
+  if (!validated) return null;
   return {
-    asOf,
+    asOf: validated.asOf,
     base: "KRW",
-    rates,
+    rates: validated.rates,
     rawMeta: { source: "EXIM", baseUrl },
   };
-}
-
-function extractRows(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (!raw || typeof raw !== "object") return [];
-  const rec = raw as Record<string, unknown>;
-  const topKeys = ["data", "rows", "items", "result", "response"];
-  for (const key of topKeys) {
-    const value = rec[key];
-    if (Array.isArray(value)) return value;
-    if (value && typeof value === "object") {
-      const nested = value as Record<string, unknown>;
-      for (const nestedKey of ["data", "rows", "items", "list"]) {
-        if (Array.isArray(nested[nestedKey])) return nested[nestedKey] as unknown[];
-      }
-    }
-  }
-  return [];
 }
 
 function hasHtmlShape(raw: string, contentType: string): boolean {
@@ -131,9 +64,17 @@ export async function fetchEximExchange(params?: { dateYYYYMMDD?: string }): Pro
     return { ok: false, error: { code: baseResolved.code, message: baseResolved.message } };
   }
 
-  const dateYYYYMMDD = (params?.dateYYYYMMDD ?? "").trim() || getKstTodayYYYYMMDD();
+  const today = getKstTodayYYYYMMDD();
+  const suppliedDate = params?.dateYYYYMMDD;
+  const dateYYYYMMDD = suppliedDate === undefined ? today : typeof suppliedDate === "string" ? suppliedDate.trim() : "";
+  if (!/^\d{8}$/.test(dateYYYYMMDD) || !normalizeExchangeQuoteDate(dateYYYYMMDD) || dateYYYYMMDD > today) {
+    return { ok: false, error: { code: "INPUT", message: "환율 조회일은 오늘 이하의 유효한 YYYYMMDD 날짜여야 합니다." } };
+  }
   const keyParam = (process.env.EXIM_EXCHANGE_KEY_PARAM ?? "authkey").trim() || "authkey";
   const dataParam = (process.env.EXIM_EXCHANGE_DATA ?? "AP01").trim() || "AP01";
+  if (dataParam !== "AP01") {
+    return { ok: false, error: { code: "INPUT", message: "EXIM 환율 조회에는 AP01 데이터만 사용할 수 있습니다." } };
+  }
 
   try {
     const url = new URL(baseResolved.baseUrl);
@@ -180,10 +121,9 @@ export async function fetchEximExchange(params?: { dateYYYYMMDD?: string }): Pro
       return { ok: false, error: mismatch };
     }
 
-    const normalized = normalizeEximExchange(parsed, baseResolved.baseUrl);
+    const normalized = normalizeEximExchange(parsed, baseResolved.baseUrl, { requestedDate: dateYYYYMMDD });
     if (!normalized) {
-      const rows = extractRows(parsed);
-      if (rows.length > 0 || (parsed && typeof parsed === "object" && !Array.isArray(parsed))) {
+      if (parsed !== null && !(Array.isArray(parsed) && parsed.length === 0)) {
         const mismatch = buildSchemaMismatchError({
           source: "exchange",
           stage: "normalize",

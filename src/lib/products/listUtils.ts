@@ -1,5 +1,6 @@
 import { sortProducts, type RatePreference } from "../finlife/uiSort";
-import { type NormalizedProduct } from "../finlife/types";
+import { type FinlifeKind, type NormalizedProduct } from "../finlife/types";
+import { productIdentity, resolveProductShelfIds } from "./productIdentity";
 
 export type ProductListSortKey = "rateDesc" | "rateAsc" | "nameAsc" | "termAsc";
 
@@ -7,6 +8,8 @@ export type ProductListFilterInput = {
   query?: string;
   onlyFavorites?: boolean;
   favoriteIds?: Set<string>;
+  kind?: FinlifeKind;
+  identityProducts?: NormalizedProduct[];
 };
 
 function normalizeQuery(query: string): string {
@@ -96,10 +99,14 @@ export function filterProductsForList(
 ): NormalizedProduct[] {
   const query = normalizeQuery(input.query ?? "");
   const onlyFavorites = Boolean(input.onlyFavorites);
-  const favoriteIds = input.favoriteIds ?? new Set<string>();
+  const favoriteIds = resolveProductShelfIds(
+    input.favoriteIds ?? new Set<string>(),
+    input.identityProducts ?? products,
+    input.kind,
+  );
 
   return products.filter((product) => {
-    if (onlyFavorites && !favoriteIds.has(product.fin_prdt_cd)) return false;
+    if (onlyFavorites && !favoriteIds.has(productIdentity(product, input.kind))) return false;
     if (!query) return true;
     const haystack = `${product.fin_prdt_nm ?? ""} ${product.kor_co_nm ?? ""}`.toLowerCase();
     return haystack.includes(query);

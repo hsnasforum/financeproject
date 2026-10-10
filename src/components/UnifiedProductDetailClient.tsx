@@ -10,6 +10,7 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { ProductFreshnessSummary } from "@/lib/sources/types";
+import { ProductDisclosureMeta } from "@/components/products/ProductDisclosureMeta";
 import { formatCatalogSourceAsOf, formatCatalogSourceName } from "@/lib/products/catalogExplorer";
 
 type UnifiedOption = {
@@ -29,6 +30,7 @@ type UnifiedItem = {
   providerName: string;
   productName: string;
   summary?: string;
+  disclosureMonth?: string | null;
   badges?: string[];
   signals?: {
     depositProtection?: "matched" | "unknown";
@@ -241,9 +243,16 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
             <Card className="rounded-[2.5rem] p-8 shadow-sm">
               <div className="flex flex-wrap items-center gap-2 mb-6">
                 <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{formatKindLabel(item.kind)}</span>
-                <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
-                  수집 기준 {formatCatalogSourceAsOf(freshness?.sources[0]?.sourceAsOf ?? null)}
-                </span>
+                {(item.sourceId === "finlife" || item.sourceIds?.includes("finlife")) ? (
+                  <ProductDisclosureMeta
+                    disclosureMonth={item.disclosureMonth}
+                    collectedAt={freshness?.sources.find((source) => source.sourceId === "finlife")?.sourceAsOf}
+                  />
+                ) : (
+                  <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    수집 기준 {formatCatalogSourceAsOf(freshness?.sources.find((source) => source.sourceId === item.sourceId)?.sourceAsOf ?? null)}
+                  </span>
+                )}
                 {(item.badges ?? []).map((badge) => (
                   <span key={`${item.stableId}-${badge}`} className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-navy">{badge}</span>
                 ))}

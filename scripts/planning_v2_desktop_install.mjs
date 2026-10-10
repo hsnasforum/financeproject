@@ -1,25 +1,31 @@
 import fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 import { runPnpm } from "./pnpm_runner.mjs";
 import {
   copyPreservedDesktopState,
   isSameOrNestedDesktopPath,
   resolveProspectiveDesktopCanonicalPath,
 } from "./planning_desktop_install_state.mjs";
-import { loadPlanningDesktopEnvironment } from "./planning_v2_desktop_env.mjs";
+import { loadPlanningDesktopEnvironment, PLANNING_DESKTOP_RUNTIME_CONFIG_ENV_KEYS } from "./planning_v2_desktop_env.mjs";
 import {
+  assertPlanningSqliteSchema,
   formatPlanningSqliteDatabaseUrl,
   resolvePlanningSqliteDatabase,
 } from "../src/lib/planning/deployment/runtimeDatabase.mjs";
 import {
+  inspectPlanningDataRoot,
   resolvePlanningControlRoot,
   resolvePlanningDataRoot,
 } from "../src/lib/planning/deployment/runtimeRoot.mjs";
+import { acquirePlanningWriterLease, verifyPlanningWriterLeaseCapability } from "../src/lib/planning/deployment/writerLease.mjs";
+import { assertFinlifeIdentityReady, inspectFinlifeIdentityMigration, migrateFinlifeIdentityDatabase } from "../src/lib/finlife/sqliteIdentityMigration.mjs";
 import {
   currentGitSha,
   lockfileSha256,
@@ -377,6 +383,70 @@ async function ensureDesktopEnv(stageDir) {
   return true;
 }
 
+async function resolveDesktopInstallEnvironment({ fromDir, toDir }) {
+  const env = { ...process.env };
+  for (const key of PLANNING_DESKTOP_RUNTIME_CONFIG_ENV_KEYS) delete env[key];
+  // Resolve the same preserved files and template that the stage will load,
+  // before copying state or acquiring a lease for a new installation.
+  for (const filename of [".env.local", "env.local", ".env"]) {
+    const candidates = [path.join(toDir, filename), path.join(fromDir, filename)];
+    if (filename === ".env.local") candidates.push(path.join(fromDir, ".env.local.example"));
+    for (const candidate of candidates) {
+      let source;
+      try {
+        const stats = await fs.lstat(candidate);
+        if (stats.isSymbolicLink() || !stats.isFile()) {
+          throw new Error("desktop installation environment must be a regular non-symlink file");
+        }
+        source = await fs.readFile(candidate, "utf8");
+      } catch (error) {
+        if (error && typeof error === "object" && error.code === "ENOENT") continue;
+        throw error;
+      }
+      for (const [key, value] of Object.entries(parseEnv(source))) {
+        if (!Object.hasOwn(env, key)) env[key] = value;
+      }
+      break;
+    }
+  }
+  env.NODE_ENV = "production";
+  return env;
+}
+
+async function desktopDatabaseFileState(filePath) {
+  let before;
+  try {
+    before = await fs.lstat(filePath);
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (before.isSymbolicLink() || !before.isFile()) {
+    throw new Error("desktop SQLite database and sidecars must be regular non-symlink files");
+  }
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  const after = await fs.lstat(filePath);
+  if (after.isSymbolicLink() || !after.isFile() || before.ino !== after.ino || before.dev !== after.dev
+    || before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
+    throw new Error("desktop SQLite database changed during preservation verification");
+  }
+  return { size: after.size, sha256: hash.digest("hex") };
+}
+
+async function assertDesktopDatabasePreserved(sourceDatabasePath, stageDatabasePath) {
+  if (!sourceDatabasePath) return;
+  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+    const [source, stage] = await Promise.all([
+      desktopDatabaseFileState(`${sourceDatabasePath}${suffix}`),
+      desktopDatabaseFileState(`${stageDatabasePath}${suffix}`),
+    ]);
+    if (source?.size !== stage?.size || source?.sha256 !== stage?.sha256) {
+      throw new Error("existing SQLite database was not preserved in installation stage; do not initialize it as a new database");
+    }
+  }
+}
+
 /**
  * @param {{
  *   stageDir: string;
@@ -391,7 +461,7 @@ export async function resolveDesktopStageDatabaseEnvironment(options) {
   await loadPlanningDesktopEnvironment({
     cwd: stageDir,
     env: runtimeEnv,
-    authoritativeKeys: ["DATABASE_URL"],
+    authoritativeKeys: PLANNING_DESKTOP_RUNTIME_CONFIG_ENV_KEYS,
   });
   const configured = resolvePlanningSqliteDatabase({ cwd: stageDir, env: runtimeEnv });
   let databasePath = configured.databasePath;
@@ -420,11 +490,23 @@ export async function resolveDesktopStageDatabaseEnvironment(options) {
   return Object.freeze({ env: runtimeEnv, databasePath, databaseUrl });
 }
 
-async function prepareStage({ fromDir, toDir, stageDir, skipInstall }) {
+async function prepareStage({ fromDir, toDir, stageDir, skipInstall, lease, sourceDatabasePath }) {
   await copyArtifact(fromDir, stageDir);
   const preserved = await copyPreservedDesktopState({ existingDir: toDir, stageDir });
   await ensureDesktopEnv(stageDir);
   const database = await resolveDesktopStageDatabaseEnvironment({ stageDir, toDir });
+  await assertDesktopDatabasePreserved(sourceDatabasePath, database.databasePath);
+  const stageEnv = { ...database.env, NODE_ENV: "production" };
+  const stageControlRoot = await resolveProspectiveDesktopCanonicalPath(
+    resolvePlanningControlRoot({ cwd: stageDir, env: stageEnv }),
+  );
+  if (stageControlRoot !== lease.dataRoot) {
+    throw new Error("desktop installation stage belongs to a different app control root");
+  }
+  database.env.NODE_ENV = "production";
+  database.env.PLANNING_WRITER_DATA_ROOT = lease.dataRoot;
+  database.env.PLANNING_WRITER_LEASE_CAPABILITY = lease.capability;
+  database.env.PLANNING_WRITER_ENTRYPOINT_ID = "desktop.install";
 
   if (!skipInstall) {
     const result = await runPnpm(["install", "--frozen-lockfile"], {
@@ -437,12 +519,20 @@ async function prepareStage({ fromDir, toDir, stageDir, skipInstall }) {
     }
   }
 
-  await runCommand(
-    process.execPath,
-    ["scripts/prisma_cli_safe.mjs", "db", "push"],
-    stageDir,
-    database.env,
-  );
+  const migrationInput = { cwd: stageDir, databasePath: database.databasePath };
+  const inspected = inspectFinlifeIdentityMigration(migrationInput);
+  if (inspected.status === "empty") {
+    await runCommand(
+      process.execPath,
+      ["scripts/prisma_cli_safe.mjs", "db", "push"],
+      stageDir,
+      database.env,
+    );
+  } else {
+    await migrateFinlifeIdentityDatabase({ ...migrationInput, controlRoot: lease.dataRoot, capability: lease.capability });
+  }
+  assertFinlifeIdentityReady(migrationInput);
+  assertPlanningSqliteSchema(migrationInput);
   return preserved;
 }
 
@@ -511,64 +601,102 @@ async function main() {
   const fromDir = path.resolve(cwd, args.from);
   const toDir = path.resolve(cwd, args.to);
   await fs.access(fromDir);
-  await assertDesktopInstallPathsSeparated(fromDir, toDir);
+  const paths = await assertDesktopInstallPathsSeparated(fromDir, toDir);
   const verified = await verifyDesktopArtifact(fromDir, cwd, {
     requireWorkspaceIdentity: !args.selfContainedSource,
   });
   await fs.mkdir(path.dirname(toDir), { recursive: true });
-  await assertDesktopInstallationStopped({ installDir: toDir });
-  const suffix = `${process.pid}-${randomUUID()}`;
-  const stageDir = path.join(path.dirname(toDir), `.${path.basename(toDir)}.install-${suffix}`);
-  const backupDir = path.join(path.dirname(toDir), `.${path.basename(toDir)}.backup-${suffix}`);
-  let hadExisting = false;
-  let activated = false;
-  let preserved = [];
-  let installationError = null;
-  try {
-    preserved = await prepareStage({ fromDir, toDir, stageDir, skipInstall: args.skipInstall });
-    await assertDesktopInstallationStopped({ installDir: toDir });
-    hadExisting = await activateStage({ stageDir, toDir, backupDir });
-    activated = true;
-    if (process.platform === "win32" && !args.skipShortcuts) {
-      await createWindowsShortcuts(toDir, "Planning v2");
+  const stopped = await pathExists(toDir) ? await assertDesktopInstallationStopped({ installDir: toDir }) : null;
+  const installEnv = await resolveDesktopInstallEnvironment({ fromDir, toDir });
+  const sourceDatabase = stopped ? resolvePlanningSqliteDatabase({ cwd: toDir, env: installEnv }) : null;
+  if (sourceDatabase) {
+    const canonicalDatabase = await resolveProspectiveDesktopCanonicalPath(sourceDatabase.databasePath);
+    if (!isSameOrNestedDesktopPath(paths.canonicalTarget, canonicalDatabase)) {
+      throw new Error("desktop installation DATABASE_URL must stay inside the installation directory");
     }
-  } catch (error) {
-    if (activated) {
-      try {
-        await rollbackActivation({ toDir, backupDir, hadExisting });
-      } catch (rollbackError) {
-        installationError = new AggregateError(
-          [error, rollbackError],
-          "desktop installation failed and the previous installation could not be restored",
-        );
-      }
-    }
-    installationError ??= error;
   }
-  let cleanupError = null;
-  try {
-    await removeDesktopPath(stageDir);
-  } catch (error) {
-    cleanupError = error;
-  }
-  if (installationError && cleanupError) {
-    throw new AggregateError(
-      [installationError, cleanupError],
-      "desktop installation failed and the staging directory could not be removed",
-    );
-  }
-  if (installationError) throw installationError;
-  if (cleanupError) throw cleanupError;
-  if (hadExisting) {
-    await removeDesktopPath(backupDir);
-  }
-
-  process.stdout.write(
-    `[planning:v2:desktop:install] verified version=${verified.manifest.version} gitSha=${verified.manifest.gitSha} files=${verified.checksum.fileCount}\n`,
+  const plannedControlRoot = await resolveProspectiveDesktopCanonicalPath(
+    resolvePlanningControlRoot({ cwd: toDir, env: installEnv }),
   );
-  process.stdout.write(`[planning:v2:desktop:install] installed=${toDir}\n`);
-  process.stdout.write(`[planning:v2:desktop:install] preserved=${preserved.length}\n`);
-  process.stdout.write(`[planning:v2:desktop:install] run=${process.platform === "win32" ? "run.cmd" : "./run.sh"}\n`);
+  if (
+    isSameOrNestedDesktopPath(paths.canonicalTarget, plannedControlRoot)
+    || isSameOrNestedDesktopPath(paths.canonicalSource, plannedControlRoot)
+  ) {
+    throw new Error("desktop installation control root must stay outside the source and installation directories so its lease and migration backups survive activation");
+  }
+  if (stopped) {
+    const currentControlRoot = await resolveProspectiveDesktopCanonicalPath(stopped.controlRoot);
+    if (currentControlRoot !== plannedControlRoot) {
+      throw new Error("desktop installation environment would change the current app control root; resolve the configuration before updating");
+    }
+  }
+  const [planningRoot, controlRoot] = await Promise.all([
+    inspectPlanningDataRoot({ dataRoot: resolvePlanningDataRoot({ cwd: toDir, env: installEnv }) }),
+    inspectPlanningDataRoot({ dataRoot: plannedControlRoot }),
+  ]);
+  if (planningRoot.dataRootKind !== "local" || controlRoot.dataRootKind !== "local"
+    || path.dirname(planningRoot.dataRoot) !== controlRoot.dataRoot) {
+    throw new Error("desktop installation requires a verified local app control root");
+  }
+  const lease = await acquirePlanningWriterLease({ dataRoot: controlRoot.dataRoot, writerId: "desktop.install" });
+  try {
+    const suffix = `${process.pid}-${randomUUID()}`;
+    const stageDir = path.join(path.dirname(toDir), `.${path.basename(toDir)}.install-${suffix}`);
+    const backupDir = path.join(path.dirname(toDir), `.${path.basename(toDir)}.backup-${suffix}`);
+    let hadExisting = false;
+    let activated = false;
+    let preserved = [];
+    let installationError = null;
+    try {
+      preserved = await prepareStage({ fromDir, toDir, stageDir, skipInstall: args.skipInstall, lease, sourceDatabasePath: sourceDatabase?.databasePath });
+      if (stopped) await assertDesktopInstallationStopped({ installDir: toDir });
+      else if (await pathExists(toDir)) throw new Error("desktop installation target changed during preparation");
+      await verifyPlanningWriterLeaseCapability({ dataRoot: lease.dataRoot, capability: lease.capability });
+      hadExisting = await activateStage({ stageDir, toDir, backupDir });
+      activated = true;
+      if (process.platform === "win32" && !args.skipShortcuts) {
+        await createWindowsShortcuts(toDir, "Planning v2");
+      }
+    } catch (error) {
+      if (activated) {
+        try {
+          await rollbackActivation({ toDir, backupDir, hadExisting });
+        } catch (rollbackError) {
+          installationError = new AggregateError(
+            [error, rollbackError],
+            "desktop installation failed and the previous installation could not be restored",
+          );
+        }
+      }
+      installationError ??= error;
+    }
+    let cleanupError = null;
+    try {
+      await removeDesktopPath(stageDir);
+    } catch (error) {
+      cleanupError = error;
+    }
+    if (installationError && cleanupError) {
+      throw new AggregateError(
+        [installationError, cleanupError],
+        "desktop installation failed and the staging directory could not be removed",
+      );
+    }
+    if (installationError) throw installationError;
+    if (cleanupError) throw cleanupError;
+    if (hadExisting) {
+      await removeDesktopPath(backupDir);
+    }
+
+    process.stdout.write(
+      `[planning:v2:desktop:install] verified version=${verified.manifest.version} gitSha=${verified.manifest.gitSha} files=${verified.checksum.fileCount}\n`,
+    );
+    process.stdout.write(`[planning:v2:desktop:install] installed=${toDir}\n`);
+    process.stdout.write(`[planning:v2:desktop:install] preserved=${preserved.length}\n`);
+    process.stdout.write(`[planning:v2:desktop:install] run=${process.platform === "win32" ? "run.cmd" : "./run.sh"}\n`);
+  } finally {
+    await lease.release();
+  }
 }
 
 const invokedPath = process.argv[1];
@@ -576,7 +704,8 @@ const modulePath = fileURLToPath(import.meta.url);
 if (invokedPath && path.resolve(invokedPath) === path.resolve(modulePath)) {
   main().catch((error) => {
     const message = error instanceof Error ? error.stack ?? error.message : String(error);
-    process.stderr.write(`[planning:v2:desktop:install] failed\n${message}\n`);
+    const code = error && typeof error === "object" && typeof error.code === "string" ? error.code : "DESKTOP_INSTALL_FAILED";
+    process.stderr.write(`[planning:v2:desktop:install] failed code=${code}\n${message}\n`);
     process.exit(1);
   });
 }

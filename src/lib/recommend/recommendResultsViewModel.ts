@@ -424,6 +424,7 @@ export function buildCardFreshnessMeta(input: {
 }
 
 function buildUnifiedId(sourceId: string, finPrdtCd: string): string {
+  if (finPrdtCd.startsWith("finlife:") || finPrdtCd.startsWith(`${sourceId}:`)) return finPrdtCd;
   return `${sourceId}:${finPrdtCd}`;
 }
 

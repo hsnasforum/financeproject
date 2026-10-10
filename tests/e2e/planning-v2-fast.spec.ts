@@ -77,13 +77,21 @@ test("/planner/legacy redirects to /planning", async ({ page }) => {
   await expect(page).toHaveURL(/\/planning$/, { timeout: 30_000 });
 });
 
-test("/planning shows the beginner form and omits developer JSON controls by default", async ({ page }) => {
+test("/planning shows the beginner form and exposes JSON controls only with the debug flag", async ({ page }) => {
   await page.goto("/planning");
 
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
-  await expect(page.getByTestId("planning-advanced-toggle")).toHaveCount(0);
-  await expect(page.getByTestId("planning-json-editor")).toHaveCount(0);
+  if (process.env.PLANNING_DEBUG_ENABLED === "true") {
+    await expect(page.getByTestId("planning-advanced-toggle")).toHaveCount(1);
+    await expect(page.getByTestId("planning-json-editor")).toBeHidden();
+    await page.getByTestId("planning-advanced-toggle").click();
+    await expect(page.getByTestId("planning-json-editor")).toBeVisible();
+  } else {
+    await expect(page.getByTestId("planning-advanced-toggle")).toHaveCount(0);
+    await expect(page.getByTestId("planning-json-editor")).toHaveCount(0);
+  }
 
+  await page.getByTestId("planning-calculation-options").locator(":scope > summary").click();
   await expect(page.getByTestId("snapshot-selector")).toBeVisible();
   const tagName = await page.getByTestId("planning-snapshot-select").evaluate((node) => node.tagName);
   expect(tagName).toBe("SELECT");
@@ -133,10 +141,16 @@ test("/planning/runs shows print button", async ({ page }) => {
 
 test("key interactive controls expose accessible names", async ({ page, request }) => {
   const seeded = await seedRunForReports(request);
+  // This link is shown for stale/missing data, independently of other tests' snapshots.
+  await page.route("**/api/planning/v2/assumptions/snapshots?*", (route) => route.fulfill({
+    json: { ok: true, latest: { id: "e2e-keycontrols-stale", staleDays: 90, warningsCount: 0 }, items: [] },
+  }));
   await page.goto("/planning");
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
   await expect(page.getByTestId("run-button")).toHaveAccessibleName("플래닝 실행·기록 저장");
   await expect(page.getByTestId("planning-snapshot-ops-link")).toHaveCount(0);
+  await page.getByTestId("planning-calculation-options").locator(":scope > summary").click();
+  await expect(page.getByTestId("snapshot-stale-badge")).toHaveText("90일 경과");
   await expect(
     page.getByTestId("snapshot-selector").getByRole("link", { name: "데이터 상태 확인하기" }),
   ).toBeVisible();

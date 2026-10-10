@@ -1,5 +1,6 @@
 "use client";
 
+import DiagnosisSummary from "@/components/planning/DiagnosisSummary";
 import { useEffect } from "react";
 import type { ReportVM } from "@/lib/planning/reports/reportViewModel";
 import type { PlanningRunRecord } from "@/lib/planning/store/types";
@@ -60,8 +61,8 @@ export default function SavedReportBrief({ run, vm }: SavedReportBriefProps) {
     };
   }, [run.id]);
   const unavailable = !isSavedReportInterpretable(run, vm);
-  const interpretation = unavailable || !vm ? null : buildInterpretationVM(toInterpretationInputFromReportVM(vm));
-  const badge = interpretation?.verdict;
+  const interpretation = unavailable || !vm ? null : buildInterpretationVM(toInterpretationInputFromReportVM(vm), vm.reproducibility?.policy);
+  const badge = interpretation?.assessment;
   const action = interpretation?.nextActions[0];
   const statusLabel = badge?.label || "해석 확인 필요";
   const stageFailures = run.stages?.filter((stage) => stage.status === "FAILED").length ?? 0;
@@ -87,8 +88,8 @@ export default function SavedReportBrief({ run, vm }: SavedReportBriefProps) {
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <p className="text-sm font-semibold text-slate-600">핵심 상태</p>
-          <p className="mt-2 text-lg font-bold leading-8 text-navy">{badge?.headline || "이 실행의 결과를 해석할 수 없습니다. 기록 상태와 원본을 확인해 주세요."}</p>
-          {interpretation?.diagnostics.filter((item) => item.severity !== "info").map((item) => (
+          {interpretation ? <DiagnosisSummary assessment={interpretation.assessment} showLabel={false} /> : <p className="mt-2 text-lg font-bold leading-8 text-navy">이 실행의 결과를 해석할 수 없습니다. 기록 상태와 원본을 확인해 주세요.</p>}
+          {interpretation?.diagnostics.filter((item) => item.id === "snapshot" && item.severity !== "info").map((item) => (
             <p key={item.id} className={cn("mt-3 border-l-2 pl-3 text-sm leading-6", item.severity === "risk" ? "border-rose-300 text-rose-800" : "border-amber-300 text-amber-800")}>
               <span className="font-semibold">{item.title} · {item.evidence}</span><br />{item.description}
             </p>

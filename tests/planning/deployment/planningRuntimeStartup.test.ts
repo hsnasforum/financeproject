@@ -10,9 +10,9 @@ import {
 } from "../../../src/lib/planning/deployment/writerLease.mjs";
 import { PLANNING_RUNTIME_ATTESTATION } from "../../../src/lib/planning/deployment/runtimePolicy.mjs";
 import { verifyPlanningDesktopRuntimeStartup } from "../../../scripts/planning_runtime_startup.mjs";
+import { createFinlifeLegacyFixture } from "../../helpers/finlifeLegacyDatabase";
 import {
   formatPlanningSqliteDatabaseUrl,
-  readPlanningSqliteSchemaContract,
 } from "../../../src/lib/planning/deployment/runtimeDatabase.mjs";
 
 const cleanupRoots: string[] = [];
@@ -22,13 +22,14 @@ afterEach(async () => {
 });
 
 function createRuntimeDatabase(databasePath: string): void {
+  createFinlifeLegacyFixture(databasePath, { globalUnique: false, identityColumn: true });
   const database = new Database(databasePath);
   try {
-    const schemaContract = readPlanningSqliteSchemaContract({ cwd: process.cwd() });
-    for (const entry of schemaContract) {
-      const columns = entry.columns.map((column) => `"${column}" TEXT`).join(", ");
-      database.exec(`CREATE TABLE "${entry.tableName}" (${columns})`);
-    }
+    database.exec(`
+      CREATE UNIQUE INDEX "Product_identityKey_key" ON "Product"("identityKey");
+      CREATE INDEX "Product_finPrdtCd_idx" ON "Product"("finPrdtCd");
+      UPDATE "Product" SET "identityKey"='finlife:deposit:0010001:SHARED-CODE';
+    `);
   } finally {
     database.close();
   }
@@ -69,6 +70,56 @@ function runtimeEnv(
 }
 
 describe("planning runtime startup verification", () => {
+  it("rejects an identity column with the old global product-code uniqueness before runtime startup", async () => {
+    const controlRoot = await fs.mkdtemp(path.join(os.tmpdir(), "planning-runtime-legacy-"));
+    cleanupRoots.push(controlRoot);
+    const databasePath = path.join(controlRoot, "legacy.db");
+    createFinlifeLegacyFixture(databasePath, { identityColumn: true });
+    const before = await fs.readFile(databasePath);
+    const lease = await acquirePlanningWriterLease({ dataRoot: controlRoot, writerId: "runtime.desktop" });
+    try {
+      await registerPlanningWriterLeaseChild({
+        dataRoot: controlRoot,
+        capability: lease.capability,
+        childPid: process.ppid,
+      });
+      await expect(verifyPlanningDesktopRuntimeStartup({
+        cwd: process.cwd(),
+        env: runtimeEnv(process.cwd(), path.join(controlRoot, "planning"), controlRoot, lease.capability, databasePath),
+        bindHost: "127.0.0.1",
+      })).rejects.toThrow("finlife:identity:migrate");
+      expect(await fs.readFile(databasePath)).toEqual(before);
+    } finally {
+      await lease.release();
+    }
+  });
+
+  it("makes the primary launcher fail identity readiness before preparing a session or server", async () => {
+    const controlRoot = await fs.mkdtemp(path.join(os.tmpdir(), "planning-launcher-legacy-"));
+    cleanupRoots.push(controlRoot);
+    const databasePath = path.join(controlRoot, "legacy.db");
+    createFinlifeLegacyFixture(databasePath, { identityColumn: true });
+    const before = await fs.readFile(databasePath);
+    const result = spawnSync(process.execPath, ["scripts/planning_v2_desktop_launch.mjs", "--runtime", "prod", "--no-open"], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE: path.join(controlRoot, "bootstrap.json"),
+        PLANNING_E2E_DESKTOP_DATABASE_URL: formatPlanningSqliteDatabaseUrl({ cwd: process.cwd(), databasePath }),
+        PLANNING_E2E_DESKTOP_DATA_DIR: path.join(controlRoot, "planning"),
+        PLANNING_E2E_DESKTOP_SESSION_TOKEN: "invalid",
+      },
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain("finlife:identity:migrate");
+    expect(result.stderr).not.toContain("must be a high-entropy");
+    expect(await fs.readFile(databasePath)).toEqual(before);
+    await expect(fs.access(path.join(controlRoot, "runtime", "writer-lease.json"))).rejects.toThrow();
+    await expect(fs.access(path.join(controlRoot, "bootstrap.json"))).rejects.toThrow();
+  });
+
   it("accepts only the desktop runtime lease with its registered parent", async () => {
     const controlRoot = await fs.mkdtemp(path.join(os.tmpdir(), "planning-runtime-startup-"));
     cleanupRoots.push(controlRoot);

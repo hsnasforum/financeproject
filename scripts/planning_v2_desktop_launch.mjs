@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { assertFinlifeIdentityReady } from "../src/lib/finlife/sqliteIdentityMigration.mjs";
 import {
   acquirePlanningWriterLease,
   verifyPlanningWriterLeaseCapability,
@@ -562,11 +563,12 @@ async function main() {
     // A secondary launch only asks the already-running primary for a fresh
     // authenticated bootstrap URL. Schema readiness is therefore a primary
     // startup preflight and must not prevent that recovery path.
-    assertPlanningSqliteSchema({ databasePath: runtime.database.databasePath });
     lease = await acquirePlanningWriterLease({
       dataRoot: runtime.controlRoot,
       writerId: "runtime.desktop",
     });
+    assertFinlifeIdentityReady({ cwd: process.cwd(), databasePath: runtime.database.databasePath });
+    assertPlanningSqliteSchema({ databasePath: runtime.database.databasePath });
     const e2eSessionToken = asString(process.env.PLANNING_E2E_DESKTOP_SESSION_TOKEN);
     if (e2eSessionToken && !/^[A-Za-z0-9_-]{43,}$/.test(e2eSessionToken)) {
       throw new Error("PLANNING_E2E_DESKTOP_SESSION_TOKEN must be a high-entropy base64url token");

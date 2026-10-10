@@ -1182,6 +1182,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
           {interpretationInput && (
             canRenderInterpretability ? (
               <InterpretabilityGuideCard
+                policy={selectedRunVmData?.reproducibility?.policy}
                 aggregatedWarnings={interpretationInput.aggregatedWarnings}
                 goals={interpretationInput.goals}
                 monthlyOperatingGuide={selectedRunVmData?.monthlyOperatingGuide}

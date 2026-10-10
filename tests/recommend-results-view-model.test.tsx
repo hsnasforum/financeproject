@@ -55,6 +55,14 @@ const baseMeta: NonNullable<RecommendResponse["meta"]> = {
 };
 
 describe("recommend results view model", () => {
+  it.each(["finlife", "datago_kdb"])("keeps a scoped FINLIFE recommendation link for %s without repeating its source prefix", (sourceId) => {
+    const response: RecommendResponse = {
+      ok: true,
+      items: [{ ...baseItem, sourceId, finPrdtCd: "finlife:deposit:0000001:SAME" }],
+    };
+    expect(attachUnifiedIds(response).items?.[0]?.unifiedId).toBe("finlife:deposit:0000001:SAME");
+  });
+
   it("normalizes recommendation item ids without mutating the response", () => {
     const response: RecommendResponse = { ok: true, meta: baseMeta, items: [baseItem] };
 

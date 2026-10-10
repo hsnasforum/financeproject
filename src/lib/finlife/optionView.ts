@@ -1,4 +1,5 @@
-import { type FinlifeSourceResult, type NormalizedOption, type NormalizedProduct } from "./types";
+import { type FinlifeKind, type FinlifeSourceResult, type NormalizedOption, type NormalizedProduct } from "./types";
+import { productIdentity } from "../products/productIdentity";
 
 export type OptionRow = {
   key: string;
@@ -78,7 +79,7 @@ export function formatOptionBonus(value?: number): string {
   return `+${value.toFixed(2)}%p`;
 }
 
-export function flattenOptionRows(products: NormalizedProduct[], selectedTerms: string[]): OptionRow[] {
+export function flattenOptionRows(products: NormalizedProduct[], selectedTerms: string[], kind?: FinlifeKind): OptionRow[] {
   const termSet = new Set(selectedTerms);
   const rows: OptionRow[] = [];
   for (const product of products) {
@@ -86,7 +87,7 @@ export function flattenOptionRows(products: NormalizedProduct[], selectedTerms: 
       const option = product.options[idx];
       if (termSet.size > 0 && option.save_trm && !termSet.has(option.save_trm)) continue;
       rows.push({
-        key: `${product.fin_prdt_cd}::${option.save_trm ?? "term-missing"}::${idx}`,
+        key: `${productIdentity(product, kind)}::${option.save_trm ?? "term-missing"}::${idx}`,
         product,
         option,
         rate: readOptionRate(option),
@@ -146,10 +147,10 @@ export function sortOptionRows(rows: OptionRow[], sortKey: OptionSortKey): Optio
   });
 }
 
-export function groupOptionRowsByProduct(rows: OptionRow[], representativeSortKey: OptionSortKey = "best_desc"): OptionRowGroup[] {
+export function groupOptionRowsByProduct(rows: OptionRow[], representativeSortKey: OptionSortKey = "best_desc", kind?: FinlifeKind): OptionRowGroup[] {
   const groups = new Map<string, OptionRowGroup>();
   for (const row of rows) {
-    const key = row.product.fin_prdt_cd || `${row.product.kor_co_nm ?? "provider"}::${row.product.fin_prdt_nm ?? "product"}`;
+    const key = productIdentity(row.product, kind) || `${row.product.kor_co_nm ?? "provider"}::${row.product.fin_prdt_nm ?? "product"}`;
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {

@@ -9,6 +9,8 @@ import {
   type FinlifeSnapshotMeta,
 } from "./snapshot";
 import { type FinlifeMode, type NormalizedProduct } from "./types";
+import { deriveBestFromOptions } from "./best";
+import { FinlifeIntegrityError, finlifeRowKey, mergeFinlifeProducts, validateFinlifeProducts, validateFinlifeResponse } from "./identity.mjs";
 
 export type FinlifeSyncResult =
   | { ok: true; kind: FinlifeSnapshotKind; meta: FinlifeSnapshotMeta }
@@ -72,49 +74,36 @@ async function fetchLiveWithRetry(kind: FinlifeSnapshotKind, topFinGrpNo: string
   }
 }
 
-function mergeProductsAcrossGroups(groups: Array<{ topFinGrpNo: string; data: NormalizedProduct[] }>): {
+function mergeProductsAcrossGroups(groups: Array<{ topFinGrpNo: string; data: NormalizedProduct[] }>, kind?: FinlifeSnapshotKind): {
   items: NormalizedProduct[];
   duplicateAcrossGroupsCount: number;
 } {
-  const seenByCode = new Map<string, { group: string; item: NormalizedProduct }>();
+  const firstGroupByIdentity = new Map<string, string>();
   let duplicateAcrossGroupsCount = 0;
 
   for (const group of groups) {
     for (const item of group.data) {
-      const existing = seenByCode.get(item.fin_prdt_cd);
-      if (!existing) {
-        seenByCode.set(item.fin_prdt_cd, {
-          group: group.topFinGrpNo,
-          item: {
-            ...item,
-            options: [...item.options],
-          },
-        });
+      const key = finlifeRowKey({ ...item.raw, fin_co_no: item.fin_co_no ?? item.raw.fin_co_no, fin_prdt_cd: item.fin_prdt_cd, dcls_month: "" });
+      const existingGroup = firstGroupByIdentity.get(key);
+      if (existingGroup === undefined) {
+        firstGroupByIdentity.set(key, group.topFinGrpNo);
         continue;
       }
 
-      if (existing.group !== group.topFinGrpNo) {
+      if (existingGroup !== group.topFinGrpNo) {
         duplicateAcrossGroupsCount += 1;
       }
-
-      const optionsByKey = new Map<string, (typeof item.options)[number]>();
-      for (const opt of existing.item.options) {
-        const key = `${opt.save_trm ?? ""}:${opt.intr_rate ?? ""}:${opt.intr_rate2 ?? ""}`;
-        optionsByKey.set(key, opt);
-      }
-      for (const opt of item.options) {
-        const key = `${opt.save_trm ?? ""}:${opt.intr_rate ?? ""}:${opt.intr_rate2 ?? ""}`;
-        if (!optionsByKey.has(key)) optionsByKey.set(key, opt);
-      }
-      existing.item.options = [...optionsByKey.values()];
-      if (!existing.item.best && item.best) existing.item.best = item.best;
-      if (!existing.item.kor_co_nm && item.kor_co_nm) existing.item.kor_co_nm = item.kor_co_nm;
-      if (!existing.item.fin_prdt_nm && item.fin_prdt_nm) existing.item.fin_prdt_nm = item.fin_prdt_nm;
     }
   }
 
+  const items = mergeFinlifeProducts(groups.flatMap((group) => group.data), { kind });
+  for (const item of items) {
+    const best = deriveBestFromOptions(item.options);
+    if (best) item.best = best;
+  }
+
   return {
-    items: [...seenByCode.values()].map((entry) => entry.item),
+    items,
     duplicateAcrossGroupsCount,
   };
 }
@@ -205,6 +194,7 @@ export async function collectFinlifeSnapshot(kind: FinlifeSnapshotKind): Promise
             try {
               raw = await fetchLiveWithRetry(kind, topFinGrpNo, pageNo);
             } catch (error) {
+              if (error instanceof FinlifeIntegrityError) throw error;
               lastUpstreamStatus = parseHttpStatus(error);
               if (!failOpenToMock) {
                 return {
@@ -231,10 +221,11 @@ export async function collectFinlifeSnapshot(kind: FinlifeSnapshotKind): Promise
           source = "mock";
         }
 
+        if (pageSource === "finlife") validateFinlifeResponse(kind, raw, { pageNo });
         const root = (raw as { result?: { baseList?: unknown[]; optionList?: unknown[] } })?.result ?? {};
         const baseList = Array.isArray(root.baseList) ? root.baseList : [];
         const optionList = Array.isArray(root.optionList) ? root.optionList : [];
-        const normalized = normalizeFinlifeProducts({ baseList, optionList });
+        const normalized = normalizeFinlifeProducts({ baseList, optionList, kind });
         const pageMeta = extractPagingMeta(raw);
 
         if (pageNo === 1 && typeof pageMeta.totalCount === "number") groupTotalCount = pageMeta.totalCount;
@@ -258,7 +249,8 @@ export async function collectFinlifeSnapshot(kind: FinlifeSnapshotKind): Promise
       groupRows.push({ topFinGrpNo, data: groupData, totalCount: groupTotalCount });
     }
 
-    const merged = mergeProductsAcrossGroups(groupRows);
+    const merged = mergeProductsAcrossGroups(groupRows, kind);
+    if (source === "finlife") merged.items = validateFinlifeProducts(kind, merged.items);
     const totalOptions = merged.items.reduce((sum, item) => sum + item.options.length, 0);
     const completion = computeCompletion({
       groups: topGroups,
@@ -295,8 +287,12 @@ export async function collectFinlifeSnapshot(kind: FinlifeSnapshotKind): Promise
       ok: false,
       kind,
       error: {
-        code: "INTERNAL",
-        message: error instanceof Error ? error.message : "finlife sync failed",
+        code: error instanceof FinlifeIntegrityError
+          ? error.code === "FINLIFE_UPSTREAM_FAILED" ? "UPSTREAM_FETCH_FAILED" : "UPSTREAM_SCHEMA_MISMATCH"
+          : "INTERNAL",
+        message: error instanceof FinlifeIntegrityError && error.code === "FINLIFE_UPSTREAM_FAILED"
+          ? "FINLIFE upstream returned an error"
+          : error instanceof Error ? error.message : "finlife sync failed",
         upstreamStatus: lastUpstreamStatus,
       },
     };
@@ -308,6 +304,9 @@ export async function runFinlifeSnapshotSync(kind: FinlifeSnapshotKind): Promise
   if (!collected.ok) return collected;
 
   try {
+    if (collected.snapshot.meta.source === "finlife") {
+      collected.snapshot.items = validateFinlifeProducts(kind, collected.snapshot.items);
+    }
     saveFinlifeSnapshot(kind, collected.snapshot);
     return {
       ok: true,
@@ -319,7 +318,9 @@ export async function runFinlifeSnapshotSync(kind: FinlifeSnapshotKind): Promise
       ok: false,
       kind,
       error: {
-        code: "INTERNAL",
+        code: error instanceof FinlifeIntegrityError
+          ? error.code === "FINLIFE_UPSTREAM_FAILED" ? "UPSTREAM_FETCH_FAILED" : "UPSTREAM_SCHEMA_MISMATCH"
+          : "INTERNAL",
         message: error instanceof Error ? error.message : "finlife sync failed",
         upstreamStatus: collected.snapshot.meta.lastUpstreamStatus ?? null,
       },

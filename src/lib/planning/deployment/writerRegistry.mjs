@@ -4,7 +4,12 @@ export const PLANNING_RUNTIME_WRITER_IDS = Object.freeze([
   "planning:v2:ops:scheduler",
 ]);
 
+export const PLANNING_MAINTENANCE_WRITER_IDS = Object.freeze([
+  "desktop.install",
+]);
+
 export const PLANNING_MUTATING_PACKAGE_SCRIPTS = Object.freeze([
+  "finlife:identity:migrate:apply",
   "news:refresh",
   "indicators:refresh",
   "v3:refresh-all",
@@ -41,6 +46,7 @@ export const PLANNING_MUTATING_PACKAGE_SCRIPTS = Object.freeze([
 ]);
 
 export const PLANNING_READ_ONLY_PACKAGE_SCRIPTS = Object.freeze([
+  "finlife:identity:migrate",
   "v3:doctor",
   "v3:export",
   "v3:support-bundle",
@@ -56,6 +62,7 @@ export const PLANNING_DISABLED_WRITER_SCRIPTS = Object.freeze([
 
 const WRITER_IDS = new Set([
   ...PLANNING_RUNTIME_WRITER_IDS,
+  ...PLANNING_MAINTENANCE_WRITER_IDS,
   ...PLANNING_MUTATING_PACKAGE_SCRIPTS,
 ]);
 

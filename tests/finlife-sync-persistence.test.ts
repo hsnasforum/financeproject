@@ -7,6 +7,11 @@ import {
 } from "../scripts/finlife_persistence.mjs";
 import type { FinlifeSnapshot } from "../src/lib/finlife/snapshot";
 
+function product(code: string) {
+  return { fin_prdt_cd: code, fin_co_no: "0010001", options: [],
+    raw: { fin_co_no: "0010001", fin_prdt_cd: code, dcls_month: "202609" } };
+}
+
 function snapshot(): FinlifeSnapshot {
   return {
     meta: {
@@ -20,7 +25,7 @@ function snapshot(): FinlifeSnapshot {
       truncatedByHardCap: false,
       source: "finlife",
     },
-    items: [{ fin_prdt_cd: "FIN-001", options: [], raw: {} }],
+    items: [product("FIN-001")],
   };
 }
 
@@ -58,13 +63,13 @@ describe("FINLIFE sync persistence contract", () => {
 
     await expect(syncFinlifeProductsToDb("deposit", [{
       fin_prdt_cd: "FIN-001",
-      fin_co_no: "COMPANY-001",
+      fin_co_no: "0010001",
       kor_co_nm: "테스트은행",
       fin_prdt_nm: "테스트예금",
       options: [],
-      raw: {},
+      raw: product("FIN-001").raw,
     }], {
-      getPrismaClient: () => prisma,
+      getPrismaClient: () => ({ ...prisma, $transaction: async (callback: (tx: typeof prisma) => unknown) => callback(prisma) }),
     })).resolves.toEqual({
       providersUpserted: 1,
       productsUpserted: 1,
@@ -96,13 +101,11 @@ describe("FINLIFE sync persistence contract", () => {
       },
     };
     const duplicate = {
-      fin_prdt_cd: "FIN-DUPLICATE",
-      options: [],
-      raw: {},
+      ...product("FIN-DUPLICATE"),
     };
 
     await expect(syncFinlifeProductsToDb("deposit", [duplicate, duplicate], {
-      getPrismaClient: () => prisma,
+      getPrismaClient: () => ({ ...prisma, $transaction: async (callback: (tx: typeof prisma) => unknown) => callback(prisma) }),
     })).resolves.toMatchObject({
       productsUpserted: 1,
       candidateItems: 1,
@@ -132,11 +135,9 @@ describe("FINLIFE sync persistence contract", () => {
     };
 
     await expect(syncFinlifeProductsToDb("saving", [{
-      fin_prdt_cd: "FIN-002",
-      options: [],
-      raw: {},
+      ...product("FIN-002"),
     }], {
-      getPrismaClient: () => prisma,
+      getPrismaClient: () => ({ ...prisma, $transaction: async (callback: (tx: typeof prisma) => unknown) => callback(prisma) }),
     })).resolves.toMatchObject({
       productsUpserted: 1,
       candidateItems: 1,
@@ -146,9 +147,9 @@ describe("FINLIFE sync persistence contract", () => {
     });
   });
 
-  it("reports negative inventory drift when a higher-priority stored kind blocks the current run", async () => {
-    const providerUpsert = vi.fn();
-    const productUpsert = vi.fn();
+  it("stores the same product code independently in different product kinds", async () => {
+    const providerUpsert = vi.fn(async () => ({ id: 10 }));
+    const productUpsert = vi.fn(async () => ({ id: 20 }));
     const prisma = {
       provider: {
         upsert: providerUpsert,
@@ -156,7 +157,7 @@ describe("FINLIFE sync persistence contract", () => {
       product: {
         findMany: vi.fn(async () => [{ finPrdtCd: "SHARED-001", kind: "saving" }]),
         upsert: productUpsert,
-        count: vi.fn(async () => 0),
+        count: vi.fn(async () => 1),
       },
       productOption: {
         deleteMany: vi.fn(),
@@ -165,24 +166,39 @@ describe("FINLIFE sync persistence contract", () => {
     };
 
     await expect(syncFinlifeProductsToDb("deposit", [{
-      fin_prdt_cd: "SHARED-001",
-      options: [],
-      raw: {},
+      ...product("SHARED-001"),
     }], {
-      getPrismaClient: () => prisma,
+      getPrismaClient: () => ({ ...prisma, $transaction: async (callback: (tx: typeof prisma) => unknown) => callback(prisma) }),
     })).resolves.toEqual({
-      providersUpserted: 0,
-      productsUpserted: 0,
+      providersUpserted: 1,
+      productsUpserted: 1,
       optionsWritten: 0,
-      skippedCrossKindDuplicates: 1,
+      skippedCrossKindDuplicates: 0,
       replacedCrossKindDuplicates: 0,
       candidateItems: 1,
-      inventoryItems: 0,
-      inventoryDeltaItems: -1,
+      inventoryItems: 1,
+      inventoryDeltaItems: 0,
       staleCandidateItems: 0,
     });
-    expect(providerUpsert).not.toHaveBeenCalled();
-    expect(productUpsert).not.toHaveBeenCalled();
+    expect(providerUpsert).toHaveBeenCalledTimes(1);
+    expect(productUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists the same latest disclosure and counts in DB and snapshot", async () => {
+    const current = product("VERSIONED");
+    const old = { ...current, raw: { ...current.raw, dcls_month: "202608" } };
+    const value = snapshot();
+    value.items = [old, current];
+    value.meta.totalProducts = 2;
+    const syncProductsToDb = vi.fn<(kind: string, items: unknown[]) => Promise<ReturnType<typeof dbSyncResult>>>(async () => dbSyncResult());
+    const writeSnapshot = vi.fn();
+    await persistFinlifeSyncKind({kind:"deposit",snapshot:value}, {
+      syncProductsToDb,writeSnapshot,writeCompletionEvidence:vi.fn(),writeSyncAttempt:vi.fn(),clearSyncAttempt:vi.fn(),
+    });
+    expect(syncProductsToDb.mock.calls[0][1]).toEqual([current]);
+    expect(writeSnapshot).toHaveBeenCalledWith("deposit",expect.objectContaining({
+      items:[current],meta:expect.objectContaining({totalProducts:1,totalOptions:0}),
+    }));
   });
 
   it("writes the snapshot only after the DB sync and completion evidence finish", async () => {

@@ -76,6 +76,8 @@ export type UnifiedProductView = {
   providerName: string;
   productName: string;
   summary?: string;
+  /** FINLIFE original disclosure month (YYYYMM); null means missing or invalid. */
+  disclosureMonth?: string | null;
   firstSeenAt?: string;
   lastSeenAt?: string;
   updatedAt?: string;

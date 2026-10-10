@@ -30,7 +30,9 @@ import { t, type Locale } from "@/lib/planning/i18n";
 import { formatKrw, formatPct } from "@/lib/planning/i18n/format";
 import { resolveWarningCatalog } from "@/lib/planning/catalog/warningCatalog";
 import { appendProfileIdQuery } from "@/lib/planning/profileScope";
-import { buildEvidence } from "@/lib/planning/v2/insights/evidence";
+import { resolveWorkspaceInterpretationInput } from "@/lib/planning/ui/workspaceResultInsights";
+import { buildInterpretationVM } from "@/lib/planning/v2/insights/interpretationVm";
+import { buildResultSummaryMetrics } from "@/lib/planning/v2/resultSummary";
 import { LIMITS } from "@/lib/planning/v2/limits";
 import { aggregateWarnings as aggregateGuideWarnings } from "@/lib/planning/v2/resultGuide";
 import { cn } from "@/lib/utils";
@@ -105,7 +107,6 @@ export function PlanningWorkspaceResultsPanel({
     summaryEvidence,
     summaryCriticalWarnings,
     aggregatedWarningsForInsight,
-    goalsForInsight,
     actionsTopForInsight,
     workspaceSnapshotState,
     monteDepletionProb,
@@ -151,6 +152,48 @@ export function PlanningWorkspaceResultsPanel({
     setActiveTab,
     setShowAllActions,
   } = actions;
+
+  const dto = runResult?.resultDto;
+  const summaryMetrics = dto ? buildResultSummaryMetrics(dto, { debtMonthlyPaymentKrw: debtMeta.totalMonthlyPaymentKrw }) : undefined;
+  const dsrPct = typeof dto?.summary.dsrPct === "number" ? dto.summary.dsrPct : summaryMetrics?.dsrPct;
+  const goalCounts = dto?.summary.goalsAchieved;
+  const fallbackProps = {
+    summaryMetrics: {
+      monthlySurplusKrw: summaryMonthlySurplusKrw,
+      emergencyFundMonths: summaryEmergencyFundMonths,
+      endNetWorthKrw: summaryEndNetWorthKrw,
+      worstCashKrw: summaryWorstCashKrw,
+      worstCashMonthIndex: summaryWorstCashMonth,
+      dsrPct,
+      goalsAchievedText: goalCounts ? `${goalCounts.achieved}/${goalCounts.total}` : undefined,
+    },
+    summaryEvidence,
+    aggregatedWarnings: aggregatedWarningsForInsight,
+    goals: goalTableRows,
+    outcomes: {
+      actionsTop: actionsTopForInsight,
+      snapshotMeta: workspaceSnapshotState.outcomesMeta,
+      monteCarlo: { retirementDepletionBeforeEnd: monteDepletionProb },
+      runId: savedRun?.id,
+    },
+    policy: savedRun?.reproducibility?.policy,
+  };
+  const interpretationInput = resolveWorkspaceInterpretationInput(savedRun, {
+    summary: fallbackProps.summaryMetrics,
+    aggregatedWarnings: fallbackProps.aggregatedWarnings,
+    goals: fallbackProps.goals,
+    outcomes: fallbackProps.outcomes,
+    summaryEvidence,
+  });
+  const interpretationProps = {
+    summaryMetrics: interpretationInput.summary,
+    aggregatedWarnings: interpretationInput.aggregatedWarnings,
+    goals: interpretationInput.goals,
+    outcomes: interpretationInput.outcomes,
+    summaryEvidence: interpretationInput.summaryEvidence,
+    policy: savedRun?.reproducibility?.policy,
+  };
+  const assessment = buildInterpretationVM(interpretationInput, interpretationProps.policy).assessment;
 
   return (
     <>
@@ -210,10 +253,11 @@ export function PlanningWorkspaceResultsPanel({
               locale={locale}
               status={guideBadge.status}
               reason={guideBadge.reason}
-              minCashKrw={guideBadge.minCashKrw}
-              achievedGoals={achievedGoalCount}
-              totalGoals={goalTableRows.length}
-              maxDsr={guideBadge.maxDsr}
+              minCashKrw={interpretationInput.summary.worstCashKrw}
+              assessment={assessment}
+              achievedGoals={goalCounts?.achieved ?? achievedGoalCount}
+              totalGoals={goalCounts?.total ?? goalTableRows.length}
+              maxDsr={typeof interpretationInput.summary.dsrPct === "number" && Number.isFinite(interpretationInput.summary.dsrPct) ? interpretationInput.summary.dsrPct / 100 : undefined}
               topActions={topActionTitles}
             />
           </div>
@@ -302,7 +346,7 @@ export function PlanningWorkspaceResultsPanel({
                   </div>
                   <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                     <p className="mb-1 text-sm font-semibold uppercase text-slate-400">최저 현금(월)</p>
-                    <p className="text-sm font-semibold tabular-nums text-navy">{formatKrw(locale, summaryWorstCashKrw)} <span className="ml-1 text-sm font-bold text-slate-400">(M{summaryWorstCashMonth + 1})</span></p>
+                    <p className="text-sm font-semibold tabular-nums text-navy">{typeof summaryWorstCashKrw === "number" ? formatKrw(locale, summaryWorstCashKrw) : "확인되지 않음"} {typeof summaryWorstCashKrw === "number" ? <span className="ml-1 text-sm font-bold text-slate-400">(M{summaryWorstCashMonth + 1})</span> : null}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                     <p className="mb-1 text-sm font-semibold uppercase text-slate-400">목표 달성</p>
@@ -321,53 +365,7 @@ export function PlanningWorkspaceResultsPanel({
                 <details className="rounded-xl border border-slate-200 p-4 sm:p-5" data-testid="planning-result-interpretation">
                   <summary className="cursor-pointer py-1 text-sm font-semibold text-navy">자세한 해석과 실행 제안</summary>
                   <div className="mt-5 min-w-0">
-                <InterpretabilityGuideCard
-                  summaryMetrics={{
-                    ...(typeof summaryMonthlySurplusKrw === "number" ? { monthlySurplusKrw: summaryMonthlySurplusKrw } : {}),
-                    ...(typeof summaryEmergencyFundMonths === "number" ? { emergencyFundMonths: summaryEmergencyFundMonths } : {}),
-                    endNetWorthKrw: summaryEndNetWorthKrw,
-                    worstCashKrw: summaryWorstCashKrw,
-                    worstCashMonthIndex: summaryWorstCashMonth,
-                    ...(typeof summaryDsr === "number" ? { dsrPct: summaryDsr } : {}),
-                    ...(summaryGoalsText !== "-" ? { goalsAchievedText: summaryGoalsText } : {}),
-                  }}
-                  summaryEvidence={buildEvidence(
-                    {
-                      summaryCards: {
-                        monthlySurplusKrw: summaryMonthlySurplusKrw ?? undefined,
-                        dsrPct: summaryDsr ?? undefined,
-                        emergencyFundMonths: summaryEmergencyFundMonths ?? undefined,
-                      },
-                    },
-                    undefined,
-                    summaryEvidence,
-                  )}
-                  aggregatedWarnings={aggregatedWarningsForInsight.map((warning) => ({
-                    code: warning.code,
-                    severity: warning.severity,
-                    count: warning.count,
-                    ...(typeof warning.firstMonth === "number" ? { firstMonth: warning.firstMonth } : {}),
-                    ...(typeof warning.lastMonth === "number" ? { lastMonth: warning.lastMonth } : {}),
-                    ...(typeof warning.sampleMessage === "string" ? { sampleMessage: warning.sampleMessage } : {}),
-                  }))}
-                  goals={goalsForInsight.map((goal) => ({
-                    goalId: goal.id,
-                    name: goal.name,
-                    achieved: goal.achieved,
-                    targetMonth: goal.targetMonth,
-                    progressPct: goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0,
-                    shortfallKrw: goal.shortfall,
-                    interpretation: goal.comment,
-                  }))}
-                  outcomes={{
-                    ...(actionsTopForInsight.length > 0 ? { actionsTop: actionsTopForInsight } : {}),
-                    snapshotMeta: workspaceSnapshotState.outcomesMeta,
-                    monteCarlo: {
-                      retirementDepletionBeforeEnd: monteDepletionProb,
-                    },
-                    ...(savedRun?.id ? { runId: savedRun.id } : {}),
-                  }}
-                />
+                <InterpretabilityGuideCard {...interpretationProps} />
 
                   </div>
                 </details>

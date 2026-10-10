@@ -96,6 +96,50 @@ async function seedSnapshot() {
 }
 test.afterEach(async () => { for (const file of [...snapshotFiles.splice(0), ...profileDraftFiles.splice(0)]) await fs.rm(file, { force: true }); });
 
+for (const exchangeFails of [false, true]) {
+  test(`dashboard secondary tools load on first expansion and preserve ${exchangeFails ? "partial failure" : "cached data"}`, async ({ page }) => {
+    const requests: string[] = [];
+    await page.route("**/api/public/exchange", async (route) => {
+      requests.push("exchange");
+      await route.fulfill({
+        status: exchangeFails ? 503 : 200,
+        json: exchangeFails
+          ? { ok: false, error: { code: "UPSTREAM", message: "환율 공급자 응답 실패" } }
+          : { ok: true, data: { asOf: "2026-10-01", rates: { USD: 1300 } } },
+      });
+    });
+    await page.route("**/api/public/benefits/search?*", async (route) => {
+      requests.push("benefits");
+      await route.fulfill({ json: { ok: true, data: { items: [{
+        serviceId: "cached-benefit", title: "저장된 혜택 안내", summary: "기준 자료를 확인하세요.", org: "테스트 기관",
+      }] } } });
+    });
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle");
+    const tools = page.getByTestId("dashboard-secondary-tools");
+    await expect(tools).not.toHaveAttribute("open");
+    expect(requests).toEqual([]);
+
+    await tools.locator(":scope > summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(tools.getByText("저장된 혜택 안내", { exact: true })).toBeVisible();
+    await expect.poll(() => requests.slice().sort()).toEqual(["benefits", "exchange"]);
+    if (exchangeFails) {
+      await expect(page.getByText("일부 보조 정보를 불러오지 못했습니다.", { exact: true })).toBeVisible();
+      await page.getByTestId("dashboard-resources-partial").locator("summary").click();
+      await expect(page.getByText("기준 환율 정보를 불러오지 못했습니다.", { exact: true })).toBeVisible();
+    } else {
+      await expect(tools).toContainText("USD 1 = 1,300원");
+      await expect(tools).toContainText("2026-10-01");
+    }
+    await expect(page.getByTestId("dashboard-current-state")).toBeVisible();
+    await tools.locator(":scope > summary").click();
+    await tools.locator(":scope > summary").click();
+    await expect(tools.getByText("저장된 혜택 안내", { exact: true })).toBeVisible();
+    expect(requests.slice().sort()).toEqual(["benefits", "exchange"]);
+  });
+}
+
 test("production desktop session rejects raw identity headers", async ({ request, baseURL }) => {
   test.skip(!isProductionRuntime, "desktop-session rejection is a production runtime boundary");
   for (const headerName of ["x-planning-user-id", "x-auth-user-id"] as const) {

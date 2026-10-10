@@ -83,6 +83,7 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
     runsErrorMessage: initialViewModel.runsErrorMessage,
   });
   const [loading, setLoading] = useState(true);
+  const [hasOpenedSecondaryTools, setHasOpenedSecondaryTools] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [rerunError, setRerunError] = useState("");
@@ -90,6 +91,8 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
   const pendingRerun = useRef<PendingPlanningRunRequest | null>(null);
 
   useEffect(() => {
+    if (!hasOpenedSecondaryTools) return;
+
     let cancelled = false;
     const controller = new AbortController();
 
@@ -163,7 +166,7 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
       cancelled = true;
       controller.abort();
     };
-  }, [initialViewModel]);
+  }, [hasOpenedSecondaryTools, initialViewModel]);
 
   const latestRun = state.runs[0] ?? null;
   const currentProfile = initialViewModel.currentProfile;
@@ -440,7 +443,13 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
           )}
         </section>
 
-        <details className="group rounded-xl border border-slate-200 bg-white" data-testid="dashboard-secondary-tools">
+        <details
+          className="group rounded-xl border border-slate-200 bg-white"
+          data-testid="dashboard-secondary-tools"
+          onToggle={(event) => {
+            if (event.currentTarget.open) setHasOpenedSecondaryTools(true);
+          }}
+        >
           <summary className="cursor-pointer px-5 py-5 text-base font-semibold text-navy outline-none focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:px-6">상품·혜택·환율과 데이터 상태 <span className="ml-2 text-sm font-normal text-slate-500">필요할 때 펼쳐보기</span></summary>
           <div className="space-y-8 border-t border-slate-200 px-5 py-6 sm:px-6">
             <nav aria-label="보조 도구" className="flex flex-wrap gap-x-6 gap-y-2">

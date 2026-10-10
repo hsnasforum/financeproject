@@ -50,6 +50,8 @@ test("normal packaged bootstrap authenticates fresh browsers without OAuth or pr
       await page.goto(bootstrap).catch(() => { throw new Error("Desktop bootstrap navigation failed"); });
       expect(new URL(page.url()).pathname).toBe("/dashboard");
       await expect(page.getByRole("heading", { name: "내 재무 현황", exact: true })).toBeVisible();
+      // Secondary resources load only after this explicit user action.
+      await page.getByTestId("dashboard-secondary-tools").locator(":scope > summary").click();
       await expect(page.getByText("보조 정보를 불러오는 중입니다.", { exact: true })).toHaveCount(0, { timeout: 20_000 });
       await expect(page.getByRole("button", { name: "새로고침", exact: true })).toBeEnabled();
       const cookie = (await context.cookies()).find((item) => item.name === "planning.desktop-session");

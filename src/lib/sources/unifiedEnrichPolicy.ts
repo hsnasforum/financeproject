@@ -237,11 +237,13 @@ function mergeBadges(items: UnifiedMergeItem[]): string[] | undefined {
 export function buildStableUnifiedId(input: {
   sourceId: string;
   externalKey: string;
+  identityKey?: string | null;
   canonicalFinPrdtCd?: string | null;
+  canonicalFinlifeIdentity?: string | null;
 }): string {
   const externalKey = (input.externalKey ?? "").trim();
-  if (input.sourceId === FINLIFE_SOURCE_ID && externalKey) return externalKey;
-  const canonical = (input.canonicalFinPrdtCd ?? "").trim();
+  if (input.sourceId === FINLIFE_SOURCE_ID && externalKey) return (input.identityKey ?? "").trim() || externalKey;
+  const canonical = (input.canonicalFinlifeIdentity ?? input.canonicalFinPrdtCd ?? "").trim();
   if (canonical) return canonical;
   return `${input.sourceId}:${externalKey || "unknown"}`;
 }

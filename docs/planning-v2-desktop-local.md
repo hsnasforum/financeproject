@@ -43,6 +43,8 @@
 - Desktop runtime은 Planning data root의 부모인 canonical app control root에 cross-process lease를 획득합니다.
 - 공식 mutating package script도 같은 registry와 lease를 사용하므로 앱이 실행 중이거나 다른 writer가 동작 중이면 중복 쓰기를 시작하지 않습니다.
 - `news:refresh`, `indicators:refresh`, `daily:refresh`, migration/trim/ops/report/release 계열 쓰기 명령은 앱을 종료한 뒤 `pnpm <script>` 형태로 실행합니다.
+- FINLIFE SQLite legacy DB는 `corepack pnpm finlife:identity:migrate`로 읽기 전용 검사하고, 적용은 `corepack pnpm finlife:identity:migrate:apply`를 사용합니다. managed 설치본의 DB·data root·app 이름은 설치본 env를 기준으로 production root에서 lease를 확보합니다.
+- installer는 별도의 `desktop.install` maintenance writer로 복사 전부터 준비·원자 교체·rollback·정리가 끝날 때까지 같은 control root를 보호합니다.
 - 직접 `node scripts/...`로 wrapper를 우회하는 실행은 지원 경로가 아닙니다.
 - stale lease는 같은 host에서 기록된 parent/child PID가 모두 종료된 것이 확인될 때만 자동 회수합니다. foreign host, malformed lease, PID 상태 미확인은 수동 삭제하지 말고 원인부터 확인합니다.
 
@@ -83,10 +85,15 @@ pnpm planning:v2:desktop:install -- --from=.dist/planning-v2-desktop --to=$HOME/
 - manifest가 없거나 오래된 checkout/lockfile/아티팩트와 맞지 않으면 설치하지 않습니다. 이 경우 원본 리포지토리에서 아티팩트를 다시 빌드한 뒤 설치합니다.
 - 배포 압축을 푼 사용자는 압축 해제 폴더의 `install.sh` 또는 `install.cmd`를 실행합니다. 이 self-contained 경로는 checkout을 요구하지 않고 manifest 전체 checksum을 검증한 뒤 별도 설치 폴더에 복사하며, 압축 해제 원본은 변경하지 않으므로 실패 후 다시 실행할 수 있습니다.
 - 설치는 임시 sibling 디렉터리에서 의존성과 SQLite 스키마를 먼저 준비한 뒤 설치 경로를 원자 교체합니다. 준비 또는 교체가 실패하면 기존 설치를 복구합니다.
+- 새 빈 DB에만 안전 Prisma `db push`를 사용합니다. 기존 DB는 stage에서 FINLIFE migration preflight·백업·transaction을 거쳐 준비하고, 필수 전체 schema와 식별키·index를 확인한 뒤 교체합니다. 준비된 DB는 다시 쓰거나 백업하지 않습니다.
+- migration은 기존 `Product.id`, 즐겨찾기·외부 상품 연결·옵션·사용자 데이터를 유지합니다. 모호한 회사·상품 구분이나 지원하지 않는 schema는 차단하며 기존 설치본을 유지합니다.
+- migration 백업과 receipt는 stage 밖의 `<control-root>/backups/finlife-identity/<id>/`에 남으므로 성공한 교체나 실패한 stage 정리 뒤에도 보존됩니다.
 - 같은 경로에 업데이트할 때 `.env.local`, `.env`, `env.local`, `prisma/`의 DB·sidecar, `.data/`와 패키지가 소유하지 않는 사용자 파일은 새 설치로 복사해 유지합니다.
 - 보존 상태 안의 symlink/junction과 source/target의 실제 경로 겹침은 복사 전에 거부합니다.
 - managed installer의 `DATABASE_URL`은 설치 폴더 내부 SQLite 파일만 허용합니다. 설치 폴더 밖 절대 경로나 symlink/junction을 통한 이탈은 기존 DB를 변경하기 전에 거부합니다.
+- 기존 설정 DB와 `-wal`·`-shm`·`-journal`이 stage에 동일하게 보존됐는지 초기화·migration 전에 비교합니다. `src/`, `scripts/` 등 교체되는 패키지 소유 경로의 DB가 복사에서 빠지면 신규 DB로 초기화하지 않고 설치를 중단합니다.
 - 설치 중 앱이 실행 중이면 종료한 뒤 다시 시도해야 합니다. 실행 중 DB를 복사하거나 스키마를 갱신하는 경로는 지원하지 않습니다.
+- control root가 설치 폴더 또는 압축 해제 원본 안에 있으면 lease·migration 백업도 폴더 교체와 함께 이동할 수 있어 복사 전에 중단합니다. 기본 OS app-data 위치는 설치 폴더 밖이며, 내부 root를 사용하는 기존 설치본은 별도 데이터 이동 작업이 먼저 필요합니다.
 
 배포 압축 해제 디렉토리에서 직접 설치:
 ```bash

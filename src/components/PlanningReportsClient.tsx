@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { toInterpretationInputFromReportVM } from "@/lib/planning/reports/reportInterpretationAdapter";
+import { buildInterpretationVM } from "@/lib/planning/v2/insights/interpretationVm";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -306,6 +308,9 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
   );
   const selectedVmData = selectedVm.vm;
   const selectedVmError = selectedVm.error;
+  const interpretation = useMemo(() => selectedVmData
+    ? buildInterpretationVM(toInterpretationInputFromReportVM(selectedVmData), selectedVmData.reproducibility?.policy)
+    : null, [selectedVmData]);
   const selectedRecommendHistoryHref = useMemo(
     () => buildRecommendHistoryHref(selected?.recommendRunId),
     [selected?.recommendRunId],
@@ -547,10 +552,11 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         locale="ko-KR"
                         status={badge.status}
                         reason={badge.reason}
-                        minCashKrw={badge.minCashKrw}
+                        minCashKrw={selectedVmData?.summaryCards.worstCashKrw}
+                        assessment={interpretation?.assessment}
                         achievedGoals={achievedGoals}
                         totalGoals={goalRows.length}
-                        maxDsr={badge.maxDsr}
+                        maxDsr={typeof selectedVmData?.summaryCards.dsrPct === "number" ? selectedVmData.summaryCards.dsrPct / 100 : undefined}
                         topActions={topActions}
                       />
                     </div>

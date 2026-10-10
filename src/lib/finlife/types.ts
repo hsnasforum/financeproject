@@ -19,7 +19,7 @@ export type FinlifeParams = {
 
 export type FinlifeCardFreshnessMeta = {
   sourceId: string;
-  kind: "deposit" | "saving";
+  kind: FinlifeKind;
   lastSyncedAt?: string | null;
   freshnessStatus?: "ok" | "stale" | "error" | "empty";
   fallbackMode?: string | null;
@@ -35,6 +35,7 @@ export type NormalizedOption = {
 
 export type NormalizedProduct = {
   fin_prdt_cd: string;
+  identityKey?: string;
   fin_co_no?: string;
   kor_co_nm?: string;
   fin_prdt_nm?: string;

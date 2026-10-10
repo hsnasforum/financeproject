@@ -417,9 +417,9 @@ test("specialized product list hydrates and updates the product shelf without sc
       compareBasket: parsed.compareBasket ?? [],
     };
   })).toEqual({
-    favorites: ["PENSION-SHELF"],
-    recentViewed: ["PENSION-SHELF"],
-    compareBasket: ["fixture-compare-a", "fixture-compare-b", "PENSION-SHELF"],
+    favorites: ["finlife:pension:0010003:PENSION-SHELF"],
+    recentViewed: ["finlife:pension:0010003:PENSION-SHELF"],
+    compareBasket: ["fixture-compare-a", "fixture-compare-b", "finlife:pension:0010003:PENSION-SHELF"],
   });
   await page.evaluate(() => new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));

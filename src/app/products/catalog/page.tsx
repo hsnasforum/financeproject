@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { SearchPill } from "@/components/ui/SearchPill";
+import { ProductDisclosureMeta } from "@/components/products/ProductDisclosureMeta";
 import { FilterField } from "@/components/ui/FilterField";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
@@ -388,7 +389,7 @@ export default function ProductsCatalogPage() {
                   : "설정된 갱신 주기를 지난 데이터가 포함되어 있습니다."}
           </p>
           <p className="mt-1 text-xs font-medium leading-relaxed text-slate-600">
-            화면을 연 시각이 아니라 아래 수집 기준을 확인해 주세요. 가입 전 실제 금리와 조건은 금융회사 공시에서 다시 확인해야 합니다.
+            원문 공시월은 금융회사 공시에 표시된 달이고, 수집 시각은 데이터를 가져온 때입니다. 가입 전 실제 금리와 조건은 금융회사 공시에서 다시 확인해야 합니다.
           </p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {freshness.sources.map((source) => (
@@ -487,6 +488,13 @@ export default function ProductsCatalogPage() {
                     <h2 className="mt-2 text-xl font-black text-navy leading-snug group-hover:text-primary transition-colors tracking-tight line-clamp-2">
                       {item.productName}
                     </h2>
+                    {(item.sourceId === "finlife" || item.sourceIds?.includes("finlife")) ? (
+                      <ProductDisclosureMeta
+                        className="mt-3"
+                        disclosureMonth={item.disclosureMonth}
+                        collectedAt={freshness?.sources.find((source) => source.sourceId === "finlife")?.sourceAsOf}
+                      />
+                    ) : null}
                     {item.summary && (
                       <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500 line-clamp-2">
                         {item.summary}

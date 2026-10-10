@@ -2,10 +2,11 @@ import fxMock from "@/data/public/fx.mock.json";
 import { ExternalApiError, fetchExternal, requireServerEnv } from "../../http/fetchExternal";
 import { type DataProvenance, type ExchangeRateQuote, type PublicApiResult } from "@/lib/publicApis/contracts/types";
 import {
-  normalizeExchangeCurrencyUnit,
   normalizeExchangeQuoteDate,
-  parseExchangeRate,
+  validateEximExchangeRows,
 } from "./exchangeNormalization";
+import { formatKstCompactDate } from "../../format/kstCalendarDate";
+import { buildSchemaMismatchError } from "../schemaDrift";
 
 const FX_SOURCE_LABEL = "한국수출입은행";
 
@@ -13,37 +14,20 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function normalizeKeximJson(raw: unknown, wanted: Set<string>): ExchangeRateQuote[] {
-  const rows = Array.isArray(raw)
-    ? raw
-    : Array.isArray((raw as { data?: unknown[] })?.data)
-      ? ((raw as { data: unknown[] }).data)
-      : [];
-
-  const out: ExchangeRateQuote[] = [];
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const rec = row as Record<string, unknown>;
-    const currencyRaw = typeof rec.cur_unit === "string" ? rec.cur_unit : typeof rec.currency === "string" ? rec.currency : "";
-    const currency = normalizeExchangeCurrencyUnit(currencyRaw);
-    if (!currency || (wanted.size > 0 && !wanted.has(currency.code))) continue;
-
-    const rawRate = parseExchangeRate(rec.deal_bas_r ?? rec.rate ?? rec.baseRate);
-    if (rawRate === null) continue;
-    const asOfDate = normalizeExchangeQuoteDate(rec.deal_bas_dt);
-    if (!asOfDate) continue;
-    const rate = rawRate / currency.scale;
-
-    out.push({
-      asOfDate,
-      currency: currency.code,
+function normalizeKeximJson(raw: unknown, wanted: Set<string>, requestedDate: string): ExchangeRateQuote[] | null {
+  const validated = validateEximExchangeRows(raw, { requestedDate });
+  if (!validated) return null;
+  const fetchedAt = nowIso();
+  return Object.entries(validated.rates)
+    .filter(([currency]) => wanted.size === 0 || wanted.has(currency))
+    .map(([currency, rate]) => ({
+      asOfDate: validated.asOf,
+      currency,
       base: "KRW",
       rate,
-      source: "한국수출입은행",
-      fetchedAt: new Date().toISOString(),
-    });
-  }
-  return out;
+      source: FX_SOURCE_LABEL,
+      fetchedAt,
+    }));
 }
 
 function fromMock(currencies: string[]): ExchangeRateQuote[] {
@@ -107,11 +91,16 @@ export async function getExchangeQuotes(date: string, currencies: string[]): Pro
     return { ok: false, error: { code: "CONFIG", message: "KEXIM_API_KEY 설정이 필요합니다." } };
   }
 
+  const today = formatKstCompactDate(new Date());
+  const requestedDate = date.trim() || today;
+  if (!/^\d{8}$/.test(requestedDate) || !normalizeExchangeQuoteDate(requestedDate) || requestedDate > today) {
+    return { ok: false, error: { code: "INPUT", message: "환율 조회일은 오늘 이하의 유효한 YYYYMMDD 날짜여야 합니다." } };
+  }
+
   try {
     const key = requireServerEnv("KEXIM_API_KEY");
-    const base = process.env.KEXIM_FX_API_URL ?? "https://www.koreaexim.go.kr/site/program/financial/exchangeJSON";
-    const params = new URLSearchParams({ authkey: key, data: "AP01" });
-    if (date) params.set("searchdate", date);
+    const base = (process.env.KEXIM_FX_API_URL ?? "").trim() || "https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON";
+    const params = new URLSearchParams({ authkey: key, data: "AP01", searchdate: requestedDate });
 
     const fetched = await fetchExternal(`${base}?${params.toString()}`, {
       sourceKey: "fx",
@@ -120,20 +109,33 @@ export async function getExchangeQuotes(date: string, currencies: string[]): Pro
       retryOn: [429, 500, 502, 503, 504],
     });
     if (fetched.kind !== "json") {
-      if (fallbackToMock) {
-        return {
-          ok: true,
-          data: fromMock(currencies),
-          meta: mockMeta("upstream-failure", {
-            upstreamStatus: fetched.status,
-            retryAfterSeconds: fetched.retryAfterSeconds,
-          }),
-        };
-      }
-      return { ok: false, error: { code: "UPSTREAM", message: "환율 API 응답 형식이 예상과 다릅니다." } };
+      throw new ExternalApiError(buildSchemaMismatchError({
+        source: "exchange",
+        stage: "json_parse",
+        message: "환율 API 응답 형식이 예상과 다릅니다.",
+        raw: { textLength: fetched.text.length },
+        endpoint: base,
+        contentType: fetched.contentType,
+      }), { status: fetched.status, retryAfterSeconds: fetched.retryAfterSeconds });
     }
 
-    const quotes = normalizeKeximJson(fetched.body, wanted);
+    const quotes = normalizeKeximJson(fetched.body, wanted, requestedDate);
+    if (!quotes || quotes.length === 0) {
+      const noData = fetched.body === null
+        || (Array.isArray(fetched.body) && fetched.body.length === 0)
+        || quotes?.length === 0;
+      const detail = noData
+        ? { code: "NO_DATA" as const, message: "해당 날짜 환율 데이터가 없습니다." }
+        : buildSchemaMismatchError({
+          source: "exchange",
+          stage: "normalize",
+          message: "환율 API 응답 형식이 예상과 달라 데이터를 해석하지 못했습니다.",
+          raw: fetched.body,
+          endpoint: base,
+          contentType: fetched.contentType,
+        });
+      throw new ExternalApiError(detail, { status: fetched.status, retryAfterSeconds: fetched.retryAfterSeconds });
+    }
     return { ok: true, data: quotes, meta: liveMeta(quotes) };
   } catch (error) {
     if (fallbackToMock) {

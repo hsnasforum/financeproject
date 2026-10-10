@@ -35,11 +35,24 @@ dependency link를 확인한 뒤 서버를 시작합니다.
 - `public`
 - `prisma`
 
-Launcher는 시작할 때 앱 루트의 `.env.local`, `env.local`, `.env`를 순서대로 읽되
-이미 process에 설정된 환경변수를 덮어쓰지 않습니다. `DATABASE_URL`이 비어 있으면 `file:./prisma/dev.db`를 사용하고, 상대
+Launcher는 시작할 때 앱 루트의 `.env.local`, `env.local`, `.env`를 순서대로 읽습니다.
+`DATABASE_URL`, `PLANNING_DATA_DIR`, `PLANNING_APP_NAME`은 앱의 env 파일을 기준으로 적용하며, 그 밖의 변수는 이미 process에 설정된 값을 우선합니다. `DATABASE_URL`이 비어 있으면 `file:./prisma/dev.db`를 사용하고, 상대
 `file:` URL은 launcher의 앱 루트 기준 canonical 경로로 검증한 뒤 Windows 호환 절대
-URL로 child process에 전달합니다. DB 파일이나 필수 Prisma 테이블·컬럼이 없으면 bind 전에 실패합니다. 소스 checkout은 최초 1회
-`pnpm prisma:generate`와 `pnpm prisma:db:push`로 준비하고, portable 설치본은 설치 단계에서 같은 안전 래퍼로 스키마를 준비합니다.
+URL로 child process에 전달합니다. DB 파일·필수 Prisma 테이블·컬럼과 FINLIFE 복합 식별키 및 index가 준비되지 않았으면 bind 전에 실패합니다.
+새 빈 DB는 `corepack pnpm prisma:generate`와 `corepack pnpm prisma:db:push`로 초기화합니다.
+`prisma:db:push`는 기존 DB를 변경하지 않으며, 이미 준비된 DB는 검사 후 종료합니다. reset·data-loss·schema/config/URL override 옵션은 거부합니다.
+기존 FINLIFE legacy DB는 앱을 종료한 뒤 다음 경로로 검사하고, 차단 사유가 없는 경우 명시적으로 적용합니다.
+
+```bash
+corepack pnpm finlife:identity:migrate
+corepack pnpm finlife:identity:migrate:apply
+```
+
+검사는 읽기 전용입니다. 적용 명령은 같은 app control root의 writer lease를 확보하고,
+`backups/finlife-identity/<id>/before.sqlite`와 receipt를 남긴 뒤 transaction으로 변경합니다.
+기존 `Product.id`, 즐겨찾기·외부 상품 연결·옵션·사용자 데이터는 유지하며, 회사·상품 구분이 모호하거나 알 수 없는 schema는 적용하지 않습니다.
+소스 checkout의 명시적 env는 유지하고, managed 설치본에서는 설치본 env와 production root를 launcher와 동일하게 사용합니다.
+Portable 설치 단계는 같은 migration을 stage DB에 적용하고, 새 빈 DB에만 안전 Prisma 래퍼를 사용합니다.
 Portable desktop 아티팩트는 `.next/standalone/node_modules/prisma`에 CLI와 전이
 의존성을 실체화해 포함하므로 `--skip-install` 설치본의 스키마 준비도 원본
 워크스페이스나 전역 Prisma 설치에 의존하지 않습니다.
@@ -65,7 +78,9 @@ closed합니다.
 Production runtime은 data root 부모의 `runtime/writer-lease.json`을 소유합니다.
 실제 Next server까지 모든 runtime child PID를 등록하며, session/lease capability
 원문은 파일이나 로그에 저장하지 않습니다. 공식 mutating `pnpm` script는 같은
-lease를 사용하므로 앱을 종료한 뒤 실행해야 합니다.
+lease를 사용하므로 앱을 종료한 뒤 실행해야 합니다. 설치·업데이트도 `desktop.install`
+maintenance lease를 복사 전부터 교체·rollback·정리가 끝날 때까지 유지합니다.
+설치 폴더 안의 control root는 교체 중 lease와 migration 백업을 보존할 수 없어 복사 전에 거부합니다.
 
 ## Planning Observability
 

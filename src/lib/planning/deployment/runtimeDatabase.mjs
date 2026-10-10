@@ -244,6 +244,6 @@ export function assertPlanningSqliteSchema(options = {}) {
       ? "database file is empty"
       : "database file does not exist";
   throw new Error(
-    `desktop-local SQLite schema is not ready (${detail}). Run \`pnpm prisma:generate\` and \`pnpm prisma:db:push\` before build/start.`,
+    `desktop-local SQLite schema is not ready (${detail}). Run \`corepack pnpm prisma:generate\`. Initialize a new empty database with \`corepack pnpm prisma:db:push\`; inspect an existing database with \`corepack pnpm finlife:identity:migrate\` before build/start.`,
   );
 }

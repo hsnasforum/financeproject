@@ -40,7 +40,7 @@ export function buildStandaloneReportArtifactsFromRun(
     runId: run.id,
     ...(options.report ?? {}),
   });
-  const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm));
+  const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm), vm.reproducibility?.policy);
   const html = renderStandaloneHtml({
     runId: run.id,
     reportId: vm.header.reportId,
@@ -107,6 +107,7 @@ export function buildStandaloneReportArtifactsFromRun(
         })),
       }
       : {}),
+    assessment: interpretation.assessment,
     verdict: {
       label: interpretation.verdict.label,
       headline: interpretation.verdict.headline,

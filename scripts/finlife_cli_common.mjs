@@ -1,3 +1,4 @@
+import { joinFinlifeRows, mergeFinlifeProducts, normalizeFinlifeCompany } from "../src/lib/finlife/identity.mjs";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -317,68 +318,34 @@ function ensureProductBest(item) {
   }
 }
 
+/** @returns {import("../src/lib/finlife/types").NormalizedProduct[]} */
 export function mergeProducts(baseRows, optionRows, topFinGrpNo) {
-  const byCode = new Map();
-  for (const base of baseRows) {
-    const row = (base && typeof base === "object") ? base : {};
-    const code = String(row.fin_prdt_cd ?? "").trim();
-    if (!code) continue;
-    byCode.set(code, {
-      fin_prdt_cd: code,
-      fin_co_no: row.fin_co_no == null ? undefined : String(row.fin_co_no),
+  return joinFinlifeRows(baseRows, optionRows).map(({ raw: row, options }) => {
+    /** @type {import("../src/lib/finlife/types").NormalizedProduct} */
+    const item = {
+      fin_prdt_cd: String(row.fin_prdt_cd).trim(),
+      fin_co_no: normalizeFinlifeCompany(row.fin_co_no) || undefined,
       kor_co_nm: row.kor_co_nm == null ? undefined : String(row.kor_co_nm),
       fin_prdt_nm: row.fin_prdt_nm == null ? undefined : String(row.fin_prdt_nm),
-      options: [],
-      raw: { ...(row || {}), top_fin_grp_no: topFinGrpNo },
-    });
-  }
-  for (const option of optionRows) {
-    const row = (option && typeof option === "object") ? option : {};
-    const code = String(row.fin_prdt_cd ?? "").trim();
-    if (!code || !byCode.has(code)) continue;
-    byCode.get(code).options.push({
-      save_trm: row.save_trm == null ? undefined : String(row.save_trm),
-      intr_rate: parseNullableNumber(row.intr_rate),
-      intr_rate2: parseNullableNumber(row.intr_rate2),
-      raw: row,
-    });
-  }
-  for (const item of byCode.values()) ensureProductBest(item);
-  return [...byCode.values()];
+      options: options.map(raw => ({
+        save_trm: raw.save_trm == null ? undefined : String(raw.save_trm),
+        intr_rate: parseNullableNumber(raw.intr_rate),
+        intr_rate2: parseNullableNumber(raw.intr_rate2),
+        raw,
+      })),
+      raw: { ...row, top_fin_grp_no: topFinGrpNo },
+    };
+    ensureProductBest(item);
+    return item;
+  });
 }
 
+/** @param {Array<{group: string, items: import("../src/lib/finlife/types").NormalizedProduct[], totalCount?: number}>} groupRows */
 export function mergeAcrossGroups(groupRows) {
-  const byCode = new Map();
-  let duplicateAcrossGroupsCount = 0;
-
-  for (const group of groupRows) {
-    for (const item of group.items) {
-      const existing = byCode.get(item.fin_prdt_cd);
-      if (!existing) {
-        byCode.set(item.fin_prdt_cd, { ...item, options: [...item.options], __group: group.group });
-        continue;
-      }
-      if (existing.__group !== group.group) duplicateAcrossGroupsCount += 1;
-      const optMap = new Map(existing.options.map((opt) => [`${opt.save_trm ?? ""}:${opt.intr_rate ?? ""}:${opt.intr_rate2 ?? ""}`, opt]));
-      for (const opt of item.options) {
-        const key = `${opt.save_trm ?? ""}:${opt.intr_rate ?? ""}:${opt.intr_rate2 ?? ""}`;
-        if (!optMap.has(key)) optMap.set(key, opt);
-      }
-      existing.options = [...optMap.values()];
-      ensureProductBest(existing);
-    }
-  }
-
-  for (const item of byCode.values()) ensureProductBest(item);
-
-  return {
-    items: [...byCode.values()].map((entry) => {
-      const copy = { ...entry };
-      delete copy.__group;
-      return copy;
-    }),
-    duplicateAcrossGroupsCount,
-  };
+  const rows = groupRows.flatMap(group => group.items);
+  const items = mergeFinlifeProducts(rows);
+  for (const item of items) ensureProductBest(item);
+  return { items, duplicateAcrossGroupsCount: rows.length - items.length };
 }
 
 export function snapshotFilePath(kind) {
@@ -414,7 +381,7 @@ export function readSyncAttempt(kind) {
     const parsed = JSON.parse(fs.readFileSync(syncAttemptFilePath(kind), "utf-8"));
     if (!parsed || typeof parsed !== "object") return null;
     if (parsed.status !== "running" && parsed.status !== "failed") return null;
-    if (parsed.phase !== "db" && parsed.phase !== "snapshot" && parsed.phase !== "completion") return null;
+    if (parsed.phase !== "db" && parsed.phase !== "snapshot" && parsed.phase !== "completion" && parsed.phase !== "integrity" && parsed.phase !== "fetch") return null;
     if (typeof parsed.startedAt !== "string" || typeof parsed.updatedAt !== "string") return null;
     return parsed;
   } catch {

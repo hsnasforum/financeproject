@@ -785,16 +785,10 @@ function toWarningAgg(dto: ResultDtoV1, run: PlanningRunRecord | null): Dashboar
   return fallbackWarningAggFromDto(dto);
 }
 
-function toInsightWarnings(rows: DashboardWarningAggRow[]): ReportVM["insight"]["aggregatedWarnings"] {
+function toInsightWarnings(rows: ResultDtoV1["warnings"]["aggregated"]): ReportVM["insight"]["aggregatedWarnings"] {
   return rows.map((row) => ({
-    code: row.code,
-    severity: row.severityMax,
-    count: row.count,
-    ...(typeof row.firstMonth === "number" ? { firstMonth: row.firstMonth } : {}),
-    ...(typeof row.lastMonth === "number" ? { lastMonth: row.lastMonth } : {}),
-    ...(row.sampleMessage ? { sampleMessage: row.sampleMessage } : {}),
-    ...(row.suggestedActionId ? { suggestedActionId: row.suggestedActionId } : {}),
-    ...(row.subjectLabel ? { subjectLabel: row.subjectLabel } : {}),
+    ...row,
+    severity: row.severity === "critical" || row.severity === "warn" ? row.severity : "info",
   }));
 }
 
@@ -1174,7 +1168,7 @@ export function buildReportVM(
       ...(goalsAchieved ? { goalsAchievedText: goalsAchieved } : {}),
     },
     summaryEvidence,
-    aggregatedWarnings: toInsightWarnings(warningAgg),
+    aggregatedWarnings: toInsightWarnings(dto.warnings.aggregated),
     goals: guideGoals,
     outcomes: {
       actionsTop: topActions,
@@ -1276,7 +1270,7 @@ export function buildReportVM(
         ...(goalsAchieved ? { goalsAchievedText: goalsAchieved } : {}),
       },
       summaryEvidence,
-      aggregatedWarnings: toInsightWarnings(warningAgg),
+      aggregatedWarnings: toInsightWarnings(dto.warnings.aggregated),
       goals: goalsTable,
       outcomes: {
         actionsTop: topActions,

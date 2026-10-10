@@ -15,7 +15,7 @@ export function PlanningAuthRequiredState({
   const signInHref = `/api/auth/signin?callbackUrl=${encodeURIComponent(callbackPath)}`;
   return (
     <div className="min-h-screen bg-surface-muted px-4 py-16">
-      <section className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+      <section data-planning-navigation-state={callbackPath} className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <p className="text-xs font-black uppercase tracking-widest text-primary">
           {desktopRecovery ? "앱 세션 확인 필요" : unauthenticated ? "사용자 확인 필요" : "로컬 실행 설정 확인 필요"}
         </p>
