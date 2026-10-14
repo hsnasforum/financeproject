@@ -12,8 +12,10 @@ type Broker = Awaited<ReturnType<typeof createPlanningDesktopSessionBootstrap>>;
 
 const openBrokers: Broker[] = [];
 const temporaryRoots: string[] = [];
-// Each case runs two real launcher processes, each bounded by runSecondaryLauncher's 10s guard.
-const SECONDARY_LAUNCHER_TEST_TIMEOUT_MS = 30_000;
+// A launcher may wait up to 30s for the Windows drive-type query before it reads the lock,
+// so each real launcher process gets 45s and each case (two launches) gets room for both.
+const SECONDARY_LAUNCHER_PROCESS_TIMEOUT_MS = 45_000;
+const SECONDARY_LAUNCHER_TEST_TIMEOUT_MS = 2 * SECONDARY_LAUNCHER_PROCESS_TIMEOUT_MS + 10_000;
 
 async function createBroker(options: Record<string, unknown> = {}) {
   const broker = await createPlanningDesktopSessionBootstrap({
@@ -58,7 +60,7 @@ async function runSecondaryLauncher(env: NodeJS.ProcessEnv) {
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       reject(new Error("secondary desktop launcher timed out"));
-    }, 10_000);
+    }, SECONDARY_LAUNCHER_PROCESS_TIMEOUT_MS);
     child.once("error", (error) => {
       clearTimeout(timer);
       reject(error);

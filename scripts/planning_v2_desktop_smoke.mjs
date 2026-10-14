@@ -175,7 +175,8 @@ async function runDesktopLauncherOnce({ appDir, env, port }) {
   child.stderr.on("data", (chunk) => {
     stderr = `${stderr}${String(chunk)}`.slice(-16_000);
   });
-  const result = await waitForExit(child, 15_000);
+  // The launcher may wait up to 30s for the Windows drive-type query before it reads the lock.
+  const result = await waitForExit(child, 45_000);
   if (!result) {
     await stopServer(child);
     throw new Error("secondary desktop launcher did not exit after bootstrap issuance");

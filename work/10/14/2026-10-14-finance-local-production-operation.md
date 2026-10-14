@@ -164,3 +164,10 @@
 - braces 예외 만료: `2026-11-14T00:00:00+09:00`(30일, 작업 가정). 만료 시 연장하지 않고 권고 상태를 다시 확인합니다.
 - 검증: 실제 lockfile의 runtime 범위 275개 패키지에 braces·micromatch·fast-glob·eslint 없음(next·react·better-sqlite3 포함). 실제 `pnpm deps:audit`는 `EXCEPTION HIGH braces ...` 후 `PASS exceptions=1`, `--now=2026-11-14T00:00:00+09:00`에서는 만료로 실패, 예외 파일 없이 실행하면 기존처럼 실패. 단위 테스트(예외 파싱·runtime 범위·적용·package script 연결) 포함 4파일 94 통과, lint·전체 `tsc` 통과.
 - 남은 것: CI `verify`는 지금까지 `deps:audit`에서 멈춰 다음 gate가 이 브랜치에서 실행된 적이 없습니다. HEAD 데이터로 `freshness:release`를 미리 돌리면 `exchange_snapshot.json`(3.7일, 기준 1일)과 `finlife_pension_snapshot.json`(113.8일, 원천 결함)이 stale이라 실패합니다. 연금은 문서 정책상 유효한 원천 갱신 없이 예외를 다시 추가하지 않으며, 환율은 공식 공시일 확인 후 live 수집과 데이터 commit이 필요합니다(별도 승인 필요).
+
+## 후속: `17b8d80f` CI와 보조 런처 대기 시간 (21:30~21:50 KST)
+
+- 결과: `deps:audit`는 통과했고 `verify`는 예상대로 다음 gate인 `freshness:release`에서 실패했습니다(환율·연금 snapshot stale). E2E Smoke 3개와 push 쪽 `windows_native`는 통과.
+- PR 쪽 `windows_native` 7단계에서 "lets a secondary launcher ..."가 `secondary desktop launcher timed out`(테스트 helper의 런처 1회 10초 제한)으로 실패했습니다. 첫 런처 실행 뒤 두 번째 실행(잘못된 broker → 즉시 거부되는 경로)이 10초를 넘겼고, 같은 실행에서 primary 대기 테스트도 평소 0.8초가 6.1초로 느렸습니다. 런처는 lock을 읽기 전에 저장소 확인(PowerShell 드라이브 조회, `98fad12c`부터 최대 30초)을 거치므로, 느린 runner에서 테스트가 런처보다 먼저 포기한 것입니다.
+- 수정: 테스트 helper의 런처 1회 제한 10초 → 45초, 해당 3개 테스트 제한 30초 → 100초, desktop smoke의 보조 런처 대기 15초 → 45초(같은 노출). 검사 내용은 그대로입니다.
+- 검증(격리 사본): windows_native 7단계 묶음과 smoke 관련 테스트 5파일 37 통과 / 3 skip, lint 통과. desktop smoke 전체 실행은 수정본·HEAD를 번갈아 7회 중 7회 `PASS`였고, 수정본 첫 실행 1회(전체 8회 중 1회)는 `PASS` 뒤 종료 확인에서 "writer descendants remained alive"로 실패했습니다. 바꾼 대기 시간과 무관한 종료 경로이며 이후 재현되지 않았습니다(원인 미확인, 관찰 기록).
