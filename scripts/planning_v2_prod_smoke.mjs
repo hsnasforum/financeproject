@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { createPlanningDesktopE2EEnvironment } from "./planning_v2_e2e_isolation.mjs";
 import { preparePlanningSmokeDatabase } from "./planning_smoke_database.mjs";
+import { stopServer as stopDesktopLauncher } from "./planning_v2_desktop_smoke.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -60,51 +61,6 @@ function pickResolvedPort(text) {
   if (!match) return null;
   const parsed = Math.trunc(Number(match[1]));
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : null;
-}
-
-function waitForExit(child, timeoutMs) {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
-  }
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = (value) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-    const timer = setTimeout(() => done(null), timeoutMs);
-    child.once("exit", (code, signal) => {
-      clearTimeout(timer);
-      done({ code, signal });
-    });
-  });
-}
-
-async function stopServer(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  if (process.platform !== "win32" && typeof child.pid === "number") {
-    try {
-      process.kill(-child.pid, "SIGTERM");
-    } catch {
-      // ignore
-    }
-  } else {
-    child.kill("SIGTERM");
-  }
-  const graceful = await waitForExit(child, 15_000);
-  if (graceful) return;
-
-  if (process.platform !== "win32" && typeof child.pid === "number") {
-    try {
-      process.kill(-child.pid, "SIGKILL");
-    } catch {
-      // ignore
-    }
-  } else {
-    child.kill("SIGKILL");
-  }
-  await waitForExit(child, 5_000);
 }
 
 async function waitForUrl(url, timeoutMs) {
@@ -177,7 +133,9 @@ async function main() {
     cwd: appDir,
     env: smokeEnv,
     detached: process.platform !== "win32",
-    stdio: ["ignore", "pipe", "pipe"],
+    // The IPC channel lets the launcher stop its runtime tree gracefully; on Windows a plain
+    // kill ends only the launcher and the orphaned server can keep the smoke database locked.
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   server.on("exit", (code, signal) => {
     exited = { code, signal };
@@ -284,7 +242,7 @@ async function main() {
 
     process.stdout.write("[planning:v2:prod:smoke] PASS\n");
   } finally {
-    await stopServer(server);
+    await stopDesktopLauncher(server, smokeEnv.PLANNING_E2E_DESKTOP_SESSION_TOKEN);
     await fs.rm(smokeRoot, { recursive: true, force: true });
   }
 }

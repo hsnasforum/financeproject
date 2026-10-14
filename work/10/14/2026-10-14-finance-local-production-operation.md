@@ -148,3 +148,11 @@
 - 남은 것: production smoke가 Windows에서 DB 준비 이후 단계까지 가는 것은 다음 CI가 처음입니다. 9단계 결과 가림(2번 과제)은 아직 그대로라 로그로 직접 확인해야 합니다.
 - 함께 처리(2번 과제): `windows_native`의 6~9단계는 Windows 기본 셸인 pwsh로 실행되는데, pwsh는 실패한 명령에서 멈추지 않고 step 결과로 마지막 명령의 종료 코드만 남겨 앞 명령의 실패가 가려졌습니다(9단계의 production smoke 실패, 7단계 첫 vitest 실패 가능성 등). `release.yml`과 같은 방식으로 각 `pnpm` 명령 뒤에 `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`를 넣고 6·7단계에 `shell: pwsh`를 명시했습니다. 계약 테스트에 "windows_native의 모든 `pnpm` 명령 다음 줄이 종료 코드 검사"를 추가했습니다.
 - 추가 검증: 이 PC의 PowerShell로 GitHub pwsh step 형태를 재현해 기존 형태는 첫 명령 실패에도 종료 코드 0, 검사 추가 형태는 실패 코드로 끝남을 확인. 새 계약 검사는 HEAD `ci.yml`과 production smoke 뒤 검사 한 줄을 뺀 변형에서 각각 실패, 수정본에서 workflow 계약 테스트 57 통과, YAML 파싱으로 6~9단계 `pnpm` 9개 모두 검사 확인.
+
+## 후속: `4ed1c29c` CI와 production smoke 정리 단계 EBUSY (19:40~20:00 KST)
+
+- 결과: PR 쪽 `windows_native`가 종료 코드 검사가 들어간 상태로 통과했습니다. production smoke 7개 검사(`/public/dart`, standalone·public asset, 상품 DB 계약, `/products/catalog`, `/settings/data-sources`, 원격 probe 403)가 Windows에서 처음 모두 `PASS`, desktop smoke도 `PASS`. 저장소 확인 실패·복사 경고·chunk 오류 0건, 7단계 33 통과.
+- push 쪽 `windows_native`는 production smoke가 `PASS`를 출력한 19ms 뒤 정리 단계에서 `EBUSY: resource busy or locked, unlink '...\planning-prod-smoke-...\database\finance.db'`로 실패했습니다(같은 코드에서 PR 쪽은 통과한 경합).
+- 원인: production smoke는 Windows에서 런처를 `child.kill("SIGTERM")`으로 멈춥니다. Windows에서는 런처 프로세스만 즉시 강제 종료되고(그래서 19ms), 그 아래 Next 서버 프로세스 트리는 정상 종료 절차 없이 남아 SQLite 파일을 잠근 채 임시 폴더 삭제와 경합합니다. desktop smoke는 같은 런처를 IPC 종료 메시지(세션 토큰 확인)로 정상 종료하고 실패 시 `taskkill /T /F`로 트리를 정리하며, Windows CI에서 `shutdown signal=E2E_IPC (graceful)`로 문제없이 동작해 왔습니다.
+- 수정: desktop smoke의 종료 함수(`stopServer`)를 export하고 production smoke가 IPC 채널로 런처를 띄워 같은 함수로 종료하게 했습니다(토큰은 이미 만드는 `PLANNING_E2E_DESKTOP_SESSION_TOKEN`을 사용). production smoke의 중복 종료 코드는 제거했습니다.
+- 검증(격리 사본, 네트워크 차단): production smoke 2회 모두 7개 검사 `PASS`, 런처 `shutdown signal=E2E_IPC (graceful)`, 종료 코드 0, 임시 폴더 잔존 0. 관련 테스트 4파일 53 통과, lint 통과. Windows에서의 확인은 다음 CI입니다.

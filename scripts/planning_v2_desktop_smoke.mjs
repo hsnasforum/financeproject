@@ -118,7 +118,7 @@ async function requestE2EShutdown(child, token) {
   });
 }
 
-async function stopServer(child, e2eSessionToken = "") {
+export async function stopServer(child, e2eSessionToken = "") {
   if (child.exitCode !== null || child.signalCode !== null) return;
   const controlRequested = await requestE2EShutdown(child, e2eSessionToken);
   if (!controlRequested && process.platform !== "win32" && typeof child.pid === "number") {
