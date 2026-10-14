@@ -145,26 +145,18 @@ export async function assertDesktopInstallationIdentity(targetDir) {
     throw new Error(`desktop uninstall target is not an installed directory: ${installDir}`);
   }
 
-  await Promise.all([
-    requirePlainFile(
-      path.join(installDir, DESKTOP_MANIFEST_FILENAME),
-      "desktop uninstall manifest",
-    ),
-    requirePlainFile(path.join(installDir, "package.json"), "desktop uninstall package"),
-    requirePlainFile(path.join(installDir, "pnpm-lock.yaml"), "desktop uninstall lockfile"),
-    requirePlainFile(
-      path.join(installDir, ".env.local.example"),
-      "desktop uninstall environment template",
-    ),
-    requirePlainFile(
-      path.join(installDir, "scripts", "planning_desktop_install_state.mjs"),
-      "desktop uninstall state module",
-    ),
-    requirePlainFile(
-      path.join(installDir, "scripts", "planning_v2_desktop_uninstall.mjs"),
-      "desktop uninstall module",
-    ),
-  ]);
+  // Check in a fixed order: with Promise.all the first lstat to settle decided which missing file
+  // was reported, so a non-installation could fail on the lockfile instead of the manifest.
+  for (const [relativePath, label] of [
+    [DESKTOP_MANIFEST_FILENAME, "desktop uninstall manifest"],
+    ["package.json", "desktop uninstall package"],
+    ["pnpm-lock.yaml", "desktop uninstall lockfile"],
+    [".env.local.example", "desktop uninstall environment template"],
+    [path.join("scripts", "planning_desktop_install_state.mjs"), "desktop uninstall state module"],
+    [path.join("scripts", "planning_v2_desktop_uninstall.mjs"), "desktop uninstall module"],
+  ]) {
+    await requirePlainFile(path.join(installDir, relativePath), label);
+  }
 
   const manifest = await readDesktopManifest(installDir);
   const packageVersion = await readPackageVersion(installDir);
