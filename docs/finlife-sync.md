@@ -123,3 +123,5 @@ FINLIFE_PROBE_RETRIES=2
 ```
 
 후보 그룹을 좁혀 재확인할 때는 `FINLIFE_PROBE_GROUP_CANDIDATES=020000,050000,060000`처럼 쉼표로 지정합니다.
+
+동기화(`finlife:sync`)의 페이지 요청은 기본 30초까지 기다립니다. 2026-10-14에 적금 endpoint가 정상 응답에 약 15초가 걸려 이전 10초 제한에서 매번 실패한 것을 확인했습니다. 필요하면 `FINLIFE_SYNC_TIMEOUT_MS`(500~120000ms)로 조정하며, 빈 값은 기본값으로 처리합니다.

@@ -67,3 +67,12 @@
 
 - FINLIFE 회복 후 적금 동기화, KOSTAT CPI 파싱 원인 확인.
 - 승인 시 원격 push/PR.
+
+## 후속: API 키 정리·적금 수집·DART 실시간 조회 복구 (14:35~15:00 KST)
+
+- 사용자가 `OPENDART_API_KEY`에 넣은 32자리 키는 OpenDART에서 `010` 미등록이었고, FINLIFE API에서는 `000 정상`이었습니다. FINLIFE 키로 확인되어 사용자가 `FINLIFE_API_KEY`(새 키)와 `OPENDART_API_KEY`(40자리)를 직접 정리했습니다. 최종 `.env.local`은 각 키가 한 줄씩이며 두 키 모두 실제 호출 `000 정상`입니다. 키 값은 출력·기록하지 않았습니다.
+- 정정: 위 본문에서 "원천 서버 일시 장애"로 적은 적금 실패의 실제 원인은 응답 지연이었습니다. 정상 응답에 약 15초가 걸려 `fetchFinlifePage`의 10초 고정 timeout에서 매번 끊겼습니다. 수집 timeout을 `FINLIFE_SYNC_TIMEOUT_MS`(기본 30초, 500~120000ms, 빈 값은 기본값)로 조정 가능하게 했고, 이후 적금 59/178 수집 성공, 실패 marker가 자동 정리되었습니다.
+- DART 실시간 조회(기업 개황·공시 목록)가 `502 UPSTREAM`이었습니다. 원인은 env의 legacy `OPENDART_API_URL`이 `/api`로 끝나는데 코드가 다시 `/api`를 붙여 `/api/api/company.json`을 호출한 것입니다(키와 무관한 기존 결함). `resolveDartBaseUrl`이 끝의 `/api`를 정리하도록 고쳐 두 env 형식을 모두 받게 했습니다.
+- 변경 파일: `scripts/finlife_cli_common.mjs`, `tests/finlife-sync-timeout.test.ts`(신규), `docs/finlife-sync.md`, `src/lib/publicApis/dart/baseUrl.ts`, `tests/dart-base-url-env.test.ts`, `docs/opendart-setup.md`, `.data/finlife_saving_snapshot.json`(live sync), 이 절.
+- 검증: DART URL 새 테스트 RED(HEAD 코드에서 4 실패) → 수정 후 DART·공시 29파일 111 통과, FINLIFE 49파일 203 통과, 변경 파일 lint 오류 0, 전체 `tsc` 통과, production build 통과(첫 build는 테스트의 JSDoc 타입 누락으로 실패 후 수정), 재시작 후 앱에서 적금 59개, 기업 개황 200(삼성전자(주)), 공시 목록 200·3건, 주요 화면 200.
+- 남은 것: 연금은 원천 결함으로 실패 marker를 유지합니다. 이 후속 변경은 아직 commit하지 않았습니다.

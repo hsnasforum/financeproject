@@ -41,6 +41,16 @@ export function parsePositiveInt(value, fallback, min, max) {
   return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
+// The savings endpoint has been observed answering healthy pages in ~15s, so a 10s cut failed every sync.
+const DEFAULT_FINLIFE_SYNC_TIMEOUT_MS = 30_000;
+
+/** @param {Readonly<Record<string, string | undefined>>} [env] */
+export function resolveFinlifeSyncTimeoutMs(env = process.env) {
+  const raw = typeof env.FINLIFE_SYNC_TIMEOUT_MS === "string" ? env.FINLIFE_SYNC_TIMEOUT_MS.trim() : "";
+  if (!raw) return DEFAULT_FINLIFE_SYNC_TIMEOUT_MS;
+  return parsePositiveInt(raw, DEFAULT_FINLIFE_SYNC_TIMEOUT_MS, 500, 120_000);
+}
+
 function normalizeLookupKey(value) {
   return String(value || "").toLowerCase().replace(/[\s_\-:/()[\].]/g, "");
 }
@@ -235,7 +245,7 @@ export async function fetchFinlifePage({ baseUrl, apiKey, kind, topFinGrpNo, pag
   if (Number.isFinite(Number(pageSize)) && Number(pageSize) > 0) {
     url.searchParams.set("pageSize", String(Math.trunc(Number(pageSize))));
   }
-  const diag = await fetchJsonWithDiag(url.toString(), { timeoutMs: 10_000 });
+  const diag = await fetchJsonWithDiag(url.toString(), { timeoutMs: resolveFinlifeSyncTimeoutMs() });
   if (!isFinlifeSuccess(diag)) {
     const statusText = typeof diag.status === "number" ? `HTTP ${diag.status}` : "HTTP ERR";
     const codeText = diag.errCd ? ` err_cd=${diag.errCd}` : "";
