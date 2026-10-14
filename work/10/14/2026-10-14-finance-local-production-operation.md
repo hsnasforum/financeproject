@@ -121,3 +121,11 @@
 - 수정: 홈 디렉터리를 작은 함수(`resolveUserHomeDirectory`)로 감싸 실행 시점에만 계산합니다(동작 동일). 회귀 테스트 1건(Next 내장 nft로 `runtimeRoot.mjs`를 추적해 임시 홈 아래 파일이 없어야 함) 추가.
 - 검증(격리 사본, 네트워크 차단): 새 테스트는 수정 전 코드에서 홈 probe 2개가 추적되어 실패, 수정 후 통과. 실제 webpack build를 홈이 추적 루트 안에 있는 조건으로 비교하면 수정 전 page trace의 홈 파일 참조 346건·standalone에 홈 폴더 복사, 수정 후 0건·미복사(두 build 모두 성공, server chunk 107개 standalone 누락 0). 배포·provenance 17파일 229 통과 / 4 skip, lint·전체 `tsc` 통과.
 - 남은 것: Windows 실기 결과는 다음 CI에서 확인합니다. 9단계의 production smoke DB 볼륨 문제와 저장소 확인 불안정은 별도 원인이라 이번 수정으로 해결되지 않습니다.
+
+## 후속: `428f96a6` CI 결과와 Windows 테스트 제한 시간 (17:50~18:00 KST)
+
+- PR 쪽 `windows_native`가 처음으로 9단계까지 통과했습니다. 빌드 경고 `Failed to copy traced files` 0건, `chunks/...` 오류 0건, 설치본 desktop smoke `PASS`로 chunk 누락 수정이 Windows에서 확인되었습니다.
+- 단, 같은 9단계의 production smoke는 여전히 "same filesystem volume"으로 실패했는데 step이 성공으로 표시되었습니다. pwsh step은 앞 명령의 실패 종료 코드로 멈추지 않고 마지막 명령(desktop smoke)의 결과만 반영하기 때문입니다(미수정, 별도 과제).
+- push 쪽 `windows_native`는 7단계에서 vitest 기본 제한 5초 초과 2건으로 실패했습니다. 실제 런처 프로세스를 두 번 띄우는 기존 테스트(직전 3.3초 → 5.02초, 같은 실행에서 다른 테스트도 약 2배 느림)와 이번에 추가한 nft 회귀 테스트(5.7초, 통과한 PR 쪽도 4.5초)입니다. 런처 프로세스 테스트 3건에 30초(보조 런처 1회당 10초 상한 ×2 기준), nft 테스트에 30초 제한을 명시했습니다. 검사 내용은 바꾸지 않았습니다.
+- `dart_index_missing`은 `/invest/companies`의 `waitForLoadState("networkidle")`가 60초 동안 끝나지 않아 실패했습니다(재시도 포함 2회). 직전 두 CI와 격리 사본 3회 재실행에서는 모두 통과했고 이번 변경과 관련된 경로가 아니라 일시적 불안정으로 판단합니다(근본 원인 미확인).
+- 검증(격리 사본): windows_native 7단계 묶음 2회 모두 32 중 30 통과 / 2 skip, lint·전체 `tsc` 통과.

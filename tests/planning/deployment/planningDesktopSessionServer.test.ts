@@ -12,6 +12,8 @@ type Broker = Awaited<ReturnType<typeof createPlanningDesktopSessionBootstrap>>;
 
 const openBrokers: Broker[] = [];
 const temporaryRoots: string[] = [];
+// Each case runs two real launcher processes, each bounded by runSecondaryLauncher's 10s guard.
+const SECONDARY_LAUNCHER_TEST_TIMEOUT_MS = 30_000;
 
 async function createBroker(options: Record<string, unknown> = {}) {
   const broker = await createPlanningDesktopSessionBootstrap({
@@ -245,7 +247,7 @@ describe("planning desktop session bootstrap broker", () => {
     expect(rejected.bootstrapUrl).toBe("");
     expect(`${rejected.stdout}\n${rejected.stderr}`).not.toContain(lockPayload.targetUrl);
     expect(`${rejected.stdout}\n${rejected.stderr}`).not.toContain("session bootstrap");
-  });
+  }, SECONDARY_LAUNCHER_TEST_TIMEOUT_MS);
 
   it("waits for a living primary to atomically publish its broker contract", async () => {
     const token = "g".repeat(43);
@@ -305,7 +307,7 @@ describe("planning desktop session bootstrap broker", () => {
     expect(issuedUrl).toBeTruthy();
     await expect(fetch(issuedUrl!, { redirect: "manual" }).then((response) => response.status))
       .resolves.toBe(303);
-  });
+  }, SECONDARY_LAUNCHER_TEST_TIMEOUT_MS);
 
   it("checks the automation bootstrap file against the canonical control root", async () => {
     const broker = await createBroker({ sessionToken: "j".repeat(43), issueInitialBootstrap: false });
@@ -354,5 +356,5 @@ describe("planning desktop session bootstrap broker", () => {
     expect(outside.code).toBe(1);
     expect(outside.stderr).toContain("PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE must stay inside the desktop control root");
     expect(outside.bootstrapUrl).toBe("");
-  });
+  }, SECONDARY_LAUNCHER_TEST_TIMEOUT_MS);
 });

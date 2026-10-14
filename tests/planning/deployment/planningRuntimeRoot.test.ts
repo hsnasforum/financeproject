@@ -130,7 +130,7 @@ describe("planning runtime data root", () => {
         else process.env[key] = value;
       }
     }
-  });
+  }, 30_000); // loading Next's bundled tracer alone can exceed the default 5s on Windows runners
 
   it("accepts only SQLite file database facts", () => {
     expect(resolvePlanningDatabaseFacts({ DATABASE_URL: "file:./data.db" } as unknown as NodeJS.ProcessEnv)).toEqual({
