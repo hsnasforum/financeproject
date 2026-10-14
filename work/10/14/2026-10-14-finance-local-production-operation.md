@@ -179,3 +179,11 @@
 - 결과: `.data/exchange_snapshot.json`이 `asOf=2026-10-14`, `rowCount=23`, `generatedAt=2026-10-14T14:49:45.080Z`로 갱신되었고 다른 파일은 바뀌지 않았습니다. 같은 날짜 AP01 응답(result 1)의 `deal_bas_r` 23개가 공식 화면 매매기준율과 모두 일치했습니다(대조용 추가 조회 1회).
 - 확인: HEAD 데이터에 갱신된 receipt를 넣어 `freshness:release`(strict, check-only)를 실행하면 환율은 fresh(0.00일), 연금 snapshot만 stale(113.95일)로 남습니다. 연금은 원천 결함 해소 전까지 정책상 예외 없이 출시를 막는 상태이며 이번 범위에서 다루지 않았습니다.
 - 주의: 환율 receipt의 기준은 1일이므로 다음 공시 영업일 이후에는 다시 stale이 됩니다.
+
+## 후속: release gate 사전 실행과 runs-report-route 기대값 (10/15 00:35~01:30 KST)
+
+- 사전 실행: 커밋된 HEAD(`9b966d7e`)만 담은 깨끗한 사본(`.env.local` 없음)에서 CI와 같은 `prisma:generate`·`prisma:db:push` 후 `freshness:release` 다음 release gate를 순서대로 실행했습니다. `e2e:inventory:check`, `planning:v2:complete`, `multi-agent:guard`, `planning:v2:compat`, `planning:v2:regress`(Playwright 브라우저 경로 지정 후), `planning:postgres:readiness`, `e2e:release:contracts`, production·desktop smoke, `planning:ssot:check`가 통과했습니다.
+- `test`: 격리 환경 27건 실패 중 26건은 같은 사본을 격리 밖에서 실행하면 통과(owner restore/archive, news, reports route 등 sandbox 특성), `planning-v2-static-guard` 1건은 전체 병렬 실행에서 5초 제한 초과(5.35초, 단독 통과)였습니다. 실제 실패는 `tests/planning-v2-api/runs-report-route.test.ts` 1건이었습니다.
+- 원인: `eb6eb922`(10/11 검토본 신뢰성 개선)가 workspace·보고서·standalone HTML/print에 같은 진단 assessment를 표시하도록 바꾸면서, standalone HTML은 assessment가 있을 때 `10초 판정: <판정>` 대신 assessment 라벨과 `기본 지표 판정: <판정>`을 표시합니다(`diagnosis-consistency.test.tsx`가 이 계약을 검사). 같은 작업에서 `stableReportScenarios` 기대값은 갱신했지만 이 API route 테스트는 회귀 범위 밖이었고 전체 suite도 실행하지 않아 옛 기대값이 남았습니다. 수정 전 커밋에서도 동일하게 실패하는 기존 drift입니다.
+- 수정: 기대값을 `기본 지표 판정:`으로 바꿨습니다(그 외 검사 유지). 이전에는 첫 기대값에서 멈춰 평가되지 않던 `Warnings`·`Top Actions`·내부 경로 비노출 검사도 이제 실행되어 통과합니다.
+- 검증(깨끗한 사본, 격리 밖·최소 env): 수정 전 1 실패 / 4 통과, 수정 후 5 통과, 주변 planning API·report·insights 56파일 287 통과.
