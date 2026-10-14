@@ -105,3 +105,11 @@
 - 원인 2: 개발 모드 Strict Mode에서 리포트 화면이 실행 기록을 2번 요청하고 첫 요청을 abort합니다(측정: 2회, 첫 요청 `ERR_ABORTED`). 테스트가 요청 순서(첫 401, 둘째 200)로 응답해 abort된 요청이 401을 소비했습니다. 모든 요청이 401일 때 로그인 안내 알림은 정상 표시되어 화면 결함은 아닙니다.
 - 수정: workflow 해당 단계에서 `--` 제거, 손상 프로필 테스트는 로그인 필수 구성에서 skip, 리포트 테스트는 "다시 시도" 클릭 전 401·후 200으로 응답(기존 검사 유지).
 - 검증(격리 사본, CI env): 새 단계 명령은 1개만 실행·통과, 로그인 필수 환경 전체 spec 4 통과/1 skip, 일반 환경 전체 spec 4 통과/1 skip, workflow 계약 테스트·lint 통과.
+
+## 후속: windows_native 데스크톱 세션 서버 테스트 원인 (16:30~16:45 KST)
+
+- PR #301 CI `windows_native`는 10/07 job 추가 이후 이 브랜치의 모든 실행에서 7단계 "Windows writer and process-tree contracts"에서 같은 2건(`planningDesktopSessionServer.test.ts`의 보조 런처 테스트)으로 실패했습니다. 8~9단계(데스크톱 빌드·설치, Windows production·desktop smoke)는 한 번도 실행되지 않았습니다.
+- 원인: 런처의 `publishAutomationBootstrapUrl`이 `realpath`로 정규화된 control root와, 정규화하지 않은 `PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE` 경로를 글자 단위로 비교했습니다. 테스트와 desktop smoke는 `os.tmpdir()` 아래 경로를 넘기는데, Windows runner의 임시 경로가 8.3 짧은 이름(`RUNNER~1`)이면 realpath(`runneradmin`)와 달라져 "control root 밖"으로 판정됩니다. 짧은 이름 자체는 CI 로그에 직접 찍히지 않아 추정이며, Linux에서 `TMPDIR`을 symlink로 거치게 하면 같은 2건이 같은 메시지로 재현됩니다.
+- 수정: 비교 전에 출력 경로도 기존 헬퍼 `resolveProspectiveDesktopCanonicalPath`로 정규화합니다(`scripts/planning_v2_desktop_launch.mjs`). control root 밖 경로 거부는 그대로이며, 링크로 control root 밖을 가리키는 경로도 이제 정규화 후 거부됩니다. 회귀 테스트 1건 추가(링크로 접근한 control root는 통과, 밖의 경로는 거부).
+- 검증(격리 사본, 네트워크 차단): 새 테스트는 수정 전 런처에서 실패 재현, 수정 후 일반 `/tmp`·symlink `TMPDIR` 모두 10 통과. windows_native 7단계 묶음과 런처 관련 11파일 182 통과 / 4 skip, lint·전체 `tsc` 통과.
+- 범위 밖: symlink `TMPDIR`에서 배포 suite 3파일 6건(`DATABASE_SYMLINK`, writer capability root 비교 등)이 실패하지만 수정 전 런처에서도 동일하며 Windows CI 대상 suite가 아닙니다. Windows 실기 실행은 하지 못했으므로 8~9단계 결과는 다음 CI에서 처음 확인됩니다.

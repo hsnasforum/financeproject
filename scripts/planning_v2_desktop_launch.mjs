@@ -34,7 +34,10 @@ import {
   loadPlanningDesktopEnvironment,
   PLANNING_DESKTOP_RUNTIME_CONFIG_ENV_KEYS,
 } from "./planning_v2_desktop_env.mjs";
-import { assertManagedDesktopDatabasePath } from "./planning_desktop_install_state.mjs";
+import {
+  assertManagedDesktopDatabasePath,
+  resolveProspectiveDesktopCanonicalPath,
+} from "./planning_desktop_install_state.mjs";
 import { openInDefaultBrowser } from "./planning_desktop_browser.mjs";
 
 const E2E_BOOTSTRAP_FILE_ENV = "PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE";
@@ -122,7 +125,9 @@ async function publishAutomationBootstrapUrl(controlRoot, bootstrapUrl) {
   if (!/^[A-Za-z0-9_-]{43,}$/.test(e2eToken)) {
     throw new Error(`${E2E_BOOTSTRAP_FILE_ENV} requires PLANNING_E2E_DESKTOP_SESSION_TOKEN`);
   }
-  const outputPath = path.resolve(outputValue);
+  // controlRoot is canonical (realpath), so compare against the canonical output path too:
+  // Windows temp paths may use 8.3 short names and other hosts may reach temp through a symlink.
+  const outputPath = await resolveProspectiveDesktopCanonicalPath(outputValue);
   const relative = path.relative(controlRoot, outputPath);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(`${E2E_BOOTSTRAP_FILE_ENV} must stay inside the desktop control root`);

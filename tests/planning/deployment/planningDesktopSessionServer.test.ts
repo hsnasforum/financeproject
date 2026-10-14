@@ -306,4 +306,53 @@ describe("planning desktop session bootstrap broker", () => {
     await expect(fetch(issuedUrl!, { redirect: "manual" }).then((response) => response.status))
       .resolves.toBe(303);
   });
+
+  it("checks the automation bootstrap file against the canonical control root", async () => {
+    const broker = await createBroker({ sessionToken: "j".repeat(43), issueInitialBootstrap: false });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "planning-desktop-canonical-root-test-"));
+    const linkedRoot = `${root}-link`;
+    temporaryRoots.push(linkedRoot, root);
+    // Reaching the root through a link mirrors Windows 8.3 temp paths that differ from their realpath.
+    await fs.symlink(root, linkedRoot, "junction");
+    const runtimeDir = path.join(root, "runtime");
+    await fs.mkdir(runtimeDir, { recursive: true, mode: 0o700 });
+    await fs.writeFile(path.join(runtimeDir, "desktop-instance.lock.json"), `${JSON.stringify({
+      pid: process.pid,
+      baseUrl: "http://127.0.0.1:3100",
+      targetUrl: "http://127.0.0.1:3100/planning",
+      openPath: "/planning",
+      brokerUrl: broker.brokerUrl,
+      issueCapability: broker.issueCapability,
+      readyAt: new Date().toISOString(),
+    })}\n`, { mode: 0o600 });
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      NODE_ENV: "production",
+      PLANNING_DEPLOYMENT_MODE: "desktop-local",
+      PLANNING_E2E_DESKTOP_DATABASE_URL: "file:./dev.db",
+      PLANNING_E2E_DESKTOP_DATA_DIR: path.join(linkedRoot, "planning"),
+      PLANNING_FORWARDED_HEADERS_TRUSTED: "false",
+      PLANNING_NAMESPACE_ENABLED: "false",
+      PLANNING_SINGLE_USER_MODE: "true",
+      PLANNING_TRUST_AUTH_HEADERS: "false",
+      PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE: path.join(linkedRoot, "runtime", "e2e-bootstrap.url"),
+      PLANNING_E2E_DESKTOP_SESSION_TOKEN: "k".repeat(43),
+    };
+
+    const linked = await runSecondaryLauncher(env);
+    expect(
+      linked.code,
+      `secondary launcher failed\nstdout:\n${linked.stdout}\nstderr:\n${linked.stderr}`,
+    ).toBe(0);
+    await expect(fetch(linked.bootstrapUrl, { redirect: "manual" }).then((response) => response.status))
+      .resolves.toBe(303);
+
+    const outside = await runSecondaryLauncher({
+      ...env,
+      PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE: `${root}-outside.url`,
+    });
+    expect(outside.code).toBe(1);
+    expect(outside.stderr).toContain("PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE must stay inside the desktop control root");
+    expect(outside.bootstrapUrl).toBe("");
+  });
 });
