@@ -156,3 +156,11 @@
 - 원인: production smoke는 Windows에서 런처를 `child.kill("SIGTERM")`으로 멈춥니다. Windows에서는 런처 프로세스만 즉시 강제 종료되고(그래서 19ms), 그 아래 Next 서버 프로세스 트리는 정상 종료 절차 없이 남아 SQLite 파일을 잠근 채 임시 폴더 삭제와 경합합니다. desktop smoke는 같은 런처를 IPC 종료 메시지(세션 토큰 확인)로 정상 종료하고 실패 시 `taskkill /T /F`로 트리를 정리하며, Windows CI에서 `shutdown signal=E2E_IPC (graceful)`로 문제없이 동작해 왔습니다.
 - 수정: desktop smoke의 종료 함수(`stopServer`)를 export하고 production smoke가 IPC 채널로 런처를 띄워 같은 함수로 종료하게 했습니다(토큰은 이미 만드는 `PLANNING_E2E_DESKTOP_SESSION_TOKEN`을 사용). production smoke의 중복 종료 코드는 제거했습니다.
 - 검증(격리 사본, 네트워크 차단): production smoke 2회 모두 7개 검사 `PASS`, 런처 `shutdown signal=E2E_IPC (graceful)`, 종료 코드 0, 임시 폴더 잔존 0. 관련 테스트 4파일 53 통과, lint 통과. Windows에서의 확인은 다음 CI입니다.
+
+## 후속: `deps:audit` 기한부 예외 (20:10~20:40 KST)
+
+- 상태 확인: braces 권고 GHSA-vfj7-8cjw-p6xm은 수정 버전이 없습니다(권고 `first_patched_version` 없음, npm 최신 braces 3.0.3). 경로는 `eslint-config-next`(devDependency) > `@next/eslint-plugin-next` > `fast-glob` 3.3.1 > `micromatch` 4.0.8 > `braces` 3.0.3 하나이며, 상위 최신판(16.4.0, 16.5 canary)도 같은 `fast-glob`을 고정합니다. standalone build와 desktop artifact에는 braces가 없습니다.
+- 결정(사용자 선택 2): 기존 `config/data-freshness-exceptions.json`과 같은 원칙의 예외를 `deps:audit`에 추가했습니다. `config/dependency-audit-exceptions.json`(schemaVersion 1)의 각 항목은 GHSA ID·패키지·`scope: "dev"`·사유·완화책·`expiresAt`을 가져야 하고, 만료·중복·더 이상 보고되지 않는 예외와 90일을 넘는 기한은 gate를 실패시킵니다. `scope: "dev"` 예외는 lockfile의 runtime dependency 경로(importers의 dependencies/optionalDependencies에서 snapshots를 따라감, snapshot 누락 시 실패)에서 해당 패키지가 닿으면 적용하지 않습니다. 적용된 예외는 `EXCEPTION` 줄로 사유·만료와 함께 출력됩니다.
+- braces 예외 만료: `2026-11-14T00:00:00+09:00`(30일, 작업 가정). 만료 시 연장하지 않고 권고 상태를 다시 확인합니다.
+- 검증: 실제 lockfile의 runtime 범위 275개 패키지에 braces·micromatch·fast-glob·eslint 없음(next·react·better-sqlite3 포함). 실제 `pnpm deps:audit`는 `EXCEPTION HIGH braces ...` 후 `PASS exceptions=1`, `--now=2026-11-14T00:00:00+09:00`에서는 만료로 실패, 예외 파일 없이 실행하면 기존처럼 실패. 단위 테스트(예외 파싱·runtime 범위·적용·package script 연결) 포함 4파일 94 통과, lint·전체 `tsc` 통과.
+- 남은 것: CI `verify`는 지금까지 `deps:audit`에서 멈춰 다음 gate가 이 브랜치에서 실행된 적이 없습니다. HEAD 데이터로 `freshness:release`를 미리 돌리면 `exchange_snapshot.json`(3.7일, 기준 1일)과 `finlife_pension_snapshot.json`(113.8일, 원천 결함)이 stale이라 실패합니다. 연금은 문서 정책상 유효한 원천 갱신 없이 예외를 다시 추가하지 않으며, 환율은 공식 공시일 확인 후 live 수집과 데이터 commit이 필요합니다(별도 승인 필요).

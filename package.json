@@ -124,7 +124,7 @@
     "v3:restore": "node --import tsx src/lib/planning/v3/ops/restore.ts",
     "v3:migrate": "node scripts/planning_writer_entry.mjs v3:migrate -- node --import tsx src/lib/planning/v3/ops/migrate.ts",
     "v3:report:weekly": "node scripts/planning_writer_entry.mjs v3:report:weekly -- node --import tsx src/lib/planning/v3/report/weeklyHtml.ts",
-    "deps:audit": "node scripts/deps_audit.mjs",
+    "deps:audit": "node scripts/deps_audit.mjs --exceptions=config/dependency-audit-exceptions.json",
     "sec:check": "node scripts/security_check.mjs && node scripts/security_route_guard_scan.mjs",
     "sec:scan:routes": "node scripts/security_route_guard_scan.mjs",
     "planning:v2:guard": "node scripts/planning_v2_static_guard.mjs",

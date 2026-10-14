@@ -36,6 +36,10 @@
 - 사용자 흐름 영향이 있으면 같은 소유자가 `pnpm e2e:rc`를 이어서 실행합니다.
 - `release:verify` 구성은 `scripts/quality_gates.mjs`의 `QUALITY_GATE_SUITES["release:verify"]`를 기준으로 합니다.
 - required preflight는 `cleanup:next-artifacts → deps:audit → freshness:release → e2e:inventory:check` 순서입니다.
+- `deps:audit`는 보안 권고가 하나라도 있으면 실패하며, 예외는 `config/dependency-audit-exceptions.json`만 기준으로 합니다.
+  각 예외는 GHSA ID·패키지·`scope: "dev"`·사유·완화책·`expiresAt`(최대 90일)을 가져야 하고, 해당 패키지가 runtime
+  dependency에서 닿으면 적용되지 않습니다. 만료·중복·더 이상 보고되지 않는 예외는 gate를 실패시키며, 만료 시 기한을
+  연장하지 않고 권고 상태를 다시 확인합니다. 경계 재현에는 `--now=<ISO date-time>`을 사용합니다.
 - 설치본 release 단계는 `release:verify → artifact build/install → production smoke → desktop smoke` 순서이며, 두 smoke는 `release:verify` 내부 gate가 아닙니다.
 - `pnpm planning:postgres:readiness`는 release suite의 optional gate이며, PostgreSQL target schema readiness evidence만 만들고 운영 DB migration을 실행하지 않습니다.
 

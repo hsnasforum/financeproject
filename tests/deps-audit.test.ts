@@ -3,8 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  applyDependencyAuditExceptions,
   buildBulkAdvisoryPayload,
   collectBulkAdvisories,
+  collectProductionPackageNames,
+  parseDependencyAuditExceptions,
+  readAdvisoryId,
   runDependencyAudit,
 } from "../scripts/deps_audit.mjs";
 
@@ -606,5 +610,145 @@ packages:
     expect(logs[3]).toBe("[deps:audit] checked packages=1 versions=1 advisories=0 attempts=2");
     expect(logs.join("\n")).not.toContain("secret-value");
     expect(logs.join("\n")).not.toContain(JSON.stringify({ plain: ["1.0.0"] }));
+  });
+});
+
+describe("dependency audit exceptions", () => {
+  const now = new Date("2026-10-14T00:00:00+09:00");
+  const bracesAdvisory = {
+    packageName: "braces",
+    severity: "high",
+    title: "braces vulnerable to stack-exhaustion denial of service",
+    vulnerableVersions: "<=3.0.3",
+    url: "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+  };
+  const otherAdvisory = {
+    packageName: "runtime-lib",
+    severity: "moderate",
+    title: "runtime issue",
+    vulnerableVersions: "<2.0.0",
+    url: "https://github.com/advisories/GHSA-aaaa-bbbb-cccc",
+  };
+
+  function exceptionEntry(overrides: Record<string, unknown> = {}) {
+    return {
+      advisory: "GHSA-vfj7-8cjw-p6xm",
+      package: "braces",
+      scope: "dev",
+      reason: "no patched release; lint-only devDependency",
+      mitigation: "remove when a patched release is available",
+      expiresAt: "2026-11-14T00:00:00+09:00",
+      ...overrides,
+    };
+  }
+
+  function exceptionsSource(...entries: Record<string, unknown>[]) {
+    return JSON.stringify({ schemaVersion: 1, exceptions: entries });
+  }
+
+  const lockfile = `
+lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      app-runtime:
+        specifier: ^1.0.0
+        version: 1.0.0(peer@1.0.0)
+    devDependencies:
+      lint-plugin:
+        specifier: ^1.0.0
+        version: 1.0.0
+packages:
+  app-runtime@1.0.0: {}
+  runtime-lib@1.0.0: {}
+  peer@1.0.0: {}
+  lint-plugin@1.0.0: {}
+  braces@3.0.3: {}
+snapshots:
+  app-runtime@1.0.0(peer@1.0.0):
+    dependencies:
+      runtime-lib: 1.0.0
+      peer: 1.0.0
+  runtime-lib@1.0.0: {}
+  peer@1.0.0: {}
+  lint-plugin@1.0.0:
+    dependencies:
+      braces: 3.0.3
+  braces@3.0.3: {}
+`;
+
+  it("reads the GHSA identifier from the advisory URL", () => {
+    expect(readAdvisoryId(bracesAdvisory)).toBe("GHSA-vfj7-8cjw-p6xm");
+    expect(readAdvisoryId({ url: "https://example.invalid/advisory/1" })).toBe("");
+  });
+
+  it("accepts a complete dev-scoped exception that has not expired", () => {
+    const exceptions = parseDependencyAuditExceptions(exceptionsSource(exceptionEntry()), now);
+    expect([...exceptions.values()]).toEqual([expect.objectContaining({
+      advisory: "GHSA-vfj7-8cjw-p6xm",
+      packageName: "braces",
+      scope: "dev",
+      expiresAt: "2026-11-14T00:00:00+09:00",
+    })]);
+  });
+
+  it("rejects incomplete, non-dev, expired, too long, and duplicate exceptions", () => {
+    expect(() => parseDependencyAuditExceptions("{", now)).toThrow("valid JSON");
+    expect(() => parseDependencyAuditExceptions(JSON.stringify({ exceptions: [] }), now)).toThrow("schemaVersion=1");
+    expect(() => parseDependencyAuditExceptions(exceptionsSource(exceptionEntry({ reason: " " })), now))
+      .toThrow("invalid dependency audit exception entry: GHSA-vfj7-8cjw-p6xm");
+    expect(() => parseDependencyAuditExceptions(exceptionsSource(exceptionEntry({ advisory: "CVE-2026-1" })), now))
+      .toThrow("invalid dependency audit exception entry");
+    expect(() => parseDependencyAuditExceptions(exceptionsSource(exceptionEntry({ scope: "runtime" })), now))
+      .toThrow("invalid dependency audit exception entry");
+    expect(() => parseDependencyAuditExceptions(exceptionsSource(exceptionEntry()), new Date("2026-11-14T00:00:00+09:00")))
+      .toThrow("expired dependency audit exception: GHSA-vfj7-8cjw-p6xm braces");
+    expect(() => parseDependencyAuditExceptions(exceptionsSource(exceptionEntry({ expiresAt: "2027-03-01T00:00:00+09:00" })), now))
+      .toThrow("must expire within 90 days");
+    expect(() => parseDependencyAuditExceptions(exceptionsSource(exceptionEntry(), exceptionEntry()), now))
+      .toThrow("duplicate dependency audit exception");
+  });
+
+  it("collects only packages reachable from runtime dependencies", () => {
+    const names = collectProductionPackageNames(lockfile);
+    expect([...names].sort()).toEqual(["app-runtime", "peer", "runtime-lib"]);
+    const withoutRuntimeSnapshot = lockfile.replace("      peer: 1.0.0\n  runtime-lib@1.0.0: {}\n", "      peer: 1.0.0\n");
+    expect(withoutRuntimeSnapshot).not.toBe(lockfile);
+    expect(() => collectProductionPackageNames(withoutRuntimeSnapshot))
+      .toThrow("snapshot is missing for runtime dependency runtime-lib@1.0.0");
+  });
+
+  it("moves only the matching dev-only advisory out of the blocking list", () => {
+    const exceptions = parseDependencyAuditExceptions(exceptionsSource(exceptionEntry()), now);
+    const result = applyDependencyAuditExceptions({
+      advisories: [bracesAdvisory, otherAdvisory],
+      exceptions,
+      productionPackageNames: collectProductionPackageNames(lockfile),
+    });
+
+    expect(result.blocking).toEqual([otherAdvisory]);
+    expect(result.excepted).toEqual([expect.objectContaining({
+      packageName: "braces",
+      exception: expect.objectContaining({ advisory: "GHSA-vfj7-8cjw-p6xm" }),
+    })]);
+  });
+
+  it("fails when a dev exception covers a runtime package or is no longer reported", () => {
+    const exceptions = parseDependencyAuditExceptions(exceptionsSource(exceptionEntry()), now);
+    expect(() => applyDependencyAuditExceptions({
+      advisories: [bracesAdvisory],
+      exceptions,
+      productionPackageNames: new Set(["braces"]),
+    })).toThrow("scoped to dev, but the package is reachable from runtime dependencies");
+    expect(() => applyDependencyAuditExceptions({
+      advisories: [otherAdvisory],
+      exceptions,
+      productionPackageNames: new Set(),
+    })).toThrow("unused dependency audit exceptions: GHSA-vfj7-8cjw-p6xm braces");
+  });
+
+  it("wires the package script to the single exceptions file", async () => {
+    const pkg = JSON.parse(await fs.readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+    expect(pkg.scripts["deps:audit"]).toBe("node scripts/deps_audit.mjs --exceptions=config/dependency-audit-exceptions.json");
   });
 });
