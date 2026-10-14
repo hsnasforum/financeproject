@@ -76,3 +76,10 @@
 - 변경 파일: `scripts/finlife_cli_common.mjs`, `tests/finlife-sync-timeout.test.ts`(신규), `docs/finlife-sync.md`, `src/lib/publicApis/dart/baseUrl.ts`, `tests/dart-base-url-env.test.ts`, `docs/opendart-setup.md`, `.data/finlife_saving_snapshot.json`(live sync), 이 절.
 - 검증: DART URL 새 테스트 RED(HEAD 코드에서 4 실패) → 수정 후 DART·공시 29파일 111 통과, FINLIFE 49파일 203 통과, 변경 파일 lint 오류 0, 전체 `tsc` 통과, production build 통과(첫 build는 테스트의 JSDoc 타입 누락으로 실패 후 수정), 재시작 후 앱에서 적금 59개, 기업 개황 200(삼성전자(주)), 공시 목록 200·3건, 주요 화면 200.
 - 남은 것: 연금은 원천 결함으로 실패 marker를 유지합니다. 이 후속 변경은 아직 commit하지 않았습니다.
+
+## 후속: PR #301 E2E seed fixture 정리 (15:20~15:40 KST)
+
+- PR #301의 E2E Smoke 3개 job이 `pnpm seed:debug` 단계에서 `FINLIFE integrity: normalized/raw product identity mismatch`로 실패했습니다. 10/11 식별 검증 강화 이후 2월 fixture `tests/fixtures/finlife_deposit.normalized.json`의 원문(`raw`)에 회사·상품코드·공시월이 없었던 것이 원인이며, 오늘 commit 이전(`eb6eb922`)에서도 같은 실패를 재현했습니다.
+- fixture 상품 2개·옵션 3개의 원문에 정규화 값과 같은 `fin_co_no`, `fin_prdt_cd`, `dcls_month=202602`와 이름·금리를 채웠습니다. 상품 식별자와 기존 테스트 기대값은 그대로입니다.
+- 검증(격리 사본, 네트워크 차단, CI env 동일): fixture 관련 단위·FINLIFE 50파일 206 통과, `prisma:db:push` → `seed:debug`(FINLIFE·KDB 재생) 통과, core flows E2E 43 통과 / 2 skip / 1 실패.
+- 남은 실패 `error-state-retry.spec.ts` "benefits exposes the default retry action"은 `/benefits`에서 실패 알림이 나타나지 않는 문제로, 오늘 commit 이전 사본에서도 동일하게 실패하는 기존 문제입니다(원인 미조사).
