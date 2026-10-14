@@ -90,3 +90,10 @@
 - 측정: 임시 probe(격리 사본 전용)로 `/benefits` 진입 후 10초간 검색 요청 수정 전 **0회**, 수정 후 **1회**. 실행 중인 production 앱은 Strict Mode 이중 실행이 없어 초기 검색이 정상(10,958건)이었으므로 실제 사용자 화면 영향은 없었습니다.
 - 수정: 플래그를 첫 검색이 실제로 시작될 때만 켜도록 옮겼습니다(`src/components/BenefitsClient.tsx`). 같은 플래그를 쓰는 `SubscriptionClient`는 즉시 동기 실행이라 영향이 없어 바꾸지 않았습니다.
 - 검증: `error-state-retry`·`gov24-request-lifecycle` E2E 17 통과 / 1 skip(인증 필요 조건 전용), `benefits-latest-action` 단위 3 통과, lint·전체 `tsc` 통과.
+
+## 후속: DART 인덱스 누락 E2E 기대값 정리 (16:00~16:10 KST)
+
+- PR #301 CI `dart_index_missing`의 `dart-missing-index.spec.ts` › "invest companies hides missing-index ops commands"가 30초 재시도 후 실패했습니다.
+- 원인: 10/07 `37d26329`에서 `SearchPill` 지우기 버튼의 접근성 이름이 `Clear search` → `검색어 지우기`로 바뀌었는데 테스트가 옛 이름을 찾았습니다. 화면 결함이 아닌 테스트 기대값 불일치입니다. 옛 이름 참조는 이 1곳뿐이었습니다.
+- 수정: 테스트가 `검색어 지우기` 버튼을 찾도록 변경(`tests/e2e/dart-missing-index.spec.ts`).
+- 검증(CI `dart_index_missing`과 같은 env, 인덱스 파일 삭제 조건): 수정 전 1 실패 재현, 수정 후 2 통과.
