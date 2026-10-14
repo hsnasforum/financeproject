@@ -171,3 +171,11 @@
 - PR 쪽 `windows_native` 7단계에서 "lets a secondary launcher ..."가 `secondary desktop launcher timed out`(테스트 helper의 런처 1회 10초 제한)으로 실패했습니다. 첫 런처 실행 뒤 두 번째 실행(잘못된 broker → 즉시 거부되는 경로)이 10초를 넘겼고, 같은 실행에서 primary 대기 테스트도 평소 0.8초가 6.1초로 느렸습니다. 런처는 lock을 읽기 전에 저장소 확인(PowerShell 드라이브 조회, `98fad12c`부터 최대 30초)을 거치므로, 느린 runner에서 테스트가 런처보다 먼저 포기한 것입니다.
 - 수정: 테스트 helper의 런처 1회 제한 10초 → 45초, 해당 3개 테스트 제한 30초 → 100초, desktop smoke의 보조 런처 대기 15초 → 45초(같은 노출). 검사 내용은 그대로입니다.
 - 검증(격리 사본): windows_native 7단계 묶음과 smoke 관련 테스트 5파일 37 통과 / 3 skip, lint 통과. desktop smoke 전체 실행은 수정본·HEAD를 번갈아 7회 중 7회 `PASS`였고, 수정본 첫 실행 1회(전체 8회 중 1회)는 `PASS` 뒤 종료 확인에서 "writer descendants remained alive"로 실패했습니다. 바꾼 대기 시간과 무관한 종료 경로이며 이후 재현되지 않았습니다(원인 미확인, 관찰 기록).
+
+## 후속: 환율 수집 receipt 갱신 (23:45~23:55 KST, 사용자 승인)
+
+- 배경: `a74148e5` CI에서 `windows_native` 2개와 E2E Smoke 3개가 통과했고, `verify`는 `freshness:release`에서 환율 receipt(3.7일, 기준 1일)와 연금 snapshot(113.8일) stale로 실패했습니다.
+- 절차(`docs/exim-exchange-contract.md`): EXIM env는 존재만 확인(키 32자, endpoint `https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON`, 값 미출력). 공식 [날짜별 환율 화면](https://www.koreaexim.go.kr/wg/HPHKWG057M01)에서 조회기준일 2026.10.14의 23개 통화 게시를 확인한 뒤 `corepack pnpm warm:if-stale --exchange-only --exchange-date=20261014`를 1회 실행했습니다.
+- 결과: `.data/exchange_snapshot.json`이 `asOf=2026-10-14`, `rowCount=23`, `generatedAt=2026-10-14T14:49:45.080Z`로 갱신되었고 다른 파일은 바뀌지 않았습니다. 같은 날짜 AP01 응답(result 1)의 `deal_bas_r` 23개가 공식 화면 매매기준율과 모두 일치했습니다(대조용 추가 조회 1회).
+- 확인: HEAD 데이터에 갱신된 receipt를 넣어 `freshness:release`(strict, check-only)를 실행하면 환율은 fresh(0.00일), 연금 snapshot만 stale(113.95일)로 남습니다. 연금은 원천 결함 해소 전까지 정책상 예외 없이 출시를 막는 상태이며 이번 범위에서 다루지 않았습니다.
+- 주의: 환율 receipt의 기준은 1일이므로 다음 공시 영업일 이후에는 다시 stale이 됩니다.
