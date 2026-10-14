@@ -7,8 +7,10 @@ FINLIFE 동기화에는 파일 snapshot과 Prisma 상품 DB라는 두 저장 경
 | 경로 | kind 범위 | 쓰기 대상 | 성공 의미와 한계 |
 | --- | --- | --- | --- |
 | unified `refresh=1` | `deposit`, `saving` | sync-attempt marker, Prisma `Provider`/`Product`/`ProductOption`, DB 완료 증거, 이후 file snapshot | verified live 수집만 공용 persistence 코어로 반영합니다. kind별 runtime 요청은 process 안에서 singleflight로 합치고, 기존 marker를 수집 뒤 다시 확인합니다. |
-| `pnpm finlife:sync` | `deposit`, `saving`, `pension`, `mortgage-loan`, `rent-house-loan`, `credit-loan` | sync-attempt marker, Prisma `Provider`/`Product`/`ProductOption`, DB 완료 증거, 이후 file snapshot | kind별 DB 반영과 snapshot 교체가 모두 끝나야 해당 kind를 완료로 봅니다. 여러 kind 전체는 하나의 transaction이 아닙니다. |
-| `pnpm finlife:sync:if-stale` | 위 6개 kind | stale이거나 failed marker가 남은 kind에 대해 `finlife:sync` 실행 | failed marker는 fresh snapshot보다 우선해 재시도합니다. running marker는 정상 동기화와 겹치지 않도록 skip합니다. |
+| `pnpm finlife:sync` | `deposit`, `saving`, `mortgage-loan`, `rent-house-loan`, `credit-loan` | sync-attempt marker, Prisma `Provider`/`Product`/`ProductOption`, DB 완료 증거, 이후 file snapshot | kind별 DB 반영과 snapshot 교체가 모두 끝나야 해당 kind를 완료로 봅니다. 여러 kind 전체는 하나의 transaction이 아닙니다. |
+| `pnpm finlife:sync:if-stale` | 위 5개 kind | stale이거나 failed marker가 남은 kind에 대해 `finlife:sync` 실행 | failed marker는 fresh snapshot보다 우선해 재시도합니다. running marker는 정상 동기화와 겹치지 않도록 skip합니다. |
+
+연금저축은 2026-10-15부터 FINLIFE로 수집하지 않습니다. FINLIFE `annuitySavingProductsSearch`가 대출 형식 행이나 빈 페이지를 계속 반환해([finlife-identity.md](finlife-identity.md)) 금감원 통합연금포털 OpenAPI의 `pnpm pension:sync`로 옮겼습니다([fss-pension-openapi.md](fss-pension-openapi.md)). 기존 Prisma의 FINLIFE 연금 행은 삭제하지 않았습니다.
 | unified FINLIFE query | `deposit`, `saving` | Prisma `Product` read, DB 완료 증거 read | 사용자 상품 결과의 저장소입니다. `onlyNew`는 완료된 DB sync 증거의 snapshot 수집 시각을 사용하고, 증거가 없는 기존 설치만 file snapshot으로 fallback합니다. |
 | unified source status | `deposit`, `saving` | DB 완료 증거, file snapshot fallback, sync-attempt marker read | `complete` 증거의 freshness와 fetched item count를 사용하고 marker를 우선합니다. 증거가 없는 기존 설치는 file snapshot 기준으로 안전하게 fallback합니다. |
 
@@ -105,7 +107,6 @@ pnpm finlife:sync:if-stale
 - completionRate<0.95 또는 truncatedByHardCap=true면 완주 수집이 아닙니다.
 - groupsScanned가 1개면 topFinGrpNo 범위가 좁습니다.
 - 업권별 유효 그룹이 다르면 `FINLIFE_<KIND>_TOPFIN_GRP_LIST`가 공통 `FINLIFE_TOPFIN_GRP_LIST`보다 우선합니다.
-- 연금저축은 공통 예적금 그룹과 달라서 별도 설정이 없으면 기본값 `050000,060000`을 사용합니다.
 
 ## 업권 프로빙
 
@@ -113,7 +114,7 @@ pnpm finlife:sync:if-stale
 pnpm finlife:probe
 ```
 
-출력된 `Recommended FINLIFE_TOPFIN_GRP_LIST=...`와 `Recommended FINLIFE_PENSION_TOPFIN_GRP_LIST=...` 값을 `.env.local`에 반영한 뒤 동기화하세요.
+출력된 `Recommended FINLIFE_TOPFIN_GRP_LIST=...` 값을 `.env.local`에 반영한 뒤 동기화하세요. 프로브는 예금·적금 endpoint만 확인합니다.
 
 프로브는 기본적으로 그룹별 요청을 20초까지 기다리고, timeout/네트워크 오류/429/5xx 응답은 1회 재시도합니다. 운영 환경에서 업스트림 지연이 반복되면 아래 값을 조정합니다.
 

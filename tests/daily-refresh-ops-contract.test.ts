@@ -104,9 +104,10 @@ describe("daily refresh ops contract", () => {
     const syncSource = fs.readFileSync(path.join(process.cwd(), "scripts", "finlife_sync.mjs"), "utf-8");
     const ifStaleSource = fs.readFileSync(path.join(process.cwd(), "scripts", "finlife_sync_if_stale.mjs"), "utf-8");
 
-    for (const kind of ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"]) {
+    for (const kind of ["deposit", "saving", "mortgage-loan", "rent-house-loan", "credit-loan"]) {
       expect(syncSource).toContain(`"${kind}"`);
     }
+    expect(syncSource).not.toMatch(/SUPPORTED_FINLIFE_KINDS = \[[^\]]*"pension"/u);
     expect(syncSource).toContain("export const SUPPORTED_FINLIFE_KINDS");
     expect(ifStaleSource).toContain("SUPPORTED_FINLIFE_KINDS");
     expect(ifStaleSource).not.toContain("[\"deposit\", \"saving\"]");
@@ -140,6 +141,7 @@ describe("daily refresh ops contract", () => {
     writePackage(root, {
       "warm:if-stale": "node warm-child.mjs",
       "finlife:sync:if-stale": okScript("finlife"),
+      "pension:sync:if-stale": okScript("pension"),
       "datago:sync": okScript("datago"),
       "gov24:sync:if-stale": okScript("gov24"),
       "news:refresh": okScript("news"),
@@ -158,6 +160,7 @@ describe("daily refresh ops contract", () => {
     expect(payload.steps?.map((step) => step.name)).toEqual([
       "warm:if-stale",
       "finlife:sync:if-stale",
+      "pension:sync:if-stale",
       "datago:sync",
       "gov24:sync:if-stale",
       "news:refresh",
@@ -197,6 +200,7 @@ describe("daily refresh ops contract", () => {
     writePackage(root, {
       "warm:if-stale": okScript("warm"),
       "finlife:sync:if-stale": failScript("finlife"),
+      "pension:sync:if-stale": okScript("pension"),
       "datago:sync": okScript("datago"),
       "gov24:sync:if-stale": okScript("gov24"),
       "news:refresh": okScript("news"),
@@ -224,6 +228,7 @@ describe("daily refresh ops contract", () => {
     const scripts = {
       "warm:if-stale": okScript("warm"),
       "finlife:sync:if-stale": okScript("finlife"),
+      "pension:sync:if-stale": okScript("pension"),
       "datago:sync": okScript("datago"),
       "gov24:sync:if-stale": okScript("gov24"),
       "news:refresh": okScript("news"),
@@ -249,6 +254,7 @@ describe("daily refresh ops contract", () => {
     writePackage(root, {
       "warm:if-stale": okScript("warm"),
       "finlife:sync:if-stale": okScript("finlife"),
+      "pension:sync:if-stale": okScript("pension"),
       "datago:sync": okScript("datago"),
       "gov24:sync:if-stale": okScript("gov24"),
       "news:refresh": "node strict-child.mjs news",
@@ -285,6 +291,10 @@ describe("daily refresh ops contract", () => {
     expect(payload.mode).toBe("strict");
     expect(payload.ok).toBe(false);
     expect(payload.steps?.find((step) => step.name === "finlife:sync:if-stale")).toMatchObject({
+      status: "failed",
+      stderrTail: "script_not_found",
+    });
+    expect(payload.steps?.find((step) => step.name === "pension:sync:if-stale")).toMatchObject({
       status: "failed",
       stderrTail: "script_not_found",
     });

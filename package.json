@@ -73,6 +73,8 @@
     "finlife:identity:migrate:apply": "node scripts/planning_writer_entry.mjs finlife:identity:migrate:apply -- node scripts/finlife_identity_migrate.mjs --apply",
     "finlife:sync": "node scripts/finlife_sync.mjs",
     "finlife:sync:if-stale": "node scripts/finlife_sync_if_stale.mjs",
+    "pension:sync": "node scripts/fss_pension_sync.mjs",
+    "pension:sync:if-stale": "node scripts/fss_pension_sync.mjs --if-stale",
     "finlife:backfill-norms": "node scripts/finlife_backfill_norms.mjs",
     "artifacts:prune": "node scripts/artifacts_prune.mjs --keep=10",
     "fixtures:refresh:finlife": "node scripts/fixtures_refresh_finlife.mjs --kind=deposit --take=10",

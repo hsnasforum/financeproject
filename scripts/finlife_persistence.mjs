@@ -3,7 +3,6 @@ import path from "node:path";
 
 export const PRIORITY_KIND_ORDER = [
   "saving",
-  "pension",
   "mortgage-loan",
   "rent-house-loan",
   "credit-loan",

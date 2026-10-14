@@ -34,10 +34,9 @@ export { FinlifeSyncPersistenceError } from "./finlife_persistence.mjs";
 ensureFetchAvailable();
 const require = createRequire(import.meta.url);
 let prismaClient = null;
-export const SUPPORTED_FINLIFE_KINDS = ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"];
-const DEFAULT_GROUPS_BY_KIND = {
-  pension: "050000,060000",
-};
+// Pension savings moved to the FSS 통합연금포털 OpenAPI (`pnpm pension:sync`); the FINLIFE
+// annuitySavingProductsSearch endpoint returns loan-shaped or empty pages.
+export const SUPPORTED_FINLIFE_KINDS = ["deposit", "saving", "mortgage-loan", "rent-house-loan", "credit-loan"];
 
 function parseArgs(argv) {
   const out = {
@@ -203,12 +202,10 @@ function parseGroupList(raw) {
 export function resolveFinlifeGroupsForKind(kind, env = process.env) {
   const kindKey = finlifeGroupEnvKey(kind);
   const kindRaw = (env[kindKey] || "").trim();
-  const defaultRaw = DEFAULT_GROUPS_BY_KIND[kind] ?? "";
   const globalRaw = (env.FINLIFE_TOPFIN_GRP_LIST || "").trim();
-  const sourceKey = kindRaw ? kindKey : (defaultRaw ? `${kindKey} default` : "FINLIFE_TOPFIN_GRP_LIST");
   return {
-    sourceKey,
-    groups: parseGroupList(kindRaw || defaultRaw || globalRaw),
+    sourceKey: kindRaw ? kindKey : "FINLIFE_TOPFIN_GRP_LIST",
+    groups: parseGroupList(kindRaw || globalRaw),
   };
 }
 

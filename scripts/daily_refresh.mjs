@@ -125,6 +125,12 @@ async function main() {
     plan.push({ name: "finlife:sync:if-stale", required: true, runnable: false, reason: "script_not_found" });
   }
 
+  if (typeof scripts["pension:sync:if-stale"] === "string" && scripts["pension:sync:if-stale"].trim()) {
+    plan.push({ name: "pension:sync:if-stale", required: true, runnable: true });
+  } else {
+    plan.push({ name: "pension:sync:if-stale", required: true, runnable: false, reason: "script_not_found" });
+  }
+
   if (typeof scripts["datago:sync"] === "string" && scripts["datago:sync"].trim()) {
     plan.push({ name: "datago:sync", required: true, runnable: true });
   } else {

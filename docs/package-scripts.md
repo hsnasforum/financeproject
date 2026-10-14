@@ -47,6 +47,7 @@
 
 - DART: `pnpm dart:corpindex`, `pnpm dart:ensure-corpindex`, `pnpm dart:watch*`, `pnpm dart:rules:*`
 - FINLIFE/DataGo/Gov24: `pnpm finlife:sync*`, `pnpm finlife:inventory:report`, `pnpm datago:sync`, `pnpm products:sync`, `pnpm gov24:sync*`
+- 연금저축(통합연금포털): `pnpm pension:sync`, `pnpm pension:sync:if-stale`. `FSS_PENSION_API_KEY`가 필요하며 계약·분기 선택·제외 기준은 [fss-pension-openapi.md](fss-pension-openapi.md)를 따릅니다.
 - freshness/warmup: `pnpm freshness:report`, `pnpm data:doctor`, `pnpm warm:if-stale`, `pnpm daily:refresh*`
   - 공식 공시일을 확인한 환율 단독 수집: `pnpm warm:if-stale --exchange-only --exchange-date=YYYYMMDD`. 유효한 과거/당일 날짜를 정확히 한 번 조회하며 빈 응답에서 다른 날짜를 추정하지 않습니다. 명시 날짜는 기존 receipt가 fresh여도 조회합니다. [AP01 계약과 저장 범위](exim-exchange-contract.md)를 먼저 확인합니다.
 - 지원되는 freshness 명령(`freshness:report`, `freshness:release`, `data:doctor`, `verify`)은 모두

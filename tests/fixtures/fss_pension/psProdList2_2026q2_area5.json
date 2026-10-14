@@ -1,0 +1,49 @@
+{
+  "code": "000",
+  "message": "정상 처리 되었습니다.",
+  "count": 2,
+  "list": [
+    {
+      "area": "손해보험",
+      "company": "삼성화재해상보험",
+      "product": "연금저축손해보험 삼성화재 연금보험 아름다운생활 (1004.6)",
+      "launchDate": "2010/04/01",
+      "productType": "금리연동형",
+      "rcvMethod": "확정기간형",
+      "feeType": "감소형",
+      "sells": "N",
+      "guarantees": "Y",
+      "reserve": 1753940,
+      "reserve1": 1828092,
+      "reserve2": 1894648,
+      "reserve3": 1946779,
+      "earnRate3": -0.44,
+      "earnRate5": 0.35,
+      "earnRate7": 0.5,
+      "earnRate10": 0.65,
+      "avgTotalEarRate": 0.88,
+      "avgFeeRate": 6.472
+    },
+    {
+      "area": "손해보험",
+      "company": "삼성화재해상보험",
+      "product": "연금저축손해보험 삼성화재 연금보험 아름다운생활(1204.10)",
+      "launchDate": "2012/04/01",
+      "productType": "금리연동형",
+      "rcvMethod": "확정기간형",
+      "feeType": "감소형",
+      "sells": "N",
+      "guarantees": "Y",
+      "reserve": 1480562,
+      "reserve1": 1531773,
+      "reserve2": 1587141,
+      "reserve3": 1595859,
+      "earnRate3": -1.67,
+      "earnRate5": -0.59,
+      "earnRate7": -0.12,
+      "earnRate10": 0.35,
+      "avgTotalEarRate": 0.74,
+      "avgFeeRate": 7.709
+    }
+  ]
+}

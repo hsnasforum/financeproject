@@ -26,6 +26,8 @@ function writeJsonReport(result) {
 
 const SOURCE_RULES = [
   { source: "finlife", pattern: /^finlife_.*_snapshot\.json$/i, maxAgeDays: 3 },
+  // Quarterly/monthly disclosures: the receipt proves a recent check for the newest published period.
+  { source: "fss_pension", pattern: /^fss_pension_.*_snapshot\.json$/i, maxAgeDays: 7 },
   { source: "benefits", pattern: /^benefits_.*\.json$/i, maxAgeDays: 7 },
   { source: "gov24", pattern: /^gov24_.*\.json$/i, maxAgeDays: 7 },
   { source: "exchange", pattern: /^exchange_snapshot\.json$/i, maxAgeDays: 1 },

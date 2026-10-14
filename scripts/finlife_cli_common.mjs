@@ -227,7 +227,6 @@ export async function fetchFinlifePage({ baseUrl, apiKey, kind, topFinGrpNo, pag
   const endpointMap = {
     deposit: "depositProductsSearch.json",
     saving: "savingProductsSearch.json",
-    pension: "annuitySavingProductsSearch.json",
     "mortgage-loan": "mortgageLoanProductsSearch.json",
     "rent-house-loan": "rentHouseLoanProductsSearch.json",
     "credit-loan": "creditLoanProductsSearch.json",

@@ -43,6 +43,7 @@ jobs:
         env:
           FINLIFE_API_KEY: ${{ secrets.FINLIFE_API_KEY }}
           FINLIFE_TOPFIN_GRP_LIST: ${{ secrets.FINLIFE_TOPFIN_GRP_LIST }}
+          FSS_PENSION_API_KEY: ${{ secrets.FSS_PENSION_API_KEY }}
           KDB_DATAGO_SERVICE_KEY: ${{ secrets.KDB_DATAGO_SERVICE_KEY }}
           DATAGO_SERVICE_KEY: ${{ secrets.DATAGO_SERVICE_KEY }}
           BOK_ECOS_API_KEY: ${{ secrets.BOK_ECOS_API_KEY }}
@@ -59,6 +60,7 @@ jobs:
         env:
           FINLIFE_API_KEY: ${{ secrets.FINLIFE_API_KEY }}
           FINLIFE_TOPFIN_GRP_LIST: ${{ secrets.FINLIFE_TOPFIN_GRP_LIST }}
+          FSS_PENSION_API_KEY: ${{ secrets.FSS_PENSION_API_KEY }}
           KDB_DATAGO_SERVICE_KEY: ${{ secrets.KDB_DATAGO_SERVICE_KEY }}
           DATAGO_SERVICE_KEY: ${{ secrets.DATAGO_SERVICE_KEY }}
           BOK_ECOS_API_KEY: ${{ secrets.BOK_ECOS_API_KEY }}
@@ -104,9 +106,10 @@ jobs:
             .data/finlife_credit-loan_snapshot.json
             .data/finlife_deposit_snapshot.json
             .data/finlife_mortgage-loan_snapshot.json
-            .data/finlife_pension_snapshot.json
             .data/finlife_rent-house-loan_snapshot.json
             .data/finlife_saving_snapshot.json
+            .data/fss_pension_guaranteed_snapshot.json
+            .data/fss_pension_products_snapshot.json
             docs/dart-daily-brief.md
             docs/dart-disclosure-alerts.md
             docs/dart-disclosure-digest.md
@@ -130,9 +133,10 @@ jobs:
             .data/finlife_credit-loan_snapshot.json
             .data/finlife_deposit_snapshot.json
             .data/finlife_mortgage-loan_snapshot.json
-            .data/finlife_pension_snapshot.json
             .data/finlife_rent-house-loan_snapshot.json
             .data/finlife_saving_snapshot.json
+            .data/fss_pension_guaranteed_snapshot.json
+            .data/fss_pension_products_snapshot.json
             docs/dart-daily-brief.md
             docs/dart-disclosure-alerts.md
             docs/dart-disclosure-digest.md

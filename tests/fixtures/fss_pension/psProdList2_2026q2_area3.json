@@ -1,0 +1,44 @@
+{
+  "code": "000",
+  "message": "정상 처리 되었습니다.",
+  "count": 4,
+  "list": [
+    {
+      "area": "자산운용",
+      "company": "하나자산운용",
+      "product": "하나 1Q 현대차그룹채권(A+이상)&국고통안증권상장지수투자신탁[채권]",
+      "launchDate": "2024/09/30",
+      "productType": "채권형",
+      "rcvMethod": "확정기간형",
+      "feeType": "증가형",
+      "sells": "Y",
+      "guarantees": "N",
+      "avgTotalEarRate": 2.04,
+      "avgFeeRate": 0.128
+    },
+    {
+      "area": "자산운용",
+      "company": "KB자산운용",
+      "product": "KB RISE 미국달러SOFR금리액티브 특별자산 상장지수 투자신탁(금리-파생형)(합성)",
+      "launchDate": "2023/05/12",
+      "productType": "특별자산",
+      "rcvMethod": "연금 수령시 선택형",
+      "feeType": "증가형",
+      "sells": "Y",
+      "guarantees": "N",
+      "earnRate3": 10.4,
+      "avgTotalEarRate": 9.72,
+      "avgFeeRate": -0.106
+    },
+    {
+      "area": "자산운용",
+      "company": "미래에셋자산운용",
+      "product": "미래에셋코어테크증권자투자신탁(주식)CP"
+    },
+    {
+      "area": "자산운용",
+      "company": "미래에셋자산운용",
+      "product": "미래에셋미국달러채권증권자투자신탁 1(UH)(채권)종류C-Pe"
+    }
+  ]
+}

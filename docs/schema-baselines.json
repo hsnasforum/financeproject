@@ -1597,428 +1597,6 @@
         }
       ]
     },
-    "finlife_pension_snapshot.json": {
-      "maxDepth": 8,
-      "arraySampleSize": 3,
-      "entries": [
-        {
-          "path": "$",
-          "types": [
-            "object"
-          ]
-        },
-        {
-          "path": "$.items",
-          "types": [
-            "array"
-          ]
-        },
-        {
-          "path": "$.items[]",
-          "types": [
-            "object"
-          ]
-        },
-        {
-          "path": "$.items[].fin_co_no",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].fin_prdt_cd",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].fin_prdt_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].kor_co_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options",
-          "types": [
-            "array"
-          ]
-        },
-        {
-          "path": "$.items[].options[]",
-          "types": [
-            "object"
-          ]
-        },
-        {
-          "path": "$.items[].options[].intr_rate",
-          "types": [
-            "null"
-          ]
-        },
-        {
-          "path": "$.items[].options[].intr_rate2",
-          "types": [
-            "null"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw",
-          "types": [
-            "object"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.dcls_month",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.fin_co_no",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.fin_prdt_cd",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.mon_paym_atm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.mon_paym_atm_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.paym_prd",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.paym_prd_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.pnsn_entr_age",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.pnsn_entr_age_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.pnsn_recp_amt",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.pnsn_recp_trm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.pnsn_recp_trm_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.pnsn_strt_age",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.pnsn_strt_age_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw",
-          "types": [
-            "object"
-          ]
-        },
-        {
-          "path": "$.items[].raw.avg_prft_rate",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].raw.btrm_prft_rate_1",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].raw.btrm_prft_rate_2",
-          "types": [
-            "null",
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].raw.btrm_prft_rate_3",
-          "types": [
-            "null",
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].raw.dcls_end_day",
-          "types": [
-            "null"
-          ]
-        },
-        {
-          "path": "$.items[].raw.dcls_month",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.dcls_rate",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].raw.dcls_strt_day",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.etc",
-          "types": [
-            "null"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_co_no",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_co_subm_day",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_prdt_cd",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_prdt_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.guar_rate",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.join_way",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.kor_co_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.mntn_cnt",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].raw.pnsn_kind",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.pnsn_kind_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.prdt_type",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.prdt_type_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.sale_co",
-          "types": [
-            "null"
-          ]
-        },
-        {
-          "path": "$.items[].raw.sale_strt_day",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.top_fin_grp_no",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.meta",
-          "types": [
-            "object"
-          ]
-        },
-        {
-          "path": "$.meta.completionRate",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.meta.configuredGroups",
-          "types": [
-            "array"
-          ]
-        },
-        {
-          "path": "$.meta.configuredGroups[]",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.meta.duplicateAcrossGroupsCount",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.meta.fallbackUsed",
-          "types": [
-            "boolean"
-          ]
-        },
-        {
-          "path": "$.meta.generatedAt",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.meta.groupsScanned",
-          "types": [
-            "array"
-          ]
-        },
-        {
-          "path": "$.meta.groupsScanned[]",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.meta.lastUpstreamStatus",
-          "types": [
-            "null"
-          ]
-        },
-        {
-          "path": "$.meta.pagesFetchedByGroup",
-          "types": [
-            "object"
-          ]
-        },
-        {
-          "path": "$.meta.pagesFetchedByGroup.050000",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.meta.pagesFetchedByGroup.060000",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.meta.source",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.meta.totalOptions",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.meta.totalProducts",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.meta.truncatedByHardCap",
-          "types": [
-            "boolean"
-          ]
-        },
-        {
-          "path": "$.meta.ttlMs",
-          "types": [
-            "number"
-          ]
-        }
-      ]
-    },
     "finlife_rent-house-loan_snapshot.json": {
       "maxDepth": 8,
       "arraySampleSize": 3,
@@ -2733,6 +2311,529 @@
           "path": "$.meta.ttlMs",
           "types": [
             "number"
+          ]
+        }
+      ]
+    },
+    "fss_pension_guaranteed_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.areas",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.areas[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.areas[].code",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.areas[].exactDuplicateRowsRemoved",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.areas[].label",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.areas[].rowCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.areas[].sourceRows",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.asOf",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.asOf.label",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.asOf.reportMonth",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].agentFeeDesc",
+          "types": [
+            "null",
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].area",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].areaCode",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].company",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fpFeeDesc",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].guaranteedInterestRate",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].onlineFeeDesc",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].product",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].publishedInterestRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].reportMonth",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].tel",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.rowCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.schemaVersion",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.source",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.source.attribution",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.endpoint",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.id",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.name",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.url",
+          "types": [
+            "string"
+          ]
+        }
+      ]
+    },
+    "fss_pension_products_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.areas",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.areas[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.areas[].code",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.areas[].exactDuplicateRowsRemoved",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.areas[].excludedRowsWithoutProductInfo",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.areas[].label",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.areas[].rowCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.areas[].sourceRows",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.asOf",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.asOf.label",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.asOf.quarter",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.asOf.year",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].area",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].areaCode",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].avgFeeRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].avgTotalEarRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].company",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].earnRate10",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].earnRate3",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].earnRate5",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].earnRate7",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].feeType",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].guarantees",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].launchDate",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].product",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].productType",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].rcvMethod",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].reserve",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].reserve1",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].reserve2",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].reserve3",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].sells",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.rowCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.schemaVersion",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.selection",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.selection.attempts",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.selection.attempts[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.selection.attempts[].areaCode",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.selection.attempts[].quarter",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.selection.attempts[].status",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.selection.attempts[].year",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.selection.quartersBehind",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.source",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.source.attribution",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.endpoint",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.id",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.name",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.source.url",
+          "types": [
+            "string"
           ]
         }
       ]
