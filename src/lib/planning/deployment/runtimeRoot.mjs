@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 
 const DEFAULT_APP_NAME = "PlanningV2";
+// Windows statfs reports type 0, so every Windows root check needs a PowerShell drive query;
+// a cold PowerShell start on a loaded machine can take several seconds.
+const WINDOWS_DRIVE_TYPE_TIMEOUT_MS = 30_000;
+const windowsDriveTypeQueries = new Map();
 const NETWORK_FILESYSTEM_TYPES = new Set([
   0x00006969, // NFS
   0xff534d42, // CIFS
@@ -100,9 +104,28 @@ export function classifyPlanningWindowsDriveType(value) {
   return "unknown";
 }
 
-async function resolvePlanningWindowsDriveType(dataRoot) {
+function resolvePlanningWindowsDriveType(dataRoot) {
   const driveRoot = path.win32.parse(dataRoot).root;
-  if (!/^[A-Za-z]:\\$/.test(driveRoot)) return "";
+  if (!/^[A-Za-z]:\\$/.test(driveRoot)) return Promise.resolve("");
+  // Roots on one drive share a single query per process; failed or empty answers are not kept.
+  const key = driveRoot.toUpperCase();
+  const existing = windowsDriveTypeQueries.get(key);
+  if (existing) return existing;
+  const query = queryPlanningWindowsDriveType(driveRoot).then(
+    (driveType) => {
+      if (!driveType) windowsDriveTypeQueries.delete(key);
+      return driveType;
+    },
+    (error) => {
+      windowsDriveTypeQueries.delete(key);
+      throw error;
+    },
+  );
+  windowsDriveTypeQueries.set(key, query);
+  return query;
+}
+
+async function queryPlanningWindowsDriveType(driveRoot) {
   const systemRoot = asString(process.env.SystemRoot)
     || asString(process.env.WINDIR);
   if (!/^[A-Za-z]:[\\/]/.test(systemRoot)) return "";
@@ -122,7 +145,7 @@ async function resolvePlanningWindowsDriveType(dataRoot) {
         encoding: "utf8",
         env: { ...process.env, PLANNING_DRIVE_ROOT_QUERY: driveRoot },
         maxBuffer: 4_096,
-        timeout: 5_000,
+        timeout: WINDOWS_DRIVE_TYPE_TIMEOUT_MS,
         windowsHide: true,
       },
       (error, stdout) => {

@@ -129,3 +129,12 @@
 - push 쪽 `windows_native`는 7단계에서 vitest 기본 제한 5초 초과 2건으로 실패했습니다. 실제 런처 프로세스를 두 번 띄우는 기존 테스트(직전 3.3초 → 5.02초, 같은 실행에서 다른 테스트도 약 2배 느림)와 이번에 추가한 nft 회귀 테스트(5.7초, 통과한 PR 쪽도 4.5초)입니다. 런처 프로세스 테스트 3건에 30초(보조 런처 1회당 10초 상한 ×2 기준), nft 테스트에 30초 제한을 명시했습니다. 검사 내용은 바꾸지 않았습니다.
 - `dart_index_missing`은 `/invest/companies`의 `waitForLoadState("networkidle")`가 60초 동안 끝나지 않아 실패했습니다(재시도 포함 2회). 직전 두 CI와 격리 사본 3회 재실행에서는 모두 통과했고 이번 변경과 관련된 경로가 아니라 일시적 불안정으로 판단합니다(근본 원인 미확인).
 - 검증(격리 사본): windows_native 7단계 묶음 2회 모두 32 중 30 통과 / 2 skip, lint·전체 `tsc` 통과.
+
+## 후속: Windows 로컬 저장소 확인 실패 원인 (18:20~18:45 KST)
+
+- `3fd5756f` CI에서 `windows_native`가 PR 쪽은 7단계(보조 런처 테스트), push 쪽은 8단계(설치 `verified local app control root`)에서 `planning=unknown, app=unknown, database=unknown`으로 실패했습니다. 지금까지 이 확인까지 간 Windows job 5개 중 3개에서 7·8·9단계 어디서나 나왔습니다.
+- 원인: Windows의 Node `statfs`는 파일시스템 종류를 주지 않아(`type=0`, 이 PC에서 확인) `inspectPlanningDataRoot`가 매번 PowerShell로 드라이브 종류를 묻습니다. 런처는 3개 루트를 동시에, 런타임 시작 확인은 2개를 확인하므로 실행 한 번에 PowerShell이 최대 5번 뜨고 각 조회 제한이 5초였습니다. 실패한 CI 테스트는 5.2초, smoke는 5.45초 만에 실패해 시간 초과와 맞습니다.
+- 재현(이 PC의 Windows Node, 기존 코드 그대로): 부하 없음 0.5초·모두 local, CPU 부하 시 5.1~6.0초에 3번 중 3번 1개 루트 unknown(PowerShell 3회).
+- 수정(`runtimeRoot.mjs`): 같은 드라이브 조회는 프로세스 안에서 1회로 공유(실패·빈 응답은 보관하지 않음), 조회 제한 5초 → 30초. 확인 불가 시 거부하는 원칙은 그대로입니다. Windows 전용 회귀 테스트 1건(같은 드라이브의 루트 3개 동시 확인 → 모두 local, PowerShell 1회 이하).
+- 검증: 같은 부하에서 수정 코드는 3번 모두 local·PowerShell 1회, 소요 6.9~8.5초(기존 5초 제한이었다면 실패). Linux 격리 사본에서 배포·provenance 17파일 229 통과 / 5 skip(Windows 전용 포함), lint·전체 `tsc` 통과. Windows 전용 테스트는 다음 CI의 windows_native 7단계에서 실행됩니다.
+- 영향: CI뿐 아니라 느린 사용자 PC에서 데스크톱 앱이 간헐적으로 시작을 거부할 수 있었던 문제입니다.

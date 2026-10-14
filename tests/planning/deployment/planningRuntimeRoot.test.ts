@@ -13,6 +13,19 @@ import {
   resolvePlanningDataRoot,
 } from "../../../src/lib/planning/deployment/runtimeRoot.mjs";
 
+const childProcessCalls = vi.hoisted(() => ({ execFile: 0 }));
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return {
+    ...actual,
+    execFile: ((...args: Parameters<typeof actual.execFile>) => {
+      childProcessCalls.execFile += 1;
+      return actual.execFile(...args);
+    }) as typeof actual.execFile,
+  };
+});
+
 const cleanupRoots: string[] = [];
 
 afterEach(async () => {
@@ -68,6 +81,21 @@ describe("planning runtime data root", () => {
       } as unknown as NodeJS.ProcessEnv,
     })).resolves.toMatchObject({ dataRootKind: "local" });
   });
+
+  it.runIf(process.platform === "win32")("shares one PowerShell drive query for concurrent roots on one drive", async () => {
+    const parent = await fs.mkdtemp(path.join(os.tmpdir(), "planning-root-win-drive-"));
+    cleanupRoots.push(parent);
+    const callsBefore = childProcessCalls.execFile;
+
+    const inspected = await Promise.all([
+      inspectPlanningDataRoot({ dataRoot: path.join(parent, "vault") }),
+      inspectPlanningDataRoot({ dataRoot: parent }),
+      inspectPlanningDataRoot({ dataRoot: path.join(parent, "database") }),
+    ]);
+
+    expect(inspected.map((row) => row.dataRootKind)).toEqual(["local", "local", "local"]);
+    expect(childProcessCalls.execFile - callsBefore).toBeLessThanOrEqual(1);
+  }, 60_000);
 
   it("fails closed for UNC and unknown filesystem types", () => {
     expect(isObviouslySharedDataRoot("\\\\server\\share\\vault", "win32")).toBe(true);
