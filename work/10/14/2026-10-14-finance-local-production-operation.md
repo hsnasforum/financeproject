@@ -138,3 +138,13 @@
 - 수정(`runtimeRoot.mjs`): 같은 드라이브 조회는 프로세스 안에서 1회로 공유(실패·빈 응답은 보관하지 않음), 조회 제한 5초 → 30초. 확인 불가 시 거부하는 원칙은 그대로입니다. Windows 전용 회귀 테스트 1건(같은 드라이브의 루트 3개 동시 확인 → 모두 local, PowerShell 1회 이하).
 - 검증: 같은 부하에서 수정 코드는 3번 모두 local·PowerShell 1회, 소요 6.9~8.5초(기존 5초 제한이었다면 실패). Linux 격리 사본에서 배포·provenance 17파일 229 통과 / 5 skip(Windows 전용 포함), lint·전체 `tsc` 통과. Windows 전용 테스트는 다음 CI의 windows_native 7단계에서 실행됩니다.
 - 영향: CI뿐 아니라 느린 사용자 PC에서 데스크톱 앱이 간헐적으로 시작을 거부할 수 있었던 문제입니다.
+
+## 후속: Windows production smoke DB 볼륨 문제 (18:45~19:00 KST)
+
+- `98fad12c` CI에서 push 쪽 `windows_native`는 저장소 확인 실패 0건으로 통과했지만, 9단계 production smoke는 계속 `desktop-local SQLite database must be on the same filesystem volume as the app`으로 실패했습니다(마지막 명령인 desktop smoke 결과만 반영되어 가려짐).
+- 원인: "같은 볼륨" 규칙은 의도된 제품 계약입니다(`planningSmokeDatabase.test.ts`가 다른 볼륨 거부를 고정, 런타임도 같은 규칙). production smoke는 테스트 DB를 `os.tmpdir()`(runner의 `C:\Users\RUNNER~1\...\Temp`)에 만들고, CI는 앱을 `RUNNER_TEMP`(D:)에 설치해 규칙에 걸렸습니다. 태그 릴리스 `release.yml`도 같은 구성(Windows, `RUNNER_TEMP` 설치 후 production smoke)이며 그쪽은 명령별 종료 코드를 검사하므로 다음 릴리스에서 실패할 상태였습니다.
+- 수정: 제품 규칙과 smoke 스크립트는 그대로 두고, 두 workflow의 smoke step에 `TEMP`/`TMP: ${{ runner.temp }}`를 지정해 OS 임시 폴더를 설치 볼륨에 맞췄습니다. workflow 계약 테스트(`quality-gates-registry`, `release-workflow-contract`)에 이 설정 검사를 추가했습니다.
+- 검증: 이 PC의 Windows Node에서 `TEMP=D:\a\_temp`이면 `os.tmpdir()`가 그 경로를 쓰고 앱 경로 기준 상대 경로가 `..\...`(같은 볼륨)임을 확인. 새 계약 검사는 수정 전 workflow에서 2건 실패, 수정 후 workflow 계약 테스트 3파일 57 통과, YAML 파싱으로 두 step의 env 확인, lint 통과.
+- 남은 것: production smoke가 Windows에서 DB 준비 이후 단계까지 가는 것은 다음 CI가 처음입니다. 9단계 결과 가림(2번 과제)은 아직 그대로라 로그로 직접 확인해야 합니다.
+- 함께 처리(2번 과제): `windows_native`의 6~9단계는 Windows 기본 셸인 pwsh로 실행되는데, pwsh는 실패한 명령에서 멈추지 않고 step 결과로 마지막 명령의 종료 코드만 남겨 앞 명령의 실패가 가려졌습니다(9단계의 production smoke 실패, 7단계 첫 vitest 실패 가능성 등). `release.yml`과 같은 방식으로 각 `pnpm` 명령 뒤에 `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`를 넣고 6·7단계에 `shell: pwsh`를 명시했습니다. 계약 테스트에 "windows_native의 모든 `pnpm` 명령 다음 줄이 종료 코드 검사"를 추가했습니다.
+- 추가 검증: 이 PC의 PowerShell로 GitHub pwsh step 형태를 재현해 기존 형태는 첫 명령 실패에도 종료 코드 0, 검사 추가 형태는 실패 코드로 끝남을 확인. 새 계약 검사는 HEAD `ci.yml`과 production smoke 뒤 검사 한 줄을 뺀 변형에서 각각 실패, 수정본에서 workflow 계약 테스트 57 통과, YAML 파싱으로 6~9단계 `pnpm` 9개 모두 검사 확인.

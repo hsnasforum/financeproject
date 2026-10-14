@@ -363,6 +363,17 @@ describe("quality gate registry", () => {
     expect(ci).toContain("planning:v2:prod:smoke");
     expect(ci).toContain("planning:v2:desktop:smoke");
     expect(ci).toContain("--use-installed-database");
+    expect(ci).toContain("TEMP: ${{ runner.temp }}");
+    expect(ci).toContain("TMP: ${{ runner.temp }}");
+    const windowsStart = ci.indexOf("\n  windows_native:\n");
+    const nextJob = ci.slice(windowsStart + 1).search(/\n  [a-z_]+:\n/u);
+    const windowsJob = nextJob < 0 ? ci.slice(windowsStart) : ci.slice(windowsStart, windowsStart + 1 + nextJob);
+    const windowsLines = windowsJob.split("\n").map((line) => line.trim());
+    const windowsCommands = windowsLines.flatMap((line, index) => (line.startsWith("pnpm ") ? [index] : []));
+    expect(windowsCommands.length).toBeGreaterThanOrEqual(9);
+    for (const index of windowsCommands) {
+      expect(windowsLines[index + 1], windowsLines[index]).toBe("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }");
+    }
     expect(ci).toContain("desktop-artifact-provenance.test.ts");
     expect(ci).toContain("planningRuntimeRoot.test.ts");
     expect(ci).toContain("planningWriterLease.test.ts");

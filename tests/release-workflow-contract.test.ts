@@ -57,6 +57,8 @@ describe("tag release workflow contract", () => {
     expect(verifyJob).toContain("PLANNING_DESKTOP_SKIP_SHORTCUTS");
     expect(verifyJob).not.toContain("PLANNING_DESKTOP_SKIP_INSTALL");
     expect(verifyJob).toContain("--use-installed-database");
+    expect(verifyJob).toContain("TEMP: ${{ runner.temp }}");
+    expect(verifyJob).toContain("TMP: ${{ runner.temp }}");
     expect(verifyJob).toContain("desktop uninstall left package binaries behind");
     expect(verifyJob).toContain("desktop uninstall removed the SQLite database");
     expect(provenance).toBeGreaterThan(desktopUninstall);

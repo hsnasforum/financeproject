@@ -81,6 +81,11 @@ jobs:
 
       - name: Install and smoke published desktop artifact
         shell: pwsh
+        # The smoke scripts create their SQLite files under the OS temp directory, which must be
+        # on the install volume (RUNNER_TEMP, D:) because desktop-local rejects cross-volume databases.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: |
           $installRoot = Join-Path $env:RUNNER_TEMP "planning-v2-desktop-release"
           $env:PLANNING_DESKTOP_INSTALL_DIR = $installRoot
