@@ -83,3 +83,10 @@
 - fixture 상품 2개·옵션 3개의 원문에 정규화 값과 같은 `fin_co_no`, `fin_prdt_cd`, `dcls_month=202602`와 이름·금리를 채웠습니다. 상품 식별자와 기존 테스트 기대값은 그대로입니다.
 - 검증(격리 사본, 네트워크 차단, CI env 동일): fixture 관련 단위·FINLIFE 50파일 206 통과, `prisma:db:push` → `seed:debug`(FINLIFE·KDB 재생) 통과, core flows E2E 43 통과 / 2 skip / 1 실패.
 - 남은 실패 `error-state-retry.spec.ts` "benefits exposes the default retry action"은 `/benefits`에서 실패 알림이 나타나지 않는 문제로, 오늘 commit 이전 사본에서도 동일하게 실패하는 기존 문제입니다(원인 미조사).
+
+## 후속: 혜택 화면 초기 검색 누락 수정 (15:40~16:00 KST)
+
+- 원인: `BenefitsClient`의 초기 effect가 시작하자마자 "초기화 완료" 플래그를 켜고 검색은 microtask 뒤로 미루며 cleanup에서 취소합니다. 개발 모드 React Strict Mode의 mount → cleanup → mount에서 첫 실행은 취소되고 두 번째 실행은 플래그 때문에 빠져나가 **첫 검색이 한 번도 나가지 않았습니다.** 혜택 화면 코드는 9/4 이후 그대로이며, Next 16.2.12 → 16.3.8 이후 개발 서버(E2E)에서 드러났습니다.
+- 측정: 임시 probe(격리 사본 전용)로 `/benefits` 진입 후 10초간 검색 요청 수정 전 **0회**, 수정 후 **1회**. 실행 중인 production 앱은 Strict Mode 이중 실행이 없어 초기 검색이 정상(10,958건)이었으므로 실제 사용자 화면 영향은 없었습니다.
+- 수정: 플래그를 첫 검색이 실제로 시작될 때만 켜도록 옮겼습니다(`src/components/BenefitsClient.tsx`). 같은 플래그를 쓰는 `SubscriptionClient`는 즉시 동기 실행이라 영향이 없어 바꾸지 않았습니다.
+- 검증: `error-state-retry`·`gov24-request-lifecycle` E2E 17 통과 / 1 skip(인증 필요 조건 전용), `benefits-latest-action` 단위 3 통과, lint·전체 `tsc` 통과.
