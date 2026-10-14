@@ -14,6 +14,7 @@ import {
   type DebtOfferFormRow,
 } from "@/lib/planning/ui/workspaceDebtOffersEditor";
 import { defaults as planningExecutionDefaults } from "@/lib/planning/ui/workspaceUiState";
+import { EMERGENCY_FUND_TARGET_MONTHS } from "@/lib/planning/calc/emergencyFundPolicy";
 import { type PlanningFeatureFlags } from "@/lib/planning/config";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import {
@@ -31,7 +32,7 @@ const DEFAULT_DEBT_OFFERS_JSON = `[
 ]`;
 
 const DEFAULT_OPTIMIZER_CONSTRAINTS_JSON = `{
-  "minEmergencyMonths": 3,
+  "minEmergencyMonths": ${EMERGENCY_FUND_TARGET_MONTHS},
   "maxDebtServiceRatio": 0.6
 }`;
 

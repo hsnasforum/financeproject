@@ -1,3 +1,4 @@
+import { EMERGENCY_FUND_TARGET_MONTHS } from "../../../calc/emergencyFundPolicy";
 import { roundToDigits } from "../../../calc/roundingPolicy";
 import { type AssumptionsV2 } from "../scenarios";
 import { type ProfileV2, type SimulationResultV2 } from "../types";
@@ -21,7 +22,7 @@ type GoalMiss = {
   targetMonth: number;
 };
 
-const EMERGENCY_MONTHS_TARGET = 6;
+const EMERGENCY_MONTHS_TARGET = EMERGENCY_FUND_TARGET_MONTHS;
 const STANDARD_ACTION_CAUTIONS = [
   "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
   "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다.",
@@ -176,7 +177,7 @@ export function buildActionsFromPlan(args: BuildActionsArgs): ActionItemV2[] {
         currentCashKrw,
       },
       steps: [
-        "비상금 목표(기본 6개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.",
+        `비상금 목표(기본 ${EMERGENCY_MONTHS_TARGET}개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.`,
         "중도 인출 비용/제약이 작은 후보를 우선 비교합니다.",
         "비상금 달성 전에는 고위험 자산 비중 확대를 보류합니다.",
       ],

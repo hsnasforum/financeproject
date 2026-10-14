@@ -28,13 +28,25 @@ describe("buildInterpretationVM", () => {
     const good = buildInterpretationVM({
       summary: {
         monthlySurplusKrw: 300_000,
-        emergencyFundMonths: 4,
+        emergencyFundMonths: 6,
         dsrPct: 20,
       },
       aggregatedWarnings: [],
       goals: [],
     });
     expect(good.verdict.code).toBe("GOOD");
+
+    // Four months met the previous 3-month caution line but is below the 6-month emergency fund standard.
+    const belowEmergencyStandard = buildInterpretationVM({
+      summary: {
+        monthlySurplusKrw: 300_000,
+        emergencyFundMonths: 4,
+        dsrPct: 20,
+      },
+      aggregatedWarnings: [],
+      goals: [],
+    });
+    expect(belowEmergencyStandard.verdict.code).toBe("CAUTION");
 
     const unknown = buildInterpretationVM({
       summary: {},

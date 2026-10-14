@@ -6,6 +6,7 @@ import {
   toGuardErrorResponse,
   } from "../../../../../lib/dev/devGuards";
 import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
+import { EMERGENCY_FUND_TARGET_MONTHS } from "../../../../../lib/planning/calc/emergencyFundPolicy";
 import { generateCandidatePlans } from "../../../../../lib/planning/server/v2/optimizer/greedy";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
@@ -97,7 +98,7 @@ function parseConstraints(input: unknown): {
     ]);
   }
 
-  const minEmergencyMonthsRaw = obj.minEmergencyMonths ?? 3;
+  const minEmergencyMonthsRaw = obj.minEmergencyMonths ?? EMERGENCY_FUND_TARGET_MONTHS;
   if (!isFiniteNumber(minEmergencyMonthsRaw)) {
     throw new PlanningV2ValidationError("Invalid constraints", [
       { path: "constraints.minEmergencyMonths", message: "must be a finite number" },

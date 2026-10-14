@@ -28,14 +28,22 @@ function fixture(): PlanningRunRecord {
       simulate: { ...a.outputs.simulate, ref: { name: "simulate", path: "fixture/simulate.json" } } } };
 }
 
+// Interpretation policy stored by runs created before the 6-month emergency fund standard.
+const PREVIOUS_THREE_MONTH_POLICY = { ...DEFAULT_PLANNING_POLICY, emergencyFundMonths: { caution: 3, risk: 1 } };
+
+function withStoredPolicy(run: PlanningRunRecord, policy: typeof DEFAULT_PLANNING_POLICY): PlanningRunRecord {
+  run.reproducibility = { appVersion: "test", engineVersion: "test", profileHash: "synthetic", appliedOverrides: [], policy };
+  return run;
+}
+
 describe("same saved run diagnosis across views and outputs", () => {
   it("explains zero cash risk alongside good basic metrics without modifying the run", () => {
-    const run = fixture();
+    const run = withStoredPolicy(fixture(), PREVIOUS_THREE_MONTH_POLICY);
     const before = JSON.stringify(run);
     expect(run.outputs.resultDto!.summary.worstCashKrw).toBe(0);
     const workspace = buildWorkspaceResultSummaryVm({ resultDto: run.outputs.resultDto! });
     const vm = safeBuildReportVMFromRun(run).vm!;
-    const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm));
+    const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm), vm.reproducibility?.policy);
     expect(interpretation.verdict.code).toBe("GOOD");
     const workspaceHtml = renderToStaticMarkup(<ResultGuideCard locale="ko-KR" status={workspace.guideBadge.status}
       reason={workspace.guideBadge.reason} minCashKrw={workspace.summaryWorstCashKrw}
@@ -51,6 +59,23 @@ describe("same saved run diagnosis across views and outputs", () => {
       expect(html).not.toContain("정기 점검만 이어가면 됩니다");
     }
     expect(JSON.stringify(run)).toBe(before);
+  });
+
+  it("applies the 6-month emergency fund standard in every output when the run stores no policy", () => {
+    const run = fixture();
+    const vm = safeBuildReportVMFromRun(run).vm!;
+    const emergencyFundMonths = vm.summaryCards.emergencyFundMonths ?? Number.NaN;
+    expect(emergencyFundMonths).toBeGreaterThanOrEqual(3);
+    expect(emergencyFundMonths).toBeLessThan(6);
+    const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm), vm.reproducibility?.policy);
+    expect(interpretation.verdict.code).toBe("CAUTION");
+    const brief = renderToStaticMarkup(<SavedReportBrief run={run} vm={vm} />);
+    const output = buildStandaloneReportArtifactsFromRun(run, { printView: true }).html;
+    for (const html of [brief, output]) {
+      expect(html).toContain("위험 신호 있음");
+      expect(html).toContain("기본 지표 판정: 주의");
+      expect(html).not.toContain("기본 지표 판정: 양호");
+    }
   });
 
   it("does not turn absent cash into zero in the workspace", () => {

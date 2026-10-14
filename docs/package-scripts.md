@@ -48,6 +48,9 @@
 - 지원되는 freshness 명령(`freshness:report`, `freshness:release`, `data:doctor`, `verify`)은 모두
   `config/data-freshness-exceptions.json`을 단일 예외 기준으로 사용합니다. 예외는 `expiresAt` 직전까지만
   유효하고 그 시각부터 만료로 판정합니다.
+- 만료된 예외는 기한을 연장하지 않고 제거합니다. 제거된 snapshot은 실제 나이대로 stale로 보고되며,
+  일반 점검(`freshness:report`, `data:doctor`, `verify`)에서는 경고로 남고 `freshness:release` strict 검사에서는
+  출시를 계속 차단합니다. 유효한 원천 갱신 없이 예외를 다시 추가하지 않습니다.
 - 경계 재현이나 테스트가 필요하면 script에 `--now=<ISO date-time>`을 전달할 수 있습니다. 운영 판정은
   package script가 사용하는 실제 현재 시각을 기준으로 합니다.
 - planning ops: `pnpm planning:v2:ops:*`, `pnpm planning:v2:backfill-legacy-runs`, `pnpm planning:v2:migrate:*`

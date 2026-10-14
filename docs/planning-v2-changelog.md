@@ -1,5 +1,12 @@
 # Planning v2 Changelog (P97-0 ~ P97-99)
 
+## 2026-10-14 Emergency Fund Standard (unreleased)
+
+- 사용자 결정에 따라 비상금 기준을 월 생활비 6개월로 통일했습니다. 기준값은 `src/lib/planning/calc/emergencyFundPolicy.ts` 한 곳에 둡니다.
+- `balanced`/`growth` preset의 `minEmergencyMonths`를 3 → 6으로 맞췄습니다. `balanced`는 `emergencyFirst=false`·`stopInvestWhenEmergencyShort=false`라 배분 결과는 같고 비상금 목표 도달 trace 시점만 달라집니다. `growth`는 비상금 6개월 미만 동안 투자 적립을 멈추므로 결과가 달라질 수 있습니다.
+- 해석 정책 `emergencyFundMonths.caution`을 3 → 6으로 올려, 단계 엔진의 비상금 단계와 진단·근거 문구가 같은 기준을 사용합니다. 저장된 실행은 생성 당시 정책을 유지합니다.
+- optimizer 기본 제약, 리포트→상품 추천 신호, v3 거래 기반 초안의 비상금 목표도 같은 기준을 사용합니다. 시뮬레이션 trace 문구는 실제 적용 개월 수를 표시합니다.
+
 ## 2026-03-16 Release Notes Prep (v1.0.4)
 
 - 패키지 버전과 Planning v2 릴리즈 스크립트의 `--version` 파라미터를 `1.0.4`로 동기화했습니다.

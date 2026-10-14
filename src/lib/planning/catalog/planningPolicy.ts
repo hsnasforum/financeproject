@@ -1,3 +1,5 @@
+import { EMERGENCY_FUND_TARGET_MONTHS } from "../calc/emergencyFundPolicy";
+
 export type PlanningInterpretationPolicy = {
   dsr: {
     cautionPct: number;
@@ -31,7 +33,8 @@ export const DEFAULT_PLANNING_POLICY: PlanningInterpretationPolicy = {
     riskPct: 50,
   },
   emergencyFundMonths: {
-    caution: 3,
+    // Below the product emergency fund standard is a caution; the stage engine uses the same standard.
+    caution: EMERGENCY_FUND_TARGET_MONTHS,
     risk: 1,
   },
   monthlySurplusKrw: {

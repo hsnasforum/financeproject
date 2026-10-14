@@ -9,8 +9,18 @@
 
 - `dsr.cautionPct`: `40`
 - `dsr.riskPct`: `60`
-- `emergencyFundMonths.caution`: `3`
+- `emergencyFundMonths.caution`: `6` (`EMERGENCY_FUND_TARGET_MONTHS`, 2026-10-14 사용자 결정으로 3 → 6)
 - `emergencyFundMonths.risk`: `1`
+
+## Emergency Fund Standard
+
+소스: `src/lib/planning/calc/emergencyFundPolicy.ts`
+
+- `EMERGENCY_FUND_TARGET_MONTHS`: `6` (월 생활비 기준 개월 수)
+- 같은 값을 단계 엔진 기본값, `balanced`/`safety`/`growth` preset의 `minEmergencyMonths`, 행동 제안 목표,
+  optimizer 기본 제약, 해석 정책 `emergencyFundMonths.caution`, v3 거래 기반 초안 추정이 함께 사용합니다.
+- 저장된 실행은 생성 시점의 해석 정책(`reproducibility.policy`)을 유지하므로 기존 리포트의 판정은 바뀌지 않고,
+  새 실행부터 6개월 기준이 적용됩니다.
 - `monthlySurplusKrw.cautionMax`: `0`
 - `monthlySurplusKrw.riskMax`: `-1`
 - `monteCarlo.cautionDepletionPct`: `10`

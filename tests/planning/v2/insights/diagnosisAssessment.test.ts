@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { buildInterpretationVM, type InterpretationInput } from "../../../../src/lib/planning/v2/insights/interpretationVm";
 import { buildWorkspaceGuideBadge } from "../../../../src/lib/planning/ui/workspaceResultInsights";
 
+// Basic metrics that all meet their standards, including the 6-month emergency fund standard.
 const base: InterpretationInput = {
-  summary: { monthlySurplusKrw: 2_500_000, emergencyFundMonths: 4, dsrPct: 0, worstCashKrw: 100_000 },
+  summary: { monthlySurplusKrw: 2_500_000, emergencyFundMonths: 6, dsrPct: 0, worstCashKrw: 100_000 },
   aggregatedWarnings: [], goals: [],
 };
 function view(summary: InterpretationInput["summary"] = {}, warnings: InterpretationInput["aggregatedWarnings"] = [], goals: InterpretationInput["goals"] = []) {
@@ -50,6 +51,18 @@ describe("diagnosis assessment separates basic metrics from individual signals",
     const vm = view(summary);
     expect(vm.verdict.code).toBe(basic);
     expect(vm.assessment?.code).toBe(signal);
+  });
+
+  it.each([
+    { months: 0.99, basic: "CAUTION", signal: "RISK" },
+    { months: 1, basic: "CAUTION", signal: "CAUTION" },
+    { months: 5.99, basic: "CAUTION", signal: "CAUTION" },
+    { months: 6, basic: "GOOD", signal: "GOOD" },
+  ])("uses the 6-month emergency fund standard at $months months", ({ months, basic, signal }) => {
+    const vm = view({ emergencyFundMonths: months });
+    expect(vm.verdict.code).toBe(basic);
+    expect(vm.assessment?.code).toBe(signal);
+    expect(vm.assessment?.signals.some((s) => s.id === "emergency-fund")).toBe(months < 6);
   });
 
   it.each([

@@ -1,3 +1,4 @@
+export * from "./emergencyFundPolicy";
 export * from "./evidence";
 export * from "./interest";
 export * from "./metrics";

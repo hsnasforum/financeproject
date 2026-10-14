@@ -232,12 +232,11 @@ describe("quality gate registry", () => {
     }
   });
 
-  it.each([
-    { file: "ci.yml", nodeVersion: "22.22.2" },
-    { file: "e2e-smoke.yml", nodeVersion: "20" },
-  ])("pins the declared toolchain in $file", ({ file, nodeVersion }) => {
+  it.each(["ci.yml", "e2e-smoke.yml"])("pins the declared toolchain in %s", (file) => {
     const workflow = loadYaml(read(`.github/workflows/${file}`)) as Workflow;
-    const pkg = JSON.parse(read("package.json")) as { packageManager?: string };
+    const pkg = JSON.parse(read("package.json")) as { packageManager?: string; engines?: { node?: string } };
+    const nodeVersion = pkg.engines?.node;
+    expect(nodeVersion).toBe("22.22.2");
     const pins = {
       "actions/checkout": "df4cb1c069e1874edd31b4311f1884172cec0e10",
       "pnpm/action-setup": "0977fd99725f1db4007ccb2928dbb4e90d06cc86",
@@ -260,6 +259,20 @@ describe("quality gate registry", () => {
         "cache-dependency-path": "pnpm-lock.yaml",
       });
     }
+  });
+
+  it("aligns every workflow setup-node version with package.json engines.node", () => {
+    const pkg = JSON.parse(read("package.json")) as { engines?: { node?: string } };
+    const setupNodeSteps = readWorkflows().flatMap(({ file, workflow }) =>
+      Object.entries(workflow.jobs).flatMap(([jobId, job]) =>
+        (job.steps ?? [])
+          .filter((step) => step.uses?.startsWith("actions/setup-node@"))
+          .map((step) => ({ location: `${file}/${jobId}`, nodeVersion: step.with?.["node-version"] })),
+      ),
+    );
+
+    expect(setupNodeSteps.length).toBeGreaterThan(0);
+    expect(setupNodeSteps.filter((step) => step.nodeVersion !== pkg.engines?.node)).toEqual([]);
   });
 
 

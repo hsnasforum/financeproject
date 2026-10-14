@@ -64,7 +64,7 @@ function extractStepBlock(source: string, name: string): string {
 }
 
 describe("daily refresh workflow contract", () => {
-  it("pins exact pnpm 9.15.9 before the Node 20 pnpm cache and frozen install", () => {
+  it("pins exact pnpm 9.15.9 before the engines Node pnpm cache and frozen install", () => {
     const workflow = fs.readFileSync(
       path.join(process.cwd(), ".github", "workflows", "daily-refresh.yml"),
       "utf-8",
@@ -87,12 +87,16 @@ describe("daily refresh workflow contract", () => {
 
     const setupPnpmBlock = extractStepBlock(workflow, "Setup pnpm");
     expect(setupPnpmBlock).toContain("uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86");
-    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as { packageManager?: string };
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as {
+      packageManager?: string;
+      engines?: { node?: string };
+    };
     expectExactPnpmContract(loadYaml(workflow) as DailyWorkflow, pkg.packageManager);
 
     const setupNodeBlock = extractStepBlock(workflow, "Setup Node");
     expect(setupNodeBlock).toContain("uses: actions/setup-node@v5");
-    expect(setupNodeBlock).toMatch(/\n\s+node-version: 20\s*$/m);
+    expect(pkg.engines?.node).toBe("22.22.2");
+    expect(setupNodeBlock).toContain(`node-version: "${pkg.engines?.node}"`);
     expect(setupNodeBlock).toContain('cache: "pnpm"');
     expect(setupNodeBlock).toContain("cache-dependency-path: pnpm-lock.yaml");
 

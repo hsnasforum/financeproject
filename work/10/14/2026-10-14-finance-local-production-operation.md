@@ -1,0 +1,69 @@
+# 2026-10-14 Finance 로컬 production 운영 복구
+
+기준: [추천·비상금·Node 정리](2026-10-14-finance-recommend-emergency-toolchain.md). branch `checkpoint/finance-review-20261011`, HEAD `eb6eb922`.
+사용자 승인(2026-10-14 KST): 의존성 재설치, 로컬 commit, "웹페이지가 정상적으로 운영될 수 있게" 작업. push·PR·배포는 승인 범위가 아니어서 하지 않았습니다.
+
+## 결과
+
+- RUNNING: 공식 Desktop Local launcher(`corepack pnpm start:local`, Node 22.22.2)로 `127.0.0.1:3100`에서 실행 중이며 기본 브라우저 bootstrap 요청까지 확인했습니다. 터미널 패널 탭에서 foreground로 실행되므로 Ctrl+C로 종료합니다.
+- 인증 후 사용자 브라우저 화면은 직접 보지 못했습니다(one-shot session이 사용자 기본 브라우저로 전달됨). 같은 build의 공식 desktop smoke가 bootstrap·프로필·실행 생성 흐름을 통과했습니다.
+- 출시 판정(braces 보안, 연금 원천)은 바뀌지 않습니다.
+
+## 변경 파일
+
+- 저장소: `tsconfig.json`(`work/local/**` exclude), `.data/finlife_deposit_snapshot.json`, `.data/finlife_credit-loan_snapshot.json`, `.data/finlife_mortgage-loan_snapshot.json`, `.data/finlife_rent-house-loan_snapshot.json`(공식 live sync 결과), 이 기록
+- 저장소 밖 또는 비추적 상태: `node_modules` 재설치, `dev.db` 교체(이전 파일 보존), production data root의 `assumptions.latest.json`, `tmp/dart/corpCodes.index.json`, `.data/finlife_{saving,pension}_sync_attempt.json` 실패 marker, `.next` build
+
+## 사용 skill
+
+- anthropic-skills:built-in-browser
+
+## 변경 이유와 핵심 변경
+
+1. 의존성: `node_modules`가 2026-08-24 설치본으로 lockfile과 달랐습니다(Next 16.2.12 ↔ 16.3.8, vitest 4.1.9 ↔ 4.1.11, eslint-config-next 16.2.12 ↔ 16.3.8). Node 22.22.2에서 `corepack pnpm install --frozen-lockfile`을 실행했고 postinstall `prisma generate`로 `identityKey`가 반영된 client가 생성되었습니다. lockfile·package.json hash는 변하지 않았습니다.
+2. DB: `.env.local`의 `DATABASE_URL=file:./dev.db`(2026-06-28)는 공식 식별 마이그레이션 점검에서 `blocked / UNSUPPORTED_LEGACY_SCHEMA`였고 launcher가 bind 전에 거부하는 상태였습니다. 읽기 전용 점검 결과 auth 테이블과 `userId` 컬럼이 없고 `UserProfile`·`Favorite`·`PlannerSnapshot`은 0행, 나머지는 재수집 가능한 공개 상품 캐시(Product 538, ProductOption 18,531 등)였습니다. 원본을 `work/local/db-backup-20261014/dev.db.legacy`로 이동해 보존(sha256 `a2dae0f6…` 동일, README에 복원 방법 기록)하고 공식 `prisma:db:push`로 새 빈 DB를 초기화했습니다. 점검 결과 `ready`.
+3. 상품 데이터: 오래된 snapshot을 재생하면 `generatedAt`이 현재 시각으로 기록되어 최신처럼 보이므로 사용하지 않고, 설정된 키로 공식 `finlife:sync --kind=all`을 1회 실행했습니다.
+   - 예금 39/158, 신용 44/139, 주담대 34/108, 전세 41/80 저장. DB integrity ok, FK 오류 0, `identityKey` null 0. 원문 공시월 202609.
+   - 연금: `FINLIFE_INTEGRITY_FAILED`(기존 원천 결함), 기존 snapshot 보존.
+   - 적금: `SYNC_FAILED`. 진단 결과 FINLIFE 응답 `HTTP ERR err_cd=TIMEOUT msg=timeout(10000ms)`였고, 같은 시점 직접 확인에서 적금·예금 endpoint 모두 `Empty reply from server`(약 10초)였습니다. 원천 서버 일시 장애로 판단해 timeout 코드를 바꾸지 않았고 시간 간격을 둔 재시도 1회도 실패했습니다. 기존 snapshot과 실패 marker를 보존했습니다.
+4. 유지보수 창(앱 종료 후 각 1회): `datago:sync` KDB 예금 25개(처리 750행), DART 회사 인덱스 재생성 119,614개, `planning:assumptions:sync`를 `PLANNING_DATA_DIR=~/.local/share/PlanningV2/vault`로 production root에 저장(asOf 2026-10-14, 기준금리 3%, CD91 3.24%, 경고 5개: CPI 파싱 실패로 물가는 기본값 사용).
+5. 빌드: 첫 `corepack pnpm build`가 비추적 증거 폴더 `work/local/**/*.spec.ts` 타입 검사로 실패했습니다. 소스 checkout에만 있는 로컬 작업 공간이므로 `tsconfig.json` exclude에 `work/local/**`를 추가했고 이후 build가 통과했습니다.
+6. standalone 서버는 build 시점에 복사한 `.next/standalone/tmp/dart/`를 읽습니다. DART 인덱스를 갱신한 뒤에는 다시 build해야 화면에 반영되어 재빌드했습니다(BUILD_ID `TvAzG0m5NwdfhgZGwyqhn`).
+
+## 검증
+
+| 검사 | 결과 |
+| --- | --- |
+| `corepack pnpm install --frozen-lockfile` | exit 0, lockfile 불변, better-sqlite3 로드 확인 |
+| 전체 `tsc --noEmit`(격리 사본) | exit 0 (기존 7개 오류 해소) |
+| `pnpm lint`(격리 사본) | 오류 0, eslint-config-next 16.3.8 신규 규칙 경고 12개(기존 코드) |
+| 전체 `vitest run`(격리 사본) | 4,480 통과 / 26 실패 / 4 skip. 26개는 HEAD baseline과 같은 sandbox 환경·기존 기대값 불일치 |
+| `corepack pnpm build` | exit 0 (254 static pages) |
+| `planning:v2:prod:smoke` | PASS (DART, standalone asset, 상품 카탈로그 DB 계약, data-sources, remote probe 403) |
+| `planning:v2:desktop:smoke` | PASS (bootstrap·프로필·실행 생성, production-hidden route) |
+| 실행 중 앱 HTTP | `/`, `/dashboard`, `/planning`, `/recommend`, `/products/catalog`, `/public/dart`, `/settings/data-sources`, `/tools/fx` 모두 200·오류 marker 0, 세션 없는 보호 API 401 |
+| 내장 브라우저 | 상품 카탈로그 예금 39개·공시월·수집 시각 표시, 데이터 소스 "연결 준비 6/6, 주의 1(가정 snapshot 부분 수집)" |
+
+미실행: 사용자 Windows 브라우저의 인증 후 화면 직접 확인, E2E 전체, `release:verify`, native Windows 설치.
+
+## 운영 방법
+
+- 시작(Windows PowerShell): `wsl -d Ubuntu --exec bash -lc 'cd ~/code/finance && PATH=$HOME/.nvm/versions/node/v22.22.2/bin:$PATH corepack pnpm start:local'`
+  - `--exec`가 필요합니다. `wsl -- ...` 형식은 wsl이 기본 shell로 인자를 다시 해석해 `$PATH`가 먼저 확장됩니다(확인함).
+- WSL 터미널: `cd ~/code/finance && nvm use && corepack pnpm start:local`
+- 실행 중 브라우저 세션이 사라지면 같은 시작 명령을 다시 실행하면 새 one-shot session이 발급됩니다.
+- 종료: 실행 중인 터미널에서 Ctrl+C. 데이터 갱신 명령은 앱 종료 후 실행합니다.
+
+## 남은 리스크
+
+- 적금이 DB에 없어 통합 카탈로그·추천에서 적금 후보가 0개입니다. FINLIFE 회복 후 앱을 종료하고 `corepack pnpm finlife:sync --kind=saving`을 실행해야 합니다.
+- 연금 원천 결함과 freshness 출시 차단, braces 보안 차단은 그대로입니다.
+- 가정 snapshot의 CPI 수집이 실패해 물가는 기본값(2%)입니다. KOSTAT CPI 파싱 실패 원인은 조사하지 않았습니다.
+- DART 인덱스·공시 산출물은 build 시점 복사본을 사용하므로 갱신 후 재빌드가 필요합니다.
+- `runs-report-route`의 "10초 판정" 기대값 불일치와 `multi-agent:guard`의 과거 기록 형식 누락은 기존 문제로 남겼습니다.
+- 앱은 터미널 탭이 열려 있는 동안만 실행됩니다. 이 대화의 임시 시작 스크립트 대신 위 시작 명령을 사용하세요.
+
+## 다음 라운드
+
+- FINLIFE 회복 후 적금 동기화, KOSTAT CPI 파싱 원인 확인.
+- 승인 시 원격 push/PR.

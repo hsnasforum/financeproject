@@ -383,7 +383,8 @@ export function simulateMonthly(
   let insolvencyMonths = 0;
   const phaseOverlap = hasPhaseOverlap(profile, horizonMonths);
   const emergencyMonthlyExpenseTarget = Math.max(0, profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses);
-  const emergencyFundTargetKrw = emergencyMonthlyExpenseTarget * getAllocationPolicy(policyId).rules.minEmergencyMonths;
+  const emergencyFundTargetMonths = getAllocationPolicy(policyId).rules.minEmergencyMonths;
+  const emergencyFundTargetKrw = emergencyMonthlyExpenseTarget * emergencyFundTargetMonths;
   let hadEmergencyCoverage = liquidAssets + 1e-9 >= emergencyFundTargetKrw;
 
   for (let month = 1; month <= horizonMonths; month += 1) {
@@ -601,7 +602,7 @@ export function simulateMonthly(
         pushTrace({
           monthIndex,
           code: "EMERGENCY_TARGET_REACHED",
-          message: "비상금 목표 수준(3개월 지출)을 충족했습니다.",
+          message: `비상금 목표 수준(${emergencyFundTargetMonths}개월 지출)을 충족했습니다.`,
           data: {
             liquidAssets: round2(liquidAssets),
             emergencyFundTargetKrw: round2(emergencyFundTargetKrw),
