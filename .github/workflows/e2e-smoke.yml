@@ -63,7 +63,8 @@ jobs:
         env:
           PLANNING_AUTH_REQUIRED: "1"
           PLANNING_E2E_DISABLE_AUTH_HEADER: "1"
-        run: pnpm e2e -- tests/e2e/error-state-retry.spec.ts --grep "planning reports keeps" --workers=1
+        # No "--": pnpm forwards it, and Playwright then treats --grep as a file filter.
+        run: pnpm e2e tests/e2e/error-state-retry.spec.ts --grep "planning reports keeps" --workers=1
 
   dart_index_present:
     runs-on: ubuntu-latest

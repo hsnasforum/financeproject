@@ -7,7 +7,8 @@ const canExercisePlanningAuthRequired = (
 );
 
 test("planning keeps corrupt profile reads in the error state after retry and reload", async ({ page }) => {
-  const message = "저장 데이터가 손상되었을 수 있습니다. 기존 파일을 보관하고, 저장 상태를 확인한 후 다시 시도해 주세요.";
+  test.skip(canExercisePlanningAuthRequired, "requires an authenticated session; the auth-required configuration shows the sign-in gate");
+  const message ="저장 데이터가 손상되었을 수 있습니다. 기존 파일을 보관하고, 저장 상태를 확인한 후 다시 시도해 주세요.";
   let reads = 0;
   let writes = 0;
   await page.route("**/api/planning/v2/profiles", async route => {
@@ -105,10 +106,12 @@ test("subscription exposes the default retry action and reruns the failed reques
 test("planning reports keeps an unauthenticated response distinct and retries it", async ({ page }) => {
   test.skip(!canExercisePlanningAuthRequired, "requires the focused unauthenticated E2E configuration");
 
+  // Dev Strict Mode sends an extra request that the page aborts, so answer by phase instead of request order.
   let requestCount = 0;
+  let retryClicked = false;
   await page.route("**/api/planning/v2/runs?**", async (route) => {
     requestCount += 1;
-    if (requestCount === 1) {
+    if (!retryClicked) {
       await route.fulfill({
         contentType: "application/json",
         status: 401,
@@ -131,9 +134,11 @@ test("planning reports keeps an unauthenticated response distinct and retries it
   await expect(alert).toContainText("로그인이 필요합니다");
   await expect(alert).toContainText("로그인 상태를 확인한 뒤 다시 시도해주세요.");
   await expect(alert).not.toContainText("오류가 발생했습니다");
+  const requestsBeforeRetry = requestCount;
+  retryClicked = true;
   await alert.getByRole("button", { name: "다시 시도" }).click();
 
-  await expect.poll(() => requestCount).toBe(2);
+  await expect.poll(() => requestCount).toBeGreaterThan(requestsBeforeRetry);
   await expect(alert).toHaveCount(0);
   await expect(page.getByText("아직 저장된 실행이 없습니다")).toBeVisible();
 });
