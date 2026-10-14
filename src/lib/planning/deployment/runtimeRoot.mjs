@@ -37,15 +37,22 @@ function sanitizeAppName(value) {
   return sanitized || DEFAULT_APP_NAME;
 }
 
+// Next's build-time file tracing evaluates a direct os.homedir() path and traces the whole tree under it
+// (AppData/Local, ~/.local/share). A Windows build on another drive cannot filter those files and fails
+// to copy page traces into the standalone output, so resolve the home directory at runtime only.
+function resolveUserHomeDirectory() {
+  return os.homedir();
+}
+
 function resolvePackagedPlanningRoot(env, platform) {
   const appName = sanitizeAppName(env.PLANNING_APP_NAME);
   if (platform === "win32") {
     const localAppData = asString(env.LOCALAPPDATA) || asString(env.APPDATA);
-    const base = localAppData || path.join(os.homedir(), "AppData", "Local");
+    const base = localAppData || path.join(resolveUserHomeDirectory(), "AppData", "Local");
     return path.resolve(base, appName, "vault");
   }
   const xdgDataHome = asString(env.XDG_DATA_HOME);
-  const base = xdgDataHome || path.join(os.homedir(), ".local", "share");
+  const base = xdgDataHome || path.join(resolveUserHomeDirectory(), ".local", "share");
   return path.resolve(base, appName, "vault");
 }
 

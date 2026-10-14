@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +92,43 @@ describe("planning runtime data root", () => {
       })).resolves.toMatchObject({ dataRootKind: "shared", filesystemType: 0xff534d42 });
     } finally {
       statfs.mockRestore();
+    }
+  });
+
+  it("keeps the packaged home data roots out of Next build-time file tracing", async () => {
+    // Windows builds on another drive than the home directory cannot filter these files and fail to copy page traces.
+    const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "planning-root-trace-home-")));
+    cleanupRoots.push(home);
+    for (const dataHome of [path.join(home, "AppData", "Local"), path.join(home, ".local", "share")]) {
+      await fs.mkdir(path.join(dataHome, "PlanningV2", "vault"), { recursive: true });
+      await fs.writeFile(path.join(dataHome, "PlanningV2", "vault", "probe.json"), "{}\n");
+    }
+    const { nodeFileTrace } = createRequire(import.meta.url)("next/dist/compiled/@vercel/nft") as {
+      nodeFileTrace: (
+        files: string[],
+        options: { base: string; processCwd: string; mixedModules: boolean },
+      ) => Promise<{ fileList: Set<string> }>;
+    };
+    const previousHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    try {
+      expect(os.homedir()).toBe(home);
+      const base = path.parse(process.cwd()).root;
+      const result = await nodeFileTrace([path.resolve("src/lib/planning/deployment/runtimeRoot.mjs")], {
+        base,
+        processCwd: process.cwd(),
+        mixedModules: true,
+      });
+      const tracedUnderHome = [...result.fileList]
+        .map((file) => path.resolve(base, file))
+        .filter((file) => file.startsWith(`${home}${path.sep}`));
+      expect(tracedUnderHome).toEqual([]);
+    } finally {
+      for (const [key, value] of Object.entries(previousHome)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
     }
   });
 

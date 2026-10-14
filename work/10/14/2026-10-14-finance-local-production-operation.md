@@ -113,3 +113,11 @@
 - 수정: 비교 전에 출력 경로도 기존 헬퍼 `resolveProspectiveDesktopCanonicalPath`로 정규화합니다(`scripts/planning_v2_desktop_launch.mjs`). control root 밖 경로 거부는 그대로이며, 링크로 control root 밖을 가리키는 경로도 이제 정규화 후 거부됩니다. 회귀 테스트 1건 추가(링크로 접근한 control root는 통과, 밖의 경로는 거부).
 - 검증(격리 사본, 네트워크 차단): 새 테스트는 수정 전 런처에서 실패 재현, 수정 후 일반 `/tmp`·symlink `TMPDIR` 모두 10 통과. windows_native 7단계 묶음과 런처 관련 11파일 182 통과 / 4 skip, lint·전체 `tsc` 통과.
 - 범위 밖: symlink `TMPDIR`에서 배포 suite 3파일 6건(`DATABASE_SYMLINK`, writer capability root 비교 등)이 실패하지만 수정 전 런처에서도 동일하며 Windows CI 대상 suite가 아닙니다. Windows 실기 실행은 하지 못했으므로 8~9단계 결과는 다음 CI에서 처음 확인됩니다.
+
+## 후속: windows_native 설치본 서버 chunk 누락 원인 (17:15~17:45 KST)
+
+- `55dcdccc` 이후 windows_native 7·8단계가 처음 통과했고, 9단계 desktop smoke에서 설치본 서버가 `Cannot find module './chunks/6555.js'`(`_not-found/page.js`가 요구)를 반복하다 종료했습니다.
+- 원인: `runtimeRoot.mjs`의 `path.join(os.homedir(), "AppData", "Local")`(및 `.local/share`)를 Next 빌드 파일 추적(nft)이 빌드 시점에 계산해 홈 아래 전체를 추적합니다. nft·Next의 "추적 루트 밖" 필터는 상대 경로가 `..`로 시작하는지만 보므로, 프로젝트(D:)와 홈(C:)이 다른 Windows runner에서는 `C:\...`가 걸러지지 않았습니다. 빌드 경고 `Failed to copy traced files` 173건의 바깥 경로는 모두 `C:\Users\runneradmin\AppData\Local`(1건은 그 안 winget 별칭이 가리키는 `WindowsApps`)이었습니다. Next의 복사 루틴은 실패 시 동시 복사 슬롯을 반납하지 않고 "복사됨" 표시를 먼저 하므로, 실패가 쌓인 페이지의 나머지 파일과 같은 chunk를 공유하는 페이지까지 복사가 빠졌습니다.
+- 수정: 홈 디렉터리를 작은 함수(`resolveUserHomeDirectory`)로 감싸 실행 시점에만 계산합니다(동작 동일). 회귀 테스트 1건(Next 내장 nft로 `runtimeRoot.mjs`를 추적해 임시 홈 아래 파일이 없어야 함) 추가.
+- 검증(격리 사본, 네트워크 차단): 새 테스트는 수정 전 코드에서 홈 probe 2개가 추적되어 실패, 수정 후 통과. 실제 webpack build를 홈이 추적 루트 안에 있는 조건으로 비교하면 수정 전 page trace의 홈 파일 참조 346건·standalone에 홈 폴더 복사, 수정 후 0건·미복사(두 build 모두 성공, server chunk 107개 standalone 누락 0). 배포·provenance 17파일 229 통과 / 4 skip, lint·전체 `tsc` 통과.
+- 남은 것: Windows 실기 결과는 다음 CI에서 확인합니다. 9단계의 production smoke DB 볼륨 문제와 저장소 확인 불안정은 별도 원인이라 이번 수정으로 해결되지 않습니다.
