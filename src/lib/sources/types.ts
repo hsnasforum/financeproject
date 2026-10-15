@@ -87,7 +87,7 @@ export type FinlifeNormalizedDump = {
   schemaVersion: number;
   meta: {
     dumpedAt: string;
-    kind: "deposit" | "saving" | "pension" | "mortgage-loan" | "rent-house-loan" | "credit-loan";
+    kind: "deposit" | "saving" | "mortgage-loan" | "rent-house-loan" | "credit-loan";
     source: "finlife_sync_normalized_dump";
     productCount: number;
     optionCount: number;

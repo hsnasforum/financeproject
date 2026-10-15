@@ -39,7 +39,7 @@ const SPECIALIZED_PRODUCT_LINKS = [
   {
     href: "/products/pension",
     title: "연금저축",
-    description: "연금저축 상품군을 먼저 보며 납입 조건과 절세 요소를 좁혀 볼 때",
+    description: "통합연금포털 공시로 원리금보장 연금저축보험과 상품별 수수료율·수익률을 비교할 때",
     entryLabel: "이 상품군 보기",
     badge: "Pension",
     badgeClass: "bg-violet-50 text-violet-700 border-violet-100",

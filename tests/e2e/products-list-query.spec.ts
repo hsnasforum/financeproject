@@ -286,7 +286,7 @@ for (const scenario of [
 }
 
 test("specialized product list applies the pure result pipeline to query filters", async ({ page }) => {
-  await page.route("**/api/finlife/pension?**", async (route) => {
+  await page.route("**/api/finlife/mortgage-loan?**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -294,7 +294,7 @@ test("specialized product list applies the pure result pipeline to query filters
         ok: true,
         mode: "live",
         meta: {
-          kind: "pension",
+          kind: "mortgage-loan",
           pageNo: 1,
           topFinGrpNo: "020000",
           fallbackUsed: false,
@@ -304,19 +304,19 @@ test("specialized product list applies the pure result pipeline to query filters
         },
         data: [
           {
-            fin_prdt_cd: "PENSION-A",
+            fin_prdt_cd: "LOAN-A",
             fin_co_no: "0010001",
             kor_co_nm: "검증금융",
-            fin_prdt_nm: "알파 연금",
+            fin_prdt_nm: "알파 주담대",
             options: [{ save_trm: "12", intr_rate: 3, intr_rate2: 3.4, raw: {} }],
             best: { save_trm: "12", intr_rate: 3, intr_rate2: 3.4 },
             raw: {},
           },
           {
-            fin_prdt_cd: "PENSION-C",
+            fin_prdt_cd: "LOAN-C",
             fin_co_no: "0010002",
             kor_co_nm: "확인금융",
-            fin_prdt_nm: "감마 연금",
+            fin_prdt_nm: "감마 주담대",
             options: [{ save_trm: "24", intr_rate: 2.9, intr_rate2: 3.3, raw: {} }],
             best: { save_trm: "24", intr_rate: 2.9, intr_rate2: 3.3 },
             raw: {},
@@ -327,26 +327,26 @@ test("specialized product list applies the pure result pipeline to query filters
   });
 
   await page.goto("/");
-  await page.goto("/products/pension?q=%EA%B0%90%EB%A7%88&sort=nameAsc");
+  await page.goto("/products/mortgage-loan?q=%EA%B0%90%EB%A7%88&sort=nameAsc");
 
-  await expect(page.getByRole("heading", { name: "연금저축 상품" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "주택담보대출 상품" })).toBeVisible({ timeout: 30_000 });
   const searchInput = page.getByPlaceholder("은행명 또는 상품명을 입력하세요");
   await expect(searchInput).toHaveValue("감마");
-  await expect(page.getByRole("heading", { name: "감마 연금" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "알파 연금" })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/products\/pension\?.*q=%EA%B0%90%EB%A7%88/);
+  await expect(page.getByRole("heading", { name: "감마 주담대" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "알파 주담대" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/products\/mortgage-loan\?.*q=%EA%B0%90%EB%A7%88/);
 
   await searchInput.fill("알파");
-  await expect(page.getByRole("heading", { name: "알파 연금" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "감마 연금" })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/products\/pension\?.*q=%EC%95%8C%ED%8C%8C/);
+  await expect(page.getByRole("heading", { name: "알파 주담대" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "감마 주담대" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/products\/mortgage-loan\?.*q=%EC%95%8C%ED%8C%8C/);
 
   await page.goBack();
   await expect.poll(() => new URL(page.url()).pathname).toBe("/");
 });
 
 test("specialized product list hydrates and updates the product shelf without script warnings", async ({ page }) => {
-  await page.route("**/api/finlife/pension?**", async (route) => {
+  await page.route("**/api/finlife/mortgage-loan?**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -354,7 +354,7 @@ test("specialized product list hydrates and updates the product shelf without sc
         ok: true,
         mode: "live",
         meta: {
-          kind: "pension",
+          kind: "mortgage-loan",
           pageNo: 1,
           topFinGrpNo: "020000",
           fallbackUsed: false,
@@ -364,10 +364,10 @@ test("specialized product list hydrates and updates the product shelf without sc
         },
         data: [
           {
-            fin_prdt_cd: "PENSION-SHELF",
+            fin_prdt_cd: "LOAN-SHELF",
             fin_co_no: "0010003",
             kor_co_nm: "보관금융",
-            fin_prdt_nm: "보관 연금",
+            fin_prdt_nm: "보관 주담대",
             options: [{ save_trm: "12", intr_rate: 3, intr_rate2: 3.4, raw: {} }],
             best: { save_trm: "12", intr_rate: 3, intr_rate2: 3.4 },
             raw: {},
@@ -396,7 +396,7 @@ test("specialized product list hydrates and updates the product shelf without sc
   page.on("console", (message) => captureRuntimeWarning(message.text()));
   page.on("pageerror", (error) => captureRuntimeWarning(error.message));
 
-  await page.goto("/products/pension");
+  await page.goto("/products/mortgage-loan");
 
   const compareCount = page.locator("[data-product-compare-count]");
   await expect(compareCount).toHaveText("비교함 2", { timeout: 30_000 });
@@ -417,9 +417,9 @@ test("specialized product list hydrates and updates the product shelf without sc
       compareBasket: parsed.compareBasket ?? [],
     };
   })).toEqual({
-    favorites: ["finlife:pension:0010003:PENSION-SHELF"],
-    recentViewed: ["finlife:pension:0010003:PENSION-SHELF"],
-    compareBasket: ["fixture-compare-a", "fixture-compare-b", "finlife:pension:0010003:PENSION-SHELF"],
+    favorites: ["finlife:mortgage-loan:0010003:LOAN-SHELF"],
+    recentViewed: ["finlife:mortgage-loan:0010003:LOAN-SHELF"],
+    compareBasket: ["fixture-compare-a", "fixture-compare-b", "finlife:mortgage-loan:0010003:LOAN-SHELF"],
   });
   await page.evaluate(() => new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
@@ -443,7 +443,7 @@ test("specialized product list ignores a superseded FINLIFE response", async ({ 
   const markInitialBrowserRequestSettled = (requestUrl: string) => {
     const url = new URL(requestUrl);
     if (
-      url.pathname === "/api/finlife/pension"
+      url.pathname === "/api/finlife/mortgage-loan"
       && url.searchParams.get("topFinGrpNo") === "020000"
     ) {
       browserSettledInitialRequests += 1;
@@ -452,7 +452,7 @@ test("specialized product list ignores a superseded FINLIFE response", async ({ 
   page.on("requestfinished", (request) => markInitialBrowserRequestSettled(request.url()));
   page.on("requestfailed", (request) => markInitialBrowserRequestSettled(request.url()));
 
-  await page.route("**/api/finlife/pension?**", async (route) => {
+  await page.route("**/api/finlife/mortgage-loan?**", async (route) => {
     const url = new URL(route.request().url());
     const topFinGrpNo = url.searchParams.get("topFinGrpNo") ?? "";
     const isInitialRequest = topFinGrpNo === "020000";
@@ -471,7 +471,7 @@ test("specialized product list ignores a superseded FINLIFE response", async ({ 
           ok: true,
           mode: "live",
           meta: {
-            kind: "pension",
+            kind: "mortgage-loan",
             pageNo: 1,
             topFinGrpNo,
             fallbackUsed: false,
@@ -481,10 +481,10 @@ test("specialized product list ignores a superseded FINLIFE response", async ({ 
           },
           data: [
             {
-              fin_prdt_cd: latest ? "PENSION-LATEST" : "PENSION-STALE",
+              fin_prdt_cd: latest ? "LOAN-LATEST" : "LOAN-STALE",
               fin_co_no: latest ? "0010002" : "0010001",
               kor_co_nm: latest ? "최신금융" : "이전금융",
-              fin_prdt_nm: latest ? "최신 연금" : "이전 연금",
+              fin_prdt_nm: latest ? "최신 주담대" : "이전 주담대",
               options: [{ save_trm: "12", intr_rate: 3, intr_rate2: 3.4, raw: {} }],
               best: { save_trm: "12", intr_rate: 3, intr_rate2: 3.4 },
               raw: {},
@@ -497,17 +497,81 @@ test("specialized product list ignores a superseded FINLIFE response", async ({ 
     }
   });
 
-  await page.goto("/products/pension");
+  await page.goto("/products/mortgage-loan");
   await initialRequestStarted;
   await page.getByRole("button", { name: "저축은행", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "최신 연금" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "최신 주담대" })).toBeVisible({ timeout: 30_000 });
   releaseInitialResponse?.();
   await expect.poll(() => settledInitialRequests).toBe(initialRequests);
   await expect.poll(() => browserSettledInitialRequests).toBe(initialRequests);
   await page.evaluate(() => new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   }));
-  await expect(page.getByRole("heading", { name: "이전 연금" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "최신 연금" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이전 주담대" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "최신 주담대" })).toBeVisible();
+});
+
+test("pension page reads the 통합연금포털 snapshots with source, period and cost-first sorting", async ({ page }) => {
+  await page.goto("/products/pension");
+
+  await expect(page.getByRole("heading", { name: "연금저축 상품" })).toBeVisible({ timeout: 30_000 });
+  const guaranteedNotice = page.getByTestId("pension-source-notice");
+  await expect(guaranteedNotice).toContainText("통합연금포털(금융감독원) 콘텐츠", { timeout: 30_000 });
+  await expect(guaranteedNotice).toContainText("공시 기준:");
+  await expect(page.getByTestId("pension-guaranteed-caution")).toContainText("적립금이 낸 돈보다 적을 수 있습니다");
+  const firstGuaranteed = page.getByTestId("pension-guaranteed-item").first();
+  await expect(firstGuaranteed).toContainText("공시이율");
+  await firstGuaranteed.getByText("가입 경로별 수수료 부과구조 보기").click();
+  await expect(firstGuaranteed).toContainText("계약체결비용");
+
+  await page.getByRole("button", { name: "상품별 수익률·수수료율" }).click();
+  await expect(page).toHaveURL(/\/products\/pension\?tab=products$/);
+  await expect(page.getByTestId("pension-products-caution")).toContainText("앞으로의 수익을 보장하지 않는 참고 지표");
+  await expect(page.getByTestId("pension-result-count")).toContainText("연평균 수수료율 낮은 순", { timeout: 30_000 });
+  await expect(page.getByTestId("pension-product-item")).toHaveCount(20);
+  await expect(page.getByLabel("판매 여부")).toHaveValue("Y");
+
+  await page.getByLabel("권역").selectOption("4");
+  await expect(page.getByTestId("pension-product-item").first()).toContainText("생명보험");
+  await expect(page.getByTestId("pension-product-item").filter({ hasText: "자산운용" })).toHaveCount(0);
+});
+
+test("pension page explains a snapshot that has not been collected yet", async ({ page }) => {
+  await page.route("**/api/products/pension?**", async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: { code: "SNAPSHOT_MISSING", message: "연금저축 공시 자료가 아직 준비되지 않았습니다." },
+      }),
+    });
+  });
+
+  await page.goto("/products/pension");
+
+  const missing = page.getByTestId("pension-snapshot-missing");
+  await expect(missing).toContainText("연금저축 공시 자료가 아직 준비되지 않았습니다.", { timeout: 30_000 });
+  await expect(missing.getByRole("link", { name: "통합연금포털 원문 보기" })).toHaveAttribute("href", /fss\.or\.kr/);
+  await expect(missing).not.toContainText(/scripts\/|pnpm|pension:sync/);
+});
+
+test("compare page marks stored FINLIFE pension items as retired instead of showing old data", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.setItem("products_shelf_v1", JSON.stringify({
+      schemaVersion: 1,
+      favorites: [],
+      recentViewed: [],
+      compareBasket: ["finlife:pension:0010003:LEGACY-A", "finlife:pension:0010004:LEGACY-B"],
+    }));
+  });
+
+  await page.goto("/products/compare");
+
+  const notices = page.getByText("이전 데이터 제공을 종료했습니다", { exact: false });
+  await expect(notices.first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("link", { name: "새 화면에서 보기" }).first()).toHaveAttribute("href", "/products/pension");
+  await expect(page.getByText("PRODUCT_RETIRED")).toHaveCount(0);
 });

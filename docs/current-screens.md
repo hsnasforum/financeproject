@@ -179,6 +179,7 @@
 - `/api/planner/compute`는 legacy planner 계산 API지만 개인 재무 입력을 받으므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다. `/api/planner/assumptions`는 저장소를 쓰지 않는 외부 가정값 조회 보조 API로 유지한다.
 - `/api/recommend`는 추천 입력과 planning context를 받는 계산 API이므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 기존 추천 trace/source meta에 `meta.userId`와 `meta.authSource`를 함께 유지한다.
 - 금융탐색의 상위 public 진입점은 `/products`다. 이 게이트웨이 안에서 예금/적금의 대표 비교 화면은 `/products/catalog`이며, catalog `kind` preset과 연금/대출 별도 상품군 화면의 노출 수준을 구분한다. `samplebank`는 production public catalog UI/API에서 노출하지 않는다.
+- `/products/pension`은 금감원 통합연금포털 OpenAPI를 `pnpm pension:sync`로 수집한 `.data/fss_pension_*_snapshot.json`만 읽는 공개 GET `/api/products/pension`을 사용한다. 기본 탭은 원리금보장 연금저축보험, 상품별 탭은 판매 중·연평균 수수료율 낮은 순이 기본이다. 화면은 "통합연금포털(금융감독원) 콘텐츠"와 원문 링크, 공시 기준·수집 시각·오래된 자료(수집 7일 초과, 기준이 2분기/6개월 이상 뒤처짐)·미공시 분기를 표시하고, 스냅샷 없음(409 `SNAPSHOT_MISSING`)과 손상(500 `SNAPSHOT_INVALID`)을 빈 목록으로 숨기지 않는다. 연금저축은 비교함·즐겨찾기를 지원하지 않는다. 이전 `GET /api/finlife/pension`은 제거했고, 저장된 `finlife:pension:*` 비교·상세 id는 `GET /api/products/unified/item`이 410 `PRODUCT_RETIRED`로 거부해 새 화면을 안내한다.
 - `/api/ops/actions/preview`와 `/api/ops/actions/run`처럼 planning 저장소 작업을 registry로 실행하는 ops action route도 local/dev unlock과 CSRF 외에 routeAuth current-user scope를 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다.
 
 ## 정합성 체크 규칙

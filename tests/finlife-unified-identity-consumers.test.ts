@@ -26,7 +26,7 @@ vi.mock("../src/lib/finlife/snapshot", () => ({
 }));
 vi.mock("../src/lib/finlife/persistentSync", () => ({ runFinlifePersistentSync: vi.fn() }));
 
-import { getUnifiedProductById, UnifiedInputError } from "../src/lib/sources/unified";
+import { getUnifiedProductById, UnifiedInputError, UnifiedRetiredProductError } from "../src/lib/sources/unified";
 import { DEFAULT_UNIFIED_SOURCE_LOADERS } from "../src/lib/sources/unifiedLoaders";
 
 function row(id: number, company: string, identityKey: string | null, finPrdtCd = "SAME") {
@@ -110,6 +110,22 @@ describe("FINLIFE scoped identity in unified consumers", () => {
     const item = await getUnifiedProductById({ id: "finlife:credit-loan:0010016:WR0002F:3" });
     expect(item?.stableId).toBe("finlife:credit-loan:0010016:WR0002F:3");
     await expect(getUnifiedProductById({ id: "WR0002F" })).rejects.toBeInstanceOf(UnifiedInputError);
+  });
+
+  it("refuses stored FINLIFE pension rows as retired instead of serving old data", async () => {
+    const pension = {
+      ...row(5, "0010003", "finlife:pension:0010003:PEN", "PEN"),
+      kind: "pension",
+      raw: { fin_co_no: "0010003", fin_prdt_cd: "PEN", pnsn_kind: "1", prdt_type: "1" },
+    };
+    database.rows = [pension];
+    await expect(getUnifiedProductById({ id: "finlife:pension:0010003:PEN" })).rejects.toMatchObject({
+      name: "UnifiedRetiredProductError",
+      replacementHref: "/products/pension",
+    });
+    // A scoped pension id is retired even when the row is gone, and a legacy bare code still resolves to the pension row.
+    await expect(getUnifiedProductById({ id: "finlife:pension:0010009:GONE" })).rejects.toBeInstanceOf(UnifiedRetiredProductError);
+    await expect(getUnifiedProductById({ id: "PEN" })).rejects.toBeInstanceOf(UnifiedRetiredProductError);
   });
 
   it("rejects malformed scoped identities without falling back to bare codes", async () => {

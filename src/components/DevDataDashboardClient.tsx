@@ -38,7 +38,6 @@ type FinlifeSummary = {
 const FINLIFE_KINDS = [
   "deposit",
   "saving",
-  "pension",
   "mortgage-loan",
   "rent-house-loan",
   "credit-loan",

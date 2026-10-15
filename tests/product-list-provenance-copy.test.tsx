@@ -14,7 +14,7 @@ const mocked = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: () => undefined, push: () => undefined, refresh: () => undefined }),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => "/products/pension",
+  usePathname: () => "/products/mortgage-loan",
 }));
 
 vi.mock("@/components/products/useFinlifeProductListData", () => ({
@@ -71,7 +71,7 @@ function renderList(kind: FinlifeKind): string {
       initialTopFinGrpNo="020000"
       kind={kind}
       ratePreference="higher"
-      title={kind === "pension" ? "연금저축 상품" : "예금 상품"}
+      title={kind === "mortgage-loan" ? "주택담보대출 상품" : "예금 상품"}
     />,
   );
 }
@@ -81,10 +81,10 @@ beforeEach(() => {
 });
 
 describe("product list source and freshness copy", () => {
-  it("does not promise current data when the pension API configuration is missing", () => {
+  it("does not promise current data when the loan API configuration is missing", () => {
     mocked.state.error = "FINLIFE_API_KEY가 설정되지 않았습니다.";
 
-    const html = renderList("pension");
+    const html = renderList("mortgage-loan");
 
     expect(html).toContain("데이터 오류");
     expect(html).toContain("FINLIFE_API_KEY가 설정되지 않았습니다.");
@@ -96,9 +96,9 @@ describe("product list source and freshness copy", () => {
   it("does not promise current data before loading has completed", () => {
     mocked.state.loading = true;
 
-    const html = renderList("pension");
+    const html = renderList("mortgage-loan");
 
-    expect(html).toContain("연금저축 상품");
+    expect(html).toContain("주택담보대출 상품");
     expect(html).not.toContain("서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다.");
     expect(html).toContain("가입 전 금융회사 공시에서 금리와 조건을 다시 확인하세요.");
   });

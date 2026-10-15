@@ -3,7 +3,6 @@ import type { FallbackMeta } from "@/lib/http/fallbackMeta";
 export type FinlifeKind =
   | "deposit"
   | "saving"
-  | "pension"
   | "mortgage-loan"
   | "rent-house-loan"
   | "credit-loan";

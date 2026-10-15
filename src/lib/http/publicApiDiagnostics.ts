@@ -1,5 +1,7 @@
 export type PublicApiDiagnosticCode =
   | "BENEFITS_SNAPSHOT_MISSING"
+  | "PENSION_SNAPSHOT_MISSING"
+  | "PENSION_SNAPSHOT_INVALID"
   | "RECOMMEND_NO_CANDIDATES";
 
 type OpsDiagnostic = {
@@ -10,6 +12,8 @@ type OpsDiagnostic = {
 
 const PUBLIC_MESSAGES: Record<PublicApiDiagnosticCode, string> = {
   BENEFITS_SNAPSHOT_MISSING: "공공 혜택 기준 데이터가 아직 준비되지 않았습니다. 잠시 후 다시 조회하거나 검색 범위를 줄여 주세요.",
+  PENSION_SNAPSHOT_MISSING: "연금저축 공시 자료가 아직 준비되지 않았습니다. 통합연금포털 원문에서 같은 공시를 확인할 수 있습니다.",
+  PENSION_SNAPSHOT_INVALID: "저장된 연금저축 공시 자료를 읽지 못했습니다. 통합연금포털 원문에서 같은 공시를 확인해 주세요.",
   RECOMMEND_NO_CANDIDATES: "현재 조건에 맞는 상품 후보를 찾지 못했습니다. 조건을 넓히거나 잠시 후 다시 조회해 주세요.",
 };
 
@@ -18,6 +22,16 @@ const OPS_DIAGNOSTICS: Record<PublicApiDiagnosticCode, OpsDiagnostic> = {
     diagnosticId: "benefits.snapshot.missing",
     code: "BENEFITS_SNAPSHOT_MISSING",
     hint: "Benefits snapshot is missing. Refresh it via /api/dev/benefits/snapshot/refresh.",
+  },
+  PENSION_SNAPSHOT_MISSING: {
+    diagnosticId: "pension.snapshot.missing",
+    code: "PENSION_SNAPSHOT_MISSING",
+    hint: "FSS pension snapshot is missing under .data. Collect it with pnpm pension:sync (needs FSS_PENSION_API_KEY).",
+  },
+  PENSION_SNAPSHOT_INVALID: {
+    diagnosticId: "pension.snapshot.invalid",
+    code: "PENSION_SNAPSHOT_INVALID",
+    hint: "FSS pension snapshot failed validation. Re-collect it with pnpm pension:sync and check the snapshot contract.",
   },
   RECOMMEND_NO_CANDIDATES: {
     diagnosticId: "recommend.no_candidates",

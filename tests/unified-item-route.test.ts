@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocked = vi.hoisted(() => ({
   getUnifiedProductById: vi.fn(),
   UnifiedInputError: class UnifiedInputError extends Error {},
+  UnifiedRetiredProductError: class UnifiedRetiredProductError extends Error {
+    constructor(message: string, readonly replacementHref: string) {
+      super(message);
+    }
+  },
   getProductFreshnessSummary: vi.fn(),
 }));
 
@@ -13,6 +18,7 @@ vi.mock("@/lib/sources/productFreshness", () => ({
 vi.mock("@/lib/sources/unified", () => ({
   getUnifiedProductById: mocked.getUnifiedProductById,
   UnifiedInputError: mocked.UnifiedInputError,
+  UnifiedRetiredProductError: mocked.UnifiedRetiredProductError,
 }));
 
 import { GET } from "../src/app/api/products/unified/item/route";
@@ -58,6 +64,20 @@ describe("GET /api/products/unified/item", () => {
     expect(json.ok).toBe(false);
     expect(json.error?.code).toBe("NO_DATA");
     expect(typeof json.error?.message).toBe("string");
+  });
+
+  it("returns 410 PRODUCT_RETIRED with the replacement screen for a retired source", async () => {
+    mocked.getUnifiedProductById.mockRejectedValue(
+      new mocked.UnifiedRetiredProductError("이전 데이터 제공을 종료했습니다.", "/products/pension"),
+    );
+
+    const res = await GET(new Request("http://localhost/api/products/unified/item?id=finlife:pension:0010003:OLD"));
+    const json = await res.json() as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string; replacementHref?: string } };
+
+    expect(res.status).toBe(410);
+    expect(json.ok).toBe(false);
+    expect(json.data).toBeUndefined();
+    expect(json.error).toMatchObject({ code: "PRODUCT_RETIRED", message: "이전 데이터 제공을 종료했습니다.", replacementHref: "/products/pension" });
   });
 
   it("returns item payload on success", async () => {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isDebugEnabled, makeHttpError } from "../../../../../lib/http/apiError";
 import { isSamplebankProductId, isSamplebankPublicAccessAllowed } from "@/lib/products/samplebankPolicy";
-import { getUnifiedProductById, UnifiedInputError } from "@/lib/sources/unified";
+import { getUnifiedProductById, UnifiedInputError, UnifiedRetiredProductError } from "@/lib/sources/unified";
 import { getProductFreshnessSummary } from "@/lib/sources/productFreshness";
 import type { UnifiedKind, UnifiedSourceId } from "@/lib/sources/types";
 
@@ -74,6 +74,18 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof UnifiedRetiredProductError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            ...makeHttpError("PRODUCT_RETIRED", error.message, { debugEnabled, debug: { id } }),
+            replacementHref: error.replacementHref,
+          },
+        },
+        { status: 410 },
+      );
+    }
     if (error instanceof UnifiedInputError) {
       return NextResponse.json(
         {

@@ -8,7 +8,6 @@ export const runtime = "nodejs";
 type FinlifeKind =
   | "deposit"
   | "saving"
-  | "pension"
   | "mortgage-loan"
   | "rent-house-loan"
   | "credit-loan";

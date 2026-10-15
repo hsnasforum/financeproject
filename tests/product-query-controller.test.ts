@@ -5,7 +5,7 @@ import { buildProductExplorerQueryTarget } from "../src/components/products/useP
 describe("product query controller", () => {
   it("serializes the full explorer state with the existing query names and order", () => {
     const target = buildProductExplorerQueryTarget({
-      kind: "pension",
+      kind: "mortgage-loan",
       topFinGrpNo: "030300",
       pageNo: 4,
       scanMode: "all",
@@ -31,7 +31,7 @@ describe("product query controller", () => {
 
   it("omits default product-view filters without changing page-mode parameters", () => {
     const target = buildProductExplorerQueryTarget({
-      kind: "pension",
+      kind: "mortgage-loan",
       topFinGrpNo: "020000",
       pageNo: 3,
       scanMode: "page",

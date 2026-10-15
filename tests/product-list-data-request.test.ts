@@ -10,7 +10,7 @@ function responsePayload(overrides: Record<string, unknown> = {}) {
     ok: true,
     mode: "live",
     meta: {
-      kind: "pension",
+      kind: "mortgage-loan",
       pageNo: 1,
       topFinGrpNo: "030300",
       fallbackUsed: true,
@@ -23,7 +23,7 @@ function responsePayload(overrides: Record<string, unknown> = {}) {
 }
 
 const request = {
-  kind: "pension" as const,
+  kind: "mortgage-loan" as const,
   topFinGrpNo: "030300",
   pageNo: 4,
   scanMode: "all" as const,
@@ -49,7 +49,7 @@ describe("product list data request", () => {
     });
 
     expect(observedUrl).toBe(
-      "/api/finlife/pension?topFinGrpNo=030300&pageNo=1&pageSize=50&scan=all&maxPages=auto",
+      "/api/finlife/mortgage-loan?topFinGrpNo=030300&pageNo=1&pageSize=50&scan=all&maxPages=auto",
     );
     expect(observedInit?.cache).toBe("no-store");
     expect(observedInit?.signal).toBe(controller.signal);

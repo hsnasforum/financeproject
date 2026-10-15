@@ -9,8 +9,20 @@ export const FSS_PENSION_SOURCE = Object.freeze({
   id: "fss-lifeplan-openapi",
   name: "통합연금포털(금융감독원) OpenAPI",
   attribution: "통합연금포털(금융감독원) 콘텐츠",
-  url: "https://www.fss.or.kr/fss/lifeplan/goodsCmpr/list.do?menuNo=200961",
+  url: "https://www.fss.or.kr/fss/lifeplan/goodsCmpr/list4.do?menuNo=201274",
 });
+
+// The portal pages that publish each dataset (checked 2026-10-15); screens link here as the original source.
+export const FSS_PENSION_PAGES = Object.freeze({
+  products: "https://www.fss.or.kr/fss/lifeplan/goodsCmpr/list4.do?menuNo=201274",
+  guaranteed: "https://www.fss.or.kr/fss/lifeplan/svingsInsrnc/list.do?menuNo=200971",
+});
+
+export const FSS_PENSION_PRODUCTS_SNAPSHOT = "fss_pension_products_snapshot.json";
+export const FSS_PENSION_GUARANTEED_SNAPSHOT = "fss_pension_guaranteed_snapshot.json";
+export const FSS_PENSION_SCHEMA_VERSION = 1;
+// Quarterly/monthly disclosures: a collection receipt older than this no longer proves the newest period was checked.
+export const FSS_PENSION_SNAPSHOT_MAX_AGE_DAYS = 7;
 
 export const FSS_PENSION_PRODUCT_AREAS = Object.freeze([
   Object.freeze({ code: 1, label: "은행" }),

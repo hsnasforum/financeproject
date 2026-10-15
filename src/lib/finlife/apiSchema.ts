@@ -45,7 +45,6 @@ function isFinlifeKind(value: unknown): value is FinlifeSourceResult["meta"]["ki
   return (
     value === "deposit" ||
     value === "saving" ||
-    value === "pension" ||
     value === "mortgage-loan" ||
     value === "rent-house-loan" ||
     value === "credit-loan"

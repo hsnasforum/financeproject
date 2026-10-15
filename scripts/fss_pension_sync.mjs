@@ -7,7 +7,11 @@ import dotenv from "dotenv";
 import {
   FSS_PENSION_API_BASE_URL,
   FSS_PENSION_GUARANTEED_AREAS,
+  FSS_PENSION_GUARANTEED_SNAPSHOT,
+  FSS_PENSION_PAGES,
   FSS_PENSION_PRODUCT_AREAS,
+  FSS_PENSION_PRODUCTS_SNAPSHOT,
+  FSS_PENSION_SCHEMA_VERSION,
   FSS_PENSION_SOURCE,
   FssPensionError,
   classifyFssPensionResult,
@@ -16,9 +20,7 @@ import {
   normalizeFssPensionProductRows,
 } from "../src/lib/publicApis/providers/fssPension.mjs";
 
-export const FSS_PENSION_PRODUCTS_SNAPSHOT = "fss_pension_products_snapshot.json";
-export const FSS_PENSION_GUARANTEED_SNAPSHOT = "fss_pension_guaranteed_snapshot.json";
-export const FSS_PENSION_SCHEMA_VERSION = 1;
+export { FSS_PENSION_GUARANTEED_SNAPSHOT, FSS_PENSION_PRODUCTS_SNAPSHOT, FSS_PENSION_SCHEMA_VERSION };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Freshness allows 7 days; refreshing after 3 keeps a margin for a few failed daily runs.
@@ -106,7 +108,7 @@ export async function collectFssPensionSnapshots({ apiKey, fetchImpl = globalThi
   return {
     products: {
       schemaVersion: FSS_PENSION_SCHEMA_VERSION,
-      source: { ...FSS_PENSION_SOURCE, endpoint: "psProdList2" },
+      source: { ...FSS_PENSION_SOURCE, url: FSS_PENSION_PAGES.products, endpoint: "psProdList2" },
       generatedAt,
       asOf: { year: products.candidate.year, quarter: products.candidate.quarter, label: quarterLabel(products.candidate) },
       selection: { attempts: products.attempts, quartersBehind: products.quartersBehind },
@@ -123,7 +125,7 @@ export async function collectFssPensionSnapshots({ apiKey, fetchImpl = globalThi
     },
     guaranteed: {
       schemaVersion: FSS_PENSION_SCHEMA_VERSION,
-      source: { ...FSS_PENSION_SOURCE, endpoint: "psGuaranteedProdList" },
+      source: { ...FSS_PENSION_SOURCE, url: FSS_PENSION_PAGES.guaranteed, endpoint: "psGuaranteedProdList" },
       generatedAt,
       asOf: { reportMonth: guaranteed.reportMonth, label: `${reportYear}년 ${Number(reportMonthNumber)}월` },
       areas: guaranteed.areas.map(({ area, result }) => ({

@@ -52,6 +52,7 @@ type UnifiedItemResponse = {
   error?: {
     code?: string;
     message?: string;
+    replacementHref?: string;
   };
 };
 
@@ -115,6 +116,7 @@ function ProductIdentifierDisclosure({
 export function UnifiedProductDetailClient({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [retiredHref, setRetiredHref] = useState("");
   const [item, setItem] = useState<UnifiedItem | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string>("");
   const [freshness, setFreshness] = useState<ProductFreshnessSummary | null>(null);
@@ -127,6 +129,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
     async function run() {
       setLoading(true);
       setError("");
+      setRetiredHref("");
       setCompareMessage("");
       try {
         const params = new URLSearchParams();
@@ -137,7 +140,12 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
         if (!res.ok || !json.ok || !json.data?.item) {
           const code = json.error?.code ?? "UPSTREAM";
           const message = json.error?.message ?? "상품 상세를 불러오지 못했습니다.";
-          setError(`${code}: ${message}`);
+          if (code === "PRODUCT_RETIRED") {
+            setError(message);
+            setRetiredHref(json.error?.replacementHref ?? "/products");
+          } else {
+            setError(`${code}: ${message}`);
+          }
           setItem(null);
           return;
         }
@@ -205,6 +213,14 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
           <div className="py-20">
             <LoadingState title="상품 정보를 불러오는 중입니다" />
           </div>
+        ) : retiredHref ? (
+          <EmptyState
+            title="제공이 끝난 상품 정보입니다"
+            description={error}
+            icon="data"
+            actionLabel="새 화면으로 이동"
+            onAction={() => window.location.href = retiredHref}
+          />
         ) : error ? (
           <EmptyState
             title="상품을 찾을 수 없습니다"

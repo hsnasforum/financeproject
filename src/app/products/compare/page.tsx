@@ -56,6 +56,7 @@ type UnifiedItemResponse = {
   error?: {
     code?: string;
     message?: string;
+    replacementHref?: string;
   };
 };
 
@@ -63,6 +64,8 @@ type CompareCell = {
   id: string;
   item: UnifiedItem | null;
   error?: string;
+  /** Set when the stored id belongs to a retired source (e.g. FINLIFE 연금저축); points to its replacement screen. */
+  retiredHref?: string;
   freshness?: ProductFreshnessSummary | null;
 };
 
@@ -131,6 +134,9 @@ export default function ProductsComparePage() {
             if (!res.ok || !json.ok || !json.data?.item) {
               const code = json.error?.code ?? "UPSTREAM";
               const message = json.error?.message ?? "상품 조회 실패";
+              if (code === "PRODUCT_RETIRED") {
+                return { id, item: null, error: message, retiredHref: json.error?.replacementHref ?? "/products" };
+              }
               return { id, item: null, error: `${code}: ${message}` };
             }
             return { id, item: json.data.item, freshness: json.meta?.freshness ?? null };
@@ -278,7 +284,7 @@ export default function ProductsComparePage() {
                             <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-10 w-10" />
                             <div>
                               <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
-                              <h3 className="mt-1 font-black text-navy leading-snug line-clamp-2">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
+                              <h3 className="mt-1 font-black text-navy leading-snug line-clamp-2">{cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")}</h3>
                             </div>
                             <Link
                               href={`/products/catalog/${encodeURIComponent(cell.id)}`}
@@ -368,7 +374,12 @@ export default function ProductsComparePage() {
                       </td>
                       {cells.map((cell) => (
                         <td key={`summary-${cell.id}`} className="p-5 px-6 text-xs leading-relaxed text-slate-600 border-r border-slate-100 last:border-0">
-                          {cell.error ? (
+                          {cell.retiredHref ? (
+                            <span className="font-bold text-amber-700">
+                              {cell.error}{" "}
+                              <Link href={cell.retiredHref} className="underline underline-offset-2">새 화면에서 보기</Link>
+                            </span>
+                          ) : cell.error ? (
                             <span className="font-bold text-rose-600">{cell.error}</span>
                           ) : (
                             (cell.item?.summary ?? (cell.item?.badges ?? []).join(", ")) || "-"
@@ -403,7 +414,7 @@ export default function ProductsComparePage() {
                       <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-12 w-12" />
                       <div>
                         <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
-                        <h3 className="mt-1 font-black text-navy leading-tight">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
+                        <h3 className="mt-1 font-black text-navy leading-tight">{cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")}</h3>
                       </div>
                     </div>
 
@@ -445,7 +456,12 @@ export default function ProductsComparePage() {
                       <div className="pt-4 border-t border-slate-50 px-2">
                         <p className="text-[11px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{readThroughCopy.summaryLabel}</p>
                         <p className="text-xs leading-relaxed text-slate-600 italic">
-                          {cell.error ? (
+                          {cell.retiredHref ? (
+                            <span className="font-bold text-amber-700">
+                              {cell.error}{" "}
+                              <Link href={cell.retiredHref} className="underline underline-offset-2">새 화면에서 보기</Link>
+                            </span>
+                          ) : cell.error ? (
                             <span className="font-bold text-rose-600">{cell.error}</span>
                           ) : (
                             (cell.item?.summary ?? (cell.item?.badges ?? []).join(", ")) || "-"

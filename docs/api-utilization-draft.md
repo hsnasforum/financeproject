@@ -64,7 +64,6 @@
   - `GET /api/finlife/company`
   - `GET /api/finlife/deposit`
   - `GET /api/finlife/saving`
-  - `GET /api/finlife/pension`
   - `GET /api/finlife/mortgage-loan`
   - `GET /api/finlife/rent-house-loan`
   - `GET /api/finlife/credit-loan`
@@ -73,7 +72,7 @@
   - `/products/mortgage-loan`
   - `/products/rent-house-loan`
   - `/products/credit-loan`
-  - 연금저축은 현재 UI 페이지를 제공하지 않고 API(`GET /api/finlife/pension`)만 유지한다.
+  - 연금저축은 2026-10-15부터 FINLIFE를 쓰지 않는다. `/products/pension`은 금감원 통합연금포털 OpenAPI를 `pnpm pension:sync`로 수집한 스냅샷을 `GET /api/products/pension`으로 읽는다([fss-pension-openapi.md](fss-pension-openapi.md)). `GET /api/finlife/pension`은 제거했다.
 - 필수/선택 env:
   - `FINLIFE_API_KEY` (권장, 없으면 mock 모드)
   - `FINLIFE_BASE_URL` (optional, 기본 `https://finlife.fss.or.kr/finlifeapi`)

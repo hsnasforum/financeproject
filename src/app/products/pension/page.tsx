@@ -1,6 +1,6 @@
-import { headers } from "next/headers";
-import { ProductListPage } from "@/components/ProductListPage";
+import { PensionProductsClient } from "@/components/products/PensionProductsClient";
 import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
+import { FSS_PENSION_PAGES } from "@/lib/publicApis/providers/fssPension.mjs";
 
 export const metadata = PUBLIC_PAGE_METADATA["/products/pension"];
 
@@ -10,11 +10,7 @@ export default async function PensionProductsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const topFinGrpNo = typeof params.topFinGrpNo === "string" ? params.topFinGrpNo : "020000";
-  const pageNoRaw = typeof params.pageNo === "string" ? Number(params.pageNo) : 1;
-  const pageNo = Number.isFinite(pageNoRaw) && pageNoRaw > 0 ? pageNoRaw : 1;
-  const requestHeaders = await headers();
-  const scriptNonce = requestHeaders.get("x-nonce") ?? undefined;
+  const initialTab = params.tab === "products" ? "products" : "guaranteed";
 
-  return <ProductListPage kind="pension" title="연금저축 상품" ratePreference="higher" initialTopFinGrpNo={topFinGrpNo} initialPageNo={pageNo} scriptNonce={scriptNonce} />;
+  return <PensionProductsClient initialTab={initialTab} sourcePages={FSS_PENSION_PAGES} />;
 }

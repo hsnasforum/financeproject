@@ -37,6 +37,7 @@ import {
 } from "@/lib/sources/unifiedEnrichPolicy";
 import {
   UnifiedInputError,
+  UnifiedRetiredProductError,
   type UnifiedDataPartialReason,
   type EnrichSourceId,
   type UnifiedProductView,
@@ -47,7 +48,15 @@ import {
   type UnifiedSnapshotProvenance,
 } from "@/lib/sources/unifiedTypes";
 
-export { UnifiedInputError } from "@/lib/sources/unifiedTypes";
+export { UnifiedInputError, UnifiedRetiredProductError } from "@/lib/sources/unifiedTypes";
+
+// FINLIFE 연금저축 moved to the 통합연금포털 disclosure, which has no product codes to match stored ids against.
+function retiredPensionProductError(): UnifiedRetiredProductError {
+  return new UnifiedRetiredProductError(
+    "연금저축 상품 정보는 통합연금포털(금융감독원) 공시로 바뀌어 이전 데이터 제공을 종료했습니다. 연금저축 화면에서 최신 공시를 확인하세요.",
+    "/products/pension",
+  );
+}
 export type {
   EnrichSourceId,
   UnifiedMode,
@@ -1521,6 +1530,7 @@ export async function getUnifiedProductById(input: {
     let finlife: Prisma.ProductGetPayload<{ select: typeof select }> | null;
     if (isScoped) {
       const kind = parts[0];
+      if (kind === "pension") throw retiredPensionProductError();
       let code: string;
       let identityKey: string;
       try {
@@ -1552,6 +1562,8 @@ export async function getUnifiedProductById(input: {
       finlife = legacy[0] ?? null;
     }
     if (!finlife) return null;
+    // A legacy unscoped id can still resolve to a stored FINLIFE pension row.
+    if (finlife.kind === "pension") throw retiredPensionProductError();
 
     const canonical = buildFinlifeItemFromProductRow(finlife, includeTimestamps);
     if (finlife.kind !== "deposit") return canonical;

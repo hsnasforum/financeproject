@@ -11,6 +11,14 @@ export class UnifiedInputError extends Error {
   }
 }
 
+/** A stored id whose source no longer feeds this catalog (e.g. FINLIFE 연금저축); old rows are not served as current data. */
+export class UnifiedRetiredProductError extends Error {
+  constructor(message: string, readonly replacementHref: string) {
+    super(message);
+    this.name = "UnifiedRetiredProductError";
+  }
+}
+
 export type EnrichSourceId = "datago_kdb";
 
 export type UnifiedMode = "merged" | "integrated";
