@@ -101,12 +101,16 @@ export async function verifyPlanningDesktopArtifact({
 } = {}) {
   assertVerifyMode(mode);
   const root = path.resolve(artifactDir);
-  await Promise.all([
-    assertRegularFile(path.join(root, DESKTOP_MANIFEST_FILENAME), "desktop manifest"),
-    assertRegularFile(path.join(root, "package.json"), "package.json"),
-    assertRegularFile(path.join(root, "pnpm-lock.yaml"), "pnpm lockfile"),
-    assertRegularFile(path.join(root, ".env.local.example"), "desktop environment template"),
-  ]);
+  // Check in a fixed order: with Promise.all the first lstat to settle decided which missing file
+  // was reported, so input without a manifest could fail on package.json instead.
+  for (const [relativePath, label] of [
+    [DESKTOP_MANIFEST_FILENAME, "desktop manifest"],
+    ["package.json", "package.json"],
+    ["pnpm-lock.yaml", "pnpm lockfile"],
+    [".env.local.example", "desktop environment template"],
+  ]) {
+    await assertRegularFile(path.join(root, relativePath), label);
+  }
 
   const manifest = await readDesktopManifest(root);
   requireEqual("kind", asString(manifest.kind), DESKTOP_MANIFEST_KIND);
