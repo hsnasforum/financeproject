@@ -1,6 +1,13 @@
 # 2026-10-18 Finance 공식 데이터 갱신 1단계 (격리 수집·품질 검증·실제 DB 쓰기 준비)
 
-## 현재 상태 (클로드 1호, 2026-10-19 04:20 KST 검증 cutoff = source B 125 완료 직후 — 이 절이 최신입니다. 아래 시각이 적힌 절들은 그 시점의 기록입니다)
+## 현재 상태 (클로드 1호, 2026-10-19 06:20 KST 검증 cutoff = 최종 build 개인정보 포함 차단 보완 직후 — 이 절이 최신입니다. 아래 시각이 적힌 절들은 그 시점의 기록입니다)
+- local commit `5fda7dd876fa5661be4d06dfee7d9c2e3c4c5597`(parent `901091c8`, 공식 데이터·FX·카탈로그·패키징 28개 경로)은 push 전입니다.
+- 그 HEAD의 원본 production build는 exit 0이었지만, 새 `.next`의 trace·standalone 감사에서 실제 `.env`·`.env.local`·`dev.db`·tmp private DB 사본이 포함되어 FAIL했습니다(130, `tmp/finance-final-20261019/REPORT-02.md`). 아래 "최종 source build 개인정보 포함 차단" 절이 그 원인과 보완입니다.
+- 보완은 격리 W에서만 검증했습니다. 원본 재build·원본 runtime·브라우저·desktop artifact·push·CI는 이 기록 commit 이후 단계이며 아직 PASS가 아닙니다. 그 결과는 commit 대상이 아닌 `tmp/finance-privacy-final-20261019/`에 남깁니다.
+- 원본 `.next/standalone`에는 130 build의 민감 사본(`.env`, `.env.local`, `dev.db` 등)이 아직 있습니다. Git 대상이 아니며, 원본 재build가 Next의 standalone 재생성으로 그 생성물만 교체합니다.
+- 만료 시각은 아래 04:20 기록과 같습니다(환율 receipt 2026-10-19T12:10Z).
+
+## 이전 상태 기록 (클로드 1호, 2026-10-19 04:20 KST cutoff = source B 125 완료 직후)
 - **원본에 반영된 것**(아래 "source B 실행과 공식 snapshot 승격" 절, 원시 증거 `tmp/finance-source-refresh-20261019/`)
   - 원본 `dev.db`: 정식 `finlife:sync`로 공식 상품 테이블만 갱신(상품 217·옵션 663·provider 19). 개인·비대상 보호 집합 불변.
   - 비공개 backup: `/home/xpdlqj/code/finance-private-backups/20261019-20261018T191226Z/`(Git 밖, 0700/0600).
@@ -26,6 +33,7 @@
 
 ## 변경 파일
 - `work/10/18/2026-10-18-finance-official-data-refresh.md`(이 기록, 신규)
+- 최종 source build 개인정보 포함 차단(2026-10-19 06:20 KST, 5fda7dd의 후속): `next.config.ts`, `scripts/standalone_privacy_gate.mjs`·`.d.mts`(신규), `scripts/next_build_safe.mjs`, `scripts/next_prod_safe.mjs`, `scripts/planning_v2_desktop_build.mjs`, `src/app/api/dev/backup/import/route.ts`, `src/app/api/dev/recovery/reset/route.ts`, `tests/standalone-privacy-gate.test.ts`(신규), `tests/desktop-artifact-provenance.test.ts`
 - 공식 데이터 승격(B125, 2026-10-19 04:15 KST): `.data/finlife_deposit_snapshot.json`, `.data/finlife_saving_snapshot.json`, `.data/finlife_mortgage-loan_snapshot.json`, `.data/finlife_rent-house-loan_snapshot.json`, `.data/finlife_credit-loan_snapshot.json`, `.data/benefits_snapshot.json`, `.data/exchange_snapshot.json`. `dev.db`, 비공개 backup, tmp 증거는 Git 대상이 아닙니다.
 - 사용 흐름 결함 2건 수정(아래 "카탈로그 준비 상태·환율 키 호환", 20:43 KST까지):
   - `src/app/products/catalog/page.tsx`
@@ -263,6 +271,38 @@
   - 실제 secret 값(최종 child env 13개, 인코딩 변형 15개)을 메모리에서만 비교: 47파일과 REPORT에서 hit 0
 - 정책 거부 1회: overlay 실패 시에도 FX 검사를 이어 가는 명령 조합이 거부되어, 실패하면 멈추는 순차 실행으로 바꿨습니다.
 
+## 최종 source build 개인정보 포함 차단 (클로드 1호, 2026-10-19 06:20 KST, 협의 131~135 합의 구현)
+- 원시 증거: `tmp/finance-privacy-final-20261019/`(`.gitignore` `*`, commit 대상 아님). 130 실패 build의 원시 로그와 감사는 `tmp/finance-final-20261019/`에 그대로 둡니다.
+- **원인(설치된 Next 16.3.8 소스와 소규모 합성 재현으로 확인)**
+  - webpack route trace는 각 모듈의 변환 소스를 nft로 분석합니다(`next-trace-entrypoints-plugin.js:280-286`).
+  - nft는 `process.cwd()` 기반 정적 경로식이 디렉터리를 가리키면 그 디렉터리 전체를 glob합니다. 이때 그 안의 링크를 따라갑니다.
+  - `backup/import` route의 `fs.mkdirSync(path.dirname(<cwd>/tmp/backup_restore_point.json))`와 `recovery/reset`의 `path.join(process.cwd(), "tmp")`가 원본 tmp 전체(27,494개)를 끌어들였습니다. tmp 안의 repo-root 링크를 따라가 루트의 `.env`·`.env.local`·`dev.db`와 루트 디렉터리 자체까지 들어갔습니다(`r1-nft-reasons-2.json`, 130 nft의 route별 집계).
+  - Next는 `.env`·`.env.production`을 trace와 무관하게 standalone에 복사합니다(`next/dist/build/index.js:327-346`).
+  - Next는 trace 복사 실패를 경고만 남기고 exit 0으로 끝냅니다(`next/dist/build/utils.js:1080-1100`).
+- **보완**
+  - `next.config.ts`
+    - route trace 제외에 `.data`·`tmp`·`work`·`__meta`·`.claude`·`.dist`·`.git`·루트 `.env*`·`env.local`·DB 파일을 추가했습니다.
+    - `next-server` 키는 기존 `.data`만 둡니다. 이 키의 패턴은 root-relative 부분 문자열로 적용되어서(`collect-build-traces.js:86-97,185-216`), 1차 W 회귀에서 `./work/**/*`가 Next 자체 `next/dist/lib/framework/*`를 지웠습니다. 되돌린 뒤 next-server trace(node_modules 2,026개)가 130 원본과 같아졌습니다.
+  - 두 dev route: 작업 디렉터리를 함수 호출로 얻어 tracer가 tmp 디렉터리를 정적으로 평가하지 못하게 했습니다. runtime 경로는 같습니다(`r2-nft-p2-patch.json`, 수정 후 trace에 tmp·env·db 0).
+  - 신규 `scripts/standalone_privacy_gate.mjs`
+    - trace 목록 감사: 프로젝트 루트·디렉터리 항목·프로젝트 밖·private class
+    - standalone 감사: 실제 env·DB·tmp 계열·private 경로·standalone 밖 링크, `.data`는 공식 9개(+attempt marker)만
+    - Next가 만든 정확한 `standalone/.env`만 제거합니다. 일반 파일·single link·원본과 다른 inode일 때만 지우며, `.env.production`이 있으면 지우지 않고 FAIL합니다.
+    - BUILD_ID에 묶인 receipt를 발급하고 확인합니다.
+  - `scripts/next_build_safe.mjs`
+    - build 시작 때 이전 receipt를 무효화합니다.
+    - "Failed to copy traced files" 경고가 나오면 build를 실패시킵니다.
+    - gate와 공식 9개 준비가 모두 성공한 뒤에만 receipt를 발급합니다.
+  - `scripts/next_prod_safe.mjs`: 선택된 dist(분리 dist 포함)와 next-start fallback 모두 receipt가 있어야 시작합니다. managed 설치는 기존 설치 identity 확인(설치 시 checksum 검증)을 따르고, 개인 managed root는 다시 스캔하지 않습니다.
+  - `scripts/planning_v2_desktop_build.mjs`: 복사 전 source standalone 입력 감사, checksum 전 staged artifact 최종 감사를 추가했습니다. 최종 artifact의 외부 링크는 0개여야 합니다.
+- **검증(격리 W = HEAD 5fda7dd archive + 이 보완, 자체 node_modules 사본, 합성 canary만 사용)**
+  - 수정 전 재현(P2를 되돌림 + tmp의 repo-root·외부 링크): build exit 1, receipt 없음, launcher 기동 거부(exit 1, bootstrap·lease·lock 없음)
+  - 수정 후 build exit 0: gate 통과, receipt 발급, `standalone/.env` 제거, 독립 감사 c2 PASS, 합성 canary 9종 hit 0(위험 링크가 있어도 trace되지 않음)
+  - source 2회 기동: 공식 launcher, one-shot 진입. server cwd = standalone. root env loader가 합성 key를 전달했고(CONFIG 아님), graceful 종료(코드 128 = writer bootstrap의 신호 종료 계약, 8초 graceful window 안), writer·lease·lock 0
+  - desktop artifact: 입력·최종 감사 통과, artifact 외부 링크 0, canary 0. disposable 설치 후 managed 2회 기동 PASS(설치본에는 source env가 없어 CONFIG)
+  - 단위 테스트: gate 11건과 desktop provenance 21건(신규 2건 포함) 통과. 영향 범위 17파일 중 2차 실행의 무관한 timeout 3건은 단독 재실행 27/27 통과. 변경 파일 eslint exit 0, typecheck exit 0
+- **미검증**: 원본 재build와 그 감사, 원본 runtime·브라우저 실사용, 원본 artifact·설치, Windows, CI
+
 ## 사용 skill
 - 없음
 
@@ -280,7 +320,11 @@
 - 원본 full test, build, runtime, 브라우저 확인은 이번에 실행하지 않았습니다.
 
 ## 남은 리스크
-- (현재, 2026-10-19 04:20 KST cutoff)
+- (현재, 2026-10-19 06:20 KST cutoff)
+  - 원본 재build 감사와 원본 runtime·artifact 확인 전에는 build 개인정보 차단이 원본에서 PASS라고 말할 수 없습니다. 원본 `.next/standalone`에는 130 build의 민감 사본이 남아 있습니다(Git 대상 아님, 재build로 교체).
+  - production standalone은 이제 원본 tmp의 사용자 피드백·restore point 등을 포함하지 않습니다. 해당 화면은 runtime에 standalone 쪽에 새로 쓰인 값만 보입니다.
+  - `next-server` trace는 `.data`만 제외하고, 나머지는 gate가 사후 감사로 막습니다.
+- (2026-10-19 04:20 KST cutoff)
   - 환율 receipt가 2026-10-19T12:10Z에 만료됩니다. 승격은 끝났지만 push와 CI freshness preflight가 그 뒤라면 정식 warm 경로로 다시 수집해야 합니다(평일 공시는 KST 11시경).
   - 원본 production build, 원본 runtime·브라우저, desktop artifact·설치본, Windows, CI는 미실행입니다.
   - 원본 `.next/standalone/.data`는 아직 이전 public snapshot입니다. 다음 build의 public snapshot 복사 단계에서 바뀌어야 합니다.
@@ -300,6 +344,7 @@
 - 설치본(desktop artifact) 데이터 전달은 이번 범위가 아니며 확인하지 않았습니다.
 
 ## 다음 라운드
-- (현재) 최종 통합: 이 기록과 승인된 경로만 local candidate commit → 그 HEAD로 원본 production build·typecheck → trace·standalone 감사 → 공식 launcher·브라우저 실사용 확인 → desktop artifact·disposable 설치 확인. 결과는 `tmp/finance-final-20261019/REPORT.md`에 남깁니다.
+- (현재, 06:20 KST) 이 보완을 5fda7dd의 후속 commit으로 남긴 뒤 원본 재build → c2 감사·실제 secret 값 메모리 비교 → 공식 launcher·브라우저 실사용 → desktop artifact·설치·managed 기동 순서로 진행하고, push와 CI는 최종 리뷰 후 별도로 진행합니다.
+- (04:20 KST 당시 계획) 최종 통합: 이 기록과 승인된 경로만 local candidate commit → 그 HEAD로 원본 production build·typecheck → trace·standalone 감사 → 공식 launcher·브라우저 실사용 확인 → desktop artifact·disposable 설치 확인. 결과는 `tmp/finance-final-20261019/REPORT.md`에 남깁니다.
 - push는 최종 독립 리뷰 뒤 별도 배정으로 하고, 이어서 CI를 확인합니다. 환율 receipt 만료(2026-10-19T12:10Z) 뒤라면 push 전에 정식 경로로 receipt를 다시 수집합니다.
 - (2026-10-18~19 당시 계획, 완료) source B 한 번 실행, after 사본 논리 동일성, B FinLife 5개와 A 혜택 snapshot 승격, 원본 build 전 E2 1파일 비교는 B125와 123에서 끝났습니다.

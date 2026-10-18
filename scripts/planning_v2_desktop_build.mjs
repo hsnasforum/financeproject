@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPnpm } from "./pnpm_runner.mjs";
 import { copyPublicSnapshots, assertPublicSnapshotDirectory } from "./public_snapshot_assets.mjs";
+import { auditArtifactTree, auditStandaloneTree, formatPrivacyViolations } from "./standalone_privacy_gate.mjs";
 import {
   DESKTOP_MANIFEST_KIND,
   DESKTOP_PROVENANCE_VERSION,
@@ -658,6 +659,13 @@ async function main() {
   for (const relativePath of REQUIRED_V3_ARTIFACT_FILES) {
     await ensureFileExists(path.join(cwd, relativePath));
   }
+  // Input audit before anything is copied: private paths in the source standalone stop the build here.
+  if (await lstatOrNull(sourceStandaloneDir)) {
+    const inputAudit = auditStandaloneTree({ standaloneDir: sourceStandaloneDir, phase: "source-input", projectRoot: cwd, distDir: ".next" });
+    if (!inputAudit.ok) {
+      throw new Error(`desktop standalone input failed the privacy audit (${inputAudit.violationCount}): ${formatPrivacyViolations(inputAudit)}`);
+    }
+  }
 
   const artifactParent = path.dirname(outputArtifactDir);
   await fs.mkdir(artifactParent, { recursive: true });
@@ -714,6 +722,11 @@ async function main() {
     throw new Error("git SHA could not be resolved for desktop provenance manifest");
   }
   const lockfileDigest = await lockfileSha256(cwd);
+  // Final audit of the staged artifact before its checksum and manifest exist.
+  const finalAudit = auditArtifactTree({ artifactDir });
+  if (!finalAudit.ok) {
+    throw new Error(`desktop artifact failed the privacy audit (${finalAudit.violationCount}): ${formatPrivacyViolations(finalAudit)}`);
+  }
   const artifactChecksum = await computeArtifactChecksum(artifactDir);
   const manifest = {
     kind: DESKTOP_MANIFEST_KIND,

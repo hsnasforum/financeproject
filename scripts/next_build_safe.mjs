@@ -12,6 +12,14 @@ import {
 } from "./next_artifact_prune.mjs";
 import { prepareSourceSnapshotAssets } from "./public_snapshot_assets.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
+import {
+  TRACE_COPY_FAILURE_PATTERN,
+  auditStandaloneBuild,
+  formatPrivacyViolations,
+  invalidateStandalonePrivacyReceipt,
+  removeGeneratedStandaloneEnv,
+  writeStandalonePrivacyReceipt,
+} from "./standalone_privacy_gate.mjs";
 
 const fallbackDistDir = (process.env.BUILD_FALLBACK_DIST_DIR ?? ".next-build").trim() || ".next-build";
 const buildHeartbeatMs = Number.parseInt(process.env.NEXT_BUILD_HEARTBEAT_MS ?? "", 10) || 20_000;
@@ -330,6 +338,16 @@ function readBuildStage() {
   }
 }
 
+// A receipt from an earlier build must never vouch for this one.
+try {
+  if (invalidateStandalonePrivacyReceipt({ projectRoot, distDir: effectiveDistDir })) {
+    console.log(`[next_build_safe] previous standalone privacy receipt invalidated distDir=${effectiveDistDir}`);
+  }
+} catch (error) {
+  console.error("[next_build_safe] standalone privacy receipt invalidation failed", error.message);
+  process.exit(1);
+}
+
 const child = spawn(process.execPath, [nextBin, "build", ...process.argv.slice(2)], {
   stdio: ["inherit", "pipe", "pipe"],
   env,
@@ -339,10 +357,37 @@ let forwardedParentSignal = "";
 
 let lastOutputAt = Date.now();
 const buildStartedAt = lastOutputAt;
+// Next.js only warns when traced files cannot be copied (the standalone output is then incomplete).
+let traceCopyFailureSeen = false;
+let outputTail = "";
 
 function forwardOutput(target, chunk) {
   lastOutputAt = Date.now();
+  const text = `${outputTail}${chunk.toString("utf8")}`;
+  if (TRACE_COPY_FAILURE_PATTERN.test(text)) traceCopyFailureSeen = true;
+  outputTail = text.slice(-128);
   target.write(chunk);
+}
+
+// Generated-output privacy: exact generated .env removal, trace + standalone audit, then the receipt that
+// next_prod_safe requires. Any failure leaves no receipt and fails the build.
+function finalizeStandalonePrivacy() {
+  if (traceCopyFailureSeen) {
+    throw new Error("next build reported 'Failed to copy traced files'; the standalone output is incomplete");
+  }
+  const removal = removeGeneratedStandaloneEnv({ projectRoot, distDir: effectiveDistDir });
+  const audit = auditStandaloneBuild({ projectRoot, distDir: effectiveDistDir });
+  if (!audit.ok) {
+    throw new Error(`standalone privacy gate failed (${audit.violationCount}): ${formatPrivacyViolations(audit)}`);
+  }
+  writeStandalonePrivacyReceipt({
+    projectRoot,
+    distDir: effectiveDistDir,
+    summary: { ...audit.counts, removedGeneratedEnv: removal.removed },
+  });
+  console.log(
+    `[next_build_safe] standalone privacy gate passed traceFiles=${audit.counts.traceFiles} files=${audit.counts.files} links=${audit.counts.links} publicSnapshots=${audit.counts.publicSnapshots} removedGeneratedEnv=${removal.removed}`,
+  );
 }
 
 child.stdout?.on("data", (chunk) => {
@@ -479,6 +524,12 @@ child.on("exit", (code, signal) => {
         console.log(`[next_build_safe] public snapshots copied=${assets.copied} removed=${assets.removed}`);
       } catch (error) {
         console.error("[next_build_safe] public snapshot preparation failed", error.message);
+        process.exit(1);
+      }
+      try {
+        finalizeStandalonePrivacy();
+      } catch (error) {
+        console.error("[next_build_safe] standalone privacy check failed", error.message);
         process.exit(1);
       }
     }

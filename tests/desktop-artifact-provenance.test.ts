@@ -243,6 +243,54 @@ describe("desktop artifact provenance", () => {
     expect(fs.readFileSync(path.join(artifactDir, "sentinel.txt"), "utf8")).toBe("keep\n");
   });
 
+  it("rejects private files in the source standalone before creating the artifact", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const standalone = path.join(projectRoot, ".next", "standalone");
+    writeFixtureFile(standalone, ".env.local", "TEST_ONLY_SECRET=1\n");
+    writeFixtureFile(standalone, "dev.db", "TEST_ONLY_DB\n");
+    writeFixtureFile(standalone, "tmp/finance-final/private/runtime.sqlite", "TEST_ONLY_DB\n");
+    writeFixtureFile(artifactDir, "sentinel.txt", "keep\n");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+    const output = `${result.stderr}\n${result.stdout}`;
+
+    expect(result.status).not.toBe(0);
+    expect(output).toContain("desktop standalone input failed the privacy audit");
+    expect(output).toContain("real-env-file .env.local");
+    expect(output).toContain("database-file dev.db");
+    expect(output).toContain("private-directory:tmp tmp");
+    expect(output).not.toContain("TEST_ONLY_SECRET");
+    expect(fs.readFileSync(path.join(artifactDir, "sentinel.txt"), "utf8")).toBe("keep\n");
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+    expect(fs.readFileSync(path.join(standalone, ".env.local"), "utf8")).toBe("TEST_ONLY_SECRET=1\n");
+  });
+
+  it("rejects a staged artifact that would carry a private file before its checksum is written", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    writeFixtureFile(projectRoot, "public/.env.local", "TEST_ONLY_SECRET=1\n");
+    writeFixtureFile(projectRoot, "prisma/migrations/0001/dev.db", "TEST_ONLY_DB\n");
+    writeFixtureFile(artifactDir, "previous.txt", "previous\n");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+    const output = `${result.stderr}\n${result.stdout}`;
+
+    expect(result.status).not.toBe(0);
+    expect(output).toContain("desktop artifact failed the privacy audit");
+    expect(output).toContain("real-env-file public/.env.local");
+    expect(output).toContain("database-file prisma/migrations/0001/dev.db");
+    expect(fs.readFileSync(path.join(artifactDir, "previous.txt"), "utf8")).toBe("previous\n");
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+    expect(fs.readdirSync(root).filter((name) => name.startsWith(".finance-desktop-stage-"))).toEqual([]);
+  });
+
   it("rejects a symlinked provenance manifest before manifest exclusion", async () => {
     const root = makeRoot();
     const artifactDir = path.join(root, "artifact");

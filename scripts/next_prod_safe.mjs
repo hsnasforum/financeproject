@@ -14,6 +14,7 @@ import { ensureStandaloneRuntimeAssets } from "./standalone_runtime_assets.mjs";
 import { assertPlanningStorageMode } from "./planning_storage_mode_guard.mjs";
 import { verifyPlanningDesktopRuntimeStartup } from "./planning_runtime_startup.mjs";
 import { spawnRegisteredPlanningWriterChild } from "./planning_writer_child.mjs";
+import { verifySourceRuntimePrivacyReceipt } from "./standalone_privacy_gate.mjs";
 
 const FORCED_HOST = "127.0.0.1";
 const DEFAULT_PORT = 3100;
@@ -211,6 +212,22 @@ async function main() {
     env: process.env,
     bindHost: FORCED_HOST,
   });
+
+  // A source build may only run when its privacy gate issued a receipt for the selected build output (standalone or
+  // the next-start fallback). A managed installation is verified instead by its installation identity
+  // (preparePublicSnapshotRuntime -> assertDesktopInstallationIdentity) after install-time checksum verification.
+  try {
+    verifySourceRuntimePrivacyReceipt({
+      projectRoot: process.cwd(),
+      standaloneDistDir: standaloneRuntime?.distDir ?? "",
+      requestedDistDir: typeof process.env.PLAYWRIGHT_DIST_DIR === "string" ? process.env.PLAYWRIGHT_DIST_DIR.trim() : "",
+      managedInstallation: Boolean(fs.lstatSync(path.join(process.cwd(), "desktop-manifest.json"), { throwIfNoEntry: false })),
+    });
+  } catch (error) {
+    console.error(`[next_prod_safe] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(2);
+    return;
+  }
 
   if (standaloneRuntime) {
     logPruneSummary(

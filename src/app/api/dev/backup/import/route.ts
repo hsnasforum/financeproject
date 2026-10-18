@@ -7,7 +7,13 @@ import { validateRuntime } from "@/lib/backup/backupValidateRuntime";
 import { guardDevMutationRequest } from "@/lib/dev/devGuards";
 import { checkPlanningIntegrity, type PlanningIntegrityReport } from "@/lib/ops/planningDoctor";
 
-const RESTORE_POINT_PATH = path.join(process.cwd(), "tmp", "backup_restore_point.json");
+// Resolved through a call on purpose: the build tracer evaluates a direct `process.cwd()` path statically and would
+// package the whole runtime tmp directory (and anything linked from it) into the standalone output.
+function runtimeWorkingDirectory(): string {
+  return process.cwd();
+}
+
+const RESTORE_POINT_PATH = path.join(runtimeWorkingDirectory(), "tmp", "backup_restore_point.json");
 
 type SkippedItem = { path: string; reason: string };
 
