@@ -1,7 +1,9 @@
 import { ButtonLink } from "@/components/ui/Button";
+import { type DashboardAuthCallbackPath } from "@/lib/planning/auth/callbackPath";
 import { type PlanningAuthError } from "@/lib/planning/auth/currentUser";
 
-type PlanningAuthCallbackPath = "/planning" | "/settings/backup";
+// Internal paths only. The dashboard variant carries a validated profile selection query.
+type PlanningAuthCallbackPath = "/planning" | "/settings/backup" | DashboardAuthCallbackPath;
 
 export function PlanningAuthRequiredState({
   error,
@@ -13,9 +15,10 @@ export function PlanningAuthRequiredState({
   const unauthenticated = error.code === "UNAUTHENTICATED";
   const desktopRecovery = error.recovery === "desktop-launcher";
   const signInHref = `/api/auth/signin?callbackUrl=${encodeURIComponent(callbackPath)}`;
+  const navigationState = callbackPath.split("?", 1)[0];
   return (
     <div className="min-h-screen bg-surface-muted px-4 py-16">
-      <section data-planning-navigation-state={callbackPath} className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+      <section data-planning-navigation-state={navigationState} className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <p className="text-xs font-black uppercase tracking-widest text-primary">
           {desktopRecovery ? "앱 세션 확인 필요" : unauthenticated ? "사용자 확인 필요" : "로컬 실행 설정 확인 필요"}
         </p>

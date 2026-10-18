@@ -14,7 +14,7 @@
     "build": "node scripts/next_build_safe.mjs --webpack",
     "build:detached": "node scripts/build_detached.mjs",
     "build:turbopack": "next build",
-    "start": "node scripts/planning_v2_desktop_launch.mjs --runtime prod --no-open",
+    "start": "node scripts/planning_v2_desktop_launch.mjs --runtime prod",
     "start:local": "node scripts/start_local.mjs",
     "start:raw": "node scripts/planning_unsupported_mode.mjs start:raw",
     "lint": "eslint src tests scripts planning next.config.ts playwright.config.ts postcss.config.mjs prisma.config.ts vitest.config.ts eslint.config.mjs",

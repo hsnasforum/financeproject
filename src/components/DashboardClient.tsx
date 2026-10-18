@@ -8,6 +8,7 @@ import {
   resolvePlanningRunIdempotencyRequest,
   type PendingPlanningRunRequest,
 } from "@/components/planning/workspace/useWorkspaceRunExecutionActions";
+import { DashboardFxSection } from "@/components/dashboard/DashboardFxSection";
 import { PageShell } from "@/components/ui/PageShell";
 import { cn } from "@/lib/utils";
 import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
@@ -15,8 +16,9 @@ import {
   DASHBOARD_REQUEST_TIMEOUT_ERROR_NAME,
   DASHBOARD_REQUEST_TIMEOUT_MESSAGE,
   INITIAL_DASHBOARD_STATE as INITIAL_STATE,
-  asDashboardNumber as asNumber,
   asDashboardString as asString,
+  describeDashboardExchangeFailure as describeExchangeFailure,
+  describeDashboardFxFailure as describeFxFailure,
   fetchDashboardJson,
   formatDashboardDate as formatDate,
   formatDashboardDateTime as formatDateTime,
@@ -30,10 +32,13 @@ import {
   isDashboardRecord as isRecord,
   parseDashboardBenefits as parseBenefits,
   parseDashboardDataSources as parseDataSources,
-  parseDashboardFxItems as parseFxItems,
+  parseDashboardExchange as parseExchange,
+  parseDashboardFx as parseFx,
   parseDashboardSourceStatuses as parseSourceStatuses,
   truncateDashboardText as truncate,
+  DASHBOARD_UNKNOWN_PROFILE_LABEL,
   type DashboardInitialViewModel,
+  type DashboardProfileSelection,
   type DashboardState,
 } from "@/components/dashboard/dashboardClientModel";
 
@@ -72,6 +77,36 @@ function DashboardMetric({ label, value, description, emphasis = false, negative
       <p className={cn("mt-2 break-words font-bold tracking-tight tabular-nums", emphasis ? "text-4xl sm:text-5xl" : "text-xl", negative ? "text-rose-800" : "text-navy")}>{value}</p>
       {description ? <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p> : null}
     </div>
+  );
+}
+
+// A native GET form: the choice lives in /dashboard?profileId=, survives reload and is rendered by the server.
+function DashboardProfileSelector({ selection }: { selection: DashboardProfileSelection }) {
+  const duplicateLabels = new Set(
+    selection.options
+      .map((option) => option.label)
+      .filter((label, index, labels) => labels.indexOf(label) !== index),
+  );
+  return (
+    <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-3" data-testid="dashboard-profile-selector">
+      <label className="flex min-w-0 flex-col gap-1 text-sm font-medium text-slate-700">
+        표시할 프로필
+        <select
+          name="profileId"
+          required
+          defaultValue={selection.selectedProfileId}
+          className="min-h-11 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {selection.selectedProfileId ? null : <option value="" disabled>프로필을 선택하세요</option>}
+          {selection.options.map((option, index) => (
+            <option key={option.id} value={option.id}>
+              {`${option.label}${duplicateLabels.has(option.label) ? ` (${index + 1}번째)` : ""}${option.isDefault ? " · 기본 지정" : ""}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" className={dashboardSecondaryButtonClassName}>이 프로필 보기</button>
+    </form>
   );
 }
 
@@ -130,6 +165,8 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
 
       results.forEach((result, index) => {
         if (result.status === "rejected") {
+          if (index === 2) nextState.fx = describeFxFailure(result.reason);
+          if (index === 3) nextState.exchange = describeExchangeFailure(result.reason);
           const timedOut = result.reason instanceof Error
             && result.reason.name === DASHBOARD_REQUEST_TIMEOUT_ERROR_NAME;
           nextState.warnings.push(
@@ -142,14 +179,8 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
 
         if (index === 0) nextState.dataSources = parseDataSources(result.value);
         if (index === 1) nextState.sourceStatuses = parseSourceStatuses(result.value);
-        if (index === 2) nextState.fxItems = parseFxItems(result.value);
-        if (index === 3) {
-          const payload = isRecord(result.value) ? result.value : {};
-          const data = isRecord(payload.data) ? payload.data : {};
-          const rates = isRecord(data.rates) ? data.rates : {};
-          nextState.exchangeAsOf = asString(data.asOf);
-          nextState.exchangeUsdRate = asNumber(rates.USD);
-        }
+        if (index === 2) nextState.fx = parseFx(result.value);
+        if (index === 3) nextState.exchange = parseExchange(result.value);
         if (index === 4) nextState.benefits = parseBenefits(result.value);
       });
 
@@ -171,14 +202,27 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
   const latestRun = state.runs[0] ?? null;
   const currentProfile = initialViewModel.currentProfile;
   const currentPlan = initialViewModel.currentPlan;
+  const profileSelection = initialViewModel.profileSelection;
+  const selectionPending = currentProfile.state === "selection-required" || currentProfile.state === "selection-invalid";
+  const showProfileSelector = Boolean(profileSelection && profileSelection.options.length > 0
+    && (selectionPending || profileSelection.options.length > 1));
   const currentRun = "run" in currentPlan ? currentPlan.run : null;
   const currentSummary = useMemo(() => runSummary(currentRun), [currentRun]);
-  const currentPlanningHref = currentProfile.state === "loaded"
-    ? `/planning?profileId=${encodeURIComponent(currentProfile.id)}`
+  // An explicitly selected empty profile keeps its id so planning opens that profile, not the default.
+  const currentPlanningProfileId = currentProfile.state === "loaded" || currentProfile.state === "missing"
+    ? currentProfile.id ?? ""
+    : "";
+  const currentPlanningHref = currentPlanningProfileId
+    ? `/planning?profileId=${encodeURIComponent(currentPlanningProfileId)}`
     : "/planning";
   const currentReportHref = currentRun
-    ? `/planning/reports?runId=${encodeURIComponent(currentRun.id)}`
+    ? `/planning/reports?runId=${encodeURIComponent(currentRun.id)}&profileId=${encodeURIComponent(currentRun.profileId)}`
     : "/planning/reports";
+  const currentProfileHeading = currentProfile.state === "loaded"
+    ? `${currentProfile.source === "selected" ? "선택한 프로필" : "기본 프로필"}: ${currentProfile.name} · 저장 시점 ${formatDateTime(currentProfile.updatedAt)}`
+    : selectionPending
+      ? "대시보드에 표시할 프로필을 선택해 주세요."
+      : "저장된 기본 프로필 기준";
   const currentPlanMessage = currentPlan.state === "current"
     ? "현재 저장 프로필과 같은 조건으로 계산된 플랜입니다."
     : currentPlan.state === "stale"
@@ -187,7 +231,9 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
         ? "과거 실행이라 현재 프로필과 일치 여부를 자동 확인할 수 없습니다."
         : currentPlan.state === "failed"
           ? currentPlan.message
-          : "현재 프로필로 저장한 플랜이 없습니다.";
+          : selectionPending
+            ? "프로필을 선택하면 그 프로필로 저장한 플랜을 보여 드립니다."
+            : "현재 프로필로 저장한 플랜이 없습니다.";
   const runsLoadFailed = state.runsLoadState === "failed";
 
   async function rerunCurrentPlan(): Promise<void> {
@@ -270,20 +316,18 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
     [state.sourceStatuses],
   );
   const latestRunReportHref = latestRun ? `/planning/reports?runId=${encodeURIComponent(latestRun.id)}` : "/planning/reports";
-  const nextActionRun = currentRun ?? latestRun;
-  const nextActionRunSummary = useMemo(() => runSummary(nextActionRun), [nextActionRun]);
-  const nextActionTarget = currentRun
-    ? currentProfile.state === "loaded" ? `현재 프로필 ${currentProfile.name}` : "현재 프로필"
-    : latestRun
-      ? `최근 실행 ${truncate(latestRun.title || latestRun.id, 24)} · 프로필 ${truncate(latestRun.profileId, 24)}`
-      : "";
-  const nextActionSummary = nextActionRun
-    ? nextActionRunSummary.topAction
-      ? `${nextActionTarget}의 ${truncate(nextActionRunSummary.topAction, 48)} 항목을 먼저 확인하세요.`
-      : `${nextActionTarget} 리포트를 다시 열어 재무 상태와 주의 신호부터 확인하세요.`
-    : runsLoadFailed
-      ? "최근 플랜을 다시 불러와 저장된 기록의 현재 상태부터 확인하세요."
-      : "재무 상태 진단을 시작해 현재 입력 기준의 첫 리포트를 저장하세요.";
+  // The primary guidance follows only the shown profile; another profile's run is never substituted.
+  const nextActionRunSummary = useMemo(() => runSummary(currentRun), [currentRun]);
+  const nextActionTarget = currentProfile.state === "loaded" ? `현재 프로필 ${currentProfile.name}` : "현재 프로필";
+  const nextActionSummary = selectionPending
+    ? "표시할 프로필을 고르면 그 프로필의 현재 지표와 최근 계산 결과를 함께 확인할 수 있습니다. 기본 프로필 설정은 바뀌지 않습니다."
+    : currentRun
+      ? nextActionRunSummary.topAction
+        ? `${nextActionTarget}의 ${truncate(nextActionRunSummary.topAction, 48)} 항목을 먼저 확인하세요.`
+        : `${nextActionTarget} 리포트를 다시 열어 재무 상태와 주의 신호부터 확인하세요.`
+      : currentPlan.state === "missing" && runsLoadFailed
+        ? "최근 플랜을 다시 불러와 저장된 기록의 현재 상태부터 확인하세요."
+        : "재무 상태 진단을 시작해 현재 입력 기준의 첫 리포트를 저장하세요.";
   const visibleWarnings = [
     ...(runsLoadFailed ? [state.runsErrorMessage || "최근 플랜 정보를 불러오지 못했습니다."] : []),
     ...state.warnings,
@@ -308,13 +352,21 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
           <section aria-label="현재 재무 상태" data-testid="dashboard-current-state" className="min-w-0 space-y-5">
             <div>
               <h2 className="text-lg font-bold text-navy">현재 재무 상태</h2>
-              <p className="mt-1 break-words text-sm leading-6 text-slate-500">
-                {currentProfile.state === "loaded"
-                  ? `기본 프로필: ${currentProfile.name} · 저장 시점 ${formatDateTime(currentProfile.updatedAt)}`
-                  : "저장된 기본 프로필 기준"}
+              <p className="mt-1 break-words text-sm leading-6 text-slate-500" data-testid="dashboard-current-profile-label">
+                {currentProfileHeading}
               </p>
             </div>
-            {currentProfile.state === "loaded" ? (
+            {showProfileSelector && profileSelection ? <DashboardProfileSelector selection={profileSelection} /> : null}
+            {currentProfile.state === "selection-required" ? (
+              <div role="status" className="rounded-2xl bg-slate-100 p-6 sm:p-7" data-testid="dashboard-selection-required">
+                <p className="text-xl font-bold text-navy">표시할 프로필을 선택하세요.</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">자동으로 만들어진 빈 기본 프로필 외에 저장한 프로필이 있습니다. 위에서 대시보드에 표시할 프로필을 고르세요. 기본 프로필 설정은 바뀌지 않습니다.</p>
+              </div>
+            ) : currentProfile.state === "selection-invalid" ? (
+              <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900" data-testid="dashboard-selection-invalid">
+                <p>{currentProfile.message}</p>
+              </div>
+            ) : currentProfile.state === "loaded" ? (
               <>
                 <div className="rounded-2xl bg-slate-100 p-6 sm:p-7">
                   <DashboardMetric label="월 잉여금" value={formatKrw(currentProfile.monthlySurplusKrw)} description="순수입 − 생활지출 − 최소 부채상환액" emphasis negative={currentProfile.monthlySurplusKrw < 0} />
@@ -337,7 +389,7 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
               <div className="rounded-2xl bg-slate-100 p-6 sm:p-7">
                 <p className="text-xl font-bold text-navy">수입과 지출부터 입력해 보세요.</p>
                 <p className="mt-3 text-sm leading-6 text-slate-600">아직 입력된 재무 정보가 없습니다. 입력한 금액으로 현재 상태를 확인하고 첫 플랜을 저장할 수 있습니다.</p>
-                <Link href="/planning" prefetch={devPlanningPrefetch("/planning")} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline underline-offset-4">재무 상태 진단 시작</Link>
+                <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline underline-offset-4">재무 상태 진단 시작</Link>
               </div>
             )}
           </section>
@@ -346,11 +398,11 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
             <div data-testid="dashboard-next-action">
               <p className="text-sm font-semibold text-primary">다음에 할 한 가지</p>
               <h2 className="mt-2 text-xl font-bold leading-8 tracking-tight text-navy">
-                {currentPlan.state === "failed" ? "저장된 플랜을 다시 확인하세요" : currentPlan.state === "stale" ? "바뀐 재무 정보로 다시 계산하세요" : currentRun ? "저장된 결과에서 우선순위를 확인하세요" : "첫 재무 진단을 시작하세요"}
+                {selectionPending ? "표시할 프로필을 먼저 선택하세요" : currentPlan.state === "failed" ? "저장된 플랜을 다시 확인하세요" : currentPlan.state === "stale" ? "바뀐 재무 정보로 다시 계산하세요" : currentRun ? "저장된 결과에서 우선순위를 확인하세요" : "첫 재무 진단을 시작하세요"}
               </h2>
               <p className="mt-2 break-words text-sm leading-6 text-slate-600">{currentPlan.state === "stale" ? "프로필이 바뀌어 이전 결과와 현재 상태가 다릅니다. 이전 계산 조건으로 새 결과를 저장합니다." : nextActionSummary}</p>
               <div className="mt-5 flex flex-wrap gap-3">
-                {currentPlan.state === "failed" ? (
+                {selectionPending ? null : currentPlan.state === "failed" ? (
                   <button type="button" onClick={() => window.location.reload()} className={dashboardPrimaryButtonClassName}>최근 플랜 다시 불러오기</button>
                 ) : currentPlan.state === "stale" ? (
                   <button type="button" onClick={() => void rerunCurrentPlan()} disabled={rerunning} className={dashboardPrimaryButtonClassName}>
@@ -426,6 +478,7 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
                   <article className="grid min-w-0 gap-4 py-5 lg:grid-cols-[1.3fr_1fr_auto] lg:items-center" key={run.id}>
                     <div className="min-w-0">
                       <p className="break-words text-base font-semibold text-navy">{run.title || "플래닝 실행"}</p>
+                      <p className="mt-1 break-words text-sm leading-6 text-slate-600">{`프로필: ${run.profileLabel || DASHBOARD_UNKNOWN_PROFILE_LABEL}`}</p>
                       <p className="mt-1 text-sm leading-6 text-slate-500">{formatDate(run.createdAt)} · {formatRunStatus(run.overallStatus)} · {run.input?.horizonMonths ?? "-"}개월</p>
                     </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm leading-6 text-slate-600">
@@ -434,7 +487,10 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
                     </div>
                     <div className="flex flex-wrap gap-x-5 gap-y-1 lg:flex-col lg:items-end">
                       <Link href={`/planning/reports?runId=${encodeURIComponent(run.id)}`} prefetch={devPlanningPrefetch("/planning/reports")} className={dashboardTextLinkClassName}>리포트 다시 보기 →</Link>
-                      <Link href={`/planning?profileId=${encodeURIComponent(run.profileId)}`} prefetch={devPlanningPrefetch("/planning")} className="inline-flex min-h-11 items-center text-sm text-slate-600 underline underline-offset-4">같은 조건으로 다시 계산</Link>
+                      {/* planning selects another profile for an unknown id, so only a confirmed profile gets this link. */}
+                      {run.profileLinked ? (
+                        <Link href={`/planning?profileId=${encodeURIComponent(run.profileId)}`} prefetch={devPlanningPrefetch("/planning")} className="inline-flex min-h-11 items-center text-sm text-slate-600 underline underline-offset-4">같은 조건으로 다시 계산</Link>
+                      ) : null}
                     </div>
                   </article>
                 );
@@ -457,7 +513,7 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
             </nav>
             <section className="space-y-3">
               <h2 className="text-base font-bold text-navy">플랜 액션과 비교 후보</h2>
-              <p className="break-words text-sm leading-6 text-slate-500">{latestRun ? `최근 실행 ${latestRun.title || latestRun.id} · 프로필 ${latestRun.profileId} 대상 액션입니다.` : "플랜을 저장하면 실행 계획과 비교 후보를 확인할 수 있습니다."}</p>
+              <p className="break-words text-sm leading-6 text-slate-500">{latestRun ? `최근 실행 ${latestRun.title || "플래닝 실행"} · 프로필 ${latestRun.profileLabel || DASHBOARD_UNKNOWN_PROFILE_LABEL} 대상 액션입니다.` : "플랜을 저장하면 실행 계획과 비교 후보를 확인할 수 있습니다."}</p>
               {latestActions.length > 0 ? (
                 <div className="divide-y divide-slate-100">
                   {latestActions.map((action) => (
@@ -490,16 +546,7 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
                   </div>
                 )) : <p className="text-sm text-slate-500">혜택 정보가 없습니다. 혜택 탐색에서 데이터 상태와 조건을 확인해 주세요.</p>}
               </section>
-              <section className="space-y-3">
-                <h2 className="text-base font-bold text-navy">환율과 생활 도구</h2>
-                {state.fxItems.map((item) => (
-                  <div key={item.currency} className="border-b border-slate-100 pb-3 text-sm leading-6">
-                    <p className="font-semibold text-navy">{item.currency} {item.amount.toLocaleString("ko-KR")} = {formatKrw(item.krw)}</p>
-                    <p className="text-slate-500">적용 환율 {typeof item.rate === "number" ? item.rate.toLocaleString("ko-KR") : "-"} · 기준일 {item.asOfDate ? formatDate(item.asOfDate) : "미확인"}</p>
-                  </div>
-                ))}
-                <p className="text-sm leading-6 text-slate-600">시장 기준 환율: USD 1 = {state.exchangeUsdRate ? `${state.exchangeUsdRate.toLocaleString("ko-KR")}원` : "-"} · 기준일 {state.exchangeAsOf || "미확인"}</p>
-              </section>
+              <DashboardFxSection fx={state.fx} exchange={state.exchange} loading={loading} />
             </div>
             <section className="space-y-3 border-t border-slate-200 pt-5">
               <h2 className="text-base font-bold text-navy">데이터 신뢰 상태</h2>

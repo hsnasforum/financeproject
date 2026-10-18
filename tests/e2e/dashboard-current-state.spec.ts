@@ -105,7 +105,11 @@ for (const exchangeFails of [false, true]) {
         status: exchangeFails ? 503 : 200,
         json: exchangeFails
           ? { ok: false, error: { code: "UPSTREAM", message: "환율 공급자 응답 실패" } }
-          : { ok: true, data: { asOf: "2026-10-01", rates: { USD: 1300 } } },
+          : {
+            ok: true,
+            data: { asOf: "2026-10-01", base: "KRW", rates: { USD: 1300 }, rawMeta: { source: "EXIM" } },
+            meta: { cache: "hit", fallback: { mode: "CACHE", sourceKey: "exchange", reason: "cache_hit" } },
+          },
       });
     });
     await page.route("**/api/public/benefits/search?*", async (route) => {
@@ -128,9 +132,12 @@ for (const exchangeFails of [false, true]) {
       await expect(page.getByText("일부 보조 정보를 불러오지 못했습니다.", { exact: true })).toBeVisible();
       await page.getByTestId("dashboard-resources-partial").locator("summary").click();
       await expect(page.getByText("기준 환율 정보를 불러오지 못했습니다.", { exact: true })).toBeVisible();
+      await expect(tools).toContainText("시장 기준 환율: 환율 조회 실패");
+      await expect(tools).not.toContainText("USD 1 = -");
     } else {
       await expect(tools).toContainText("USD 1 = 1,300원");
       await expect(tools).toContainText("2026-10-01");
+      await expect(tools).toContainText("출처 한국수출입은행 · 응답 캐시 사용");
     }
     await expect(page.getByTestId("dashboard-current-state")).toBeVisible();
     await tools.locator(":scope > summary").click();
@@ -266,7 +273,7 @@ test("dashboard aligns the current profile plan, detects saved changes and prese
   await expect(page.getByText("더 최신인 B 플랜", { exact: true })).toBeVisible();
   await expect(page.locator(`a[href="/planning/reports?runId=${otherRunId}"]`)).not.toHaveCount(0);
   await expect(page.getByRole("link", { name: "최근 플랜 리포트 보기", exact: true }))
-    .toHaveAttribute("href", `/planning/reports?runId=${runId}`);
+    .toHaveAttribute("href", `/planning/reports?runId=${runId}&profileId=${oldId}`);
   const secondaryTools = page.getByTestId("dashboard-secondary-tools");
   await expect(secondaryTools).not.toHaveAttribute("open");
   await secondaryTools.locator(":scope > summary").focus();
@@ -735,4 +742,123 @@ test("dashboard missing snapshot rerun keeps stale, writes no run and permits re
   await plan.getByRole("link", { name: "계산 조건 검토" }).click();
   await expect(page).toHaveURL(new RegExp(`/planning\\?profileId=${seed.profileId}`), { timeout: 30_000 });
   expect(await seed.runIds()).toEqual(before);
+});
+
+test("a profile created next to the untouched seed is shown only after an explicit dashboard selection", async ({ page, request, baseURL }) => {
+  test.setTimeout(180_000);
+  const auth = await prepareFixtureAuth(page, baseURL!, "selection");
+  const { headers } = auth;
+  const csrf = (await request.storageState()).cookies.find((cookie) => cookie.name === "dev_csrf")?.value;
+  const listed = await request.get("/api/planning/v2/profiles", { headers });
+  expect(listed.ok()).toBeTruthy();
+  const listedPayload = await listed.json() as {
+    data: Array<{ id: string; createdAt: string; updatedAt: string }>;
+    meta: { userId: string };
+  };
+  // Precondition: the repository seed exists and was never edited by this suite.
+  const seedRecord = listedPayload.data.find((record) => record.id === "default-profile");
+  expect(seedRecord, "the untouched repository seed must exist").toBeTruthy();
+  expect(seedRecord!.updatedAt).toBe(seedRecord!.createdAt);
+  const scope = { userId: listedPayload.meta.userId };
+  // Shared production stores may have another default from earlier tests; make the seed the default explicitly.
+  await runWithPlanningUserScope(scope, () => setDefaultProfile("default-profile"));
+
+  // Browser: type into the seed's form and save it as a new profile with 새로 만들기.
+  await page.goto("/planning?profileId=default-profile");
+  const workspaceForm = page.getByTestId("planning-profile-form");
+  await expect(page.getByLabel("프로필 선택")).toHaveValue("default-profile", { timeout: 30_000 });
+  const name = `선택 검증 ${auth.requestedUserId}`;
+  await workspaceForm.getByLabel("프로필 이름").fill(name);
+  await workspaceForm.getByLabel("월 실수령").fill("4,650,000");
+  await workspaceForm.getByLabel("필수지출").fill("1,850,000");
+  await workspaceForm.getByLabel("선택지출").fill("550,000");
+  await workspaceForm.getByLabel("현금(예금)").fill("3,200,000");
+  await workspaceForm.getByLabel("투자자산").fill("2,100,000");
+  const createdResponse = page.waitForResponse((res) => new URL(res.url()).pathname === "/api/planning/v2/profiles" && res.request().method() === "POST");
+  await page.getByTestId("planning-profile-create-button").click();
+  const keepOriginal = page.getByRole("button", { name: "변경 없이 저장", exact: true });
+  if (await keepOriginal.isVisible()) await keepOriginal.click();
+  const created = await createdResponse;
+  expect(created.ok()).toBeTruthy();
+  const newId = (await created.json()).data.id as string;
+  await expect(page.getByLabel("프로필 선택")).toHaveValue(newId, { timeout: 30_000 });
+
+  // Browser: diagnosis run and report save.
+  const confirm = page.locator("#planning-run-warning-confirm-checkbox");
+  if (await confirm.isVisible()) await confirm.check();
+  const runResponse = page.waitForResponse((res) => new URL(res.url()).pathname === "/api/planning/v2/runs" && res.request().method() === "POST", { timeout: 60_000 });
+  await page.getByTestId("run-button").click();
+  const runCreated = await runResponse;
+  expect(runCreated.ok()).toBeTruthy();
+  const runId = (await runCreated.json()).data.id as string;
+  await expect(page.getByTestId("stage-simulate-status")).toHaveAttribute("data-stage-state", /^(success|partial_success)$/i, { timeout: 180_000 });
+  await page.goto(`/planning/reports?runId=${runId}&profileId=${newId}`);
+  await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
+  const reportResponse = page.waitForResponse((res) => new URL(res.url()).pathname === "/api/planning/v2/reports" && res.request().method() === "POST");
+  await page.getByTestId("report-save-button").click();
+  expect((await reportResponse).ok()).toBeTruthy();
+
+  // Without a selection the dashboard asks for one instead of showing the empty seed or another profile's run.
+  await page.goto("/dashboard");
+  const root = page.getByTestId("dashboard-root");
+  const current = page.getByTestId("dashboard-current-state");
+  const plan = page.getByTestId("dashboard-current-plan");
+  const label = page.getByTestId("dashboard-current-profile-label");
+  await expect(page.getByTestId("dashboard-selection-required")).toBeVisible();
+  await expect(current).not.toContainText("아직 입력된 재무 정보가 없습니다");
+  await expect(plan.getByTestId("dashboard-next-action")).toContainText("표시할 프로필을 먼저 선택하세요");
+  expect(await root.innerText()).not.toContain(newId);
+
+  // Native GET form selection.
+  await page.getByLabel("표시할 프로필").selectOption(newId);
+  await page.getByRole("button", { name: "이 프로필 보기", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/dashboard\\?profileId=${newId}$`), { timeout: 30_000 });
+  const expectSelected = async (state: "current" | "stale", incomeText: string) => {
+    await expect(label).toContainText(`선택한 프로필: ${name}`);
+    await expect(current.getByText("월 순수입", { exact: true }).locator("..")).toContainText(incomeText);
+    await expect(plan).toHaveAttribute("data-state", state);
+    await expect(page.getByLabel("표시할 프로필")).toHaveValue(newId);
+    expect(await root.innerText()).not.toContain(newId);
+  };
+  await expectSelected("current", "465만원");
+  await expect(current.getByText("월 생활지출", { exact: true }).locator("..")).toContainText("240만원");
+  await expect(plan.getByRole("link", { name: "최근 플랜 리포트 보기", exact: true })).toHaveAttribute("href", `/planning/reports?runId=${runId}&profileId=${newId}`);
+  await expect(plan.getByRole("link", { name: "현재 조건으로 다시 계산", exact: true })).toHaveAttribute("href", `/planning?profileId=${newId}`);
+
+  // Reload and reopen keep the selection from the URL.
+  await page.reload();
+  await expectSelected("current", "465만원");
+  await page.goto("/planning");
+  await page.goto(`/dashboard?profileId=${encodeURIComponent(newId)}`);
+  await expectSelected("current", "465만원");
+
+  // HTTP fixtures (value setup only): a run pinned to a snapshot, then a saved profile change.
+  const snapshot = await seedSnapshot();
+  const pinned = await request.post("/api/planning/v2/runs", { headers, data: { csrf, profileId: newId, title: "선택 프로필 기준 플랜", input: {
+    horizonMonths: 24, snapshotId: snapshot.id, runScenarios: false, getActions: false, analyzeDebt: false, includeProducts: false, monteCarlo: null,
+  } } });
+  expect(pinned.ok()).toBeTruthy();
+  const pinnedRunId = (await pinned.json()).data.id as string;
+  const stored = (await (await request.get(`/api/planning/v2/profiles/${newId}`, { headers })).json()).data.profile;
+  expect((await request.patch(`/api/planning/v2/profiles/${newId}`, { headers, data: { csrf, profile: { ...stored, monthlyIncomeNet: 4_720_000 } } })).ok()).toBeTruthy();
+  await page.reload();
+  await expectSelected("stale", "472만원");
+  await expect(plan.getByRole("link", { name: "계산 조건 검토", exact: true })).toHaveAttribute("href", `/planning?profileId=${newId}`);
+  const rerunResponse = page.waitForResponse((res) => res.url().endsWith("/api/planning/v2/runs") && res.request().method() === "POST");
+  await page.getByRole("button", { name: "현재 프로필로 다시 계산", exact: true }).click();
+  const rerun = await rerunResponse;
+  expect(rerun.ok()).toBeTruthy();
+  expect(rerun.request().postDataJSON()).toMatchObject({ profileId: newId, rerunOfRunId: pinnedRunId });
+  await expect(page).toHaveURL(new RegExp(`/planning/reports\\?runId=[^&]+&profileId=${newId}$`), { timeout: 30_000 });
+  await page.goto(`/dashboard?profileId=${encodeURIComponent(newId)}`);
+  await expectSelected("current", "472만원");
+
+  // The stored default is unchanged and an unusable selection never falls back.
+  expect(await runWithPlanningUserScope(scope, () => getDefaultProfileId())).toBe("default-profile");
+  for (const bad of ["missing-profile-id", "..%2Fx"]) {
+    await page.goto(`/dashboard?profileId=${bad}`);
+    await expect(page.getByTestId("dashboard-selection-invalid")).toBeVisible();
+    await expect(current).not.toContainText("월 순수입");
+    await expect(page.getByTestId("dashboard-profile-selector")).toBeVisible();
+  }
 });

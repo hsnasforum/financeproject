@@ -111,6 +111,9 @@ export default defineConfig({
     "**/.dist/**",
     "**/node_modules/**",
     "**/tmp/**",
+    // Local agent worktrees and scratch baselines hold stale copies of tests/e2e.
+    "**/.claude/worktrees/**",
+    "**/work/local/**",
   ],
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,

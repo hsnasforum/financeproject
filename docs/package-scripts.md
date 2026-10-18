@@ -77,6 +77,11 @@
 Production local run은 `desktop-local` launcher 하나로 수렴합니다. `start`와
 `start:local`은 같은 loopback session/writer lease 계약을 사용하며
 `next_prod_safe.mjs` 직접 실행은 허용하지 않습니다.
+`pnpm start`는 준비가 끝나면 one-shot session URL을 기본 브라우저로 넘깁니다.
+이미 실행 중이면 기존 broker에서 새 session을 받아 브라우저만 다시 엽니다.
+bootstrap URL은 stdout에 출력하지 않습니다. 브라우저 없이 실행해야 하는
+Playwright·smoke 같은 자동화는 `pnpm start` 대신 launcher를 `--no-open`과 함께
+직접 호출합니다.
 
 ## 사용 원칙
 

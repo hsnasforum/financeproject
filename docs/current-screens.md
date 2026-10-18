@@ -29,7 +29,7 @@
 
 ## Public 화면 (Public Stable / production 노출)
 - `/` (public landing, 제품 설명/시작 CTA/샘플 결과 미리보기 제공, 저장 실행 조회 없음)
-- `/dashboard` (메인 진입점, 저장 실행/데이터 상태/혜택 흐름을 상태별로 표시)
+- `/dashboard` (메인 진입점, 저장 실행/데이터 상태/혜택 흐름을 상태별로 표시. 선택 query profileId로 표시할 프로필을 고르며 기본 프로필 설정은 바꾸지 않음)
 - `/benefits` (공공혜택 canonical search, Gov24와 같은 표시 contract 사용)
 - `/compare`
 - `/gov24` (공공혜택 guided finder, `/benefits`와 같은 fallback/error 표시 정책 공유)

@@ -16,6 +16,14 @@ describe("planning authentication recovery", () => {
     expect(html).not.toContain("로그인하기");
   });
 
+  it("returns a recovered desktop session to the dashboard it was opened from", () => {
+    const error = new PlanningAuthError("UNAUTHENTICATED", "데스크톱 세션을 확인하지 못했습니다.", 401, "desktop-launcher");
+    const html = renderToStaticMarkup(createElement(PlanningAuthRequiredState, { error, callbackPath: "/dashboard" }));
+    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain("세션 다시 확인");
+    expect(html).not.toContain("/api/auth/signin");
+  });
+
   it("keeps web authentication and its callback unchanged", () => {
     const error = new PlanningAuthError("UNAUTHENTICATED", "로그인이 필요합니다.", 401);
     const html = renderToStaticMarkup(createElement(PlanningAuthRequiredState, { error, callbackPath: "/settings/backup" }));

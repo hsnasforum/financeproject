@@ -101,7 +101,8 @@ describe("dashboard view model", () => {
     const nextAction = html.match(/<div[^>]*data-testid="dashboard-next-action"[\s\S]*?<\/div>/)?.[0];
     expect(nextAction).toContain("현재 프로필 현재 기본의 비상금 먼저 점검");
     expect(nextAction).not.toContain("profile-b");
-    expect(html).toContain("최근 실행 최근 플랜 · 프로필 profile-b 대상 액션입니다.");
+    // profile-b is not in the authenticated profile list, so its label is unknown rather than its raw id.
+    expect(html).toContain("최근 실행 최근 플랜 · 프로필 연결된 프로필을 확인할 수 없습니다 대상 액션입니다.");
     expect(JSON.stringify(rows)).toBe(before);
   });
   beforeEach(() => {
@@ -196,13 +197,17 @@ describe("dashboard view model", () => {
     expect(html).toContain("저장된 기록이 없다는 뜻은 아닙니다");
   });
 
-  it("surfaces one concrete next action with an explicit target when only another profile has a run", async () => {
+  it("does not substitute another profile's run for the shown profile's next action", async () => {
     const vm = await loadDashboardViewModel(async () => [sampleRun] as unknown as PlanningRunRows);
     const html = renderToStaticMarkup(<DashboardClient initialViewModel={vm} />);
+    const nextAction = html.match(/<div[^>]*data-testid="dashboard-next-action"[\s\S]*?<\/div>/)?.[0] ?? "";
 
-    expect(html).toContain('data-testid="dashboard-next-action"');
-    expect(html).toContain("다음에 할 한 가지");
-    expect(html).toContain("최근 실행 최근 플랜 · 프로필 profile-1의 비상금 먼저 점검 항목을 먼저 확인하세요");
+    expect(vm.currentPlan).toEqual({ state: "missing" });
+    expect(nextAction).toContain("다음에 할 한 가지");
+    expect(nextAction).toContain("재무 상태 진단을 시작해 현재 입력 기준의 첫 리포트를 저장하세요.");
+    expect(nextAction).not.toContain("비상금 먼저 점검");
+    expect(nextAction).toContain('href="/planning?profileId=current-profile"');
+    expect(html.replace(/<[^>]+>/g, " ")).not.toContain("profile-1");
     expect(html).toContain("주요 데이터 연결");
     expect(html).not.toContain("P0 데이터 연결");
   });
@@ -499,6 +504,14 @@ describe("dashboard view model", () => {
   });
 
   it("preserves saved run limit, report, history, rerun, and action links", async () => {
+    // The rerun link needs the run's profile in the authenticated list (see dashboard-profile-selection tests).
+    mocks.profiles.mockResolvedValue({
+      defaultProfileId: "current-profile",
+      profiles: [
+        { id: "current-profile", name: "현재 기본", profile: currentProfile, updatedAt: "2026-09-06T00:00:00.000Z" },
+        { id: "profile-1", name: "최근 플랜 프로필", profile: currentProfile, updatedAt: "2026-07-01T00:00:00.000Z" },
+      ],
+    });
     mocks.runs.mockResolvedValue(Array.from({ length: 8 }, (_, i) => ({ ...sampleRun, id: `run-${i}` })));
     const vm = await loadDashboardViewModel();
     expect(vm.runs).toHaveLength(6);

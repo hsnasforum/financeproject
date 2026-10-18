@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
 
 let schemaSql: string;
@@ -8,10 +9,16 @@ export function createFinlifeLegacyFixture(databasePath: string, options: {
   globalUnique?: boolean; identityColumn?: boolean; secondCompany?: boolean;
 } = {}) {
   if (!schemaSql) {
+    // prisma.config.ts requires DATABASE_URL even for an offline `migrate diff`. Give only the child
+    // this fixture's own file URL so neither a missing .env nor an inherited URL is used.
     const result = spawnSync(process.execPath, [
       "node_modules/prisma/build/index.js", "migrate", "diff",
       "--from-empty", "--to-schema", "prisma/schema.prisma", "--script",
-    ], { cwd: process.cwd(), encoding: "utf8" });
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: pathToFileURL(databasePath).href },
+    });
     if (result.status !== 0 || !result.stdout.includes('CREATE TABLE "Product"')) throw new Error("fixture schema generation failed: " + result.stderr);
     schemaSql = result.stdout;
   }
