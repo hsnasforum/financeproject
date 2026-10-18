@@ -37,3 +37,7 @@
 ## 다음 라운드
 - 이 candidate의 canonical 원본 build/runtime/artifact/보호 검사를 모두 통과한 뒤 normal push합니다. 최신 GitHub CI와 비작성자 최종 리뷰는 마스터가 확인합니다.
 - staged guard 최초 실행은 제목의 날짜 위치와 다음 라운드 제목 누락으로 실패했습니다. 내용·제품 코드·검사 기대값을 바꾸지 않고 형식만 정정했으며 최초 실패 로그를 보존합니다.
+
+후속 candidate 정정: pnpm source package.json이 store와 hardlink인 정상 입력을 읽기만 할 때도 거부되는 것을 34-source-hardlink-before에서 재현했습니다(exit1). source package identity의 정규 경로·일반 파일 검사는 유지하고 hardlink는 읽기만 허용하며, generated counterpart와 .data의 single-link 검사는 유지합니다. 35-hardlink-after는 8파일 74통과/기존 Windows2skip, 36 lint exit0입니다.
+
+d2a128d9의 build/types/실제25assert/artifact/설치2starts/비밀 귀속/fresh9 검사는 통과했지만, 이 후속 source 변경 때문에 푸시 전 SOURCE_CHANGED_AFTER_BUILD로 안전하게 중단했습니다. 이를 최종 source 검증으로 확대하지 않고 final2/에서 새 후속 HEAD의 검증을 수행합니다. 최초 guard 실패와 모든 라운드 원시 로그는 보존합니다.

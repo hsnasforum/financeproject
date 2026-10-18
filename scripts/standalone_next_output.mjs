@@ -20,9 +20,16 @@ function walk(dir, visitor) {
     if (s.isDirectory() && !s.isSymbolicLink()) walk(p, visitor);
   }
 }
-function packageIdentity(p) {
+function packageIdentity(p, sourceMetadata = false) {
   try {
-    plain(p, true); plain(path.join(p, "package.json"), false);
+    plain(p, true);
+    const metadata = path.join(p, "package.json");
+    // pnpm can hardlink its source metadata to its content-addressed store. It is read only here;
+    // the generated counterpart still has to be an ordinary single-link copy.
+    if (sourceMetadata) {
+      const s = stat(metadata);
+      if (!s || s.isSymbolicLink() || !s.isFile() || !equal(fs.realpathSync(metadata), path.resolve(metadata))) throw new Error();
+    } else plain(metadata, false);
     const value = JSON.parse(fs.readFileSync(path.join(p, "package.json"), "utf8"));
     if (typeof value.name !== "string" || typeof value.version !== "string" || !value.name || !value.version) throw new Error();
     return value;
@@ -76,7 +83,7 @@ export function normalizeNextStandaloneOutput({ projectRoot, distDir = ".next" }
     const sourceRel = posix(path.relative(root, target));
     const match = /^node_modules\/\.pnpm\/[^/]+\/node_modules\/((?:@[^/]+\/)?[^/]+)$/.exec(sourceRel);
     if (!rel.startsWith("node_modules/") || !inside(root, target) || !match) throw new Error("dependency link escapes verified project pnpm packages");
-    const sourcePackage = packageIdentity(target), copy = path.join(out, path.relative(root, target)), copiedPackage = packageIdentity(copy);
+    const sourcePackage = packageIdentity(target, true), copy = path.join(out, path.relative(root, target)), copiedPackage = packageIdentity(copy);
     if (sourcePackage.name !== match[1] || copiedPackage.name !== sourcePackage.name || copiedPackage.version !== sourcePackage.version) {
       throw new Error("dependency counterpart identity differs");
     }

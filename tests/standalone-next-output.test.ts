@@ -90,6 +90,16 @@ describe("Next standalone output normalization", () => {
     expect(auditStandaloneTree({ standaloneDir: out, phase: "build" }).ok).toBe(false);
     expect(fs.existsSync(path.join(out, "tmp/private.sqlite"))).toBe(true);
   });
+  it("supports read-only pnpm source package metadata hardlinks without linking the generated copy", () => {
+    const { root, out } = seed(), d = dependency(root, out);
+    const manifest = path.join(root, d.rel, "package.json");
+    fs.linkSync(manifest, path.join(root, "store-metadata.json"));
+    expect(fs.statSync(manifest).nlink).toBe(2);
+    normalization.normalizeNextStandaloneOutput({ projectRoot: root });
+    expect(fs.realpathSync(d.link)).toBe(fs.realpathSync(path.join(out, d.rel)));
+    expect(fs.statSync(path.join(out, d.rel, "package.json")).nlink).toBe(1);
+    expect(fs.statSync(manifest).nlink).toBe(2);
+  });
   it("never normalizes an admitted runtime build", () => {
     const { root, out } = seed();
     write(root, ".next/standalone-privacy-receipt.json", "{}");
