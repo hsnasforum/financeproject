@@ -1,6 +1,10 @@
 export const STANDALONE_PRIVACY_RECEIPT: string;
 export const STANDALONE_PRIVACY_RECEIPT_VERSION: number;
 export const TRACE_COPY_FAILURE_PATTERN: RegExp;
+export function createTraceCopyFailureDetector(): {
+  push(stream: "stdout" | "stderr", chunk: string | Uint8Array): boolean;
+  readonly seen: boolean;
+};
 export const SOURCE_ONLY_STANDALONE_ALIASES: readonly string[];
 export type PrivacyViolation = { code: string; path: string };
 export type PrivacyAuditResult = {

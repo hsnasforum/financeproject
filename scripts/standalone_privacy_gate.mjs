@@ -10,6 +10,20 @@ import { PUBLIC_SNAPSHOT_FILES } from "./public_snapshot_assets.mjs";
 export const STANDALONE_PRIVACY_RECEIPT = "standalone-privacy-receipt.json";
 export const STANDALONE_PRIVACY_RECEIPT_VERSION = 1;
 export const TRACE_COPY_FAILURE_PATTERN = /Failed to copy traced files/;
+// A warning may span chunks; output from the other stream must not interrupt or complete it.
+export function createTraceCopyFailureDetector() {
+  const tails = { stdout: "", stderr: "" };
+  let seen = false;
+  return {
+    push(stream, chunk) {
+      const text = tails[stream] + (typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      if (TRACE_COPY_FAILURE_PATTERN.test(text)) seen = true;
+      tails[stream] = text.slice(-128);
+      return seen;
+    },
+    get seen() { return seen; },
+  };
+}
 // Known source-only alias links that the desktop builder omits (planning_v2_desktop_build.mjs).
 export const SOURCE_ONLY_STANDALONE_ALIASES = Object.freeze([
   "tmp/txn-batch-detail-client-audit.tsx",
@@ -170,6 +184,7 @@ export function auditStandaloneTree({ standaloneDir, phase, projectRoot = "", di
   const standaloneReal = fs.realpathSync(standaloneDir);
   const officialLinks = phase === "source-input" && projectRoot ? officialSourceLinkTargets(fs.realpathSync(projectRoot), distDir) : new Map();
   const counts = { files: 0, directories: 0, links: 0, publicSnapshots: 0 };
+  let dataSeen = false;
   const stack = [""];
   while (stack.length > 0) {
     const relativeDir = stack.pop();
@@ -178,6 +193,7 @@ export function auditStandaloneTree({ standaloneDir, phase, projectRoot = "", di
       const absolute = path.join(standaloneReal, relative);
       const stats = fs.lstatSync(absolute);
       if (relative === ".data") {
+        dataSeen = true;
         if (phase !== "source-input") counts.publicSnapshots = auditDataDirectory(absolute, phase, report);
         continue;
       }
@@ -214,6 +230,7 @@ export function auditStandaloneTree({ standaloneDir, phase, projectRoot = "", di
       }
     }
   }
+  if (phase !== "source-input" && !dataSeen) report.add("standalone-data-missing", ".data");
   return report.result(counts);
 }
 

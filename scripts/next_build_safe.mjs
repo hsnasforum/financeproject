@@ -13,7 +13,7 @@ import {
 import { prepareSourceSnapshotAssets } from "./public_snapshot_assets.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
 import {
-  TRACE_COPY_FAILURE_PATTERN,
+  createTraceCopyFailureDetector,
   auditStandaloneBuild,
   formatPrivacyViolations,
   invalidateStandalonePrivacyReceipt,
@@ -358,21 +358,18 @@ let forwardedParentSignal = "";
 let lastOutputAt = Date.now();
 const buildStartedAt = lastOutputAt;
 // Next.js only warns when traced files cannot be copied (the standalone output is then incomplete).
-let traceCopyFailureSeen = false;
-let outputTail = "";
+const traceCopyFailure = createTraceCopyFailureDetector();
 
-function forwardOutput(target, chunk) {
+function forwardOutput(target, stream, chunk) {
   lastOutputAt = Date.now();
-  const text = `${outputTail}${chunk.toString("utf8")}`;
-  if (TRACE_COPY_FAILURE_PATTERN.test(text)) traceCopyFailureSeen = true;
-  outputTail = text.slice(-128);
+  traceCopyFailure.push(stream, chunk);
   target.write(chunk);
 }
 
 // Generated-output privacy: exact generated .env removal, trace + standalone audit, then the receipt that
 // next_prod_safe requires. Any failure leaves no receipt and fails the build.
 function finalizeStandalonePrivacy() {
-  if (traceCopyFailureSeen) {
+  if (traceCopyFailure.seen) {
     throw new Error("next build reported 'Failed to copy traced files'; the standalone output is incomplete");
   }
   const removal = removeGeneratedStandaloneEnv({ projectRoot, distDir: effectiveDistDir });
@@ -391,11 +388,11 @@ function finalizeStandalonePrivacy() {
 }
 
 child.stdout?.on("data", (chunk) => {
-  forwardOutput(process.stdout, chunk);
+  forwardOutput(process.stdout, "stdout", chunk);
 });
 
 child.stderr?.on("data", (chunk) => {
-  forwardOutput(process.stderr, chunk);
+  forwardOutput(process.stderr, "stderr", chunk);
 });
 
 const scaffoldTimer = isolatedServerDir || keepSharedDevBuildPackage

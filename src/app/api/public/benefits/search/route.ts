@@ -80,7 +80,10 @@ export async function GET(request: Request) {
     const maxPages = parseMaxPages(searchParams.get("maxPages"), 10);
     const rows = parsePositiveInt(searchParams.get("rows"), 200, 50, 300);
     const snapshotPolicySec = Math.max(60, Math.trunc(getCachePolicy("benefits").ttlMs / 1000));
-    const snapshotTtlMs = parsePositiveInt(searchParams.get("snapshotTtlSec"), snapshotPolicySec, 60, 7 * 24 * 60 * 60) * 1000;
+    const snapshotTtlParam = searchParams.get("snapshotTtlSec");
+    const snapshotTtlMs = (snapshotTtlParam === null || snapshotTtlParam.trim() === ""
+      ? snapshotPolicySec
+      : parsePositiveInt(snapshotTtlParam, snapshotPolicySec, 60, 7 * 24 * 60 * 60)) * 1000;
     const deep = scanMode === "deep";
     const scanPages = useSnapshotPath ? maxPages : scanMode === "deep" ? (typeof maxPages === "number" ? Math.max(maxPages, 10) : 10) : 1;
     const scope = (searchParams.get("scope") ?? "auto").trim().toLowerCase() as "auto" | "name" | "field";

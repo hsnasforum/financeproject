@@ -1,6 +1,22 @@
 # 2026-10-18 Finance 공식 데이터 갱신 1단계 (격리 수집·품질 검증·실제 DB 쓰기 준비)
 
-## 현재 상태 (클로드 1호, 2026-10-19 06:20 KST 검증 cutoff = 최종 build 개인정보 포함 차단 보완 직후 — 이 절이 최신입니다. 아래 시각이 적힌 절들은 그 시점의 기록입니다)
+## 현재 상태 (지피티 1호, 2026-10-19 07:25 KST cutoff = 잔여 보완 격리 검사 완료, 최종 원본 검증·게시 전)
+- 기준 local HEAD는 37391e29(parent 5fda7dd8), branch checkpoint/finance-review-20261011, 원격 마지막 확인은 901091c8입니다. 아래 상태·계획은 표시된 시점의 기록입니다.
+- source B125의 원본 DB 정상 sync·공식 snapshot 7개 승격은 보존하며 이번에는 재수집·DB 갱신을 하지 않습니다.
+- snapshotTtlSec 누락·빈값·공백은 정책 2일을 적용하고 명시 60초·clamp·invalid 계약과 공유 rows 파서는 유지했습니다.
+- stdout/stderr별 tail로 경고를 감지합니다. .data 누락은 build/artifact-final에서 실패하며 source-input의 runtime 자료는 스캔·삭제하지 않습니다.
+- 실제 격리 W 회귀: 수정 전 15개 중 9 FAIL/6 PASS(exit1), 수정 후 8파일 72 PASS/기존 2 SKIP(exit0). W ESLint·정식 tsc --noEmit --incremental false exit0. 원본 Vitest/fulltest/release:verify는 실행하지 않았습니다.
+- 136 여정 원시 30 step은 명시 PASS24/FAIL1/기타5입니다. 29개 PASS assertion이 아닙니다. benefits:snapshot-not-stale 당시 exit1 및 옛 report/helper/실패 로그는 보존했습니다.
+- 승인 loader의 비밀값은 메모리에서만 대조했습니다. 기존 build production 41 적중파일·artifact189·install188은 환경 없는 W 대응 파일과 바이트 동일했습니다. 긴 값은 고유 2파일·18쌍(이름 중복 제거 후)이며 모두 이전 dev-cache입니다. 22 env 이름행·11 고유 raw값이고 인코딩 변형은 별도로 대조합니다.
+- 숫자 전체 면제는 없습니다. 엄격 경로 대조에서 compiler cache 1파일 미대응은 보존하고 공개 고정 문맥·배포 경계를 별도 확인합니다. 이전 dev static의 미대응 숫자 문맥은 현재 production 제공·trace·Git과 구분하며 과거 외부 노출이 없었다고 주장하지 않습니다. .next/dev/cache를 수동 삭제하지 않으며 옛 f2 hits52/exit1은 FAIL 기록 그대로입니다.
+- 합성 회귀 5개는 동일 숫자의 새 파일·새 문맥·긴 가짜 키·반복 적중을 거부했습니다. 새 결과에는 실제 값·변수명·해시·적중 경로·snippet을 기록하지 않습니다.
+- 변경 파일은 TTL route, next_build_safe.mjs, standalone_privacy_gate.mjs/.d.mts, tests/benefits-search-default-ttl.test.ts, tests/standalone-privacy-gate-regressions.test.ts와 이 기록, 정확히 7개입니다.
+- 이 cutoff 이후 기록을 재작성하지 않고 일반 후속 commit → 그 HEAD의 원본 build/typecheck/PW tsc → 새 B125 논리 DB 사본·Planning root로 공식 one-shot 브라우저 → HEAD/public9 artifact·새 설치·managed 2 starts → 비밀 귀속·보호 검증 순서로 진행합니다. 모두 통과할 때만 승인된 정확 branch로 일반 push합니다. 최신 CI·독립 review는 마스터 후속입니다.
+- 최종 child exit·HEAD/원격 SHA·실행 결과와 제한은 commit 밖 tmp/finance-final-close-20261019/REPORT.md와 FINAL-RESULT.json에 기록합니다. 이 cutoff는 최종 원본 build/runtime/artifact/push/CI PASS 증거가 아닙니다.
+- 기존 work10/10 +12·work10/12·DB·개인 scenario·env·기존 tmp/untracked를 보호합니다. 설치본 CONFIG를 live 성공으로 표현하지 않습니다.
+
+
+## 이전 상태 기록 (클로드 1호, 2026-10-19 06:20 KST cutoff — 당시 보완 직후이며 현재 상태는 위 절 참조)
 - local commit `5fda7dd876fa5661be4d06dfee7d9c2e3c4c5597`(parent `901091c8`, 공식 데이터·FX·카탈로그·패키징 28개 경로)은 push 전입니다.
 - 그 HEAD의 원본 production build는 exit 0이었지만, 새 `.next`의 trace·standalone 감사에서 실제 `.env`·`.env.local`·`dev.db`·tmp private DB 사본이 포함되어 FAIL했습니다(130, `tmp/finance-final-20261019/REPORT-02.md`). 아래 "최종 source build 개인정보 포함 차단" 절이 그 원인과 보완입니다.
 - 보완은 격리 W에서만 검증했습니다. 원본 재build·원본 runtime·브라우저·desktop artifact·push·CI는 이 기록 commit 이후 단계이며 아직 PASS가 아닙니다. 그 결과는 commit 대상이 아닌 `tmp/finance-privacy-final-20261019/`에 남깁니다.
@@ -304,6 +320,7 @@
 - **미검증**: 원본 재build와 그 감사, 원본 runtime·브라우저 실사용, 원본 artifact·설치, Windows, CI
 
 ## 사용 skill
+- 이번 보완에 실제 적용: superpowers:systematic-debugging, superpowers:test-driven-development, superpowers:verification-before-completion, planning-gate-selector, work-log-closeout.
 - 없음
 
 ## 검증
