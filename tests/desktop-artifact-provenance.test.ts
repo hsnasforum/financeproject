@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { PUBLIC_SNAPSHOT_FILES } from "../scripts/public_snapshot_assets.mjs";
 import { listArtifactFiles } from "../scripts/planning_v2_desktop_provenance.mjs";
 import { STANDALONE_RUNTIME_LINKED_PACKAGES } from "../scripts/standalone_runtime_assets.mjs";
 
@@ -158,6 +159,7 @@ function initializeDesktopProjectFixture(projectRoot: string): void {
   linkRelativeDirectory(fileUriPackage, path.join(path.dirname(bindingsPackage), "file-uri-to-path"));
   linkRelativeDirectory(bindingsPackage, path.join(path.dirname(betterSqlitePackage), "bindings"));
   linkDirectory(betterSqlitePackage, path.join(projectRoot, "node_modules", "better-sqlite3"));
+  for (const name of PUBLIC_SNAPSHOT_FILES) writeFixtureFile(projectRoot, `.data/${name}`, JSON.stringify({ testOnly: true }));
   initializeFixtureGit(projectRoot);
 }
 
@@ -189,6 +191,32 @@ afterEach(() => {
 });
 
 describe("desktop artifact provenance", () => {
+  it("never copies private traced data or operational files into a desktop artifact", () => {
+    const root = makeRoot(), projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
+    const data = path.join(projectRoot, ".next", "standalone", ".data");
+    fs.mkdirSync(path.join(data, "journal"), { recursive: true });
+    fs.writeFileSync(path.join(data, "journal", "test-private.json"), "TEST_ONLY_PRIVATE_CANARY");
+    fs.writeFileSync(path.join(data, "finlife_deposit_sync_attempt.json"), "TEST_ONLY_OPERATIONAL");
+    const artifactDir = path.join(root, "artifact");
+    const result = runNode(path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs"), ["--no-next-build", "--artifact-dir=" + artifactDir], { cwd: projectRoot });
+    expect(result.status).toBe(0);
+    expect(fs.readdirSync(path.join(artifactDir, ".next", "standalone", ".data")).sort()).toEqual([...PUBLIC_SNAPSHOT_FILES].sort());
+    expect(fs.readFileSync(path.join(data, "journal", "test-private.json"), "utf8")).toBe("TEST_ONLY_PRIVATE_CANARY");
+  });
+  it("rejects a missing required snapshot and preserves the previous artifact", () => {
+    const root = makeRoot(), projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
+    fs.unlinkSync(path.join(projectRoot, ".data", PUBLIC_SNAPSHOT_FILES[0]));
+    const artifactDir = path.join(root, "artifact");
+    fs.mkdirSync(artifactDir); fs.writeFileSync(path.join(artifactDir, "previous.txt"), "previous");
+    const result = runNode(path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs"), ["--no-next-build", "--artifact-dir=" + artifactDir], { cwd: projectRoot });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("required public snapshot is missing");
+    expect(fs.readFileSync(path.join(artifactDir, "previous.txt"), "utf8")).toBe("previous");
+  });
+
+
   it("does not keep generated .dist artifacts tracked as source files", () => {
     const result = spawnSync("git", ["ls-files", ".dist"], {
       cwd: process.cwd(),

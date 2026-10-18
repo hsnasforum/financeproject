@@ -126,6 +126,13 @@ export default function ProductsCatalogPage() {
   );
   const providers = catalogViewModel.providers;
   const filteredRows = catalogViewModel.filteredRows;
+  const hasCurrentResponse = catalogState.queryKey === catalogQueryKey;
+  // The provider facet ignores search and filters, so an empty complete facet means no stored product of this kind.
+  const catalogUnprepared = hasCurrentResponse
+    && rows.length === 0
+    && providerNames.length === 0
+    && providerStatus.state === "complete"
+    && partialReasons.length === 0;
 
   const run = useCallback(async (input?: { append?: boolean; cursor?: string | null }) => {
     const request = catalogRequestsRef.current!.start();
@@ -463,7 +470,7 @@ export default function ProductsCatalogPage() {
       ) : null}
 
       <div className="space-y-8">
-        {loading && filteredRows.length === 0 ? (
+        {(loading || (!hasCurrentResponse && !error)) && filteredRows.length === 0 ? (
           <div className="py-20">
             <LoadingState title="현재 조건 기준으로 비교 후보를 불러오고 있습니다" />
           </div>
@@ -547,6 +554,19 @@ export default function ProductsCatalogPage() {
               ))}
             </div>
           </>
+        ) : !loading && !error && catalogUnprepared ? (
+          <div className="py-20" data-testid="catalog-unprepared">
+            <EmptyState
+              icon="data"
+              title="공식 상품 자료가 아직 준비되지 않았습니다"
+              description="이 앱에 저장된 상품 자료가 없어 비교 후보를 보여 드릴 수 없습니다. 검색어나 필터 때문이 아닙니다."
+            />
+            <p className="mt-6 text-center text-sm font-medium text-slate-600">
+              <Link href="/settings/data-sources" className="font-black text-primary underline-offset-4 hover:underline">
+                데이터 연결 상태와 기준 시각 확인 →
+              </Link>
+            </p>
+          </div>
         ) : !loading && !error ? (
           <div className="py-20">
             <EmptyState

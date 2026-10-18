@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPnpm } from "./pnpm_runner.mjs";
+import { copyPublicSnapshots, assertPublicSnapshotDirectory } from "./public_snapshot_assets.mjs";
 import {
   DESKTOP_MANIFEST_KIND,
   DESKTOP_PROVENANCE_VERSION,
@@ -361,6 +362,9 @@ async function materializeStandaloneEntry({
   resolutionFrom = "",
   requestedPackageName = "",
 }) {
+  // Do not traverse traced local data. Canonical files are copied explicitly below.
+  const publicDataPath = toPosixPath(relativePath);
+  if (publicDataPath === ".data" || publicDataPath.startsWith(".data/")) return;
   const stats = await fs.lstat(source);
   if (!stats.isSymbolicLink()) {
     await copyResolvedStandaloneEntry({
@@ -601,12 +605,39 @@ export default {
 `;
 }
 
+async function activateArtifactStage(stage, target) {
+  const existing = await lstatOrNull(target);
+  if (existing && (existing.isSymbolicLink() || !existing.isDirectory())) throw new Error("desktop artifact target must be a regular directory");
+  let backupDir = "", oldMoved = false, activated = false;
+  try {
+    if (existing) {
+      backupDir = await fs.mkdtemp(path.join(path.dirname(target), ".finance-desktop-previous-"));
+      await fs.rename(target, path.join(backupDir, "artifact"));
+      oldMoved = true;
+    }
+    try {
+      await fs.rename(stage, target);
+      activated = true;
+    } catch (error) {
+      if (oldMoved) { await fs.rename(path.join(backupDir, "artifact"), target); oldMoved = false; }
+      throw error;
+    }
+  } finally {
+    if (backupDir && (activated || !oldMoved)) await fs.rm(backupDir, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
-  const artifactDir = path.resolve(cwd, args.artifactDir);
+  const outputArtifactDir = path.resolve(cwd, args.artifactDir);
   const sourceStandaloneDir = path.join(cwd, ".next", "standalone");
-  await assertArtifactDoesNotOverlapStandalone(artifactDir, sourceStandaloneDir);
+  await assertArtifactDoesNotOverlapStandalone(outputArtifactDir, sourceStandaloneDir);
+  const sourceData = await canonicalPathForComparison(path.join(cwd, ".data"));
+  const outputCanonical = await canonicalPathForComparison(outputArtifactDir);
+  if (isPathWithin(sourceData, outputCanonical) || isPathWithin(outputCanonical, sourceData)) {
+    throw new Error("desktop artifact destination overlaps source data");
+  }
 
   if (args.withNextBuild) {
     const result = await runPnpm(["build"], {
@@ -628,8 +659,10 @@ async function main() {
     await ensureFileExists(path.join(cwd, relativePath));
   }
 
-  await fs.rm(artifactDir, { recursive: true, force: true });
-  await fs.mkdir(artifactDir, { recursive: true });
+  const artifactParent = path.dirname(outputArtifactDir);
+  await fs.mkdir(artifactParent, { recursive: true });
+  const artifactDir = await fs.mkdtemp(path.join(artifactParent, ".finance-desktop-stage-"));
+  try {
 
   await copyIfExists(path.join(cwd, "src"), path.join(artifactDir, "src"));
   await copyIfExists(path.join(cwd, "public"), path.join(artifactDir, "public"));
@@ -672,6 +705,9 @@ async function main() {
   await fs.chmod(path.join(artifactDir, "run.sh"), 0o755);
   await fs.chmod(path.join(artifactDir, "uninstall.sh"), 0o755);
 
+  copyPublicSnapshots({ cwd, generatedRoot: artifactDir, standaloneServer: path.join(artifactDir, ".next", "standalone", "server.js"), required: true });
+  assertPublicSnapshotDirectory(path.join(artifactDir, ".next", "standalone", ".data"), { required: true });
+
   const packageVersion = await readPackageVersion(cwd);
   const gitSha = currentGitSha(cwd);
   if (!gitSha) {
@@ -701,7 +737,12 @@ async function main() {
   };
   await fs.writeFile(path.join(artifactDir, "desktop-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
 
-  process.stdout.write(`[planning:v2:desktop:build] artifact=${artifactDir}\n`);
+  await activateArtifactStage(artifactDir, outputArtifactDir);
+  process.stdout.write(`[planning:v2:desktop:build] artifact=${outputArtifactDir}\n`);
+  } finally {
+    // Unique staging directory created by this invocation; never source data.
+    await fs.rm(artifactDir, { recursive: true, force: true });
+  }
 }
 
 const currentFile = fileURLToPath(import.meta.url);

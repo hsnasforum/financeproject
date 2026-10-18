@@ -43,6 +43,11 @@ const nextConfig: NextConfig = {
     "@prisma/client",
     "better-sqlite3",
   ],
+  // Public snapshots are copied explicitly; local .data never belongs in a trace.
+  outputFileTracingExcludes: {
+    "/*": ["./.data/**/*"],
+    "next-server": ["./.data/**/*"],
+  },
   outputFileTracingIncludes: {
     "/*": [
       "./node_modules/@prisma/adapter-better-sqlite3/**/*",

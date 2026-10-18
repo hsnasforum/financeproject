@@ -9,6 +9,7 @@ import {
   pruneStandaloneShadowNextArtifacts,
 } from "./next_artifact_prune.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
+import { preparePublicSnapshotRuntime } from "./public_snapshot_assets.mjs";
 import { ensureStandaloneRuntimeAssets } from "./standalone_runtime_assets.mjs";
 import { assertPlanningStorageMode } from "./planning_storage_mode_guard.mjs";
 import { verifyPlanningDesktopRuntimeStartup } from "./planning_runtime_startup.mjs";
@@ -260,6 +261,8 @@ async function main() {
 
   let child;
   if (standaloneRuntime) {
+    const snapshots = await preparePublicSnapshotRuntime({ cwd: process.cwd(), standaloneServer: standaloneRuntime.serverPath });
+    console.log(`[next_prod_safe] public snapshots managed=${snapshots.managed} copied=${snapshots.copied} removed=${snapshots.removed}`);
     ensureStandaloneRuntimeAssets({
       standaloneServer: standaloneRuntime.serverPath,
       distDir: standaloneRuntime.distDir,

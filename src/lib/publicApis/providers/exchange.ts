@@ -86,6 +86,7 @@ export async function fetchEximExchange(params?: { dateYYYYMMDD?: string }): Pro
       timeoutMs: 12_000,
       retries: 2,
       sourceKey: "exchange",
+      sensitiveQueryParams: [keyParam],
       retryOn: [429, 500, 502, 503, 504],
     });
     const contentType = fetched.contentType;

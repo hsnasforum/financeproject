@@ -10,6 +10,7 @@ import {
   pruneStandaloneDataArtifactsForBuildPreflight,
   pruneStandaloneShadowNextArtifacts,
 } from "./next_artifact_prune.mjs";
+import { prepareSourceSnapshotAssets } from "./public_snapshot_assets.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
 
 const fallbackDistDir = (process.env.BUILD_FALLBACK_DIST_DIR ?? ".next-build").trim() || ".next-build";
@@ -471,6 +472,16 @@ child.on("exit", (code, signal) => {
         ignorePids: [process.ppid],
       }),
     );
+    const standaloneServer = path.join(projectRoot, effectiveDistDir, "standalone", "server.js");
+    if (fs.existsSync(standaloneServer)) {
+      try {
+        const assets = prepareSourceSnapshotAssets({ cwd: projectRoot, standaloneServer });
+        console.log(`[next_build_safe] public snapshots copied=${assets.copied} removed=${assets.removed}`);
+      } catch (error) {
+        console.error("[next_build_safe] public snapshot preparation failed", error.message);
+        process.exit(1);
+      }
+    }
     writeIsolatedBuildInfo(effectiveDistDir);
   } else {
     clearIsolatedBuildInfo();

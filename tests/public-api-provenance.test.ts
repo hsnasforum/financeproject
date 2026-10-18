@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getExchangeQuotes } from "../src/lib/publicApis/providers/fx";
 import { getHousingSalesBenchmark } from "../src/lib/publicApis/providers/housing";
 import { GET as getFxRoute } from "../src/app/api/public/fx/route";
@@ -7,6 +7,8 @@ import { createDataSourcePingSnapshot, formatDataSourcePingSummary } from "../sr
 const originalEnv = {
   KEXIM_API_KEY: process.env.KEXIM_API_KEY,
   KEXIM_FX_API_URL: process.env.KEXIM_FX_API_URL,
+  EXIM_EXCHANGE_API_KEY: process.env.EXIM_EXCHANGE_API_KEY,
+  EXIM_EXCHANGE_API_URL: process.env.EXIM_EXCHANGE_API_URL,
   API_CACHE_STORE: process.env.API_CACHE_STORE,
   MOLIT_SALES_API_KEY: process.env.MOLIT_SALES_API_KEY,
   MOLIT_SALES_API_URL: process.env.MOLIT_SALES_API_URL,
@@ -18,6 +20,12 @@ function setEnv(name: string, value: string | undefined): void {
   if (typeof value === "string") env[name] = value;
   else delete env[name];
 }
+
+beforeEach(() => {
+  // The calculator may read the EXIM pair when no KEXIM key exists; these cases mean "no FX key at all".
+  setEnv("EXIM_EXCHANGE_API_KEY", undefined);
+  setEnv("EXIM_EXCHANGE_API_URL", undefined);
+});
 
 afterEach(() => {
   vi.useRealTimers();

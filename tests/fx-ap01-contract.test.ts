@@ -107,13 +107,17 @@ describe("public FX official AP01 contract", () => {
     });
   });
 
+  // An explicit date (today included) is never moved to a previous business day.
+  // The no-date policy (bounded walk back over empty days) is covered by tests/fx-default-date.test.ts.
   it("uses today's KST date explicitly without inferring the previous business day", async () => {
     const dates: Array<string | null> = [];
     vi.stubGlobal("fetch", async (input: string) => {
       dates.push(new URL(input).searchParams.get("searchdate"));
       return new Response("null", { status: 200, headers: { "content-type": "application/json" } });
     });
-    await getExchangeQuotes("", ["USD"]);
+    const result = await getExchangeQuotes("20261011", ["USD"]);
     expect(dates).toEqual(["20261011"]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NO_DATA");
   });
 });
