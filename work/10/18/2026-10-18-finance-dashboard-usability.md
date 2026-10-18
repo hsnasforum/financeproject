@@ -6,7 +6,9 @@
 - 기존 dirty 파일(`work/10/10/2026-10-10-finance-remaining-release-validation.md` +12, 1호의 `useWorkspaceProfileBundle.ts`·`workspaceProfileBundle.test.ts`·`tests/e2e/planning-profile-races.spec.ts`)과 미추적 `.data/planning-debug-access-check/`, `__meta/`, `tmp/`, `work/10/17/`은 건드리지 않았습니다.
 - 바꾸지 않은 것: 인증 정책, provider 정책(`fx.ts`의 키 없음 → mock), 계산식, 의존성, launcher 코드.
 
-## 변경
+## 변경 파일 (파일별 내용)
+- 아래 id7 단계와 뒤의 "id10 보완"에 적힌 파일은 모두 `2026-10-18-finance-git-closeout.md` "커밋 1"(`bd0133b4`)의 26개 경로에 들어 있습니다.
+
 1. 공식 시작 경로
    - `package.json`: `start`에서 `--no-open`을 뺐습니다. 이제 `pnpm start`도 설치 바로가기·`start:local`처럼 one-shot session URL을 기본 브라우저로 넘깁니다. 앱이 이미 실행 중이면 기존 broker에서 새 session을 받아 브라우저만 다시 엽니다. bootstrap URL은 여전히 stdout에 출력하지 않습니다.
    - 호출 경로 확인: CI workflow·scripts·tests에서 `pnpm start`를 호출하는 곳은 없습니다. Playwright(`playwright.config.ts`), `planning_v2_desktop_smoke.mjs`, `planning_v2_prod_smoke.mjs`, 런타임 테스트는 launcher를 `--no-open`과 함께 직접 호출하므로 영향이 없습니다.
@@ -44,7 +46,7 @@
   - 당시 tsc의 `TSC_EXIT=0`, `TSC_PW_EXIT=0` 표시는 잘못이었습니다. Windows 쪽에서 `wsl.exe ... bash -lc "...; echo ...=$?"`로 실행해 `$?`·`${PIPESTATUS}`가 bash에 도달하기 전에 바깥 셸이나 `wsl.exe`에서 확장된 것으로 보입니다.
   - 아래 id10 로그에서는 스크립트 파일을 `wsl.exe -e bash <script>`로 실행했고, 실제 자식 exit 코드를 기록했습니다. tsc의 실제 exit 코드는 2입니다.
 
-## 미검증·남은 조건
+## 남은 리스크 (미검증·남은 조건)
 - build, 서버, 브라우저, E2E는 실행하지 않았습니다(1호 소유). 실제 `pnpm start` 브라우저 열기, `/dashboard` 세션 복구 화면, 변경한 E2E spec은 통합 runtime에서 확인되지 않았습니다.
 - headless Linux처럼 기본 브라우저 opener가 없는 환경에서 `pnpm start`를 실행하면 launcher가 기존 계약대로 실패 처리하고 종료합니다(`start:local`·설치 바로가기와 같은 동작). 이런 환경에서는 launcher를 `--no-open`으로 직접 호출해야 하며, 이 경우 세션을 얻을 방법은 없습니다.
 - 대시보드 보조 도구(환율)는 여전히 펼칠 때만 불러옵니다. `/tools/fx` 화면은 이번 범위가 아니어서 바꾸지 않았습니다.
@@ -107,3 +109,7 @@
 ## 사용 skill
 - 기존 구현 단계: 당시 사용 기록이 없어 확인하지 못했습니다.
 - 이후 Git 준비 단계: 마스터가 `superpowers:finishing-a-development-branch`를 읽고 적용했습니다(`2026-10-18-finance-git-closeout.md`).
+
+## 다음 라운드
+- 위 "통합 단계에서 1호가 확인해야 할 것"은 이후 `2026-10-18-finance-usability-integration.md`에서 다음처럼 처리했습니다: 기본 typecheck `40` exit 0과 Playwright tsc `34` 오류 0, canonical build `39`, production `dashboard-current-state.spec.ts` `12` 10 passed(type-only 수정 전 소스).
+- 실제 `pnpm start`의 기본 브라우저 열기는 그 기록에서도 NOT_VERIFIED입니다. `/dashboard` 세션 복구 화면의 runtime 확인은 그 기록에 별도 항목이 없어 미확인으로 남깁니다.

@@ -10,6 +10,8 @@
   - 잠금 판정·보존과 fetch를 마쳤습니다(아래 "실행 결과").
   - 커밋 1 `bd0133b49734ad3ac45552b0c6a63d07ab4b4e9b`를 만들었습니다.
   - 커밋 2(이 문서 포함 5개)와 push는 이 문서를 쓴 뒤의 후속 단계입니다.
+- 후속 리뷰(GPT57)에서는 "실행 결과"의 잠금 판정 중 확인 범위 표현만 정정했습니다. 나머지 실행 기록은 두 번째 커밋 직전 그대로입니다.
+- 커밋 2와 push 이후의 사실은 아래 "커밋 2·push 이후 (세 번째 커밋 직전 기록)"에 따로 적었습니다.
 - 아래 "확인된 사실", "stage 전 수행 조건" 등 이전 절은 승인 전 사전 준비 시점의 기록입니다. 당시 상태는 NOT_DONE·승인 대기였습니다.
 
 ## 변경 파일
@@ -18,6 +20,7 @@
   - `work/10/18/2026-10-18-finance-dashboard-profile-selection.md`, `work/10/18/2026-10-18-finance-dashboard-usability.md`: 끝에 `## 사용 skill` 절만 추가했습니다.
 - 사전 준비 단계에서는 코드, 잠금, index, Git 설정을 바꾸지 않았습니다.
 - 승인 뒤 실행 단계에서 바뀐 것은 아래 "실행 결과"의 Git 작업(잠금 파일 이름 변경, fetch, 커밋)뿐입니다. 코드 26개와 기존 문서 4개의 내용은 바꾸지 않았습니다.
+- 커밋 2·push 이후(세 번째 커밋 직전): 이 문서의 P3 정정과, 기록 5개(`work/10/18/` 아래 이 문서와 같은 날짜의 finance 기록)에 guard 필수 H2를 보완한 것이 바뀌었습니다. 코드 26개는 바꾸지 않았습니다.
 
 ## 실행 결과 (사용자 승인 후, 2026-10-18 18:39~)
 - **실행 시점 드리프트**:
@@ -27,7 +30,8 @@
   - `.git/index.lock`: regular empty file, size 0, inode 2148, mtime·ctime `2026-10-17 22:52:45.193216841 +0900`. 두 시점의 값이 같았습니다.
   - Linux 쪽: fd 보유자 0, git 프로세스 0. WSL 부팅 시각은 `2026-10-18 13:21`로 lock보다 뒤입니다.
   - Windows 쪽: `Win32_Process` 기준 git·ssh·sh 계열 프로세스 0개(명령줄은 출력하지 않음).
-  - 이 저장소의 쓰기 주체는 이 작업 하나였습니다.
+    - 한계: 이 검사는 git·ssh·sh 계열 프로세스 이름을 기준으로 했습니다. 다른 이름의 Git 라이브러리나 모든 열린 파일 핸들을 확인한 것은 아닙니다.
+  - 이 팀에서 배정한 Git 쓰기 담당은 클로드 1호 한 명이었습니다.
   - 위 근거로 stale로 판정했습니다.
 - **잠금 보존**(`03-preserve-lock.log`, `preserve_stale_lock.sh`):
   - 이름을 바꾸기 직전에 inode, size, mtime, 보유자 부재, 목적지 부재를 다시 확인했습니다.
@@ -48,6 +52,26 @@
     - 비밀값 패턴 0, 파일 끝 개행 누락 0
   - `git commit --file=tmp/finance-git-closeout-20261018/commit1-message.txt`, exit 0
   - 결과: `bd0133b49734ad3ac45552b0c6a63d07ab4b4e9b`. 커밋 트리의 변경 파일이 정확히 26개였고, 커밋 후 staged 0이었습니다.
+
+## 커밋 2·push 이후 (세 번째 커밋 직전 기록)
+- **커밋 2와 push**(`05-stage-commit2.log`, `06-push.log`, `07-final-verify.log`):
+  - 커밋 2 `cc6d928ef440dd2927e21ab84efdf98877dcc62e`: 이 문서를 포함한 5개, `STAGED_SET_EXACT count=5`
+  - non-force push `e474aeba..cc6d928e`, `push_exit=0`
+  - `REMOTE_EQUALS_LOCAL_HEAD`(원격 OID = 로컬 HEAD = `cc6d928e`), `+0 -0`, staged 0, `work/10/10` +12 보존
+- **P3 정정(협의60, GPT61 PASS)**: 위 "실행 결과"의 Windows 검사 한계와 Git 쓰기 담당 범위 표현을 정정했습니다.
+- **guard 실패(협의62)**(`08-precheck-commit3.log`, `09-multi-agent-guard.log`, `10-guard-failure-cause.log`):
+  - Node 22.22.2에서 `multi-agent:guard`가 FAIL issues=4, exit 1이었습니다.
+  - guard는 `HEAD^..HEAD`의 기록 중 가장 뒤 파일명인 `2026-10-18-finance-usability-integration.md`를 선택했습니다. 그 문서에 필수 H2 4개(변경 파일·검증·남은 리스크·다음 라운드)가 없었습니다.
+  - 그래서 세 번째 커밋을 멈추고 기록 5개의 필수 H2만 보완했습니다(이번 변경).
+- **원격 CI**(push CI run `39116448482`, cc6d928e 기준):
+  - `verify`의 `Required Gate - Release Verify`가 `freshness:release`에서 실패했습니다: `total=9 fresh=2 stale=7 exceptions=0`.
+  - 같은 run의 `windows_native`와 PR E2E Smoke run `39116451769`는 성공했습니다. PR CI run `39116451735`는 실패했습니다.
+  - 독립 조사 2건(Claude65, GPT64)의 공통 결론: 기존 `.data` snapshot의 시간 경과입니다. 31개 경로에는 `.data`·`config`·freshness 코드가 없습니다.
+  - 근거의 차이:
+    - GPT: 원격 baseline과 현재의 `.data` 11개 OID, gate 코드가 같음을 확인했습니다.
+    - Claude: 로컬 7개 stale 목록과 기준 시각을 확인했습니다. daily refresh는 main을 checkout하고 main 대상 PR을 만든다는 구조도 확인했습니다.
+  - 판단: Git 동기화는 성공했습니다. CI 전체 PASS는 데이터 freshness 때문에 차단돼 있습니다.
+  - 해소하려면 공식 live 수집과 snapshot 반영이 필요합니다. 이는 31개 경로 밖이라 별도 승인 사항입니다. 날짜 변경, 예외 추가, strict 해제는 하지 않습니다.
 
 ## 사용 skill
 - 마스터: `superpowers:finishing-a-development-branch`를 읽고 Git 준비에 적용했습니다.
@@ -161,6 +185,12 @@
 - 제품 test·build·runtime과 거부된 메타데이터 조회는 실행하지 않았습니다.
 
 ## 남은 리스크
+- 아래 3줄은 협의44 사전 점검 시점의 기록입니다. 이후 상태는 "실행 결과"와 "커밋 2·push 이후"에 있습니다.
 - 원격 refs 정보가 오래됐습니다(2026-10-15).
 - Windows 쪽 Git이 동시에 사용 중일 가능성은 확인하지 않았습니다(NOT_VERIFIED).
 - Git 처리 범위는 아직 사용자 승인 대기입니다.
+- 현재(세 번째 커밋 직전) 남은 것: 원격 CI `freshness:release` 차단(데이터 권한 별도), 기록 보완 커밋·push와 그 HEAD의 CI 결과(후속 보고)
+
+## 다음 라운드
+- 현재 승인된 Git 마무리: 기록 5개 보완을 리뷰한 뒤 일반 커밋 1개와 non-force push로 반영합니다. 그 HEAD의 원격 일치와 CI 결과는 이 문서가 아닌 후속 실행 보고에 적습니다.
+- freshness 해소에는 별도 승인이 필요합니다: 공식 sync의 live API 호출, 기존 키 사용, DB 쓰기, snapshot 7개 반영.

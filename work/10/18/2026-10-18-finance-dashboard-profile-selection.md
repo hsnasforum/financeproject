@@ -8,6 +8,10 @@
   - 기존 `work/10/10/...` +12줄과 미추적 `.data/planning-debug-access-check/`, `__meta/`, `tmp/`, `work/10/17/`을 보존했습니다.
 - 지킨 계약: 기본 프로필 저장 규칙(`defaultProfileId`)을 바꾸지 않습니다. 명시 선택을 다른 프로필로 조용히 대체하지 않습니다. auth fail-closed, FX 출처 표시, 계산식, 저장 경합 보호는 그대로입니다.
 
+## 변경 파일
+- 아래 본문에 적힌 제품·테스트 파일(`dashboardProfileSelection.ts`, `page.tsx`, `dashboardViewModel.ts`, `DashboardClient.tsx`, `dashboardClientModel.ts`, `docs/current-screens.md`, `tests/helpers/finlifeLegacyDatabase.ts`, `tests/finlife-legacy-fixture-env.test.ts`, `tests/dashboard-profile-selection.test.tsx`, `tests/dashboard-view-model.test.tsx`)은 모두 `2026-10-18-finance-git-closeout.md` "커밋 1"(`bd0133b4`)의 26개 경로에 들어 있습니다.
+- `tmp/` 아래 검증 script(`journey.mjs`, `run.sh`)는 커밋 대상이 아닙니다.
+
 ## 기존 구현 (클로드 1호 id19, 이번에 다시 쓰지 않음)
 - `src/app/dashboard/_lib/dashboardProfileSelection.ts`: `?profileId=`를 `none` / `requested` / `invalid`로 파싱합니다.
   - 중복 query, 빈 값, 형식 오류는 `invalid`입니다.
@@ -69,7 +73,7 @@
   - 원본: Playwright tsc exit 0 (`10`)
 - 복사본 동기화 근거: `copy-sync-*.log`(sha256 전후)와 `copy-sync-*.diff`
 
-## 미실행·남은 조건
+## 남은 리스크 (미실행·남은 조건)
 - 이번 수정 뒤에는 다음을 실행하지 않았습니다. 독립 GPT 리뷰 뒤 별도 통합 단계에서 합니다.
   - 전체 `pnpm test`(격리 복사본에서만)
   - production rebuild
@@ -125,3 +129,7 @@
 ## 사용 skill
 - 기존 구현 단계: 당시 사용 기록이 없어 확인하지 못했습니다.
 - 이후 Git 준비 단계: 마스터가 `superpowers:finishing-a-development-branch`를 읽고 적용했습니다(`2026-10-18-finance-git-closeout.md`).
+
+## 다음 라운드
+- 위 "남은 리스크"와 GPT24 보완의 미실행 항목은 이후 `2026-10-18-finance-usability-integration.md`에서 실행했습니다: 격리 복사본 full test `37` exit 0, canonical build `39`, production `dashboard-current-state.spec.ts` `12` 10 passed, `planning:v2:complete` `08`, 여정 create `27`·primary `28`(synthetic snapshot 기준).
+- live 가정 데이터 검증은 그 기록에서도 실행하지 않았습니다.

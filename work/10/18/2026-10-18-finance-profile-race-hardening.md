@@ -11,7 +11,9 @@
   - create/duplicate에서는 사용자가 이동했거나 계속 입력했으면 현재 선택과 입력을 유지하고, 변화가 없을 때만 새 프로필을 선택합니다.
 - 이 기록은 처음에 `work/10/18/finance-profile-race-hardening.md`로 만들었다가, 대상 파일이 없음을 확인한 뒤 현재 이름으로 옮겼습니다.
 
-## 변경
+## 변경 파일 (파일별 내용)
+- 이 기록의 4개 파일(아래와 끝의 "저장 완료 안내 P3 보완")은 모두 `2026-10-18-finance-git-closeout.md` "커밋 1"(`bd0133b4`)의 26개 경로에 들어 있습니다.
+
 `src/components/planning/workspace/useWorkspaceProfileBundle.ts`:
 - **선택 동기화**: 선택 ref를 선택하는 시점에 바로 갱신하고, 선택 세대(generation)도 함께 올립니다.
 - **상세 응답**: 아래 조건을 모두 만족할 때만 반영합니다. 같은 선택·세대·epoch의 중복 요청은 한 번만 보냅니다.
@@ -73,7 +75,7 @@
 ## 사용 skill
 - 없음
 
-## 남은 리스크·미확인
+## 남은 리스크 (미확인 포함)
 - 서버 PATCH는 last-writer-wins입니다(여러 탭 동시 저장). 범위 밖입니다.
 - 프로필을 바꾸면 이전 프로필의 미저장 입력을 버리는 기존 동작은 유지됩니다. 선택된 프로필이 목록에서 사라져 선택이 강제로 바뀌는 경우에도 미저장 입력을 버립니다.
 - 포커스만 해도 같은 프로필의 hydrate를 막는 기존 동작은 유지됩니다.
@@ -108,3 +110,8 @@
     - Playwright tsc exit 0 (`10`)
 - E2E는 격리 복사본에서 일회용 `/tmp` data root와 쓰지 않는 DB URL로 실행했습니다. 실행 후 data root를 삭제했고 남은 프로세스는 없습니다.
 - 앱 쓰기 승인: 이번에는 정상 응답했습니다. 이전 1800초 timeout은 재발하지 않았습니다.
+
+## 다음 라운드
+- "남은 리스크"의 통합 게이트 항목은 이후 `2026-10-18-finance-usability-integration.md`에서 실행했습니다: 기본 typecheck `40` exit 0, 원본 build `39`, 격리 복사본 full test `37` exit 0, desktop smoke `16`(type-only 수정 전 소스).
+- 전체 E2E는 그 통합 기록에도 실행 기록이 없습니다(미실행).
+- 서버 PATCH last-writer-wins는 범위 밖으로 남깁니다.

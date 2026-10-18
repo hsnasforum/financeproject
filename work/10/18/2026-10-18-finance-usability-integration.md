@@ -56,7 +56,16 @@
 - 이로써 코드 변경 전부가 작성자 아닌 리뷰를 마쳤고, 추가 개발 요청은 없습니다.
 - 기존 검증 결과는 그대로입니다: full test `37`(937 files, 4603 passed / 5 skipped, exit 0), 원본 build `39`, typecheck `40`, 26개 파일 동기화 증거 `35`·`36`·`41`.
 
-### 결과표 (raw log: `/home/xpdlqj/code/finance/tmp/finance-final-20261018/`)
+## 변경 파일
+- 이 통합 단계의 제품 변경: import 경계 수정 3개 파일(아래 "해결된 실패")
+  - `src/lib/planning/auth/callbackPath.ts`(신규)
+  - `src/app/dashboard/_lib/dashboardProfileSelection.ts`
+  - `src/components/planning/PlanningAuthRequiredState.tsx`
+- 검증 대상 소스 전체: `tmp/finance-final-20261018/manifest-41-final-after-import-fix.txt`의 26개 파일. 이 기록 작성 시점에는 커밋 전이었고, 이후 같은 26개 경로가 `2026-10-18-finance-git-closeout.md`의 "커밋 1"(`bd0133b4`)로 커밋됐습니다.
+- 검증 script(`tmp/`, 커밋 대상 아님): `tmp/finance-integration-20261018/journey.mjs`, `tmp/finance-final-20261018/fault_root_check.sh`
+- 기록: 이 문서
+
+## 검증 (결과표, raw log: `/home/xpdlqj/code/finance/tmp/finance-final-20261018/`)
 | # | 위치 | 검사 | 결과 | exit |
 |---|---|---|---|---|
 | 04 | 복사본 | `env -u DATABASE_URL corepack pnpm test` (이전 작업자 실행) | **중단됨**. 프로세스가 사라져 결과 없음(`04-INTERRUPTED-NOTE.md`) | 없음 |
@@ -204,7 +213,7 @@
 - 재무진단에서 입력·저장 → 실행·기록 저장 → 리포트 보관 → 다시 열기가 가능합니다.
 - 대시보드는 헤더나 `/dashboard`로 들어오면 기본 프로필을 보여 줍니다. `표시할 프로필`로 고르면 `/dashboard?profileId=…`로 바뀌고, 그 주소로 다시 방문하면 선택이 유지됩니다. 기본 프로필 설정은 바뀌지 않습니다.
 
-### 확인하지 않은 것
+## 남은 리스크 (확인하지 않은 것)
 - Windows 기본 브라우저 자동 열기 경로: **NOT_VERIFIED**. 기존 사용자 세션 쿠키(`127.0.0.1 Path=/`)에 영향을 줄 수 있어 실행하지 않았습니다.
 - live 외부 API와 live 가정 데이터: 여정의 snapshot은 synthetic입니다.
 - 설치본 교체와 배포.
@@ -222,3 +231,7 @@
 
 ## 사용 skill
 - 없음
+
+## 다음 라운드
+- 이 기록 다음 단계는 Git 마무리입니다. 기록은 `2026-10-18-finance-git-closeout.md`에 있습니다.
+- 위 "남은 리스크"의 NOT_VERIFIED 항목(Windows 기본 브라우저, live 외부 API, 원본 production runtime, 설치본·배포)은 이 단계에서 실행하지 않았습니다. 별도 승인이 있을 때만 확인합니다.
