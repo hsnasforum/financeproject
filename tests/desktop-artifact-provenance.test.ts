@@ -307,18 +307,20 @@ describe("desktop artifact provenance", () => {
   it.runIf(process.platform !== "win32")("writes package, git, lockfile, and checksum provenance into the generated manifest", () => {
     const root = makeRoot();
     const artifactDir = path.join(root, "planning-v2-desktop");
+    const projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
     const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
 
-    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`]);
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
 
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
     const manifest = JSON.parse(fs.readFileSync(path.join(artifactDir, "desktop-manifest.json"), "utf8")) as {
       version?: string;
       gitSha?: string;
       lockfileSha256?: string;
       artifactChecksum?: { algorithm?: string; value?: string; fileCount?: number };
     };
-    const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as { version: string };
+    const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")) as { version: string };
 
     expect(manifest.version).toBe(packageJson.version);
     expect(manifest.gitSha).toMatch(/^[0-9a-f]{40}$/);
@@ -877,12 +879,14 @@ describe("desktop artifact provenance", () => {
   it.runIf(process.platform !== "win32")("rejects symlinked and stale desktop artifacts", () => {
     const root = makeRoot();
     const artifactDir = path.join(root, "planning-v2-desktop");
+    const projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
     const toDir = path.join(root, "installed");
     const buildScript = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
     const installScript = path.join(process.cwd(), "scripts", "planning_v2_desktop_install.mjs");
 
-    const built = runNode(buildScript, ["--no-next-build", `--artifact-dir=${artifactDir}`]);
-    expect(built.status).toBe(0);
+    const built = runNode(buildScript, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+    expect(built.status, built.stderr).toBe(0);
 
     const linkedPublic = path.join(artifactDir, "linked-public");
     linkDirectory(path.join(artifactDir, "public"), linkedPublic);

@@ -10,6 +10,7 @@ import {
   pruneStandaloneDataArtifactsForBuildPreflight,
   pruneStandaloneShadowNextArtifacts,
 } from "./next_artifact_prune.mjs";
+import { normalizeNextStandaloneOutput } from "./standalone_next_output.mjs";
 import { prepareSourceSnapshotAssets } from "./public_snapshot_assets.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
 import {
@@ -517,6 +518,8 @@ child.on("exit", (code, signal) => {
     const standaloneServer = path.join(projectRoot, effectiveDistDir, "standalone", "server.js");
     if (fs.existsSync(standaloneServer)) {
       try {
+        const normalized = normalizeNextStandaloneOutput({ projectRoot, distDir: effectiveDistDir });
+        console.log(`[next_build_safe] traced data removed=${normalized.dataTraceEntriesRemoved} dependency links relocated=${normalized.dependencyLinksRelocated}`);
         const assets = prepareSourceSnapshotAssets({ cwd: projectRoot, standaloneServer });
         console.log(`[next_build_safe] public snapshots copied=${assets.copied} removed=${assets.removed}`);
       } catch (error) {
