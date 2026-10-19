@@ -483,8 +483,13 @@ process.on("exit", () => {
   terminateChild("SIGTERM");
 });
 
-child.on("exit", (code, signal) => {
+// The process may exit while inherited stdout/stderr pipes are still open.
+// Record its lifetime here; only close admits the completed output and receipt.
+child.on("exit", () => {
   childExited = true;
+});
+
+child.on("close", (code, signal) => {
   clearScaffoldTimer();
   clearHeartbeatTimer();
   restoreRootTsconfig();
@@ -544,7 +549,7 @@ child.on("exit", (code, signal) => {
     process.exit(code);
     return;
   }
-  process.kill(process.pid, signal ?? "SIGTERM");
+  relayParentSignal(signal ?? "SIGTERM");
 });
 
 child.on("error", (error) => {
