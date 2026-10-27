@@ -9,8 +9,10 @@ import {
   emergencyMonthsFromGoal,
   ensureBeginnerGoals,
   hasProfileEditsSinceDispatch,
+  hasUnconfirmedProfileContent,
   hasUnsavedProfileEditsAfterSave,
   isDeleteProfileConfirmMatched,
+  isProfileUpdateTargetForeign,
   isLatestProfileListResponse,
   resolveInitialProfileRequestId,
   resolveProfileListSelectionRequest,
@@ -21,7 +23,10 @@ import {
   shouldApplyProfileDetailResponse,
   selectLoadedProfileId,
   shouldApplyProfileHydrationForEditVersion,
+  shouldHydrateOverForeignContent,
   shouldHydrateSelectedProfile,
+  shouldKeepUnconfirmedDraftOverProfileFallback,
+  shouldReleaseSelectionForForeignDraft,
   shouldSkipSelectedProfileHydrationAfterLocalEdit,
   updateBeginnerGoalList,
 } from "../../../src/components/planning/workspace/useWorkspaceProfileBundle";
@@ -205,6 +210,67 @@ describe("workspaceProfileBundle", () => {
     expect(hasUnsavedProfileEditsAfterSave({ dispatchContentVersion: 3, selectionContentVersion: 3, currentContentVersion: 4 })).toBe(true);
     // The previous dispatch-only rule reported the dropped B edit as unsaved.
     expect(hasProfileEditsSinceDispatch({ dispatchContentVersion: 3, currentContentVersion: 4 })).toBe(true);
+  });
+
+  it("treats only content moved past the last confirmed version as unconfirmed", () => {
+    // Hydrated or saved at 3, nothing typed since (a focus does not change the content version).
+    expect(hasUnconfirmedProfileContent({ confirmedContentVersion: 3, currentContentVersion: 3 })).toBe(false);
+    // Quick start, sample or typing after the last confirmation, including after a failed list.
+    expect(hasUnconfirmedProfileContent({ confirmedContentVersion: 3, currentContentVersion: 4 })).toBe(true);
+  });
+
+  it("keeps an unconfirmed draft instead of falling back to the first saved profile", () => {
+    const base = {
+      requestedId: "missing-profile",
+      loadedProfileIds: ["profile-a", "profile-b"],
+      currentSelectedProfileId: "missing-profile",
+      fallbackProfileId: "profile-a",
+      hasUnconfirmedContent: true,
+    };
+    // Missing requested or stored selection, or an empty selection after a failed list.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback(base)).toBe(true);
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, requestedId: "", currentSelectedProfileId: "" })).toBe(true);
+    // No unconfirmed content (nothing typed, focus only, or saved before the failure): the fallback stays.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, hasUnconfirmedContent: false })).toBe(false);
+    // A requested profile that exists is a real target, not a fallback.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, requestedId: "profile-b", fallbackProfileId: "profile-b" })).toBe(false);
+    // Nothing to move to (empty list) or already on the picked profile.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, loadedProfileIds: [], fallbackProfileId: "", currentSelectedProfileId: "" })).toBe(false);
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, requestedId: "", currentSelectedProfileId: "profile-a" })).toBe(false);
+  });
+
+  it("releases the selection only when skipped content started from another profile", () => {
+    const base = {
+      profileId: "profile-b",
+      selectedProfileId: "profile-b",
+      editorContentProfileId: "profile-default",
+      hasUnconfirmedContent: true,
+    };
+    // Restored selection B loading while the server-rendered default is on screen and was edited.
+    expect(shouldReleaseSelectionForForeignDraft(base)).toBe(true);
+    // Edits on B's own stored values stay with B.
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, editorContentProfileId: "profile-b" })).toBe(false);
+    // A focus alone (no unconfirmed content) or a response for another profile changes nothing.
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, hasUnconfirmedContent: false })).toBe(false);
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, selectedProfileId: "profile-c" })).toBe(false);
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, profileId: "" })).toBe(false);
+  });
+
+  it("applies a selection's values over foreign content only when nothing unconfirmed would be lost", () => {
+    const base = { profileId: "profile-b", editorContentProfileId: "profile-default", hasUnconfirmedContent: false };
+    // A focus on the server-rendered profile while the restored selection B loads.
+    expect(shouldHydrateOverForeignContent(base)).toBe(true);
+    // Unconfirmed input is kept (and the selection released elsewhere), never replaced.
+    expect(shouldHydrateOverForeignContent({ ...base, hasUnconfirmedContent: true })).toBe(false);
+    // Content of B itself keeps the existing local-edit protection.
+    expect(shouldHydrateOverForeignContent({ ...base, editorContentProfileId: "profile-b" })).toBe(false);
+  });
+
+  it("refuses an update whose editor content did not start from the target profile", () => {
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "profile-b", editorContentProfileId: "profile-default" })).toBe(true);
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "profile-b", editorContentProfileId: "" })).toBe(true);
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "profile-b", editorContentProfileId: " profile-b " })).toBe(false);
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "", editorContentProfileId: "profile-b" })).toBe(false);
   });
 
   it("resolves save follow-up selection and local edit state at the save response", () => {

@@ -23,7 +23,8 @@ import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
-import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
+import { addCompareIdToStorage, compareStoreConfig, loadCompareIdsFromStorage } from "@/lib/products/compareStore";
+import { describeCompareAdd, type CompareAddResult } from "@/components/recommend/CompareAddNotice";
 import {
   buildRecommendHistoryHref,
   buildRecommendInitialProfileState,
@@ -138,6 +139,7 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [compareAddResult, setCompareAddResult] = useState<CompareAddResult | null>(null);
   const [resultSnapshot, setResultSnapshot] = useState<RecommendResultSnapshot | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [lastStored, setLastStored] = useState<StoredRecommendResult | null>(null);
@@ -251,12 +253,14 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
           previous,
           goHistory: options.goHistory === true,
         });
+        // Only the autorun link reaches here. Replace the autorun entry with history so Back leaves the
+        // flow instead of re-running it (the reuse branch would push history again and trap Back).
         if (continuation.kind === "reuse") {
-          if (continuation.historyHref) router.push(continuation.historyHref);
+          if (continuation.historyHref) router.replace(continuation.historyHref);
         } else {
           const runId = saveRunFromRecommend(ownerId, toSavedRunProfile(resultProfile), json);
           writeRecommendAutorunSessionPayload(ownerId, { sig: continuation.signature, runId });
-          if (continuation.goHistory) router.push(buildRecommendHistoryHref(runId));
+          if (continuation.goHistory) router.replace(buildRecommendHistoryHref(runId));
         }
       }
     } catch (requestError) {
@@ -474,9 +478,16 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
   }
 
   function addItemToCompare(unifiedId: string) {
-    addCompareIdToStorage(unifiedId, compareStoreConfig.max);
-    setFeedback("상품이 비교함에 담겼습니다.");
-    setTimeout(() => setFeedback(""), 3000);
+    const before = loadCompareIdsFromStorage(compareStoreConfig.max);
+    const after = addCompareIdToStorage(unifiedId, compareStoreConfig.max);
+    const items = resultSnapshot?.response.items ?? [];
+    setCompareAddResult(describeCompareAdd({
+      before,
+      after,
+      id: unifiedId,
+      max: compareStoreConfig.max,
+      labelFor: (id) => items.find((item) => item.unifiedId === id)?.productName,
+    }));
   }
 
   function deleteRecentHistory() {
@@ -757,6 +768,8 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
           onExportJson={exportCurrentRunJson}
           onExportCsv={exportCurrentRunCsv}
           onAddCompare={addItemToCompare}
+          compareAddResult={compareAddResult}
+          onCloseCompareNotice={() => setCompareAddResult(null)}
         />
       )}
       {!loading && !resultSnapshot && (

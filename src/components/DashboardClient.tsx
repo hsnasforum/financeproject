@@ -235,6 +235,10 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
             ? "프로필을 선택하면 그 프로필로 저장한 플랜을 보여 드립니다."
             : "현재 프로필로 저장한 플랜이 없습니다.";
   const runsLoadFailed = state.runsLoadState === "failed";
+  // The create API resolves an omitted or "latest" snapshot to today's data, so only a stored
+  // snapshot id can repeat the previous plan's conditions. Without one, send the user to review.
+  const staleRerunSnapshotId = currentPlan.state === "stale" ? currentPlan.rerunInput.snapshotId?.trim() ?? "" : "";
+  const staleRerunPinned = Boolean(staleRerunSnapshotId) && staleRerunSnapshotId.toLowerCase() !== "latest";
 
   async function rerunCurrentPlan(): Promise<void> {
     if (
@@ -400,14 +404,20 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
               <h2 className="mt-2 text-xl font-bold leading-8 tracking-tight text-navy">
                 {selectionPending ? "표시할 프로필을 먼저 선택하세요" : currentPlan.state === "failed" ? "저장된 플랜을 다시 확인하세요" : currentPlan.state === "stale" ? "바뀐 재무 정보로 다시 계산하세요" : currentRun ? "저장된 결과에서 우선순위를 확인하세요" : "첫 재무 진단을 시작하세요"}
               </h2>
-              <p className="mt-2 break-words text-sm leading-6 text-slate-600">{currentPlan.state === "stale" ? "프로필이 바뀌어 이전 결과와 현재 상태가 다릅니다. 이전 계산 조건으로 새 결과를 저장합니다." : nextActionSummary}</p>
+              <p className="mt-2 break-words text-sm leading-6 text-slate-600">{currentPlan.state === "stale"
+                ? staleRerunPinned
+                  ? "프로필이 바뀌어 이전 결과와 현재 상태가 다릅니다. 이전 계산 조건으로 새 결과를 저장합니다."
+                  : "프로필이 바뀌어 이전 결과와 현재 상태가 다릅니다. 이전 플랜의 계산 기준 자료가 고정되어 있지 않아 같은 조건으로 바로 다시 계산할 수 없습니다. 재무 진단에서 계산 조건을 확인한 뒤 다시 계산해 주세요."
+                : nextActionSummary}</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 {selectionPending ? null : currentPlan.state === "failed" ? (
                   <button type="button" onClick={() => window.location.reload()} className={dashboardPrimaryButtonClassName}>최근 플랜 다시 불러오기</button>
-                ) : currentPlan.state === "stale" ? (
+                ) : currentPlan.state === "stale" && staleRerunPinned ? (
                   <button type="button" onClick={() => void rerunCurrentPlan()} disabled={rerunning} className={dashboardPrimaryButtonClassName}>
                     {rerunning ? "다시 계산 중..." : "현재 프로필로 다시 계산"}
                   </button>
+                ) : currentPlan.state === "stale" ? (
+                  <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className={dashboardPrimaryButtonClassName}>계산 조건 검토 후 다시 계산</Link>
                 ) : currentRun ? (
                   <Link href={currentReportHref} prefetch={devPlanningPrefetch(currentReportHref)} className={dashboardPrimaryButtonClassName}>최근 플랜 리포트 보기</Link>
                 ) : (
@@ -420,7 +430,7 @@ export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClient
               <p role={currentPlan.state === "failed" ? "alert" : "status"} className={cn("text-sm leading-6", currentPlan.state === "stale" || currentPlan.state === "failed" ? "font-medium text-amber-800" : "text-slate-600")}>{currentPlanMessage}</p>
               {currentPlan.state === "stale" ? (
                 <div className="space-y-2 text-sm leading-6 text-slate-600">
-                  <p>기간·정책·가정은 이전 플랜 조건을 사용합니다.</p>
+                  {staleRerunPinned ? <p>기간·정책·가정은 이전 플랜 조건을 사용합니다.</p> : null}
                   {rerunError ? <p role="alert" className="rounded-lg bg-amber-50 p-3 font-semibold text-amber-900">{rerunError}</p> : null}
                   <div className="flex flex-wrap gap-x-5 gap-y-2">
                     <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className={dashboardTextLinkClassName}>계산 조건 검토</Link>

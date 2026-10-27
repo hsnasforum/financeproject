@@ -62,6 +62,7 @@ export function PlanningWorkspaceClient({
               >
                 {headerSelectNeedsPendingOption ? <option hidden value={quickStart.selectedProfileId} /> : null}
                 {quickStart.profiles.length === 0 ? <option value="">없음</option> : null}
+                {quickStart.profiles.length > 0 && !quickStart.selectedProfileId ? <option value="">선택 없음 · 저장 전 입력</option> : null}
                 {quickStart.profiles.map((profileOption) => (
                   <option key={profileOption.id} value={profileOption.id}>{profileOption.name}</option>
                 ))}

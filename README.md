@@ -67,14 +67,29 @@ Planning v2 문서:
 
 ## 빠른 시작
 
+일반 사용(Desktop Local, 새 환경 기준):
+
 ```bash
+cp .env.local.example .env.local   # .env.local이 없을 때만
 pnpm install
-cp .env.local.example .env.local
 pnpm prisma:generate
-pnpm prisma:db:push
+pnpm prisma:db:push                # 새 DB를 만들 때만
+pnpm build
+pnpm start
+```
+
+- 기존 `.env.local`과 DB가 있으면 그대로 두고 설정 복사와 `prisma:db:push`를 건너뜁니다.
+- 설정 복사는 `pnpm install`보다 먼저 합니다. install 후처리(`prisma generate`)가 `.env.local`의 `DATABASE_URL`을 읽으므로, 설정 파일이 없으면 새 환경에서 install이 실패합니다.
+- `pnpm start`가 기본 브라우저에서 `/planning`을 엽니다. 처음 사용 순서(간단 시작 → 프로필 저장 → 실행 → 리포트 보관 → Markdown 다운로드)는 `USER_GUIDE.md`를 참고합니다.
+- 외부 데이터 API 키가 없어도 재무 진단은 사용할 수 있으며, 데이터 연결 상태는 `/settings/data-sources`에서 확인합니다.
+
+개발 서버:
+
+```bash
 pnpm dev
 ```
 
+- 개발용입니다. 기본 설정에서 재무 진단 화면과 API는 로그인이 필요하고, 예시 설정에는 로그인 제공자가 없으므로 인증 설정을 따로 준비해야 합니다.
 - 로컬: `http://localhost:3100`
 - LAN 개발 서버: `pnpm dev:lan`
 - WSL에서는 `pnpm dev`가 기본적으로 `0.0.0.0`에 바인드하고, Windows 브라우저용 `127.0.0.1 -> WSL IPv4` localhost bridge만 추가로 엽니다.

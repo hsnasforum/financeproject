@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { SourceBadge } from "@/components/debug/SourceBadge";
 import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
+import { CompareAddNotice, type CompareAddResult } from "@/components/recommend/CompareAddNotice";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
@@ -38,6 +39,8 @@ type Props = {
   onExportJson: () => void;
   onExportCsv: () => void;
   onAddCompare: (unifiedId: string) => void;
+  compareAddResult?: CompareAddResult | null;
+  onCloseCompareNotice?: () => void;
 };
 
 function toScorePercent(finalScore: number): number {
@@ -59,6 +62,8 @@ export function RecommendResultsPanel({
   onExportJson,
   onExportCsv,
   onAddCompare,
+  compareAddResult = null,
+  onCloseCompareNotice,
 }: Props) {
   const planningContextStrip = useMemo(
     () => buildPlanningContextStrip(resultProfile, result, planningActionContext),
@@ -377,6 +382,10 @@ export function RecommendResultsPanel({
                   비교 담기
                 </Button>
               </div>
+              {/* Shown in the tapped card so the result is visible where the user acted, also on a phone. */}
+              {compareAddResult?.id === item.unifiedId ? (
+                <CompareAddNotice className="mt-4" result={compareAddResult} onClose={() => onCloseCompareNotice?.()} />
+              ) : null}
 
               <ProductDetailDrawer
                 open={openDetailKey === itemKey}

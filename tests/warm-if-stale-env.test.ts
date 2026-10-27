@@ -354,3 +354,51 @@ describe("warm_if_stale official AP01 requested-date contract", () => {
     expect(observed.after).toBe(observed.before);
   });
 });
+
+
+describe("warm_if_stale credential redirect boundary", () => {
+  it.each([301, 302, 303, 307, 308])("rejects HTTP %s without forwarding the credential to a second origin", async (statusCode) => {
+    const root = makeRoot();
+    const receiptPath = path.join(root, ".data", "exchange_snapshot.json");
+    const before = JSON.stringify({ generatedAt: "2020-01-01T00:00:00.000Z", asOf: "2019-12-31", rowCount: 7 });
+    fs.writeFileSync(receiptPath, before, "utf8");
+    let firstRequests = 0;
+    let redirectedRequests = 0;
+    const target = http.createServer((_request, response) => {
+      redirectedRequests += 1;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify([{ result: 1, cur_unit: "USD", deal_bas_r: "1339.2" }]));
+    });
+    const targetPort = await listen(target);
+    const origin = http.createServer((request, response) => {
+      firstRequests += 1;
+      response.writeHead(statusCode, { location: "http://127.0.0.1:" + targetPort + request.url });
+      response.end();
+    });
+    const originPort = await listen(origin);
+    const syntheticKey = "synthetic-redirect-only-key";
+    try {
+      const result = await runNodeScript(path.join(process.cwd(), "scripts", "warm_if_stale.mjs"), {
+        cwd: root,
+        env: {
+          ...process.env,
+          EXIM_EXCHANGE_API_KEY: syntheticKey,
+          EXIM_EXCHANGE_API_URL: "http://127.0.0.1:" + originPort + "/exchangeJSON",
+          EXIM_EXCHANGE_KEY_PARAM: "authkey",
+          EXIM_EXCHANGE_DATA: "AP01",
+        },
+        args: ["--exchange-only", "--exchange-date=20261008"],
+      });
+      expect(firstRequests).toBe(1);
+      expect(redirectedRequests).toBe(0);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("[warm] exchange: failed");
+      expect(result.stdout).not.toContain("[warm] exchange: wrote");
+      expect(result.stdout + result.stderr).not.toContain(syntheticKey);
+      expect(fs.readFileSync(receiptPath, "utf8")).toBe(before);
+    } finally {
+      await new Promise<void>((resolve) => origin.close(() => resolve()));
+      await new Promise<void>((resolve) => target.close(() => resolve()));
+    }
+  });
+});

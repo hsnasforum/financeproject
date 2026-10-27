@@ -4,7 +4,18 @@ import { expect, test, type Page } from "@playwright/test";
 
 // Deliberately replace only the workspace element in a valid Flight response.
 // React commits an empty child; this is NOT a reproduction of the original router defect.
-async function emptyPlanningWorkspace(page: Page, titleOnly = false) {
+// "stale-dashboard" puts a clearly synthetic previous-dashboard marker in that slot instead, so the
+// real /planning navigation completes while the screen still looks like the previous page.
+type WorkspaceReplacement = "empty" | "title" | "stale-dashboard";
+
+const STALE_DASHBOARD_MARKER = ["$", "section", null, {
+  "data-testid": "dashboard-current-state",
+  "data-synthetic-stale-fixture": "previous-dashboard",
+  "aria-label": "합성 이전 화면 표지",
+  children: "테스트 fixture: 이전 대시보드 화면이 남아 있는 상태를 흉내 낸 합성 표지입니다.",
+}];
+
+async function emptyPlanningWorkspace(page: Page, variant: WorkspaceReplacement = "empty") {
   let replacements = 0;
   await page.route("**/planning?*", async (route) => {
     if (route.request().headers().rsc !== "1") return route.continue();
@@ -21,7 +32,9 @@ async function emptyPlanningWorkspace(page: Page, titleOnly = false) {
               && ["featureFlags", "snapshotItems", "initialSelectedProfileId", "initialSelectedProfile", "csrf"]
                 .every((key) => key in props)) {
             replacements++;
-            return titleOnly ? ["$", "h1", null, { children: "재무 진단" }] : ["$", "$Sreact.fragment", null, { children: [] }];
+            return variant === "title" ? ["$", "h1", null, { children: "재무 진단" }]
+              : variant === "stale-dashboard" ? STALE_DASHBOARD_MARKER
+                : ["$", "$Sreact.fragment", null, { children: [] }];
           }
           return value.map(replace);
         }
@@ -209,7 +222,7 @@ test("visible profile storage error keeps its own retry instead of blank recover
 
 
 test("title without the planning body still offers recovery", async ({ page }) => {
-  const replacements = await emptyPlanningWorkspace(page, true);
+  const replacements = await emptyPlanningWorkspace(page, "title");
   await openFromDashboard(page);
   await expect.poll(replacements).toBe(1);
   await expect(page.locator("#main-content h1")).toHaveText("재무 진단");
@@ -218,11 +231,17 @@ test("title without the planning body still offers recovery", async ({ page }) =
 });
 
 test("stale dashboard DOM at planning URL does not mask recovery", async ({ page }) => {
-  await page.goto("/dashboard");
-  await expect(page.getByTestId("dashboard-current-state")).toBeVisible();
-  // Controlled stale-screen state, not an assertion about the original router defect.
-  await page.evaluate(() => window.history.pushState(null, "", "/planning"));
+  // Synthetic stale-screen fixture, not a reproduction of the original router defect: the real
+  // /planning navigation completes, but the workspace slot holds a marker that looks like the
+  // previous dashboard. (A direct history.pushState right after the SSR dashboard was visible could
+  // run before hydration, and the hydration commit's canonical replaceState then restored /dashboard.)
+  const replacements = await emptyPlanningWorkspace(page, "stale-dashboard");
+  await openFromDashboard(page);
+  // Fixture preconditions only, not product evidence: planning URL, marker shown, no planning body.
+  await expect.poll(replacements).toBe(1);
   await expect(page).toHaveURL(/\/planning$/);
+  await expect(page.locator('[data-synthetic-stale-fixture="previous-dashboard"]')).toBeVisible();
+  await expect(page.getByTestId("planning-profile-form")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-current-state")).toBeVisible();
   const recovery = page.getByRole("region", { name: "재무진단 화면 복구" });
   await expect(recovery).toBeVisible({ timeout: 15_000 });

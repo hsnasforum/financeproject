@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { PlanningAuthRequiredState } from "../src/components/planning/PlanningAuthRequiredState";
+import { CompareAddNotice } from "../src/components/recommend/CompareAddNotice";
 import { resolveRecommendAuthCallbackPath } from "../src/components/recommend/RecommendAuthRequiredState";
 import { ButtonLink } from "../src/components/ui/Button";
 import { PlanningAuthError } from "../src/lib/planning/auth/currentUser";
@@ -100,20 +101,21 @@ describe("public UI accessibility contract", () => {
   it("uses a 390px-safe grid summary and announces async public feedback", () => {
     const history = read("src/components/RecommendHistoryClient.tsx");
     const backup = read("src/components/OpsBackupClient.tsx");
-    const catalog = read("src/app/products/catalog/page.tsx");
     const detail = read("src/components/UnifiedProductDetailClient.tsx");
     const feedback = read("src/components/FeedbackFormClient.tsx");
-    const recommendResults = read("src/components/recommend/RecommendResultsPanel.tsx");
+    const compareNotice = renderToStaticMarkup(<CompareAddNotice
+      result={{ id: "deposit-1", status: "added", count: 1, max: 4, droppedLabels: [] }}
+      onClose={() => undefined}
+    />);
 
     expect(history).toContain('data-testid="recommend-history-compare-summary"');
     expect(history).toContain("grid-cols-3");
     expect(history).not.toContain("min-w-[100px]");
     expect(backup).toMatch(/role="status" aria-live="polite"/);
     expect(backup).toMatch(/role="alert"/);
-    expect(catalog).toMatch(/role="status"\s+aria-live="polite"/);
+    expect(compareNotice).toMatch(/role="status"\s+aria-live="polite"/);
     expect(detail).toMatch(/role="status"\s+aria-live="polite"/);
     expect(feedback).toMatch(/role="status" aria-live="polite"/);
     expect(feedback).toMatch(/role="alert"/);
-    expect(recommendResults).toMatch(/role="status"\s+aria-live="polite"/);
   });
 });

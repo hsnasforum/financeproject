@@ -125,11 +125,21 @@ describe("planning runtime data root", () => {
 
   it("keeps the packaged home data roots out of Next build-time file tracing", async () => {
     // Windows builds on another drive than the home directory cannot filter these files and fail to copy page traces.
-    const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "planning-root-trace-home-")));
-    cleanupRoots.push(home);
+    const traceRoot = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "planning-root-trace-")));
+    cleanupRoots.push(traceRoot);
+    const sourceCwd = path.join(traceRoot, "source");
+    const home = path.join(traceRoot, "home");
+    await fs.mkdir(sourceCwd);
+    const entryPath = path.join(sourceCwd, "runtimeRoot.mjs");
+    // The resolver imports only Node builtins. Trace its exact source in a small cwd because the
+    // bundled tracer also globs process.cwd(); repository evidence copies are unrelated to this contract.
+    await fs.copyFile(path.resolve("src/lib/planning/deployment/runtimeRoot.mjs"), entryPath);
+    const probes: string[] = [];
     for (const dataHome of [path.join(home, "AppData", "Local"), path.join(home, ".local", "share")]) {
       await fs.mkdir(path.join(dataHome, "PlanningV2", "vault"), { recursive: true });
-      await fs.writeFile(path.join(dataHome, "PlanningV2", "vault", "probe.json"), "{}\n");
+      const probe = path.join(dataHome, "PlanningV2", "vault", "probe.json");
+      await fs.writeFile(probe, "{}\n");
+      probes.push(probe);
     }
     const { nodeFileTrace } = createRequire(import.meta.url)("next/dist/compiled/@vercel/nft") as {
       nodeFileTrace: (
@@ -142,16 +152,33 @@ describe("planning runtime data root", () => {
     process.env.USERPROFILE = home;
     try {
       expect(os.homedir()).toBe(home);
-      const base = path.parse(process.cwd()).root;
-      const result = await nodeFileTrace([path.resolve("src/lib/planning/deployment/runtimeRoot.mjs")], {
+      const base = path.parse(sourceCwd).root;
+      const result = await nodeFileTrace([entryPath], {
         base,
-        processCwd: process.cwd(),
+        processCwd: sourceCwd,
         mixedModules: true,
       });
       const tracedUnderHome = [...result.fileList]
         .map((file) => path.resolve(base, file))
         .filter((file) => file.startsWith(`${home}${path.sep}`));
       expect(tracedUnderHome).toEqual([]);
+
+      // Keep home outside processCwd and inside the tracing base. Direct home resolution must
+      // still expose both probes, so the isolated source cannot make the exclusion check vacuous.
+      const directHomeEntry = path.join(sourceCwd, "direct-home.mjs");
+      await fs.writeFile(directHomeEntry, [
+        'import os from "node:os";',
+        'import path from "node:path";',
+        'export const windowsRoot = path.join(os.homedir(), "AppData", "Local", "PlanningV2", "vault");',
+        'export const linuxRoot = path.join(os.homedir(), ".local", "share", "PlanningV2", "vault");',
+      ].join("\n"));
+      const directHomeResult = await nodeFileTrace([directHomeEntry], {
+        base,
+        processCwd: sourceCwd,
+        mixedModules: true,
+      });
+      const directlyTracedFiles = [...directHomeResult.fileList].map((file) => path.resolve(base, file));
+      expect(directlyTracedFiles).toEqual(expect.arrayContaining(probes));
     } finally {
       for (const [key, value] of Object.entries(previousHome)) {
         if (value === undefined) delete process.env[key];

@@ -212,8 +212,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5",
-    "vite": "7.3.5",
-    "vitest": "^4.1.11",
+    "vite": "7.3.7",
+    "vitest": "^4.1.12",
     "yauzl": "^3.2.1"
   },
   "pnpm": {

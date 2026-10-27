@@ -40,7 +40,7 @@
   각 예외는 GHSA ID·패키지·`scope: "dev"`·사유·완화책·`expiresAt`(최대 90일)을 가져야 하고, 해당 패키지가 runtime
   dependency에서 닿으면 적용되지 않습니다. 만료·중복·더 이상 보고되지 않는 예외는 gate를 실패시키며, 만료 시 기한을
   연장하지 않고 권고 상태를 다시 확인합니다. 경계 재현에는 `--now=<ISO date-time>`을 사용합니다.
-- 설치본 release 단계는 `release:verify → artifact build/install → production smoke → desktop smoke` 순서이며, 두 smoke는 `release:verify` 내부 gate가 아닙니다.
+- 설치본 release 단계는 `release:verify → artifact build/install → production smoke → desktop smoke` 순서입니다. `release:verify`는 현재 checkout의 production·desktop smoke를 포함하며, 이후 설치본에 대한 두 smoke는 `--app-dir=<검증 설치 경로>`로 별도 실행합니다.
 - `pnpm planning:postgres:readiness`는 release suite의 optional gate이며, PostgreSQL target schema readiness evidence만 만들고 운영 DB migration을 실행하지 않습니다.
 
 ## 수동 운영·데이터 명령

@@ -92,7 +92,7 @@ async function warmExchangeSnapshot(date) {
     url.searchParams.set("data", dataParam);
     url.searchParams.set("searchdate", date);
 
-    const res = await fetch(url.toString(), { cache: "no-store" });
+    const res = await fetch(url.toString(), { cache: "no-store", redirect: "error" });
     if (!res.ok) {
       console.log(`[warm] exchange: failed (${res.status})`);
       return false;

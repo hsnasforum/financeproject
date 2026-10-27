@@ -142,7 +142,8 @@ describe("dashboard view model", () => {
   });
 
   it("puts a stale plan's corrective action ahead of historical action advice", async () => {
-    mocks.runs.mockResolvedValue([{ ...sampleRun, profileId: "current-profile", reproducibility: { profileHash: "previous-profile" } }]);
+    // A pinned snapshot is what makes the one-click rerun possible (see the unpinned cases below).
+    mocks.runs.mockResolvedValue([{ ...sampleRun, profileId: "current-profile", input: { horizonMonths: 24, snapshotId: "old-snapshot" }, reproducibility: { profileHash: "previous-profile" } }]);
     const html = renderToStaticMarkup(<DashboardClient initialViewModel={await loadDashboardViewModel()} />);
     const action = html.match(/<div[^>]*data-testid="dashboard-next-action"[\s\S]*?<\/div>/)?.[0];
     expect(action).toContain("바뀐 재무 정보로 다시 계산하세요");
@@ -311,7 +312,7 @@ describe("dashboard view model", () => {
     ["unverified", undefined, "과거 실행이라 현재 프로필과 일치 여부를 자동 확인할 수 없습니다."],
   ])("compares canonical profile hashes: %s", async (state, profileHash, message) => {
     const profileBefore = JSON.stringify(currentProfile);
-    mocks.runs.mockResolvedValue([{ ...sampleRun, profileId: "current-profile", reproducibility: { profileHash } }]);
+    mocks.runs.mockResolvedValue([{ ...sampleRun, profileId: "current-profile", input: { horizonMonths: 24, snapshotId: "old-snapshot" }, reproducibility: { profileHash } }]);
     const vm = await loadDashboardViewModel();
     expect(vm.currentPlan).toMatchObject({ state, run: { id: "run-1" } });
     const html = renderToStaticMarkup(<DashboardClient initialViewModel={vm} />);
@@ -327,6 +328,35 @@ describe("dashboard view model", () => {
     }
     expect(JSON.stringify(vm)).not.toContain("profileHash");
     expect(JSON.stringify(currentProfile)).toBe(profileBefore);
+  });
+
+  it.each([
+    ["no stored snapshot", { horizonMonths: 24 }],
+    ["latest snapshot", { horizonMonths: 24, snapshotId: "latest" }],
+    ["padded LATEST snapshot", { horizonMonths: 24, snapshotId: "  LATEST " }],
+  ])("replaces the rerun button with a condition review for a stale plan with %s", async (_label, input) => {
+    mocks.runs.mockResolvedValue([{ ...sampleRun, profileId: "current-profile", input, reproducibility: { profileHash: "previous-profile" } }]);
+    const vm = await loadDashboardViewModel();
+    expect(vm.currentPlan.state).toBe("stale");
+    const html = renderToStaticMarkup(<DashboardClient initialViewModel={vm} />);
+    const action = html.match(/<div[^>]*data-testid="dashboard-next-action"[\s\S]*?<\/div>\s*<\/div>/)?.[0] ?? "";
+    expect(action).toContain("바뀐 재무 정보로 다시 계산하세요");
+    expect(action).toContain("이전 플랜의 계산 기준 자료가 고정되어 있지 않아");
+    expect(action).toMatch(/href="\/planning\?profileId=current-profile"[^>]*>계산 조건 검토 후 다시 계산<\/a>/);
+    expect(html).not.toContain("현재 프로필로 다시 계산</button>");
+    expect(html).not.toContain("이전 계산 조건으로 새 결과를 저장합니다.");
+    expect(html).not.toContain("기간·정책·가정은 이전 플랜 조건을 사용합니다.");
+    // The plan's report and the stale explanation stay available.
+    expect(html).toContain("현재 프로필이 이 플랜 이후 변경되었습니다.");
+    expect(html).toContain('href="/planning/reports?runId=run-1&amp;profileId=current-profile"');
+  });
+
+  it("keeps the one-click rerun for a stale plan pinned to a stored snapshot", async () => {
+    mocks.runs.mockResolvedValue([{ ...sampleRun, profileId: "current-profile", input: { horizonMonths: 24, snapshotId: "2026-07-01_2026-07-01-00-00-00" }, reproducibility: { profileHash: "previous-profile" } }]);
+    const html = renderToStaticMarkup(<DashboardClient initialViewModel={await loadDashboardViewModel()} />);
+    expect(html).toContain("현재 프로필로 다시 계산</button>");
+    expect(html).toContain("이전 계산 조건으로 새 결과를 저장합니다.");
+    expect(html).not.toContain("계산 조건 검토 후 다시 계산");
   });
 
   it("copies all stored input settings only from the stale scoped run without changing the source", async () => {
