@@ -275,7 +275,8 @@ export default function ProductsComparePage() {
                               removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
                               void refresh();
                             }}
-                            className="absolute top-4 right-4 h-6 w-6 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"
+                            aria-label={`${cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")} 비교함에서 빼기`}
+                            className="absolute top-4 right-4 h-6 w-6 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                           </button>
@@ -405,7 +406,8 @@ export default function ProductsComparePage() {
                         removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
                         void refresh();
                       }}
-                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 active:bg-rose-100 active:text-rose-600 transition-all"
+                      aria-label={`${cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")} 비교함에서 빼기`}
+                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 active:bg-rose-100 active:text-rose-600 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                     </button>
