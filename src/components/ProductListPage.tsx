@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { pruneOpen, toggleOpen } from "@/lib/finlife/groupOpenState";
@@ -27,6 +27,11 @@ import {
 } from "./products/useProductExplorerQueryController";
 import { useFinlifeProductListData } from "./products/useFinlifeProductListData";
 import { useProductShelfController } from "./products/useProductShelfController";
+import {
+  ProductCompareToggleNotice,
+  toggleCompareWithNotice,
+  type CompareToggleResult,
+} from "./products/ProductCompareToggleNotice";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -275,7 +280,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
         id: item.fin_co_no!,
         name: item.kor_co_nm || "",
       }));
-    
+
     const bankMap = new Map<string, { id: string; name: string }>();
     for (const b of banks) {
       if (!bankMap.has(b.id)) {
@@ -326,6 +331,18 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     () => resolveProductShelfIds(shelfCompareSet, payload?.data ?? [], kind),
     [kind, payload?.data, shelfCompareSet],
   );
+  const [compareToggleResult, setCompareToggleResult] = useState<CompareToggleResult | null>(null);
+  // The notice compares the stored basket read at click time with what the existing toggle returned, so it
+  // never relies on the shelf captured at render time.
+  const handleCompareToggle = (productId: string) => {
+    setCompareToggleResult(toggleCompareWithNotice({
+      id: productId,
+      storage: window.localStorage,
+      toggle: handleToggleCompare,
+      max: compareLimit,
+      labelFor: (id) => (payload?.data ?? []).find((product) => productIdentity(product, kind) === id)?.fin_prdt_nm,
+    }));
+  };
   const productListViewModel = useMemo(
     () => buildProductListViewModel({
       payload,
@@ -445,8 +462,8 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
 
   return (
     <PageShell>
-      <PageHeader 
-        title={title} 
+      <PageHeader
+        title={title}
         description="수집된 금융상품 정보를 비교합니다. 가입 전 금융회사 공시에서 금리와 조건을 다시 확인하세요."
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
@@ -637,22 +654,31 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                   const productId = productIdentity(item, kind);
                   const highlightReasons = index < 3 ? (item.reasons ?? []).slice(0, 3) : [];
                   return (
-                    <ProductRowItem
-                      key={productId}
-                      product={item}
-                      kind={kind}
-                      amountWonDefault={parseAmountInput(amountInput)}
-                      freshnessMeta={cardFreshnessMeta ?? undefined}
-                      badges={[]}
-                      reasonLines={highlightReasons}
-                      isFavorite={resolvedFavoriteIds.has(productId)}
-                      isCompared={resolvedCompareIds.has(productId)}
-                      compareLimit={compareLimit}
-                      onToggleFavorite={() => handleToggleFavorite(productId)}
-                      onToggleCompare={() => handleToggleCompare(productId)}
-                      onViewed={() => handleViewed(productId)}
-                      unifiedDetailHref={unifiedId ? `/products/catalog/${encodeURIComponent(unifiedId)}` : undefined}
-                    />
+                    <Fragment key={productId}>
+                      <ProductRowItem
+                        product={item}
+                        kind={kind}
+                        amountWonDefault={parseAmountInput(amountInput)}
+                        freshnessMeta={cardFreshnessMeta ?? undefined}
+                        badges={[]}
+                        reasonLines={highlightReasons}
+                        isFavorite={resolvedFavoriteIds.has(productId)}
+                        isCompared={resolvedCompareIds.has(productId)}
+                        compareLimit={compareLimit}
+                        onToggleFavorite={() => handleToggleFavorite(productId)}
+                        onToggleCompare={() => handleCompareToggle(productId)}
+                        onViewed={() => handleViewed(productId)}
+                        unifiedDetailHref={unifiedId ? `/products/catalog/${encodeURIComponent(unifiedId)}` : undefined}
+                      />
+                      {/* Outside the card, so a tap on the notice cannot open the detail drawer. */}
+                      {compareToggleResult?.id === productId ? (
+                        <ProductCompareToggleNotice
+                          className="my-3"
+                          result={compareToggleResult}
+                          onClose={() => setCompareToggleResult(null)}
+                        />
+                      ) : null}
+                    </Fragment>
                   );
                 })
                 : optionGroup
