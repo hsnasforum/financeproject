@@ -104,3 +104,5 @@ work/local/
 work/*.tmp
 work/*.log
 work/test.js
+.data/
+__meta/
