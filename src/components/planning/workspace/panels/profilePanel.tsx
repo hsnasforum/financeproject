@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { estimateDebtMonthlyPaymentKrw } from "@/lib/planning/ui/profileFormModel";
 import ProfileV2Form from "@/components/planning/ProfileV2Form";
 import { Button } from "@/components/ui/Button";
@@ -69,6 +70,7 @@ export function PlanningWorkspaceProfilePanel({
     updateGoalRow,
     replaceProfileFromJsonText,
     applyProfileJsonEditorAction,
+    discardProfileJsonDraftAction,
     copyProfileJsonEditorAction,
     loadSampleProfileAction,
     beginProfileSave,
@@ -78,6 +80,8 @@ export function PlanningWorkspaceProfilePanel({
     clearPendingSuggestions,
     toggleSuggestionCode,
   } = actions;
+  // Unique per panel instance and stable between server and client render; links the JSON error to the editor.
+  const jsonErrorId = useId();
   const selectNeedsPendingOption = Boolean(
     selectedProfileId
     && !profiles.some((profileOption) => profileOption.id === selectedProfileId),
@@ -124,6 +128,7 @@ export function PlanningWorkspaceProfilePanel({
           >
             {selectNeedsPendingOption ? <option hidden value={selectedProfileId} /> : null}
             {profiles.length === 0 ? <option value="">저장된 프로필 없음</option> : null}
+            {profiles.length > 0 && !selectedProfileId ? <option value="">선택 없음 · 저장 전 입력</option> : null}
             {profiles.map((profileOption) => (
               <option key={profileOption.id} value={profileOption.id}>{profileOption.name}</option>
             ))}
@@ -612,11 +617,14 @@ export function PlanningWorkspaceProfilePanel({
             data-testid="planning-json-editor"
             value={profileJsonDraft}
             onChange={(event) => replaceProfileFromJsonText(event.target.value)}
+            aria-invalid={profileJsonError ? true : undefined}
+            aria-describedby={profileJsonError ? jsonErrorId : undefined}
           />
-          {profileJsonError ? <p className="mt-2 text-xs text-rose-700">{profileJsonError}</p> : null}
+          {profileJsonError ? <p id={jsonErrorId} role="alert" className="mt-2 text-xs text-rose-700">{profileJsonError}</p> : null}
         </label>
         <div className="mt-4 flex gap-2">
           <Button onClick={() => applyProfileJsonEditorAction()} size="sm" variant="outline" className="h-9 rounded-lg bg-white font-bold">Apply JSON</Button>
+          <Button onClick={() => discardProfileJsonDraftAction()} size="sm" variant="ghost" className="h-9 rounded-lg font-bold">초안 버리기</Button>
           <Button onClick={() => void copyProfileJsonEditorAction()} size="sm" variant="ghost" className="h-9 rounded-lg font-bold">Copy</Button>
         </div>
       </details>

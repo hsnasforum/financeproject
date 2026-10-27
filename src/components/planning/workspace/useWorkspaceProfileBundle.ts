@@ -212,6 +212,69 @@ export function hasUnsavedProfileEditsAfterSave(input: {
   return input.currentContentVersion !== Math.max(input.dispatchContentVersion, input.selectionContentVersion);
 }
 
+// Content that is not yet stored: the version moved past the last confirmed one (a hydrate of stored
+// values or a successful save). Focus alone never changes the content version.
+export function hasUnconfirmedProfileContent(input: {
+  confirmedContentVersion: number;
+  currentContentVersion: number;
+}): boolean {
+  return input.currentContentVersion !== input.confirmedContentVersion;
+}
+
+// The list falls back to its first profile when the requested or current selection is missing or empty.
+// That automatic move would replace unconfirmed content, so the draft stays with no selection instead.
+export function shouldKeepUnconfirmedDraftOverProfileFallback(input: {
+  requestedId: string;
+  loadedProfileIds: string[];
+  currentSelectedProfileId: string;
+  fallbackProfileId: string;
+  hasUnconfirmedContent: boolean;
+}): boolean {
+  if (!input.hasUnconfirmedContent) return false;
+  if (input.requestedId && input.loadedProfileIds.includes(input.requestedId)) return false;
+  return input.fallbackProfileId !== input.currentSelectedProfileId;
+}
+
+// A skipped hydration keeps the editor content. When that content was never the selected profile's own
+// stored values (for example the server-rendered profile shown while a restored selection loads), saving it
+// would write another profile's values into the selection, so the selection is released instead.
+export function shouldReleaseSelectionForForeignDraft(input: {
+  profileId: string;
+  selectedProfileId: string;
+  editorContentProfileId: string;
+  hasUnconfirmedContent: boolean;
+}): boolean {
+  const profileId = normalizeProfileId(input.profileId);
+  return input.hasUnconfirmedContent
+    && profileId.length > 0
+    && normalizeProfileId(input.selectedProfileId) === profileId
+    && normalizeProfileId(input.editorContentProfileId) !== profileId;
+}
+
+// The local-edit skip protects input made on a profile's own values. Content that started from another
+// profile and holds no unconfirmed input (a focus only) protects nothing, so the selection's values apply.
+export function shouldHydrateOverForeignContent(input: {
+  profileId: string;
+  editorContentProfileId: string;
+  hasUnconfirmedContent: boolean;
+}): boolean {
+  const profileId = normalizeProfileId(input.profileId);
+  return !input.hasUnconfirmedContent
+    && profileId.length > 0
+    && normalizeProfileId(input.editorContentProfileId) !== profileId;
+}
+
+// An update writes the editor content into the target profile. It is only allowed when that content
+// started from the target's own stored values; otherwise (for example the server-rendered profile still
+// on screen while a restored selection loads) it would overwrite the target with another profile's data.
+export function isProfileUpdateTargetForeign(input: {
+  targetProfileId: string;
+  editorContentProfileId: string;
+}): boolean {
+  const targetProfileId = normalizeProfileId(input.targetProfileId);
+  return targetProfileId.length > 0 && normalizeProfileId(input.editorContentProfileId) !== targetProfileId;
+}
+
 export function clearProfileSuggestionState() {
   return {
     pendingProfileSave: null,
@@ -511,6 +574,8 @@ export function useWorkspaceProfileBundle({
   const profileEditorContentVersionRef = useRef(0);
   // Content version at the last selection change, when the previous selection's edits were dropped.
   const selectionContentVersionRef = useRef(0);
+  // Content version of the last confirmed editor content (stored values hydrated or a save completed).
+  const confirmedContentVersionRef = useRef(0);
   const profileDetailRequestSequenceRef = useRef(0);
   const profileDetailInFlightKeyRef = useRef("");
   const cachedSelectedProfile = useMemo(() => {
@@ -518,6 +583,8 @@ export function useWorkspaceProfileBundle({
     const normalizedProfileId = normalizeProfileId(initialSelectedProfileId);
     return normalizedProfileId ? profileHydrationCache.get(normalizedProfileId) ?? null : null;
   }, [initialSelectedProfile, initialSelectedProfileId]);
+  // The profile whose stored values the editor content started from ("" for the built-in template).
+  const editorContentProfileIdRef = useRef(normalizeProfileId(cachedSelectedProfile?.id));
   const initialProfileEditorState = useMemo(() => {
     if (cachedSelectedProfile) {
       return hydrateProfileJsonEditorState(cachedSelectedProfile.profile, cachedSelectedProfile.name);
@@ -531,9 +598,14 @@ export function useWorkspaceProfileBundle({
   const [profiles, setProfiles] = useState<PlanningProfileRecord[]>(() => (cachedSelectedProfile ? [cachedSelectedProfile] : []));
   const [selectedProfileId, setSelectedProfileId] = useState(initialHydratedProfileId);
   const [profileName, setProfileName] = useState(cachedSelectedProfile?.name || "기본 프로필");
-  const [profileJson, setProfileJson] = useState(initialProfileEditorState.json);
-  const [profileJsonDraft, setProfileJsonDraft] = useState(initialProfileEditorState.jsonDraft);
-  const [profileJsonError, setProfileJsonError] = useState(initialProfileEditorState.jsonError);
+  // The canonical JSON, the editor draft and its error change together, so every transition reads the latest
+  // values in one functional update (no comparison against a render closure that may be one event behind).
+  const [profileJsonEditor, setProfileJsonEditor] = useState<{ json: string; jsonDraft: string; jsonError: string }>(() => ({
+    json: initialProfileEditorState.json,
+    jsonDraft: initialProfileEditorState.jsonDraft,
+    jsonError: initialProfileEditorState.jsonError,
+  }));
+  const { json: profileJson, jsonDraft: profileJsonDraft, jsonError: profileJsonError } = profileJsonEditor;
   const [profileForm, setProfileForm] = useState<ProfileFormModel>(initialProfileEditorState.form);
   const [loadingProfiles, setLoadingProfiles] = useState(!cachedSelectedProfile);
   const [profilesLoadError, setProfilesLoadError] = useState("");
@@ -562,9 +634,7 @@ export function useWorkspaceProfileBundle({
     const resolvedProfileName = (nextProfileName ?? nextState.form.name ?? "기본 프로필") || "기본 프로필";
     setProfileName(resolvedProfileName);
     setProfileForm(nextState.form);
-    setProfileJson(nextState.json);
-    setProfileJsonDraft(nextState.jsonDraft);
-    setProfileJsonError(nextState.jsonError);
+    setProfileJsonEditor({ json: nextState.json, jsonDraft: nextState.jsonDraft, jsonError: nextState.jsonError });
   }, []);
   const applyHydratedProfileEditorState = useCallback((
     nextState: ProfileJsonEditorState,
@@ -578,9 +648,9 @@ export function useWorkspaceProfileBundle({
     });
     setProfileName((current) => (shouldApply() ? resolvedProfileName : current));
     setProfileForm((current) => (shouldApply() ? nextState.form : current));
-    setProfileJson((current) => (shouldApply() ? nextState.json : current));
-    setProfileJsonDraft((current) => (shouldApply() ? nextState.jsonDraft : current));
-    setProfileJsonError((current) => (shouldApply() ? nextState.jsonError : current));
+    setProfileJsonEditor((current) => (shouldApply()
+      ? { json: nextState.json, jsonDraft: nextState.jsonDraft, jsonError: nextState.jsonError }
+      : current));
   }, []);
   const applyLocalProfileEditorState = useCallback((
     nextState: ProfileJsonEditorState,
@@ -650,19 +720,33 @@ export function useWorkspaceProfileBundle({
     if (!shouldHydrateSelectedProfile(nextStamp, lastHydratedProfileStampRef.current)) {
       return false;
     }
+    const hasUnconfirmedContent = hasUnconfirmedProfileContent({
+      confirmedContentVersion: confirmedContentVersionRef.current,
+      currentContentVersion: profileEditorContentVersionRef.current,
+    });
     // Content edits made after the read started win; leave stamp, cache and dirty state untouched.
-    if (requestContentVersion !== undefined && hasProfileEditsSinceDispatch({
+    const skipForLocalEdits = !shouldHydrateOverForeignContent({
+      profileId: profile.id,
+      editorContentProfileId: editorContentProfileIdRef.current,
+      hasUnconfirmedContent,
+    }) && ((requestContentVersion !== undefined && hasProfileEditsSinceDispatch({
       dispatchContentVersion: requestContentVersion,
       currentContentVersion: profileEditorContentVersionRef.current,
-    })) {
-      return false;
-    }
-    if (shouldSkipSelectedProfileHydrationAfterLocalEdit({
+    })) || shouldSkipSelectedProfileHydrationAfterLocalEdit({
       profileId: profile.id,
       selectedProfileId: selectedProfileIdRef.current,
       lastHydratedProfileStamp: lastHydratedProfileStampRef.current,
       hasLocalEdits: profileEditorHasLocalEditsRef.current,
-    })) {
+    }));
+    if (skipForLocalEdits) {
+      if (shouldReleaseSelectionForForeignDraft({
+        profileId: profile.id,
+        selectedProfileId: selectedProfileIdRef.current,
+        editorContentProfileId: editorContentProfileIdRef.current,
+        hasUnconfirmedContent,
+      })) {
+        commitSelectedProfileId("");
+      }
       return false;
     }
     const nextHydration = buildSelectedProfileHydration(profile);
@@ -672,8 +756,10 @@ export function useWorkspaceProfileBundle({
     clearPendingSuggestions();
     lastHydratedProfileStampRef.current = nextStamp;
     profileEditorHasLocalEditsRef.current = false;
+    confirmedContentVersionRef.current = profileEditorContentVersionRef.current;
+    editorContentProfileIdRef.current = profile.id;
     return true;
-  }, [applyHydratedProfileEditorState, clearPendingSuggestions]);
+  }, [applyHydratedProfileEditorState, clearPendingSuggestions, commitSelectedProfileId]);
 
   const loadSelectedProfileRecord = useCallback(async (profileId?: string): Promise<void> => {
     const normalizedProfileId = normalizeProfileId(profileId);
@@ -749,6 +835,20 @@ export function useWorkspaceProfileBundle({
       });
       setProfiles(payload.data);
       const pickedId = selectLoadedProfileId(payload.data, requestedId);
+      if (shouldKeepUnconfirmedDraftOverProfileFallback({
+        requestedId,
+        loadedProfileIds: payload.data.map((item) => item.id),
+        currentSelectedProfileId,
+        fallbackProfileId: pickedId,
+        hasUnconfirmedContent: hasUnconfirmedProfileContent({
+          confirmedContentVersion: confirmedContentVersionRef.current,
+          currentContentVersion: profileEditorContentVersionRef.current,
+        }),
+      })) {
+        // The draft, local-edit state and JSON stay as they are; only the list is refreshed.
+        commitSelectedProfileId("");
+        return;
+      }
       // Moving the selection here (no edits since the request, or the current one is gone)
       // behaves like a user selection: the new profile's stored values replace the editor.
       const selectionMoves = pickedId !== currentSelectedProfileId;
@@ -825,13 +925,13 @@ export function useWorkspaceProfileBundle({
     });
   }
 
+  // The canonical JSON always follows the form. The editor follows too only when it holds no unapplied draft;
+  // an unapplied draft and its parse error stay as typed until Apply (take the draft) or discard (take the form).
   function syncProfileJsonFromForm(nextForm: ProfileFormModel): void {
     const nextState = buildProfileJsonEditorState(nextForm, profileName);
-    if (profileJson !== nextState.json) {
-      setProfileJson(nextState.json);
-    }
-    setProfileJsonDraft(nextState.jsonDraft);
-    setProfileJsonError(nextState.jsonError);
+    setProfileJsonEditor((current) => (current.jsonDraft === current.json
+      ? { json: nextState.json, jsonDraft: nextState.jsonDraft, jsonError: nextState.jsonError }
+      : { ...current, json: nextState.json }));
   }
 
   function applyProfileForm(nextForm: ProfileFormModel): void {
@@ -843,19 +943,24 @@ export function useWorkspaceProfileBundle({
 
   function replaceProfileFromJsonText(nextJson: string): void {
     markProfileEditorContentEdit();
-    setProfileJsonDraft(nextJson);
-    setProfileJsonError("");
+    setProfileJsonEditor((current) => ({ ...current, jsonDraft: nextJson, jsonError: "" }));
   }
 
   function applyProfileJsonEditorAction(): void {
     const parsed = parseProfileJsonEditorDraft(profileJsonDraft, profileName);
     if (!parsed.ok) {
-      setProfileJsonError(parsed.error);
+      setProfileJsonEditor((current) => ({ ...current, jsonError: parsed.error }));
       return;
     }
     applyLocalProfileEditorState(buildProfileJsonEditorState(parsed.form, profileName));
     setLastNormalizationDisclosure(parsed.normalization);
     if (pendingSuggestions.length > 0) clearPendingSuggestions();
+  }
+
+  // Explicit user choice: drop the unapplied draft and show the current form as canonical JSON again.
+  function discardProfileJsonDraftAction(): void {
+    markProfileEditorContentEdit();
+    setProfileJsonEditor((current) => ({ ...current, jsonDraft: current.json, jsonError: "" }));
   }
 
   async function copyProfileJsonEditorAction(): Promise<void> {
@@ -955,11 +1060,42 @@ export function useWorkspaceProfileBundle({
     pushWorkspaceNotice("샘플 프로필을 편집 영역에 불러왔습니다. Save를 눌러야 실제 저장됩니다.");
   }
 
+  const ensureProfileUpdateTarget = useCallback((targetProfileId: string): boolean => {
+    if (isProfileUpdateTargetForeign({
+      targetProfileId,
+      editorContentProfileId: editorContentProfileIdRef.current,
+    })) {
+      // Nothing is written. Unconfirmed input stays on screen as a draft without a selection (save it as a
+      // new profile); without input the selected profile's stored values are still on their way.
+      const keepsDraft = shouldReleaseSelectionForForeignDraft({
+        profileId: targetProfileId,
+        selectedProfileId: selectedProfileIdRef.current,
+        editorContentProfileId: editorContentProfileIdRef.current,
+        hasUnconfirmedContent: hasUnconfirmedProfileContent({
+          confirmedContentVersion: confirmedContentVersionRef.current,
+          currentContentVersion: profileEditorContentVersionRef.current,
+        }),
+      });
+      if (keepsDraft) commitSelectedProfileId("");
+      pushWorkspaceError(keepsDraft
+        ? "선택한 프로필의 저장값을 아직 불러오지 못해 현재 입력을 그 프로필에 저장하지 않았습니다. 입력은 그대로 두었으니 새로 만들기로 저장하세요."
+        : "선택한 프로필의 저장값을 불러오는 중이라 저장하지 않았습니다. 불러온 뒤 다시 저장하세요.");
+      return false;
+    }
+    return true;
+  }, [commitSelectedProfileId, pushWorkspaceError]);
+
   async function performProfileSave(mode: ProfileSaveMode, profile: ProfileV2 | Record<string, unknown>): Promise<boolean> {
+    // An unapplied JSON draft is not what would be sent; nothing is written and the draft stays as typed.
+    if (profileJsonDraft !== profileJson) {
+      pushWorkspaceNotice("JSON 편집 내용을 먼저 적용한 뒤 저장해 주세요.");
+      return false;
+    }
     if (mode === "update" && !selectedProfileId) {
       pushWorkspaceError("수정할 프로필을 먼저 선택하세요.");
       return false;
     }
+    if (mode === "update" && !ensureProfileUpdateTarget(selectedProfileId)) return false;
 
     const feedback = resolveProfileSaveFeedback(mode, beginnerMode);
     const dispatchSelectionGeneration = selectionGenerationRef.current;
@@ -990,6 +1126,8 @@ export function useWorkspaceProfileBundle({
       const savedRecord = (payload as ApiResponse<PlanningProfileRecord>).data;
       // Reads started before this write can no longer hydrate over it.
       profileDataEpochRef.current += 1;
+      // The content sent with this save is stored now; edits typed after the dispatch stay unconfirmed.
+      confirmedContentVersionRef.current = Math.max(confirmedContentVersionRef.current, dispatchContentVersion);
       const savedProfileId = savedRecord?.id ?? "";
       const followUp = resolveProfileSaveFollowUp({
         mode,
@@ -1028,6 +1166,10 @@ export function useWorkspaceProfileBundle({
   }
 
   function beginProfileSave(mode: ProfileSaveMode): void {
+    if (profileJsonDraft !== profileJson) {
+      pushWorkspaceNotice("JSON 편집 내용을 먼저 적용한 뒤 저장해 주세요.");
+      return;
+    }
     if (profileValidation.errors.length > 0) {
       pushWorkspaceError(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
       return;
@@ -1126,6 +1268,7 @@ export function useWorkspaceProfileBundle({
     applyLocalProfileEditorState,
     markProfileEditorLocalEdit,
     loadProfiles,
+    ensureProfileUpdateTarget,
     updateProfileField,
     applyProfileForm,
     addDebtRow,
@@ -1137,6 +1280,7 @@ export function useWorkspaceProfileBundle({
     updateBeginnerGoal,
     replaceProfileFromJsonText,
     applyProfileJsonEditorAction,
+    discardProfileJsonDraftAction,
     copyProfileJsonEditorAction,
     loadSampleProfileAction,
     beginProfileSave,
