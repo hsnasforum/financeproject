@@ -27,9 +27,7 @@ const DEFAULT_ASSUMPTIONS_OVERRIDE = `{
   "expectedReturnPct": 5.0
 }`;
 
-const DEFAULT_DEBT_OFFERS_JSON = `[
-  { "liabilityId": "demo-loan-1", "newAprPct": 5.4, "feeKrw": 90000, "title": "Refi A" }
-]`;
+const DEFAULT_DEBT_OFFERS_JSON = `[]`;
 
 const DEFAULT_OPTIMIZER_CONSTRAINTS_JSON = `{
   "minEmergencyMonths": ${EMERGENCY_FUND_TARGET_MONTHS},
