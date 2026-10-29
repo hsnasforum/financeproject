@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
+import { addCompareIdToStorage, compareStoreConfig, loadCompareIdsFromStorage } from "@/lib/products/compareStore";
+import { describeCompareAdd, formatCompareAddMessage } from "@/components/recommend/CompareAddNotice";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -345,8 +346,18 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                         variant="primary"
                         className="w-full h-14 rounded-2xl font-black shadow-lg shadow-navy/20"
                         onClick={() => {
-                          const next = addCompareIdToStorage(item.stableId || id, compareStoreConfig.max);
-                          setCompareMessage(`비교함에 담았습니다. 비교 화면에서 다른 후보와 나란히 다시 확인할 수 있습니다. (${next.length}/${compareStoreConfig.max})`);
+                          const addedId = item.stableId || id;
+                          const before = loadCompareIdsFromStorage(compareStoreConfig.max);
+                          const after = addCompareIdToStorage(addedId, compareStoreConfig.max);
+                          // This page only knows its own product, so a dropped product keeps the notice's fallback name.
+                          const message = formatCompareAddMessage(describeCompareAdd({
+                            before,
+                            after,
+                            id: addedId,
+                            max: compareStoreConfig.max,
+                            labelFor: () => null,
+                          }));
+                          setCompareMessage(`${message.lead} ${message.count}`);
                         }}
                       >
                         비교 후보 담기

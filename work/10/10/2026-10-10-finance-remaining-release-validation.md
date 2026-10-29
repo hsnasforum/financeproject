@@ -172,3 +172,15 @@ commit/push/배포/release:prepare/기존 설치본 교체는 수행하지 않�
 - 다음 작업의 drift 기준: 위 공유 증거의 `baseline-after.json`, 이번 승인 delta는 `promotion-proof.json`.
 
 이번 예약은 실행 완료했고 추가 반복 예약을 만들지 않았다. commit/push/배포/기존 설치본 교체/전역 설정 변경은 하지 않았다.
+
+## 2026-10-12 13:10 KST 중복 heartbeat 종료 확인
+
+실제 도구 시각 2026-10-12 04:10:00 UTC(13:10:00 KST)로 종료 예정 시각 이후임을 확인했습니다. 두 기준 기록과 후속 식별자·환율·대출 schema·검토본 기록을 대조했습니다. 이 예약의 목적이었던 점검 후 대표 조회·키 검증·6종 sync는 위 10월 11일 단발 절에 이미 실행 완료되어 있습니다. 이후 검증된 대출 44/34/41개와 EXIM 계약 회복도 별도 기록에 있으므로, 오래된 예약 내용을 새로운 전체 수집 지시로 반복 실행하지 않았습니다.
+
+현재 원본은 별도 승인된 체크포인트 branch checkpoint/finance-review-20261011, HEAD eb6eb922f7d6e1609958d3e835a947ef5736ffe8입니다. 이번 실행에서 branch/commit을 만들거나 변경하지 않았습니다. 최신 검토본의 baseline+promotion 해시 **3,293개를 직접 재대조하여 drift 0**을 확인했고, 추적 파일의 시작 staged/unstaged 변경은 없었습니다. 기존 비추적 .data/planning-debug-access-check/, __meta/, tmp/를 그대로 보존했습니다. 공개 snapshot 바이트도 최신 기준과 같습니다.
+
+기존 /tmp/finance-* bwrap 작업 사본은 현재 존재하지 않습니다. 이를 설치된 검토본이나 과거 오염 DB로 대체하지 않았습니다. 이번에는 API 호출·키 읽기·sync·DB 접근·테스트/전체 release·제품 변경을 **실행하지 않았으며**, 새 서비스 정상 여부나 새 테스트 PASS를 주장하지 않습니다.
+
+등록 상태는 COUNT=1인데도 ACTIVE였고 완료된 예약이 다시 전달됐습니다. 완료된 단발 후속 확인의 중복 실행을 막기 위해 finance-finlife 예약을 삭제했고 도구의 deleteStatus=deleted를 확인했습니다. 새 반복 예약은 만들지 않았습니다. 연금 원천/최신성 및 braces 차단, RELEASE_GATES_FAIL과 ROOT_CAUSE_OPEN은 기존 판정을 유지합니다. 사용자 DB·설치본·백업·snapshot·예외 날짜·기존 증거는 변경하지 않았습니다.
+
+이번 읽기 전용 재검증 및 예약 종료 근거: work/local/finance-finlife-post-maintenance-20261011/heartbeat-20261012/verification.json. 본 절 추가 외 원본 변경은 없습니다.
