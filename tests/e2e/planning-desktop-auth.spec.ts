@@ -57,7 +57,7 @@ test("normal packaged bootstrap authenticates fresh browsers without OAuth or pr
       const cookie = (await context.cookies()).find((item) => item.name === "planning.desktop-session");
       expect(Boolean(cookie?.httpOnly && cookie.sameSite === "Strict")).toBe(true);
       await page.screenshot({ path: test.info().outputPath(`desktop-dashboard-${attempt}.png`), fullPage: true });
-      await page.goto("/planning");
+      await page.goto("/planning?view=full");
       await expect(page.getByRole("heading", { name: "재무 진단", exact: true })).toBeVisible();
       await expect(page.getByTestId("planning-quickstart-gate")).toBeVisible();
       await expect(page.getByRole("link", { name: "로그인하기", exact: true })).toHaveCount(0);

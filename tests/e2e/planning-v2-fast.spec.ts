@@ -78,7 +78,7 @@ test("/planner/legacy redirects to /planning", async ({ page }) => {
 });
 
 test("/planning shows the beginner form and exposes JSON controls only with the debug flag", async ({ page }) => {
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
 
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
   if (process.env.PLANNING_DEBUG_ENABLED === "true") {
@@ -145,7 +145,7 @@ test("key interactive controls expose accessible names", async ({ page, request 
   await page.route("**/api/planning/v2/assumptions/snapshots?*", (route) => route.fulfill({
     json: { ok: true, latest: { id: "e2e-keycontrols-stale", staleDays: 90, warningsCount: 0 }, items: [] },
   }));
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
   await expect(page.getByTestId("run-button")).toHaveAccessibleName("플래닝 실행·기록 저장");
   await expect(page.getByTestId("planning-snapshot-ops-link")).toHaveCount(0);

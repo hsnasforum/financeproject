@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BEGINNER_MAX_DEBT_ROWS,
   buildSelectedProfileHydrationStamp,
   buildSelectedProfileHydration,
   canAddProfileDebtRow,
   canRemoveProfileDebtRow,
+  createPlanningProfileRecord,
   createProfileDeleteDialogState,
   emergencyMonthsFromGoal,
   ensureBeginnerGoals,
@@ -346,5 +347,71 @@ describe("workspaceProfileBundle", () => {
     expect(isDeleteProfileConfirmMatched(dialog)).toBe(false);
     expect(isDeleteProfileConfirmMatched(dialog ? { ...dialog, confirmText: "mismatch" } : null)).toBe(false);
     expect(isDeleteProfileConfirmMatched(dialog ? { ...dialog, confirmText: dialog.expectedConfirm } : null)).toBe(true);
+  });
+});
+
+describe("wizard profile adapter", () => {
+  const profile = profileRecordFixture("unused").profile;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("creates one new profile by POST and returns the stored record", async () => {
+    const record = profileRecordFixture("profile-new", "새 프로필");
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({ ok: true, data: record }),
+      { status: 201 },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createPlanningProfileRecord({ locale: "ko-KR", name: "새 프로필", profile }))
+      .resolves.toEqual({ status: "ok", record });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/planning/v2/profiles");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      name: "새 프로필",
+      profile: { monthlyIncomeNet: 4_200_000, debts: [], goals: [] },
+    });
+  });
+
+  it("does not resend when the network drops", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("connection reset"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createPlanningProfileRecord({ locale: "ko-KR", name: "새 프로필", profile }))
+      .resolves.toMatchObject({ status: "unknown" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["a deterministic rejection", 400, { ok: false, error: { code: "INPUT", message: "invalid" } }, "failed"],
+    ["a rate limit", 429, { ok: false, error: { code: "RATE_LIMITED", message: "wait" } }, "unknown"],
+    ["a server error", 500, { ok: false, error: { code: "INTERNAL", message: "boom" } }, "unknown"],
+    ["an unreadable body", 201, null, "unknown"],
+    ["a success with no id", 201, { ok: true, data: {} }, "unknown"],
+  ])("classifies %s", async (_name, status, payload, expected) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(
+      payload === null ? "<html>" : JSON.stringify(payload),
+      { status },
+    )));
+
+    await expect(createPlanningProfileRecord({ locale: "ko-KR", name: "새 프로필", profile }))
+      .resolves.toMatchObject({ status: expected });
+  });
+
+  it("stops before the network when the profile cannot be normalized", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createPlanningProfileRecord({
+      locale: "ko-KR",
+      name: "새 프로필",
+      profile: { ...profile, schemaVersion: 999 },
+    })).resolves.toMatchObject({ status: "failed" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

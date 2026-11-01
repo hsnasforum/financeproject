@@ -24,7 +24,7 @@ test("planning keeps corrupt profile reads in the error state after retry and re
       body: JSON.stringify({ ok: false, error: { code: "STORAGE_CORRUPT", message } }),
     });
   });
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   const error = page.getByTestId("planning-profiles-error-state");
   await expect(error).toContainText(message);
   await expect(page.getByText("저장된 프로필이 없습니다", { exact: true })).toHaveCount(0);

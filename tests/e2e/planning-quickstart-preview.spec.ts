@@ -240,6 +240,7 @@ test("planning quickstart previews before applying beginner draft", async ({ pag
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { name: "내 재무 현황", exact: true })).toBeVisible();
   await page.getByRole("navigation", { name: "데스크톱 주 메뉴" }).getByRole("link", { name: "재무진단", exact: true }).click();
+  await page.getByRole("link", { name: "전체 입력 화면", exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(page.getByRole("heading", { name: "재무 진단", exact: true })).toBeVisible({ timeout: 30_000 });
   const calculationOptions = page.getByTestId("planning-calculation-options");
@@ -320,6 +321,7 @@ test("planning quickstart previews before applying beginner draft", async ({ pag
 
   await page.goto("/dashboard");
   await page.getByRole("navigation", { name: "데스크톱 주 메뉴" }).getByRole("link", { name: "재무진단", exact: true }).click();
+  await page.getByRole("link", { name: "전체 입력 화면", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   const restoredStatus = page.getByTestId("planning-workspace-quickstart-status");
   await expect(restoredStatus).toContainText("프로필 저장 완료");
@@ -357,7 +359,7 @@ test("planning quickstart previews before applying beginner draft", async ({ pag
 
   await page.close();
   page = await context.newPage();
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   const reopenedEmptyForm = page.getByTestId("planning-profile-form");
   await expect(reopenedEmptyForm.getByText("등록된 목표가 없습니다.", { exact: true })).toBeVisible();
   expect(await readSelectedProfileId(page)).toBe(profileId);
@@ -383,7 +385,7 @@ test("planning arrival with profileId query focuses the next-step run target", a
     window.localStorage.removeItem("planning:v2:selectedProfileId");
   });
 
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   const profileId = await prepareBeginnerQuickStart(page);
 
   await page.goto(`/planning?profileId=${encodeURIComponent(profileId)}`);
@@ -407,7 +409,7 @@ test("planning quickstart keeps review fallback focused on runs history when pro
   });
   await enableQuickStartReviewFallback(page);
 
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   await expect.poll(async () => page.evaluate(() => {
     const marker = (globalThis as Record<string, unknown>).__e2eQuickStartFallbackCryptoPatched;
     return marker === true;

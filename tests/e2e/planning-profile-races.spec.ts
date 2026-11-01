@@ -479,7 +479,7 @@ test("a stored selection without a server-rendered profile requests its detail o
     window.localStorage.setItem("planning:v2:selectedProfileId", seededProfileId);
   }, a);
   const initialList = waitForListResponse(page);
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   await initialList;
   const ui = workspace(page);
   await expect(ui.select).toHaveValue(a, { timeout: 30_000 });
@@ -1029,7 +1029,7 @@ async function beginWithSelection(page: Page, options: { beginner: boolean; stor
     if (storedId) window.localStorage.setItem("planning:v2:selectedProfileId", storedId);
     else window.localStorage.removeItem("planning:v2:selectedProfileId");
   }, { beginner: options.beginner, storedId: options.storedId ?? "" });
-  await page.goto(options.queryId ? `/planning?profileId=${encodeURIComponent(options.queryId)}` : "/planning");
+  await page.goto(options.queryId ? `/planning?profileId=${encodeURIComponent(options.queryId)}` : "/planning?view=full");
 }
 
 function missingProfileId(tag: string) {

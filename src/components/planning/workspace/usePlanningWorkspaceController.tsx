@@ -35,6 +35,7 @@ import {
 import {
   buildPlanningWorkspaceRunButtonDescribedBy,
 } from "@/components/planning/workspace/controllerUtils";
+import { usePlanningDiagnosisWizard } from "@/components/planning/workspace/usePlanningDiagnosisWizard";
 import { useWorkspaceArrivalHandoff } from "@/components/planning/workspace/useWorkspaceArrivalHandoff";
 import { useWorkspaceExecutionOptionsBundle } from "@/components/planning/workspace/useWorkspaceExecutionOptionsBundle";
 import { useWorkspaceFeedbackUiBundle } from "@/components/planning/workspace/useWorkspaceFeedbackUiBundle";
@@ -326,6 +327,46 @@ export function usePlanningWorkspaceController({
     },
   });
   const runNeedsWarningConfirmation = preflightWarnIssues.length > 0 && !runtimeState.runWarningConfirmed;
+  const diagnosisRunConfig = useMemo(() => ({
+    policyId: execution.policyId,
+    runTitle: execution.runTitle,
+    assumptionsForm: execution.assumptionsForm,
+    assumptionsExtraOverrides: execution.assumptionsExtraOverrides,
+    effectiveSnapshotSelection,
+    selectedSnapshotId,
+    selectedSnapshotItem,
+    effectiveRunScenariosEnabled: execution.effectiveRunScenariosEnabled,
+    effectiveRunMonteCarloEnabled: execution.effectiveRunMonteCarloEnabled,
+    effectiveRunActionsEnabled: execution.effectiveRunActionsEnabled,
+    effectiveRunDebtEnabled: execution.effectiveRunDebtEnabled,
+    effectiveIncludeProducts: execution.effectiveIncludeProducts,
+    maxCandidatesPerAction: execution.maxCandidatesPerAction,
+    monteCarloPaths: execution.monteCarloPaths,
+    monteCarloSeed: execution.monteCarloSeed,
+    debtExtraPaymentKrw: execution.debtExtraPaymentKrw,
+  }), [
+    effectiveSnapshotSelection,
+    execution.assumptionsExtraOverrides,
+    execution.assumptionsForm,
+    execution.debtExtraPaymentKrw,
+    execution.effectiveIncludeProducts,
+    execution.effectiveRunActionsEnabled,
+    execution.effectiveRunDebtEnabled,
+    execution.effectiveRunMonteCarloEnabled,
+    execution.effectiveRunScenariosEnabled,
+    execution.maxCandidatesPerAction,
+    execution.monteCarloPaths,
+    execution.monteCarloSeed,
+    execution.policyId,
+    execution.runTitle,
+    selectedSnapshotId,
+    selectedSnapshotItem,
+  ]);
+  const diagnosisWizard = usePlanningDiagnosisWizard({
+    locale,
+    config: diagnosisRunConfig,
+    loadProfiles: profileBundle.loadProfiles,
+  });
   const quickStartHandoff = useWorkspaceQuickStartHandoff({
     profileName: profileBundle.profileName,
     selectedProfileId: profileBundle.selectedProfileId,
@@ -493,6 +534,7 @@ export function usePlanningWorkspaceController({
     workspaceError: feedback.workspaceError,
     workspaceNotice: feedback.workspaceNotice,
     beginnerMode: execution.beginnerMode,
+    beginnerModeLoaded: execution.beginnerModeLoaded,
     savingProfile: profileBundle.savingProfile,
     running: runtimeState.running,
     quickStartNextStep,
@@ -759,6 +801,7 @@ export function usePlanningWorkspaceController({
     results,
     dialogs,
     actions,
+    diagnosisWizard,
   };
 }
 

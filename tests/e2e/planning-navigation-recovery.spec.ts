@@ -79,6 +79,7 @@ test("empty Flight body offers independent recovery and explicit reload", async 
 
 test("normal navigation and unsaved input do not offer recovery", async ({ page }) => {
   await openFromDashboard(page);
+  await page.getByRole("link", { name: "전체 입력 화면", exact: true }).click();
   await expect(page.locator("#planning-input-section")).toBeVisible();
   const income = page.getByTestId("planning-profile-form").getByLabel("월 실수령");
   await income.fill("4,321,000");
@@ -213,7 +214,7 @@ test("visible profile storage error keeps its own retry instead of blank recover
   await page.route("**/api/planning/v2/profiles", (route) => route.fulfill({
     status: 500, json: { ok: false, error: { code: "STORAGE_CORRUPT", message: "프로필 저장 파일이 손상되었습니다." } },
   }));
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   await expect(page.getByTestId("planning-profiles-error-state")).toBeVisible();
   await page.waitForTimeout(11_500);
   await expect(page.getByRole("region", { name: "재무진단 화면 복구" })).toHaveCount(0);
@@ -263,6 +264,7 @@ test("stale dashboard DOM at planning URL does not mask recovery", async ({ page
 
 test("late body and edits retire the recovery offer without discarding input", async ({ page }) => {
   await openFromDashboard(page);
+  await page.getByRole("link", { name: "전체 입력 화면", exact: true }).click();
   const form = page.getByTestId("planning-profile-form");
   await expect(form).toBeVisible();
   // CSSOM changes keep the production CSP intact while injecting an absent body.

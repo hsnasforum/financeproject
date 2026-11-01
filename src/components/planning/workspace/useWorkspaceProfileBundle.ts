@@ -15,6 +15,11 @@ import {
   type ProfileJsonEditorState,
   type ProfileFormModel,
 } from "@/lib/planning/ui/profileFormModel";
+import {
+  classifyPlanningWriteResponse,
+  DIAGNOSIS_UNCLEAR_SAVE_MESSAGE,
+  type PlanningWriteResult,
+} from "@/lib/planning/ui/planningDiagnosisWizard";
 import { buildWorkspaceLiveSummary } from "@/lib/planning/ui/workspaceQuickStart";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -549,6 +554,42 @@ function tryParseJsonText<T = unknown>(text: string): T | null {
 
 function rememberHydratedProfile(profile: PlanningProfileRecord): void {
   profileHydrationCache.set(profile.id, profile);
+}
+
+// Wizard path: one POST for an explicit new profile. It reads no editor state and writes none, so
+// the selected profile, its JSON draft and performProfileSave's boolean contract stay untouched.
+export async function createPlanningProfileRecord(input: {
+  locale: Locale;
+  name: string;
+  profile: ProfileV2 | Record<string, unknown>;
+}): Promise<PlanningWriteResult<PlanningProfileRecord>> {
+  const fallbackMessage = "프로필 저장에 실패했습니다.";
+  let payloadProfile: ReturnType<typeof normalizeDraftWithDisclosure>;
+  try {
+    payloadProfile = normalizeDraftWithDisclosure(input.profile as unknown as FormDraft, input.name);
+  } catch (error) {
+    return { status: "failed", message: error instanceof Error ? error.message : fallbackMessage };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch("/api/planning/v2/profiles", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(withDevCsrf({
+        name: input.name,
+        profile: payloadProfile.profile,
+      })),
+    });
+  } catch {
+    return { status: "unknown", message: DIAGNOSIS_UNCLEAR_SAVE_MESSAGE };
+  }
+  const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord> | null;
+  return classifyPlanningWriteResponse<PlanningProfileRecord>({
+    response: res,
+    payload,
+    message: parseApiPayload(input.locale, res, payload, fallbackMessage).errorMessage,
+  });
 }
 
 export function useWorkspaceProfileBundle({

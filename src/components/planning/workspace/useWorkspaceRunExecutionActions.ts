@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import {
+  classifyPlanningWriteResponse,
+  DIAGNOSIS_UNCLEAR_SAVE_MESSAGE,
+  type DiagnosisRunRecord,
+  type PlanningWriteResult,
+} from "@/lib/planning/ui/planningDiagnosisWizard";
 import { createInitialStepStatuses } from "@/lib/planning/ui/runPipeline";
 import { buildWorkspaceCompletedRunState } from "@/lib/planning/ui/workspaceRunResult";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -128,8 +134,8 @@ function parseApiPayload<T>(
   return { ok: true, errorMessage: "" };
 }
 
-export async function postPlanningRun(body: unknown, idempotencyKey: string): Promise<Response> {
-  const request = () => fetch("/api/planning/v2/runs", {
+function requestPlanningRun(body: unknown, idempotencyKey: string): Promise<Response> {
+  return fetch("/api/planning/v2/runs", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -137,6 +143,10 @@ export async function postPlanningRun(body: unknown, idempotencyKey: string): Pr
     },
     body: JSON.stringify(body),
   });
+}
+
+export async function postPlanningRun(body: unknown, idempotencyKey: string): Promise<Response> {
+  const request = () => requestPlanningRun(body, idempotencyKey);
 
   try {
     return await request();
@@ -144,6 +154,93 @@ export async function postPlanningRun(body: unknown, idempotencyKey: string): Pr
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     return request();
   }
+}
+
+const RUN_POLL_INTERVAL_MS = 1000;
+const RUN_POLL_MAX_ATTEMPTS = 120;
+
+function isTerminalRunStatus(status: PlanningRunRecord["overallStatus"]): boolean {
+  return status === "SUCCESS" || status === "PARTIAL_SUCCESS" || status === "FAILED";
+}
+
+async function pollPlanningRunRecord(
+  seed: PlanningRunRecord,
+  wait: () => Promise<void>,
+  maxAttempts: number,
+): Promise<PlanningRunRecord | null> {
+  let latest = seed;
+  for (let attempt = 0; attempt < maxAttempts && !isTerminalRunStatus(latest.overallStatus); attempt += 1) {
+    await wait();
+    const response = await fetch(`/api/planning/v2/runs/${encodeURIComponent(seed.id)}`, { cache: "no-store" });
+    const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
+    if (!response.ok || !payload?.ok || !payload.data) return null;
+    latest = payload.data;
+  }
+  return isTerminalRunStatus(latest.overallStatus) ? latest : null;
+}
+
+// Wizard path, separate from executePlanningRun: one POST with no network resend, so an unclear
+// result stops as unclear. Polling is not tied to the mounted screen, leaving it cannot strand a run.
+export async function createPlanningRunRecord(input: {
+  locale: Locale;
+  body: unknown;
+  createKey: () => string;
+  wait?: () => Promise<void>;
+  maxPollAttempts?: number;
+}): Promise<PlanningWriteResult<DiagnosisRunRecord>> {
+  const fallbackMessage = "진단 실행 요청에 실패했습니다.";
+  let response: Response;
+  try {
+    response = await requestPlanningRun(input.body, input.createKey());
+  } catch {
+    return { status: "unknown", message: DIAGNOSIS_UNCLEAR_SAVE_MESSAGE };
+  }
+  const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
+  const created = classifyPlanningWriteResponse<PlanningRunRecord>({
+    response,
+    payload,
+    message: parseApiPayload(input.locale, response, payload, fallbackMessage).errorMessage,
+  });
+  if (created.status !== "ok") return created;
+
+  const recordId = created.record.id;
+  const unclear = { status: "unknown" as const, message: "진단 실행 상태를 끝까지 확인하지 못했습니다. 실행 기록에서 결과를 확인해 주세요.", recordId };
+  try {
+    const finalRun = await pollPlanningRunRecord(
+      created.record,
+      input.wait ?? (() => new Promise<void>((resolve) => setTimeout(resolve, RUN_POLL_INTERVAL_MS))),
+      input.maxPollAttempts ?? RUN_POLL_MAX_ATTEMPTS,
+    );
+    if (!finalRun) return unclear;
+    if (finalRun.overallStatus === "FAILED") {
+      return { status: "failed", message: "진단 실행이 실패 상태로 끝났습니다. 실패한 실행은 리포트로 보관하지 않습니다.", recordId };
+    }
+    return { status: "ok", record: finalRun };
+  } catch {
+    return unclear;
+  }
+}
+
+export async function createPlanningReportRecord(input: {
+  locale: Locale;
+  runId: string;
+}): Promise<PlanningWriteResult<{ id: string }>> {
+  let response: Response;
+  try {
+    response = await fetch("/api/planning/v2/reports", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(withDevCsrf({ runId: input.runId })),
+    });
+  } catch {
+    return { status: "unknown", message: DIAGNOSIS_UNCLEAR_SAVE_MESSAGE };
+  }
+  const payload = (await response.json().catch(() => null)) as ApiResponse<{ id?: string }> | null;
+  return classifyPlanningWriteResponse<{ id?: string }>({
+    response,
+    payload,
+    message: parseApiPayload(input.locale, response, payload, "리포트 보관에 실패했습니다.").errorMessage,
+  });
 }
 
 export function useWorkspaceRunExecutionActions({
