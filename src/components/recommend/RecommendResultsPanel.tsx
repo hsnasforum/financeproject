@@ -177,6 +177,12 @@ export function RecommendResultsPanel({
         </Card>
       )}
 
+      {(result.items ?? []).length === 0 && result.message ? (
+        <p className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-bold text-slate-700" role="status" data-testid="recommend-empty-message">
+          {result.message}
+        </p>
+      ) : null}
+
       <div className="grid gap-6 md:grid-cols-2">
         {(result.items ?? []).map((item, index) => {
           const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;

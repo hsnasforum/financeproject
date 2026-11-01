@@ -99,6 +99,7 @@ export function OpsBackupClient({ surface = "ops", afterContent }: OpsBackupClie
   const restoreIssues = restoreResult?.issues ?? [];
   const restoreNormalizationProfiles = restoreResult?.normalization?.profiles ?? [];
   const previewIncludesPlanningV3 = preview?.manifest?.planningV3?.included === true;
+  const restoreConfirmUsesDetailCopy = isSettingsSurface && previewIncludesPlanningV3;
 
   const summaryRows = useMemo(() => {
     const actual = preview?.actual;
@@ -421,7 +422,7 @@ export function OpsBackupClient({ surface = "ops", afterContent }: OpsBackupClie
 
       {isSettingsSurface ? (
         <p className="mb-6 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm font-medium leading-relaxed text-slate-700">
-          백업에는 로그인한 사용자의 프로필·실행 기록과 상세 계좌·거래·분류 데이터가 포함됩니다. 공용 가정과 운영 정책, 이 브라우저의 화면 설정은 포함되지 않습니다. 암호와 백업 파일은 서로 다른 안전한 곳에 보관해 주세요.
+          백업에는 로그인한 사용자의 프로필·실행 기록이 포함됩니다. 상세 계좌·거래·분류 데이터는 사용자별 저장을 쓰는 실행 방식에서만 함께 포함되니, 미리보기에서 포함 여부를 확인해 주세요. 공용 가정과 운영 정책, 이 브라우저의 화면 설정은 포함되지 않습니다. 암호와 백업 파일은 서로 다른 안전한 곳에 보관해 주세요.
         </p>
       ) : null}
 
@@ -504,7 +505,7 @@ export function OpsBackupClient({ surface = "ops", afterContent }: OpsBackupClie
       {afterContent}
       {confirmRestoreOpen ? (
         <BackupRestoreConfirmDialog
-          isSettingsSurface={isSettingsSurface}
+          isSettingsSurface={restoreConfirmUsesDetailCopy}
           mode={mode}
           restoring={restoring}
           selectedName={selectedName}

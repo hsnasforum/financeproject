@@ -810,6 +810,11 @@ function RecommendPageOwned({ ownerId }: { ownerId: RecommendOwnerId }) {
               마지막 저장일: <span className="text-slate-600 ml-1 tabular-nums">{formatKoreanDateTime(lastStored.savedAt)}</span>
             </p>
           ) : null}
+          <p className="mt-3 text-xs">
+            <Link href="/recommend/history" className="font-black text-primary hover:text-navy">
+              추천 비교 기록 보기
+            </Link>
+          </p>
           {recentHistoryNotice ? (
             <div role="status" aria-live="polite" className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-primary">
               <span>{recentHistoryNotice}</span>

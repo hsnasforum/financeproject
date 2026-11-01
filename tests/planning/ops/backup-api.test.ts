@@ -11,13 +11,24 @@ import { POST as backupPreviewPOST } from "../../../src/app/api/ops/backup/previ
 import { POST as backupRestorePOST } from "../../../src/app/api/ops/backup/restore/route";
 import { decodeZip, encodeZip } from "../../../src/lib/ops/backup/zipCodec";
 import {
+  buildPlanningDataVaultZip,
   decryptPlanningDataVaultArchive,
   encryptPlanningDataVaultArchive,
+  previewPlanningDataVaultZip,
   restorePlanningDataVaultZip,
 } from "../../../src/lib/ops/backup/planningDataVault";
-import { createProfile, listProfiles } from "../../../src/lib/planning/store/profileStore";
+import {
+  createProfile,
+  getDefaultProfileId,
+  getProfile,
+  hardDeleteProfile,
+  listProfiles,
+  setDefaultProfile,
+  upsertProfileRecord,
+} from "../../../src/lib/planning/store/profileStore";
 import { createRun, getRun, listRuns } from "../../../src/lib/planning/store/runStore";
 import { resolveProfileRunDir, resolveRunDir } from "../../../src/lib/planning/store/paths";
+import { runWithPlanningUserScope } from "../../../src/lib/planning/store/userScope";
 import {
   listAssumptionsHistory,
   loadAssumptionsSnapshotById,
@@ -59,6 +70,11 @@ const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
 const BACKUP_PREVIEW_SESSION_COOKIE = "planning_backup_preview_session";
+const LEGACY_STORAGE_V3_WARNING = "이 백업에는 상세 계좌·거래·분류(Planning v3) 데이터가 포함되어 있지 않습니다. 사용자별 저장을 쓰지 않는 실행 방식에서 만든 백업이라 복원해도 상세 데이터는 바뀌지 않습니다.";
+const VAULT_TEST_LIMITS = { maxEntries: 500, maxBytes: 8 * 1024 * 1024 };
+const SAVED_PROFILE_ID = "default-profile";
+const SORTED_FIRST_PROFILE_ID = "090693ad-e176-4bd6-9e1e-645558fe60bc";
+const SAVED_PROFILE_LIQUID_ASSETS = 20_000_000;
 
 let backupPreviewSessionCookie = "";
 
@@ -96,6 +112,27 @@ async function createRunFixture(id: string, title = "backup run", options?: { cr
     },
     outputs: {},
   }, { enforceRetention: false });
+}
+
+// Replaces the fixture profile with two profiles. The older one is default and sorts last by path.
+async function seedTwoProfilesWithSortedLastDefault(): Promise<void> {
+  const fixtureProfiles = await listProfiles();
+  await upsertProfileRecord({
+    id: SAVED_PROFILE_ID,
+    name: "saved profile",
+    profile: { ...profileFixture(), liquidAssets: SAVED_PROFILE_LIQUID_ASSETS },
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
+  });
+  await upsertProfileRecord({
+    id: SORTED_FIRST_PROFILE_ID,
+    name: "draft profile",
+    profile: profileFixture(),
+    createdAt: "2026-03-02T00:00:00.000Z",
+    updatedAt: "2026-03-02T00:00:00.000Z",
+  });
+  for (const row of fixtureProfiles) await hardDeleteProfile(row.id);
+  await setDefaultProfile(SAVED_PROFILE_ID);
 }
 
 async function createLargeRunFixture(id: string, sizeBytes: number): Promise<void> {
@@ -1084,6 +1121,71 @@ describe.sequential("ops backup API", () => {
     expect((payload.data?.warnings ?? []).join("\n")).not.toMatch(/Unexpected|INVALID_|restore failed|JSON/u);
   });
 
+  it("warns and leaves detail data untouched when a full backup excludes it in shared storage mode", async () => {
+    const detailPath = path.join(env.PLANNING_DATA_DIR as string, "planning-v3", "accounts.json");
+    await fs.promises.mkdir(path.dirname(detailPath), { recursive: true });
+    await fs.promises.writeFile(detailPath, `${JSON.stringify({ version: 2, items: [{ id: "acc-1", name: "합성 계좌", kind: "bank" }] })}\n`, "utf-8");
+    const detailBefore = await fs.promises.readFile(detailPath);
+
+    const exported = await buildPlanningDataVaultZip({ mode: "full", ...VAULT_TEST_LIMITS });
+    const entries = await decodeZip(exported.bytes, { maxEntries: 500, maxTotalBytes: 8 * 1024 * 1024 });
+    expect(exported.manifest.planningV3).toEqual({ included: false, totalBytes: 0, reason: "legacy-storage-mode" });
+    expect([...entries.keys()].filter((entryPath) => entryPath.startsWith("planning-v3/"))).toEqual([]);
+
+    const preview = await previewPlanningDataVaultZip(exported.bytes, { ...VAULT_TEST_LIMITS, maxPreviewIds: 10 });
+    expect(preview.manifest.planningV3).toEqual({ included: false, totalBytes: 0, reason: "legacy-storage-mode" });
+    expect(preview.warnings).toContain(LEGACY_STORAGE_V3_WARNING);
+
+    const restored = await restorePlanningDataVaultZip(exported.bytes, { mode: "replace", ...VAULT_TEST_LIMITS });
+    expect(restored.committed).toBe(true);
+    expect(restored.imported.planningV3Files).toBe(0);
+    expect(restored.warnings).toContain(LEGACY_STORAGE_V3_WARNING);
+    expect(await fs.promises.readFile(detailPath)).toEqual(detailBefore);
+  });
+
+  it("keeps the delta warning separate from the shared storage warning", async () => {
+    const exported = await buildPlanningDataVaultZip({ mode: "delta", ...VAULT_TEST_LIMITS });
+    const preview = await previewPlanningDataVaultZip(exported.bytes, { ...VAULT_TEST_LIMITS, maxPreviewIds: 10 });
+
+    expect(preview.manifest.planningV3).toEqual({ included: false, totalBytes: 0, reason: "delta-stable-only" });
+    expect(preview.warnings).toContain("변경분 백업은 Planning v3 파일 변경 이력을 추적하지 않으므로 Planning v3 데이터는 포함하지 않습니다.");
+    expect(preview.warnings).not.toContain(LEGACY_STORAGE_V3_WARNING);
+  });
+
+  it("uses the manifest reason instead of inferring exclusion from zero detail files", async () => {
+    const exported = await buildPlanningDataVaultZip({ mode: "full", ...VAULT_TEST_LIMITS });
+    const entries = await decodeZip(exported.bytes, { maxEntries: 500, maxTotalBytes: 8 * 1024 * 1024 });
+    const manifest = JSON.parse((entries.get("manifest.json") as Buffer).toString("utf-8")) as Record<string, unknown>;
+    manifest.planningV3 = { included: false, totalBytes: 0 };
+    entries.set("manifest.json", Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf-8"));
+    const withoutReason = encodeZip([...entries.entries()].map(([entryPath, bytes]) => ({ path: entryPath, bytes })));
+
+    const preview = await previewPlanningDataVaultZip(withoutReason, { ...VAULT_TEST_LIMITS, maxPreviewIds: 10 });
+
+    expect(preview.actual.planningV3Files).toBe(0);
+    expect(preview.warnings).not.toContain(LEGACY_STORAGE_V3_WARNING);
+  });
+
+  it("does not warn about exclusion when a user-scoped backup has no detail files yet", async () => {
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    env.PLANNING_USER_ID = "alice";
+
+    const preview = await runWithPlanningUserScope({ userId: "alice", authSource: "test" }, async () => {
+      const exported = await buildPlanningDataVaultZip({ mode: "full", scope: "user", userId: "alice", ...VAULT_TEST_LIMITS });
+      return await previewPlanningDataVaultZip(exported.bytes, {
+        ...VAULT_TEST_LIMITS,
+        maxPreviewIds: 10,
+        scope: "user",
+        userId: "alice",
+      });
+    });
+
+    expect(preview.manifest.planningV3).toEqual({ included: true, totalBytes: 0 });
+    expect(preview.actual.planningV3Owners).toBe(13);
+    expect(preview.actual.planningV3Files).toBe(0);
+    expect(preview.warnings).not.toContain(LEGACY_STORAGE_V3_WARNING);
+  });
+
   it("persists preview receipts in the planning data directory", async () => {
     const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
     const previewToken = await previewTokenForEncryptedBackup(encrypted);
@@ -1455,6 +1557,7 @@ describe.sequential("ops backup API", () => {
       name: "existing profile",
       profile: profileFixture(),
     });
+    const defaultBefore = await getDefaultProfileId();
     const zip = makeRestoreZip();
     const encrypted = await encryptPlanningDataVaultArchive(zip, "backup-passphrase");
 
@@ -1489,12 +1592,14 @@ describe.sequential("ops backup API", () => {
     const profiles = await listProfiles();
     expect(profiles.some((profile) => profile.id === "imported-profile")).toBe(true);
     expect(profiles.length).toBeGreaterThanOrEqual(2);
+    expect(await getDefaultProfileId()).toBe(defaultBefore);
   });
 
   it("keeps existing data and reports an error when replace restore has invalid entries", async () => {
     const beforeProfileIds = (await listProfiles())
       .map((profile) => profile.id)
       .sort((a, b) => a.localeCompare(b));
+    const defaultBefore = await getDefaultProfileId();
     const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
 
     const form = new FormData();
@@ -1522,6 +1627,7 @@ describe.sequential("ops backup API", () => {
     const afterProfiles = await listProfiles();
     expect(afterProfiles.map((profile) => profile.id).sort((a, b) => a.localeCompare(b))).toEqual(beforeProfileIds);
     expect(afterProfiles.some((profile) => profile.id === "imported-profile")).toBe(false);
+    expect(await getDefaultProfileId()).toBe(defaultBefore);
 
     const successRows = await listOpsAuditEvents({ eventType: "OPS_BACKUP_RESTORE_SUCCESS", limit: 20 });
     const errorRows = await listOpsAuditEvents({ eventType: "OPS_BACKUP_RESTORE_ERROR", limit: 20 });
@@ -1562,6 +1668,7 @@ describe.sequential("ops backup API", () => {
     const beforeProfileIds = (await listProfiles())
       .map((profile) => profile.id)
       .sort((a, b) => a.localeCompare(b));
+    const defaultBefore = await getDefaultProfileId();
     const zip = makeRestoreZipWithAprDecimalProfile();
 
     const result = await restorePlanningDataVaultZip(zip, {
@@ -1587,6 +1694,61 @@ describe.sequential("ops backup API", () => {
     const afterProfiles = await listProfiles();
     expect(afterProfiles.map((profile) => profile.id).sort((a, b) => a.localeCompare(b))).toEqual(beforeProfileIds);
     expect(afterProfiles.some((profile) => profile.id === "normalize-profile")).toBe(false);
+    expect(await getDefaultProfileId()).toBe(defaultBefore);
+  });
+
+  it("keeps the current default profile after replace when the backup contains it", async () => {
+    await seedTwoProfilesWithSortedLastDefault();
+    const exported = await buildPlanningDataVaultZip({ mode: "full", ...VAULT_TEST_LIMITS });
+
+    const restored = await restorePlanningDataVaultZip(exported.bytes, { mode: "replace", ...VAULT_TEST_LIMITS });
+
+    expect(restored.committed).toBe(true);
+    expect(restored.imported.profiles).toBe(2);
+    expect(await getDefaultProfileId()).toBe(SAVED_PROFILE_ID);
+    expect((await listProfiles()).map((profile) => profile.id).sort((a, b) => a.localeCompare(b)))
+      .toEqual([SORTED_FIRST_PROFILE_ID, SAVED_PROFILE_ID]);
+    expect((await getProfile(SAVED_PROFILE_ID))?.profile.liquidAssets).toBe(SAVED_PROFILE_LIQUID_ASSETS);
+  });
+
+  it("uses the existing fallback after replace when the backup does not contain the current default", async () => {
+    await seedTwoProfilesWithSortedLastDefault();
+    const exported = await buildPlanningDataVaultZip({ mode: "full", ...VAULT_TEST_LIMITS });
+    await upsertProfileRecord({
+      id: "current-only-profile",
+      name: "current only profile",
+      profile: profileFixture(),
+      createdAt: "2026-03-03T00:00:00.000Z",
+      updatedAt: "2026-03-03T00:00:00.000Z",
+    });
+    await setDefaultProfile("current-only-profile");
+
+    const restored = await restorePlanningDataVaultZip(exported.bytes, { mode: "replace", ...VAULT_TEST_LIMITS });
+
+    expect(restored.committed).toBe(true);
+    expect(await getDefaultProfileId()).toBe(SORTED_FIRST_PROFILE_ID);
+    expect((await listProfiles()).map((profile) => profile.id).sort((a, b) => a.localeCompare(b)))
+      .toEqual([SORTED_FIRST_PROFILE_ID, SAVED_PROFILE_ID]);
+  });
+
+  it("rolls back replace restore when keeping the current default fails", async () => {
+    await seedTwoProfilesWithSortedLastDefault();
+    const exported = await buildPlanningDataVaultZip({ mode: "full", ...VAULT_TEST_LIMITS });
+
+    const result = await restorePlanningDataVaultZip(exported.bytes, {
+      mode: "replace",
+      ...VAULT_TEST_LIMITS,
+      faultInjection: {
+        beforeWrite(operation) {
+          if (operation.path === "profiles.meta.json") throw new Error("fault: default profile write failed");
+        },
+      },
+    });
+
+    expect(result.committed).toBe(false);
+    expect(await getDefaultProfileId()).toBe(SAVED_PROFILE_ID);
+    expect((await listProfiles()).map((profile) => profile.id).sort((a, b) => a.localeCompare(b)))
+      .toEqual([SORTED_FIRST_PROFILE_ID, SAVED_PROFILE_ID]);
   });
 
   it("returns normalization disclosures for restored profiles", async () => {

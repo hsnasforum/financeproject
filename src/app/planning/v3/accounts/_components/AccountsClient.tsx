@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { BodyActionLink } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
-import { reportHeroActionLinkClassName, ReportHeroCard, ReportHeroStatCard, ReportHeroStatGrid } from "@/components/ui/ReportTone";
+import { ReportHeroCard, ReportHeroStatCard, ReportHeroStatGrid } from "@/components/ui/ReportTone";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
 export type Account = {
@@ -362,15 +362,15 @@ export function AccountsClient({
           description="입출금, 카드, 현금 계정을 한곳에서 정리하고 월별 잔액 계산에 쓰일 기준일 초기잔액까지 연결합니다."
           action={(
             <>
-              <Link className={reportHeroActionLinkClassName} href="/planning/v3/transactions/batches">
+              <BodyActionLink href="/planning/v3/transactions/batches">
                 배치 목록
-              </Link>
-              <Link className={reportHeroActionLinkClassName} href="/planning/v3/import/csv">
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/import/csv">
                 CSV Import
-              </Link>
-              <Link className={reportHeroActionLinkClassName} href="/planning/v3/balances">
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/balances">
                 Balance Timeline
-              </Link>
+              </BodyActionLink>
             </>
           )}
         >

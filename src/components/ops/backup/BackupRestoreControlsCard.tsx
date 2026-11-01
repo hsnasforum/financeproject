@@ -96,7 +96,13 @@ export function BackupRestoreControlsCard({
               value={mode}
             >
               <option value="merge">{isSettingsSurface ? "기존 기록 유지하며 합치기 (상세 데이터 제외)" : "기존 기록 유지하며 합치기"}</option>
-              <option value="replace">{isSettingsSurface ? "백업 시점의 전체 사용자 데이터로 교체" : "백업 시점 기록으로 교체"}</option>
+              <option value="replace">
+                {!isSettingsSurface
+                  ? "백업 시점 기록으로 교체"
+                  : previewIncludesPlanningV3
+                    ? "백업 시점의 전체 사용자 데이터로 교체"
+                    : "백업 파일에 포함된 기록으로 교체"}
+              </option>
             </select>
           </label>
           <Button
@@ -117,6 +123,13 @@ export function BackupRestoreControlsCard({
             {mode === "replace"
               ? "상세 계좌·거래·분류 데이터까지 백업 시점 상태로 교체 복원합니다."
               : "기존 기록 유지 방식에서는 현재 상세 데이터 변경을 보호하기 위해 계좌·거래·분류 데이터를 복원하지 않습니다. 전체 복원이 필요하면 백업 시점으로 교체를 선택하세요."}
+          </p>
+        ) : null}
+        {isSettingsSurface && previewToken && !previewIncludesPlanningV3 ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            {mode === "replace"
+              ? "이 백업에는 상세 계좌·거래·분류 데이터가 없습니다. 교체해도 상세 데이터는 바뀌지 않고, 백업에 담긴 프로필·실행 기록만 교체합니다."
+              : "이 백업에는 상세 계좌·거래·분류 데이터가 없어 복원되지 않습니다."}
           </p>
         ) : null}
       </div>

@@ -266,6 +266,84 @@ describe("recommend results view model", () => {
     expect(html.match(/disabled=""/g)).toHaveLength(3);
   });
 
+  it("shows the API message as status when there are no recommendation items", () => {
+    const html = renderToStaticMarkup(
+      <RecommendResultsPanel
+        result={{ ok: true, meta: baseMeta, items: [], message: "조건에 맞는 추천 후보가 없습니다." }}
+        resultProfile={recommendProfileDefaults()}
+        isStale={false}
+        feedback=""
+        planningActionContext={null}
+        sourceStatusRows={[]}
+        sourceStatusReady={false}
+        openDetailKey={null}
+        onOpenDetailKeyChange={vi.fn()}
+        onSave={vi.fn()}
+        onExportJson={vi.fn()}
+        onExportCsv={vi.fn()}
+        onAddCompare={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain('data-testid="recommend-empty-message"');
+    expect(html).toContain("조건에 맞는 추천 후보가 없습니다.");
+  });
+
+  it("does not show the API message when recommendation items exist", () => {
+    const html = renderToStaticMarkup(
+      <RecommendResultsPanel
+        result={{
+          ok: true,
+          meta: baseMeta,
+          items: [attachUnifiedIds({ ok: true, items: [baseItem] }).items![0]],
+          message: "조건에 맞는 추천 후보가 없습니다.",
+        }}
+        resultProfile={recommendProfileDefaults()}
+        isStale={false}
+        feedback=""
+        planningActionContext={null}
+        sourceStatusRows={[]}
+        sourceStatusReady={false}
+        openDetailKey={null}
+        onOpenDetailKeyChange={vi.fn()}
+        onSave={vi.fn()}
+        onExportJson={vi.fn()}
+        onExportCsv={vi.fn()}
+        onAddCompare={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("상세 분석");
+    expect(html).not.toContain('data-testid="recommend-empty-message"');
+    expect(html).not.toContain("조건에 맞는 추천 후보가 없습니다.");
+  });
+
+  it("keeps the empty result unchanged when the API sends no message", () => {
+    const html = renderToStaticMarkup(
+      <RecommendResultsPanel
+        result={{ ok: true, meta: baseMeta, items: [] }}
+        resultProfile={recommendProfileDefaults()}
+        isStale={false}
+        feedback=""
+        planningActionContext={null}
+        sourceStatusRows={[]}
+        sourceStatusReady={false}
+        openDetailKey={null}
+        onOpenDetailKeyChange={vi.fn()}
+        onSave={vi.fn()}
+        onExportJson={vi.fn()}
+        onExportCsv={vi.fn()}
+        onAddCompare={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('data-testid="recommend-results"');
+    expect(html).toContain("추천 결과");
+    expect(html).not.toContain('data-testid="recommend-empty-message"');
+    expect(html).not.toContain('role="status"');
+  });
+
   it.each([
     { finalScore: 0, displayed: "0.00%", ariaValue: "0" },
     { finalScore: 0.85, displayed: "85.00%", ariaValue: "85" },

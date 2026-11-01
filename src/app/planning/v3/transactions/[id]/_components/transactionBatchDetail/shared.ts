@@ -1,4 +1,4 @@
-import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
+import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
 export type Batch = {
   id: string;
@@ -16,7 +16,7 @@ export type Batch = {
 export type Account = {
   id: string;
   name: string;
-  kind: "checking" | "saving" | "card" | "cash" | "other";
+  kind: "checking" | "saving" | "card" | "cash" | "other" | "bank" | "broker";
   currency: "KRW";
   note?: string;
 };
@@ -175,18 +175,12 @@ export type CashflowResponse = {
 
 export type DraftCreateResponse = {
   ok: true;
-  id: string;
+  data: {
+    id: string;
+  };
 };
 
 export type DraftSplitMode = "byCategory" | "byRatio" | "noSplit";
-
-export type DraftCashflowRow = {
-  ym: string;
-  incomeKrw: number;
-  expenseKrw: number;
-  netKrw: number;
-  txCount: number;
-};
 
 export const CATEGORY_OPTIONS: TransactionCategory[] = [
   "income",
@@ -262,7 +256,7 @@ export function isAccount(value: unknown): value is Account {
   if (!isRecord(value)) return false;
   if (!asString(value.id) || !asString(value.name)) return false;
   const kind = asString(value.kind);
-  return ["checking", "saving", "card", "cash", "other"].includes(kind);
+  return ["checking", "saving", "card", "cash", "other", "bank", "broker"].includes(kind);
 }
 
 export function isEvidenceRow(payload: unknown): payload is EvidenceRow {
@@ -280,7 +274,26 @@ export function isCashflowResponse(payload: unknown): payload is CashflowRespons
 }
 
 export function isDraftCreateResponse(payload: unknown): payload is DraftCreateResponse {
-  return isRecord(payload) && payload.ok === true && asString(payload.id).length > 0;
+  return isRecord(payload) && payload.ok === true && isRecord(payload.data) && asString(payload.data.id).length > 0;
+}
+
+export function buildProfileDraftReviewPath(id: string): string {
+  return `/planning/v3/profile/drafts/${encodeURIComponent(id)}`;
+}
+
+export async function requestProfileDraftFromBatch(batchId: string): Promise<string | null> {
+  const response = await fetch("/api/planning/v3/profile/drafts", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(withDevCsrf({ batchId })),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !isDraftCreateResponse(payload)) return null;
+  return payload.data.id;
 }
 
 export function buildCsrfQuery(): string {
@@ -329,61 +342,6 @@ export function pickMonth(row: CashflowMonthlyRow): string {
   const ym = asString(row.ym);
   if (/^\d{4}-\d{2}$/.test(ym)) return ym;
   return "";
-}
-
-export function toDraftCashflowRows(monthly: CashflowMonthlyRow[], fallbackTxCount: Map<string, number>): DraftCashflowRow[] {
-  return monthly
-    .map((row) => {
-      const ym = pickMonth(row);
-      if (!ym) return null;
-
-      const incomeKrw = asNumber(row.incomeKrw ?? row.inflowKrw);
-      const outflowKrw = Math.abs(asNumber(row.outflowKrw));
-      const expenseFromRow = asNumber(row.expenseKrw);
-      const expenseKrw = Number.isFinite(expenseFromRow) && expenseFromRow !== 0
-        ? expenseFromRow
-        : -outflowKrw;
-      const netFromRow = asNumber(row.netKrw);
-      const netKrw = Number.isFinite(netFromRow) && netFromRow !== 0
-        ? netFromRow
-        : incomeKrw + expenseKrw;
-      const txCount = Math.max(
-        0,
-        Math.trunc(asNumber(row.txCount ?? fallbackTxCount.get(ym) ?? 0)),
-      );
-
-      return {
-        ym,
-        incomeKrw,
-        expenseKrw,
-        netKrw,
-        txCount,
-      };
-    })
-    .filter((row): row is DraftCashflowRow => Boolean(row));
-}
-
-export function buildAssumptions(
-  splitMode: DraftSplitMode,
-  fixedRatioPct: number,
-  variableRatioPct: number,
-  evidence: EvidenceRow[],
-): string[] {
-  const rows: string[] = [];
-  rows.push(`split mode=${splitMode}`);
-  if (splitMode === "byRatio") {
-    rows.push(`ratio fixed=${fixedRatioPct}% variable=${variableRatioPct}%`);
-  }
-
-  for (const item of evidence) {
-    const assumption = asString(item.assumption);
-    if (assumption) rows.push(assumption.slice(0, 120));
-
-    const formula = asString(item.formula);
-    if (formula) rows.push(`rule: ${formula.slice(0, 120)}`);
-  }
-
-  return [...new Set(rows.filter((item) => item.length > 0))].slice(0, 20);
 }
 
 export function buildOverrideRefreshMessage(label: string): string {

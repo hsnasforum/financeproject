@@ -17,7 +17,7 @@ import { migrateAssumptionsSnapshot } from "../../planning/migrations/snapshotMi
 import { atomicWriteJson } from "../../planning/storage/atomicWrite";
 import { readStorageJournalEvents, type StorageJournalEvent } from "../../planning/storage/journal";
 import { createRun, getRun, getRunBlob, hardDeleteRun, listRunIndexEntries } from "../../planning/server/store/runStore";
-import { hardDeleteProfile, listProfiles, upsertProfileRecord } from "../../planning/store/profileStore";
+import { getDefaultProfileId, hardDeleteProfile, listProfiles, setDefaultProfile, upsertProfileRecord } from "../../planning/store/profileStore";
 import {
   resolveProfilePartitionsDir,
   resolveProfilePartitionDir,
@@ -270,6 +270,7 @@ type BackupWarningMessageKind =
   | "namespaceSharedPoliciesSkipped"
   | "legacyPlanningV3NotIncluded"
   | "deltaPlanningV3NotIncluded"
+  | "legacyStoragePlanningV3NotIncluded"
   | "planningV3MergeSkipped";
 
 type EncryptedBackupPackage = {
@@ -367,6 +368,9 @@ function backupWarningMessage(kind: BackupWarningMessageKind, target?: string): 
   }
   if (kind === "deltaPlanningV3NotIncluded") {
     return "변경분 백업은 Planning v3 파일 변경 이력을 추적하지 않으므로 Planning v3 데이터는 포함하지 않습니다.";
+  }
+  if (kind === "legacyStoragePlanningV3NotIncluded") {
+    return "이 백업에는 상세 계좌·거래·분류(Planning v3) 데이터가 포함되어 있지 않습니다. 사용자별 저장을 쓰지 않는 실행 방식에서 만든 백업이라 복원해도 상세 데이터는 바뀌지 않습니다.";
   }
   if (kind === "planningV3MergeSkipped") {
     return "Planning v3 데이터는 파일 단위 병합 시 현재 변경을 덮어쓸 수 있어 교체 복원에서만 반영합니다.";
@@ -1000,6 +1004,8 @@ async function parseVault(
     warnings.push(backupWarningMessage("legacyPlanningV3NotIncluded"));
   } else if (manifest.planningV3?.reason === "delta-stable-only") {
     warnings.push(backupWarningMessage("deltaPlanningV3NotIncluded"));
+  } else if (manifest.planningV3?.included === false && manifest.planningV3.reason === "legacy-storage-mode") {
+    warnings.push(backupWarningMessage("legacyStoragePlanningV3NotIncluded"));
   }
   const manifestIntegrityIssues: VaultManifestIntegrityIssue[] = [];
   const invalidEntryPaths = new Set<string>();
@@ -2080,6 +2086,9 @@ export async function restorePlanningDataVaultZip(
   }
 
   try {
+  // Clearing removes the current default, and the first restored profile by path order would replace it.
+  const replacedDefaultProfileId = options.mode === "replace" ? await getDefaultProfileId() : undefined;
+  const restoredProfileIds = new Set<string>();
   if (options.mode === "replace") {
     await callRestoreFaultInjection(options.faultInjection, {
       phase: "commit",
@@ -2149,6 +2158,7 @@ export async function restorePlanningDataVaultZip(
         createdAt: toIso(row.createdAt),
         updatedAt: toIso(row.updatedAt),
       });
+      restoredProfileIds.add(id);
       if (canonical.normalization.defaultsApplied.length > 0 || canonical.normalization.fixesApplied.length > 0) {
         normalizationProfiles.push({
           id,
@@ -2464,6 +2474,15 @@ export async function restorePlanningDataVaultZip(
         });
       },
     });
+  }
+
+  if (replacedDefaultProfileId && restoredProfileIds.has(replacedDefaultProfileId)) {
+    await beforeRestoreWrite(options, {
+      entity: "profile",
+      id: replacedDefaultProfileId,
+      path: "profiles.meta.json",
+    });
+    await setDefaultProfile(replacedDefaultProfileId);
   }
 
   const summary: VaultRestoreSummary = {

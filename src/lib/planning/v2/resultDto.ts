@@ -72,6 +72,8 @@ export type ResultDtoV1 = {
       incomeKrw?: number;
       expensesKrw?: number;
       debtPaymentKrw?: number;
+      /** Recurring cashflow: income - expenses - required minimum debt payment (excludes extra repayment). */
+      operatingCashflowKrw?: number;
       cashKrw?: number;
       netWorthKrw?: number;
       totalDebtKrw?: number;
@@ -266,6 +268,7 @@ function buildTimelinePoints(simulate: Record<string, unknown>): ResultDtoV1["ti
       ...(typeof asNumber(rawRow.income) === "number" ? { incomeKrw: row.income } : {}),
       ...(typeof asNumber(rawRow.expenses) === "number" ? { expensesKrw: row.expenses } : {}),
       ...(typeof asNumber(rawRow.debtPayment) === "number" ? { debtPaymentKrw: row.debtPayment } : {}),
+      ...(typeof asNumber(rawRow.operatingCashflow) === "number" ? { operatingCashflowKrw: row.operatingCashflow } : {}),
       ...(typeof row.cash === "number" ? { cashKrw: row.cash } : {}),
       ...(typeof row.netWorth === "number" ? { netWorthKrw: row.netWorth } : {}),
       ...(typeof row.totalDebt === "number" ? { totalDebtKrw: row.totalDebt } : {}),

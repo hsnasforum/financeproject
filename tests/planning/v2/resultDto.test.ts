@@ -210,6 +210,24 @@ describe("buildResultDtoV1", () => {
     expect(rawSimulate.traces?.length ?? 0).toBeLessThanOrEqual(LIMITS.tracesTop);
     expect(rawSimulate.timelineSampled?.length ?? 0).toBeLessThanOrEqual(LIMITS.tracesTop);
   });
+
+  it("carries engine operatingCashflow only when the raw row has a finite value", () => {
+    const dto = buildResultDtoV1({
+      simulate: {
+        keyTimelinePoints: [
+          { monthIndex: 0, row: { income: 4_100_000, expenses: 2_700_000, debtPayment: 21_400_000, operatingCashflow: 778_170, liquidAssets: 0, netWorth: -8_698_264.85, totalDebt: 38_820_488.56 } },
+          { monthIndex: 12, row: { income: 4_100_000, expenses: 2_754_000, debtPayment: 1_346_000, operatingCashflow: 0, liquidAssets: 0, netWorth: 7_849_982.99, totalDebt: 23_778_351.91 } },
+          { monthIndex: 119, row: { income: 4_100_000, expenses: 3_285_858.07, debtPayment: 0, operatingCashflow: null, liquidAssets: 61_488_078.24, netWorth: 140_354_917.05, totalDebt: 0 } },
+        ],
+      },
+    });
+    const [start, mid, end] = dto.timeline.points;
+
+    expect(start).toMatchObject({ label: "start", debtPaymentKrw: 21_400_000, operatingCashflowKrw: 778_170 });
+    expect(mid).toMatchObject({ label: "mid", operatingCashflowKrw: 0 });
+    expect(end?.label).toBe("end");
+    expect(end).not.toHaveProperty("operatingCashflowKrw");
+  });
 });
 
 describe("buildResultDtoV1FromRunRecord", () => {
@@ -238,5 +256,6 @@ describe("buildResultDtoV1FromRunRecord", () => {
     expect(dto.summary.endNetWorthKrw).toBe(12_000_000);
     expect(dto.warnings.aggregated[0]?.code).toBe("CONTRIBUTION_SKIPPED");
     expect(dto.timeline.points.length).toBeGreaterThan(0);
+    expect(dto.timeline.points[0]).not.toHaveProperty("operatingCashflowKrw");
   });
 });

@@ -6,9 +6,9 @@ import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import {
   asNumber,
   asString,
-  buildAssumptions,
   buildCsrfQuery,
   buildOverrideRefreshMessage,
+  buildProfileDraftReviewPath,
   buildSplitQuery,
   CATEGORY_OPTIONS,
   type Account,
@@ -21,14 +21,13 @@ import {
   isCategorizedResponse,
   isCashflowResponse,
   isDetailResponse,
-  isDraftCreateResponse,
   isRecord,
   isTransactionRow,
+  requestProfileDraftFromBatch,
   type TransactionCategory,
   type TransactionKind,
   type TransactionKindOverride,
   type TransactionRow,
-  toDraftCashflowRows,
 } from "./shared";
 
 type TransactionBatchDetailControllerInput = {
@@ -110,7 +109,6 @@ type TransactionBatchDetailCashflow = {
 
 type TransactionBatchDetailDraftReview = {
   hasBatchAccount: boolean;
-  ratioValid: boolean;
   draftSaving: boolean;
   draftMessage: string;
   onCreateDraftAndGoToReview: () => Promise<void>;
@@ -514,7 +512,7 @@ export function useTransactionBatchDetailController({
   }
 
   async function createDraftAndGoToReview() {
-    if (!detail || !cashflow) {
+    if (!detail) {
       setDraftMessage("드래프트 생성 대상 데이터가 없습니다.");
       return;
     }
@@ -523,63 +521,17 @@ export function useTransactionBatchDetailController({
       return;
     }
 
-    const txCountByMonth = new Map<string, number>();
-    for (const row of detail.monthsSummary) {
-      const month = asString(row.ym);
-      if (!month) continue;
-      txCountByMonth.set(month, Math.max(0, Math.trunc(asNumber(row.txCount))));
-    }
-
-    const draftCashflow = toDraftCashflowRows(cashflow.monthly, txCountByMonth);
-    if (draftCashflow.length < 1) {
-      setDraftMessage("저장할 월별 캐시플로우가 없습니다.");
-      return;
-    }
-
-    const assumptions = buildAssumptions(
-      splitMode,
-      fixedRatioPct,
-      variableRatioPct,
-      cashflow.draftPatch.evidence,
-    );
-
-    const draftPatch = {
-      monthlyIncomeNet: asNumber(cashflow.profilePatch.monthlyIncomeNet),
-      monthlyEssentialExpenses: asNumber(cashflow.profilePatch.monthlyEssentialExpenses),
-      monthlyDiscretionaryExpenses: asNumber(cashflow.profilePatch.monthlyDiscretionaryExpenses),
-      assumptions,
-      monthsConsidered: draftCashflow.length,
-    };
-
     setDraftSaving(true);
     setDraftMessage("");
 
     try {
-      const response = await fetch("/api/planning/v3/drafts", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(withDevCsrf({
-          source: {
-            kind: "csv",
-            ...(asString(detail.batch.fileName) ? { filename: asString(detail.batch.fileName) } : {}),
-            rows: Math.max(0, Math.trunc(asNumber(detail.stats.total))),
-            months: draftCashflow.length,
-          },
-          cashflow: draftCashflow,
-          draftPatch,
-        })),
-      });
-
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !isDraftCreateResponse(payload)) {
+      const draftId = await requestProfileDraftFromBatch(asString(detail.batch.id || id));
+      if (!draftId) {
         setDraftMessage("드래프트 저장에 실패했습니다.");
         return;
       }
 
-      router.push(`/planning/v3/drafts/${encodeURIComponent(payload.id)}`);
+      router.push(buildProfileDraftReviewPath(draftId));
     } catch {
       setDraftMessage("드래프트 저장에 실패했습니다.");
     } finally {
@@ -818,7 +770,6 @@ export function useTransactionBatchDetailController({
     },
     draftReview: {
       hasBatchAccount,
-      ratioValid,
       draftSaving,
       draftMessage,
       onCreateDraftAndGoToReview: createDraftAndGoToReview,

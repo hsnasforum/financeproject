@@ -320,6 +320,44 @@ describe("recommend history delete undo", () => {
     expect(getText(tree)).toContain("최근 추천 결과를 복원했습니다");
   });
 
+  it("keeps one plain history list link through delete and undo", async () => {
+    const storage = createMemoryStorage();
+    installBrowserStorage(storage);
+    const alice = recommendOwnerId("alice");
+    const stored = buildStoredRecommendResult({
+      ownerId: alice,
+      profile: recommendProfileDefaults(),
+      meta: { userId: alice },
+      now: new Date("2026-08-03T01:00:00.000Z"),
+    });
+    storage.setItem(recommendResultStorageKey(alice), JSON.stringify(stored));
+    const findHistoryLinks = (node: ReactNode) => findElements(node, (element) => (
+      String(element.props.href ?? "").startsWith("/recommend/history")
+    ));
+    const expectOneListLink = (node: ReactNode) => {
+      const links = findHistoryLinks(node);
+      expect(links).toHaveLength(1);
+      expect(links[0]?.props.href).toBe("/recommend/history");
+      expect(getText(links[0]?.props.children)).toBe("추천 비교 기록 보기");
+    };
+
+    renderRecommendOwned();
+    await settleAsyncState();
+    let tree = renderRecommendOwned();
+    expectOneListLink(tree);
+    (findButton(tree, "기록 삭제")?.props as { onClick?: () => void }).onClick?.();
+
+    tree = renderRecommendOwned();
+    expect(storage.getItem(recommendResultStorageKey(alice))).toBeNull();
+    expectOneListLink(tree);
+    (findButton(tree, "되돌리기")?.props as { onClick?: () => void }).onClick?.();
+
+    tree = renderRecommendOwned();
+    expect(parseStoredRecommendResult(alice, storage.getItem(recommendResultStorageKey(alice)))).toEqual(stored);
+    expect(findButton(tree, "되돌리기")).toBeUndefined();
+    expectOneListLink(tree);
+  });
+
   it("shows normalized stored weights, the current sum, and the default reset", async () => {
     const storage = createMemoryStorage();
     installBrowserStorage(storage);

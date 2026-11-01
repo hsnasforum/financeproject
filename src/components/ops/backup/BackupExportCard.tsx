@@ -44,7 +44,7 @@ export function BackupExportCard({
       <h2 className="text-base font-black text-navy">{isSettingsSurface ? "1) 내 재무설계 데이터 백업" : "1) 백업 파일 만들기"}</h2>
       <p className="mt-2 text-sm text-slate-600">
         {isSettingsSurface
-          ? "프로필, 실행 결과, 후속 행동 기록과 상세 계좌·거래·분류 데이터를 암호화 파일로 내려받습니다."
+          ? "프로필, 실행 결과, 후속 행동 기록을 암호화 파일로 내려받습니다. 상세 계좌·거래·분류 데이터의 포함 여부는 내려받은 파일의 미리보기에서 확인해 주세요."
           : "프로필, 실행 결과, 가정 기록과 후속 행동 상태를 암호화 백업 파일로 내려받습니다."}
       </p>
       <label className="mt-4 block text-xs font-semibold text-slate-700" htmlFor="ops-backup-passphrase-export">백업 암호</label>

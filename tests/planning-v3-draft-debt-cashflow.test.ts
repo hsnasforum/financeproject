@@ -2,9 +2,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { POST as createDraftPOST } from "../src/app/api/planning/v3/profile/drafts/route";
 import { POST as preflightPOST } from "../src/app/api/planning/v3/profile/drafts/[id]/preflight/route";
 import { POST as applyPOST } from "../src/app/api/planning/v3/profile/drafts/[id]/apply/route";
+import {
+  buildProfileDraftReviewPath,
+  requestProfileDraftFromBatch,
+} from "../src/app/planning/v3/transactions/[id]/_components/transactionBatchDetail/shared";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
+import { upsertRule } from "../src/lib/planning/v3/store/categoryRulesStore";
 import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 import { createDraftFromBatch, getProfileDraft } from "../src/lib/planning/v3/store/draftStore";
@@ -16,12 +22,18 @@ import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPla
 import { resolvePlanningV3DataDir } from "../src/lib/planning/v3/store/dataDir";
 
 installPlanningAuthRequiredFalseForTest();
+const ROUTE_HEADERS = { host: "localhost:4120", origin: "http://localhost:4120", referer: "http://localhost:4120/planning", "content-type": "application/json" };
 function request(id: string, action: string, body: object) {
   return new Request(`http://localhost:4120/api/planning/v3/profile/drafts/${id}/${action}`, {
-    method: "POST", body: JSON.stringify(body),
-    headers: { host: "localhost:4120", origin: "http://localhost:4120", referer: "http://localhost:4120/planning", "content-type": "application/json" },
+    method: "POST", body: JSON.stringify(body), headers: ROUTE_HEADERS,
   });
 }
+
+const JOURNEY_CSV = ["date,amount,description", ...["04", "05", "06", "07", "08", "09"].flatMap((month) => [
+  `2026-${month}-05,-1650000,가상주택 월세`, `2026-${month}-08,-350000,가상손해 보험료`, `2026-${month}-10,-621830,가상은행 대출상환`,
+  `2026-${month}-12,-400000,가상식당`, `2026-${month}-15,-120000,가상버스 교통`, `2026-${month}-18,-180000,가상몰 쇼핑`,
+  `2026-${month}-25,4100000,가상회사 급여`,
+])].join("\n");
 
 function bytesTree(root: string): Record<string, string> {
   const result: Record<string, string> = {};
@@ -42,7 +54,7 @@ describe("transaction debt to stable profile cashflow", () => {
     vi.stubEnv("PLANNING_NAMESPACE_ENABLED", "0");
     vi.stubEnv("PLANNING_ENCRYPTION_ENABLED", "0");
   });
-  afterEach(() => { vi.unstubAllEnvs(); fs.rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); fs.rmSync(root, { recursive: true, force: true }); });
 
   async function seed(hasDebt: boolean, payment = 500_000) {
     const profile = await createProfile({ name: "기존 A", profile: {
@@ -69,6 +81,55 @@ describe("transaction debt to stable profile cashflow", () => {
     expect(await getProfileDraft(draft.id)).toEqual(draft);
     return { profile, draft };
   }
+
+  async function createDraftFromBatchButton(batchId: string) {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => createDraftPOST(new Request(`http://localhost:4120${url}`, {
+      method: init?.method, body: init?.body, headers: ROUTE_HEADERS,
+    })));
+    vi.stubGlobal("fetch", fetchMock);
+    const id = await requestProfileDraftFromBatch(batchId);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/planning/v3/profile/drafts");
+    expect(id).toEqual(expect.any(String));
+    return (await getProfileDraft(id as string))!;
+  }
+
+  it("creates the batch button draft from a stored debt rule and keeps existing debts on apply", async () => {
+    const base = await createProfile({ name: "기존 A", profile: {
+      monthlyIncomeNet: 4_000_000, monthlyEssentialExpenses: 1_900_000, monthlyDiscretionaryExpenses: 650_000,
+      liquidAssets: 20_000_000, investmentAssets: 30_000_000,
+      debts: [{ id: "loan", name: "기존 대출", balance: 60_000_000, minimumPayment: 621_830, aprPct: 4.5 }],
+      goals: [],
+    } });
+    const account = await createAccount({ name: "합성 거래", kind: "bank" });
+    const batch = await importCsvToBatch({
+      csvText: JOURNEY_CSV,
+      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" }, options: { accountId: account.id },
+    });
+    const withoutRule = await createDraftFromBatchButton(batch.batchMeta.id);
+    expect(withoutRule.draftPatch).toMatchObject({ monthlyEssentialExpenses: 2_000_000, monthlyDiscretionaryExpenses: 1_321_830 });
+
+    await upsertRule({ categoryId: "debt", match: { type: "contains", value: "대출상환" }, priority: 50, enabled: true });
+    const draft = await createDraftFromBatchButton(batch.batchMeta.id);
+    expect(buildProfileDraftReviewPath(draft.id)).toBe(`/planning/v3/profile/drafts/${draft.id}`);
+    expect(draft.batchId).toBe(batch.batchMeta.id);
+    expect(draft.draftPatch).toMatchObject({ monthlyIncomeNet: 4_100_000, monthlyEssentialExpenses: 2_000_000,
+      monthlyDiscretionaryExpenses: 700_000, monthsConsidered: 6 });
+
+    const context = { params: Promise.resolve({ id: draft.id }) };
+    const checked = await preflightPOST(request(draft.id, "preflight", { profileId: base.id, applyMode: "update" }), context);
+    expect(checked.status).toBe(200);
+    const check = (await checked.json()).data;
+    expect(check.ok).toBe(true);
+    const response = await applyPOST(request(draft.id, "apply", { profileId: base.id, applyMode: "update",
+      expectedProfileRevision: check.profileRevision, expectedDraftPatchHash: check.draftPatchHash }), context);
+    expect(response.status).toBe(200);
+    const saved = (await getProfile((await response.json()).data.profileId))!;
+    expect(saved.profile).toEqual({ ...base.profile, monthlyIncomeNet: 4_100_000,
+      monthlyEssentialExpenses: 2_000_000, monthlyDiscretionaryExpenses: 700_000 });
+    expect(saved.profile.debts).toEqual(base.profile.debts);
+    expect(simulateMonthly(saved.profile, { inflation: 0, expectedReturn: 0 }, 1).timeline[0].operatingCashflow).toBe(778_170);
+  });
 
   it.each([
     { applyMode: "update", payment: 500_000 }, { applyMode: "create", payment: 500_000 },

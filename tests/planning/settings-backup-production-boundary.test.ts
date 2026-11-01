@@ -1,10 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createElement, type ComponentProps } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as exportPOST } from "../../src/app/api/settings/backup/export/route";
 import { POST as previewPOST } from "../../src/app/api/settings/backup/preview/route";
 import { POST as restorePOST } from "../../src/app/api/settings/backup/restore/route";
 import { GET as statusGET } from "../../src/app/api/settings/backup/status/route";
+import { BackupExportCard } from "../../src/components/ops/backup/BackupExportCard";
+import { BackupRestoreControlsCard } from "../../src/components/ops/backup/BackupRestoreControlsCard";
 
 const LOCAL_HOST = "127.0.0.1:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -292,5 +296,119 @@ describe("production settings backup boundary", () => {
     expect(exportHandler).not.toContain("/export/finalize");
     expect(backupClient.slice(finalizeHandlerStart)).toContain("/export/finalize");
     expect(backupClient).toContain("파일 저장을 확인했습니다");
+  });
+});
+
+describe("settings backup detail data guidance", () => {
+  const FULL_REPLACE_LABEL = "백업 시점의 전체 사용자 데이터로 교체";
+  const INCLUDED_ONLY_REPLACE_LABEL = "백업 파일에 포함된 기록으로 교체";
+  const MISSING_DETAIL_NOTE = "이 백업에는 상세 계좌·거래·분류 데이터가 없";
+
+  function renderRestoreCard(overrides: Partial<ComponentProps<typeof BackupRestoreControlsCard>> = {}): string {
+    return renderToStaticMarkup(createElement(BackupRestoreControlsCard, {
+      canUpload: true,
+      file: new File(["{}"], "backup.enc.json"),
+      hasCsrf: true,
+      isSettingsSurface: true,
+      mode: "replace",
+      passphrase: "test-passphrase",
+      previewIncludesPlanningV3: false,
+      previewToken: "",
+      previewing: false,
+      restoring: false,
+      selectedName: "backup.enc.json",
+      selectedSize: 2,
+      onFileChange: () => undefined,
+      onModeChange: () => undefined,
+      onPassphraseChange: () => undefined,
+      onPreview: () => undefined,
+      onRestore: () => undefined,
+      ...overrides,
+    }));
+  }
+
+  function restoreButtonTag(html: string): string {
+    const tag = html.match(/<button[^>]*data-testid="ops-backup-restore-button"[^>]*>/u)?.[0];
+    if (!tag) throw new Error("restore button not rendered");
+    return tag;
+  }
+
+  function renderExportCard(isSettingsSurface: boolean): string {
+    return renderToStaticMarkup(createElement(BackupExportCard, {
+      exportGzip: true,
+      exportMode: "full",
+      exporting: false,
+      finalizingExport: false,
+      hasCsrf: true,
+      isSettingsSurface,
+      passphrase: "",
+      pendingExportConfirmation: null,
+      previewing: false,
+      restoring: false,
+      savedFileConfirmationLabel: "파일 저장을 확인했습니다",
+      onExport: () => undefined,
+      onExportGzipChange: () => undefined,
+      onExportModeChange: () => undefined,
+      onFinalizeExport: () => undefined,
+      onPassphraseChange: () => undefined,
+    }));
+  }
+
+  it("does not promise full replacement before a preview confirms the backup scope", () => {
+    const html = renderRestoreCard();
+
+    expect(html).toContain(INCLUDED_ONLY_REPLACE_LABEL);
+    expect(html).not.toContain(FULL_REPLACE_LABEL);
+    expect(html).not.toContain(MISSING_DETAIL_NOTE);
+    expect(restoreButtonTag(html)).toMatch(/\sdisabled=""/u);
+  });
+
+  it.each([
+    ["replace", "교체해도 상세 데이터는 바뀌지 않고, 백업에 담긴 프로필·실행 기록만 교체합니다."],
+    ["merge", "이 백업에는 상세 계좌·거래·분류 데이터가 없어 복원되지 않습니다."],
+  ] as const)("states the real %s scope for a previewed backup without detail data", (mode, expected) => {
+    const html = renderRestoreCard({ mode, previewToken: "preview-token" });
+
+    expect(html).toContain(expected);
+    expect(html).toContain(INCLUDED_ONLY_REPLACE_LABEL);
+    expect(html).not.toContain(FULL_REPLACE_LABEL);
+    expect(html).not.toContain("상세 계좌·거래·분류 데이터까지 백업 시점 상태로 교체 복원합니다.");
+    expect(restoreButtonTag(html)).not.toMatch(/\sdisabled=""/u);
+  });
+
+  it("keeps the existing guidance for a previewed backup with detail data", () => {
+    const replaceHtml = renderRestoreCard({ previewIncludesPlanningV3: true, previewToken: "preview-token" });
+    const mergeHtml = renderRestoreCard({ mode: "merge", previewIncludesPlanningV3: true, previewToken: "preview-token" });
+
+    expect(replaceHtml).toContain(FULL_REPLACE_LABEL);
+    expect(replaceHtml).toContain("상세 계좌·거래·분류 데이터까지 백업 시점 상태로 교체 복원합니다.");
+    expect(replaceHtml).not.toContain(MISSING_DETAIL_NOTE);
+    expect(mergeHtml).toContain("기존 기록 유지 방식에서는 현재 상세 데이터 변경을 보호하기 위해 계좌·거래·분류 데이터를 복원하지 않습니다.");
+    expect(mergeHtml).not.toContain(MISSING_DETAIL_NOTE);
+  });
+
+  it("does not add the settings detail data note to the ops surface", () => {
+    const html = renderRestoreCard({ isSettingsSurface: false, previewToken: "preview-token" });
+
+    expect(html).toContain("백업 시점 기록으로 교체");
+    expect(html).not.toContain(MISSING_DETAIL_NOTE);
+  });
+
+  it("points export users to the preview instead of asserting detail data is included", () => {
+    const backupClient = fs.readFileSync(path.join(process.cwd(), "src/components/OpsBackupClient.tsx"), "utf8");
+    const settingsHtml = renderExportCard(true);
+
+    expect(settingsHtml).toContain("상세 계좌·거래·분류 데이터의 포함 여부는 내려받은 파일의 미리보기에서 확인해 주세요.");
+    expect(settingsHtml).not.toContain("후속 행동 기록과 상세 계좌·거래·분류 데이터를");
+    expect(renderExportCard(false)).toContain("프로필, 실행 결과, 가정 기록과 후속 행동 상태를 암호화 백업 파일로 내려받습니다.");
+    expect(backupClient).toContain("미리보기에서 포함 여부를 확인해 주세요.");
+    expect(backupClient).not.toContain("프로필·실행 기록과 상세 계좌·거래·분류 데이터가 포함됩니다.");
+  });
+
+  it("uses the detail data confirmation copy only for a backup that includes it", () => {
+    const backupClient = fs.readFileSync(path.join(process.cwd(), "src/components/OpsBackupClient.tsx"), "utf8");
+
+    expect(backupClient).toContain("const restoreConfirmUsesDetailCopy = isSettingsSurface && previewIncludesPlanningV3;");
+    expect(backupClient).toContain("isSettingsSurface={restoreConfirmUsesDetailCopy}");
   });
 });

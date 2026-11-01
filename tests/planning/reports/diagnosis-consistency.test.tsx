@@ -94,7 +94,10 @@ describe("same saved run diagnosis across views and outputs", () => {
     const fallback = { summary: { monthlySurplusKrw: 0 }, aggregatedWarnings: [], goals: [], outcomes: {} };
     const expected = toInterpretationInputFromReportVM(safeBuildReportVMFromRun(run).vm!);
     const rawWorkspace = buildWorkspaceResultSummaryVm({ resultDto: dto });
-    expect(rawWorkspace.summaryMonthlySurplusKrw).not.toBe(expected.summary.monthlySurplusKrw);
+    // Monthly surplus comes from the engine's operating cashflow, so a missing or zero start
+    // income/expense does not change it in either path.
+    expect(dto.timeline.points[0].operatingCashflowKrw).toBe(2_500_000);
+    expect(rawWorkspace.summaryMonthlySurplusKrw).toBe(expected.summary.monthlySurplusKrw);
     expect(expected.summary.monthlySurplusKrw).toBe(2_500_000);
     expect(resolveWorkspaceInterpretationInput(run, fallback)).toEqual(expected);
     expect(resolveWorkspaceInterpretationInput(null, fallback)).toBe(fallback);
