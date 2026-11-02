@@ -1,19 +1,18 @@
 # DART Daily Brief
 
 ## 요약
-- Generated at: 2026-06-22T16:01:24.918Z
-- Alerts: newHigh=0, newMid=1, updatedHigh=0, updatedMid=1, total=2
-- Brief lines: 2/10
+- Generated at: 2026-11-02T01:31:54.951Z
+- Alerts: newHigh=0, newMid=0, updatedHigh=0, updatedMid=0, total=0
+- Brief lines: 0/10
 
 ## Top New
-- [MID 79] 삼성전자 | 임원 주요주주특정증권등소유상황보고서
+- 없음
 
 ## Top Updated
-- [MID 72] 삼성전자 | 임원 주요주주특정증권등소유상황보고서
+- 없음
 
 ## 10줄 요약
-- [NEW/MID 79] 삼성전자 | 임원 주요주주특정증권등소유상황보고서 (지배구조/임원, 2026-06-08, 20260608000002)
-- [UPDATED/MID 72] 삼성전자 | 임원 주요주주특정증권등소유상황보고서 (지배구조/임원, 2026-06-22, 20260622000294)
+- 없음
 
 ## 오늘 할 일
 - 마감 지남: 0건

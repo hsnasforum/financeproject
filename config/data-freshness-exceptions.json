@@ -1,4 +1,17 @@
 {
   "schemaVersion": 1,
-  "exceptions": []
+  "exceptions": [
+    {
+      "file": "fss_pension_guaranteed_snapshot.json",
+      "reason": "2026-11-02 기준 FSS 통합연금포털 OpenAPI가 psGuaranteedProdList area 5에 '001 조회 결과가 없습니다'(NO_DATA)를 돌려줘 pension:sync가 실패하고 스냅샷을 갱신하지 못합니다. 키 문제가 아니라 상류 응답 문제입니다(2026-11-02 로컬 재시도 동일).",
+      "mitigation": "상류가 다시 데이터를 돌려주거나 fss_pension_sync.mjs가 빈 area를 부분 성공으로 처리하면 pension:sync로 갱신하고 이 예외를 제거합니다. 만료 시 기한을 연장하지 말고 응답 상태를 다시 확인합니다.",
+      "expiresAt": "2026-11-16T00:00:00+09:00"
+    },
+    {
+      "file": "fss_pension_products_snapshot.json",
+      "reason": "2026-11-02 기준 FSS 통합연금포털 OpenAPI가 psGuaranteedProdList area 5에 '001 조회 결과가 없습니다'(NO_DATA)를 돌려줘 pension:sync가 실패하고 스냅샷을 갱신하지 못합니다. 키 문제가 아니라 상류 응답 문제입니다(2026-11-02 로컬 재시도 동일).",
+      "mitigation": "상류가 다시 데이터를 돌려주거나 fss_pension_sync.mjs가 빈 area를 부분 성공으로 처리하면 pension:sync로 갱신하고 이 예외를 제거합니다. 만료 시 기한을 연장하지 말고 응답 상태를 다시 확인합니다.",
+      "expiresAt": "2026-11-16T00:00:00+09:00"
+    }
+  ]
 }
