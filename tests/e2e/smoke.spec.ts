@@ -421,6 +421,8 @@ test("dart page shows missing index guidance when index absent", async ({ page, 
 });
 
 test("production CSP routes hydrate without CSP console violations", async ({ page }) => {
+  // Four routes are compiled cold on the dev webserver in CI; ~35s on a fast machine against the 60s default.
+  test.slow();
   for (const routePath of ["/dashboard", "/planning", "/planning/reports", "/ops"]) {
     await expectNoCspConsoleErrors(page, routePath);
   }
