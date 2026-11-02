@@ -20,7 +20,9 @@ function makeRoot(files: Record<string, string | Buffer>) {
 
 function runGuard(cwd: string) {
   // No PATH at all, so the guard cannot depend on an rg binary.
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH"));
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH"),
+  ) as NodeJS.ProcessEnv;
   return spawnSync(process.execPath, [GUARD_SCRIPT], { cwd, env, encoding: "utf8" });
 }
 
