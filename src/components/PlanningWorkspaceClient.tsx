@@ -91,6 +91,8 @@ export function PlanningWorkspaceClient({
             <Link
               href={quickStart.runsPageHref}
               className="inline-flex h-9 items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition-colors hover:bg-surface-muted"
+              data-testid={entry === "wizard" ? "planning-runs-link" : undefined}
+              data-ready={entry === "wizard" ? "true" : undefined}
             >
               실행 기록
             </Link>
