@@ -1,10 +1,12 @@
 import PlanningRunsClient, { type ActionProgressSummary } from "@/components/PlanningRunsClient";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
 import { normalizeProfileId } from "@/lib/planning/profileScope";
 import {
   loadPlanningRunsPageInitialData,
   type PlanningRunsPageInitialData,
 } from "@/lib/planning/server/pages/planningRscLoaders";
 
+export const metadata = PUBLIC_PAGE_METADATA["/planning/runs"];
 export const dynamic = "force-dynamic";
 
 type PlanningRunsPageProps = {

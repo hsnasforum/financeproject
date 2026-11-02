@@ -100,7 +100,7 @@ describe("GET /api/planning/v2/snapshots", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.data?.latestId).toBe(newId);
-    expect(payload.data?.latestLabel).toContain("LATEST");
+    expect(payload.data?.latestLabel).toContain("최신");
     expect(payload.data?.items?.map((item) => item.id)).toEqual([newId, oldId]);
     expect((payload.data?.items ?? []).every((item) => typeof item.staleDays === "number" && item.staleDays >= 0)).toBe(true);
     expect(payload.data?.items?.[0]?.createdAt).toBe("2026-03-01T09:00:00.000Z");

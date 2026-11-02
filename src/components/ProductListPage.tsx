@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { pruneOpen, toggleOpen } from "@/lib/finlife/groupOpenState";
@@ -19,17 +19,25 @@ import { ProductExplorerHeaderCard } from "./products/ProductExplorerHeaderCard"
 import { ProductResultsHeader } from "./products/ProductResultsHeader";
 import { ProductRowItem } from "./products/ProductRowItem";
 import { ProductOptionRowItem } from "./products/ProductOptionRowItem";
+import { ProductDisclosureMeta } from "./products/ProductDisclosureMeta";
+import { formatFinlifeCollectedAt } from "@/lib/finlife/disclosure";
 import {
   useProductExplorerQueryController,
   useProductExplorerQuerySync,
 } from "./products/useProductExplorerQueryController";
 import { useFinlifeProductListData } from "./products/useFinlifeProductListData";
 import { useProductShelfController } from "./products/useProductShelfController";
+import {
+  ProductCompareToggleNotice,
+  toggleCompareWithNotice,
+  type CompareToggleResult,
+} from "./products/ProductCompareToggleNotice";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { buildProductListViewModel } from "@/lib/products/productListViewModel";
+import { productIdentity, resolveProductShelfIds } from "@/lib/products/productIdentity";
 import {
   isValidProductExplorerSortKey,
   parseAmountInput,
@@ -97,7 +105,9 @@ function formatFinlifeFallbackMode(payload: FinlifeSourceResult | null): string 
   return null;
 }
 
-function buildUnifiedDetailId(product: NormalizedProduct): string | null {
+function buildUnifiedDetailId(product: NormalizedProduct, kind: FinlifeKind): string | null {
+  const scopedId = productIdentity(product, kind);
+  if (scopedId.startsWith("finlife:")) return scopedId;
   const raw = (product.raw as Record<string, unknown> | null) ?? null;
   const stableId = typeof raw?.stableId === "string" ? raw.stableId.trim() : "";
   if (stableId) return stableId;
@@ -270,7 +280,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
         id: item.fin_co_no!,
         name: item.kor_co_nm || "",
       }));
-    
+
     const bankMap = new Map<string, { id: string; name: string }>();
     for (const b of banks) {
       if (!bankMap.has(b.id)) {
@@ -313,6 +323,26 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     amountInput,
   });
 
+  const resolvedFavoriteIds = useMemo(
+    () => resolveProductShelfIds(shelfFavoriteIds, payload?.data ?? [], kind),
+    [kind, payload?.data, shelfFavoriteIds],
+  );
+  const resolvedCompareIds = useMemo(
+    () => resolveProductShelfIds(shelfCompareSet, payload?.data ?? [], kind),
+    [kind, payload?.data, shelfCompareSet],
+  );
+  const [compareToggleResult, setCompareToggleResult] = useState<CompareToggleResult | null>(null);
+  // The notice compares the stored basket read at click time with what the existing toggle returned, so it
+  // never relies on the shelf captured at render time.
+  const handleCompareToggle = (productId: string) => {
+    setCompareToggleResult(toggleCompareWithNotice({
+      id: productId,
+      storage: window.localStorage,
+      toggle: handleToggleCompare,
+      max: compareLimit,
+      labelFor: (id) => (payload?.data ?? []).find((product) => productIdentity(product, kind) === id)?.fin_prdt_nm,
+    }));
+  };
   const productListViewModel = useMemo(
     () => buildProductListViewModel({
       payload,
@@ -393,12 +423,12 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     if (!meta) return null;
     const snapshot = meta.snapshot;
     if (!snapshot) return null;
-    const isMock = payload?.mode === "mock" || meta.source === "mock" || meta.fallbackUsed;
+    const isMock = payload?.mode === "mock" || meta.source === "mock";
     const groups = meta.groupsScanned ?? [];
     const hasNarrowGroup = groups.length <= 1;
     const hasIncomplete = Boolean(meta.truncatedByHardCap) || ((meta.completionRate ?? 1) < 0.95);
     return {
-      text: `스냅샷: ${snapshot.totalProducts ?? meta.totalProducts ?? 0}상품 / 옵션 ${snapshot.totalOptions ?? meta.totalOptions ?? 0} · 완주율 ${typeof snapshot.completionRate === "number" ? `${Math.round(snapshot.completionRate * 1000) / 10}%` : "?"}${snapshot.generatedAt ? ` · 갱신 ${new Date(snapshot.generatedAt).toLocaleString("ko-KR", { hour12: false })}` : ""}`,
+      text: `스냅샷: ${snapshot.totalProducts ?? meta.totalProducts ?? 0}상품 / 옵션 ${snapshot.totalOptions ?? meta.totalOptions ?? 0} · 완주율 ${typeof snapshot.completionRate === "number" ? `${Math.round(snapshot.completionRate * 1000) / 10}%` : "?"} · 수집 시각 ${formatFinlifeCollectedAt(snapshot.generatedAt)}`,
       isMock,
       hasNarrowGroup,
       hasIncomplete,
@@ -412,8 +442,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   }, [kind, sourceStatusRows]);
 
   const cardFreshnessMeta = useMemo<FinlifeCardFreshnessMeta | null>(() => {
-    if (kind !== "deposit" && kind !== "saving") return null;
-
     const fallbackMode = formatFinlifeFallbackMode(payload);
     const assumptionNote = toProductAssumptionNote(payload?.meta.note);
     const snapshotGeneratedAt = payload?.meta.snapshot?.generatedAt ?? null;
@@ -434,9 +462,9 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
 
   return (
     <PageShell>
-      <PageHeader 
-        title={title} 
-        description="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
+      <PageHeader
+        title={title}
+        description="수집된 금융상품 정보를 비교합니다. 가입 전 금융회사 공시에서 금리와 조건을 다시 확인하세요."
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
         데이터 신뢰 및 연동 상태는{" "}
@@ -622,31 +650,40 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
             ) : (
               viewMode === "product"
                 ? enrichedProducts.map((item: NormalizedProduct, index) => {
-                  const unifiedId = buildUnifiedDetailId(item);
-                  const productId = item.fin_prdt_cd;
+                  const unifiedId = buildUnifiedDetailId(item, kind);
+                  const productId = productIdentity(item, kind);
                   const highlightReasons = index < 3 ? (item.reasons ?? []).slice(0, 3) : [];
                   return (
-                    <ProductRowItem
-                      key={item.fin_prdt_cd}
-                      product={item}
-                      kind={kind}
-                      amountWonDefault={parseAmountInput(amountInput)}
-                      freshnessMeta={cardFreshnessMeta ?? undefined}
-                      badges={[]}
-                      reasonLines={highlightReasons}
-                      isFavorite={shelfFavoriteIds.has(productId)}
-                      isCompared={shelfCompareSet.has(productId)}
-                      compareLimit={compareLimit}
-                      onToggleFavorite={() => handleToggleFavorite(productId)}
-                      onToggleCompare={() => handleToggleCompare(productId)}
-                      onViewed={() => handleViewed(productId)}
-                      unifiedDetailHref={unifiedId ? `/products/catalog/${encodeURIComponent(unifiedId)}` : undefined}
-                    />
+                    <Fragment key={productId}>
+                      <ProductRowItem
+                        product={item}
+                        kind={kind}
+                        amountWonDefault={parseAmountInput(amountInput)}
+                        freshnessMeta={cardFreshnessMeta ?? undefined}
+                        badges={[]}
+                        reasonLines={highlightReasons}
+                        isFavorite={resolvedFavoriteIds.has(productId)}
+                        isCompared={resolvedCompareIds.has(productId)}
+                        compareLimit={compareLimit}
+                        onToggleFavorite={() => handleToggleFavorite(productId)}
+                        onToggleCompare={() => handleCompareToggle(productId)}
+                        onViewed={() => handleViewed(productId)}
+                        unifiedDetailHref={unifiedId ? `/products/catalog/${encodeURIComponent(unifiedId)}` : undefined}
+                      />
+                      {/* Outside the card, so a tap on the notice cannot open the detail drawer. */}
+                      {compareToggleResult?.id === productId ? (
+                        <ProductCompareToggleNotice
+                          className="my-3"
+                          result={compareToggleResult}
+                          onClose={() => setCompareToggleResult(null)}
+                        />
+                      ) : null}
+                    </Fragment>
                   );
                 })
                 : optionGroup
                   ? optionGroups.map((group) => {
-                    const groupKey = group.product.fin_prdt_cd ?? group.key;
+                    const groupKey = group.key;
                     const rep = getOptionRates(group.representativeRow.option);
                     const summaryTerm = group.representativeRow.option.save_trm ? `${group.representativeRow.option.save_trm}개월` : "기간 정보 없음";
                     const open = !!openGroups[groupKey];
@@ -659,13 +696,13 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                               <div className="min-w-0">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{group.product.kor_co_nm ?? "-"}</p>
                                 <h3 className="truncate text-base font-black text-navy tracking-tight">{group.product.fin_prdt_nm ?? "-"}</h3>
+                                <ProductDisclosureMeta
+                                  className="mt-2"
+                                  disclosureMonth={group.product.raw.dcls_month}
+                                  collectedAt={cardFreshnessMeta?.lastSyncedAt}
+                                />
                                 {cardFreshnessMeta ? (
                                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black">
-                                    {cardFreshnessMeta.lastSyncedAt ? (
-                                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">
-                                        기준 확인 {new Date(cardFreshnessMeta.lastSyncedAt).toLocaleString("ko-KR", { hour12: false })}
-                                      </span>
-                                    ) : null}
                                     {cardFreshnessMeta.freshnessStatus ? (
                                       <span
                                         className={cn(
@@ -679,7 +716,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                                                 : "border-slate-200 bg-white text-slate-500",
                                         )}
                                       >
-                                        상태: {cardFreshnessMeta.freshnessStatus === "ok" ? "최신" : cardFreshnessMeta.freshnessStatus === "stale" ? "기준 지남" : cardFreshnessMeta.freshnessStatus === "error" ? "최근 확인 실패" : "기준 정보 없음"}
+                                        상태: {cardFreshnessMeta.freshnessStatus === "ok" ? "수집 주기 내" : cardFreshnessMeta.freshnessStatus === "stale" ? "기준 지남" : cardFreshnessMeta.freshnessStatus === "error" ? "최근 확인 실패" : "기준 정보 없음"}
                                       </span>
                                     ) : null}
                                     {cardFreshnessMeta.fallbackMode ? (

@@ -15,6 +15,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -22,6 +23,9 @@ type RouteContext = {
 
 type ApplyBody = {
   profileId?: unknown;
+  applyMode?: unknown;
+  expectedProfileRevision?: unknown;
+  expectedDraftPatchHash?: unknown;
   csrf?: unknown;
 } | null;
 
@@ -30,8 +34,9 @@ function asString(value: unknown): string {
 }
 
 function toSafeApplyMessage(error: ApplyDraftPatchToProfileError): string {
+  if (error.code === "CONFLICT") return "프로필이 변경되어 preflight를 다시 확인해야 합니다.";
   if (error.code === "NO_DATA") {
-    return error.message.includes("기준 상담 정보")
+    return error.message.includes("기준 프로필") || error.message.includes("기준 상담 정보")
       ? "기준 상담 정보를 찾을 수 없습니다."
       : "상담 정보 초안을 찾을 수 없습니다.";
   }
@@ -84,20 +89,29 @@ export async function POST(request: Request, context: RouteContext) {
 
     try {
       const { id } = await context.params;
+      const applyMode = body?.applyMode ?? "create";
+      if (applyMode !== "create" && applyMode !== "update") {
+        return NextResponse.json({ ok: false, error: { code: "INPUT", message: "적용 방식을 확인해 주세요." }, meta: userMeta }, { status: 400 });
+      }
       const result = await applyDraftPatchToProfile({
         draftId: id,
         baseProfileId: asString(body?.profileId) || undefined,
+        applyMode,
+        expectedProfileRevision: asString(body?.expectedProfileRevision) || undefined,
+        expectedDraftPatchHash: asString(body?.expectedDraftPatchHash) || undefined,
       });
       const payload = {
         ok: true,
         meta: userMeta,
         data: {
-          profileId: result.createdProfileId,
+          profileId: result.updatedProfileId ?? result.createdProfileId,
         },
       };
       assertNoForbiddenDraftKeys(payload);
       return NextResponse.json(payload);
     } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta, { recoveryHref: null });
+      if (storageError) return storageError;
       if (error instanceof ApplyDraftPatchToProfileError) {
         const details = toSafeApplyDetails(error.details);
         return NextResponse.json(

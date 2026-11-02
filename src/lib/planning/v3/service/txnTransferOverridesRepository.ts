@@ -2,6 +2,7 @@ import {
   TxnTransferOverridesStoreInputError,
   upsertTransferOverride as upsertStoredTransferOverride,
 } from "../store/txnTransferOverridesStore";
+import { withExistingCurrentUserBatchLifecycleMutation } from "./batchLifecycleMutation";
 
 export { TxnTransferOverridesStoreInputError };
 
@@ -12,11 +13,13 @@ export async function upsertCurrentUserTransferOverride(input: {
   forceNonTransfer?: unknown;
   note?: unknown;
 }): Promise<Awaited<ReturnType<typeof upsertStoredTransferOverride>>> {
-  return upsertStoredTransferOverride({
-    batchId: input.batchId,
-    txnId: input.txnId,
-    forceTransfer: input.forceTransfer,
-    forceNonTransfer: input.forceNonTransfer,
-    note: input.note,
-  });
+  return withExistingCurrentUserBatchLifecycleMutation(input.batchId, (batchId) => (
+    upsertStoredTransferOverride({
+      batchId,
+      txnId: input.txnId,
+      forceTransfer: input.forceTransfer,
+      forceNonTransfer: input.forceNonTransfer,
+      note: input.note,
+    })
+  ));
 }

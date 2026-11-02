@@ -1,7 +1,9 @@
 # Planning v2 가족용 모드(옵션)
 
 ## 목적
-- 기본 개인용 로컬 모드를 유지하면서, 가족/소규모 팀에서 사용자별 데이터 분리를 지원합니다.
+- legacy 데이터 migration과 개발 검증을 위해 사용자별 storage namespace 골격을
+  설명합니다. 현재 production 지원 모드는 `desktop-local` 한 사용자뿐이며,
+  가족/소규모 팀 web deployment는 지원하지 않습니다.
 
 ## 동작 방식
 - 네임스페이스 분리(옵션):
@@ -12,7 +14,8 @@
   - `PLANNING_SINGLE_USER_MODE=true`
   - 개인용/desktop topology에서만 사용합니다.
   - 저장 경로는 `.data/planning/users/default/...`입니다.
-- production에서는 네임스페이스 분리 또는 명시적 단일 사용자 모드 중 하나가 없으면 시작하지 않습니다.
+- 지원 production launcher는 `PLANNING_NAMESPACE_ENABLED=false`,
+  `PLANNING_SINGLE_USER_MODE=true`만 허용합니다.
 - 공통 데이터:
   - assumptions snapshot/latest/history는 기존 공용 경로를 그대로 사용합니다.
 
@@ -42,3 +45,4 @@
 ## 주의/제약
 - PIN/패스프레이즈 분실 시 복구가 어려울 수 있습니다.
 - 이 모드는 공개 서비스용 권한 체계가 아니라 로컬 확장 골격입니다.
+- namespace migration apply는 Desktop 앱을 종료한 뒤 공식 `pnpm` script로만 실행합니다.

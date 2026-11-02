@@ -124,6 +124,7 @@ function buildWriteRequest(input: {
 }): Request {
   const host = input.host ?? LOCAL_HOST;
   const origin = input.origin ?? `http://${host}`;
+  const requestOrigin = `http://${host}`;
   const headers = new Headers({
     host,
     origin,
@@ -131,7 +132,7 @@ function buildWriteRequest(input: {
     "content-type": "application/json",
   });
   if (input.cookie) headers.set("cookie", input.cookie);
-  return new Request(`${origin}${input.pathname}`, {
+  return new Request(`${requestOrigin}${input.pathname}`, {
     method: input.method,
     headers,
     body: JSON.stringify(input.body ?? {}),

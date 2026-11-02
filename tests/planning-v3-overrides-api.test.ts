@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import {
   DELETE as overridesDELETE,
   GET as overridesGET,
@@ -45,10 +46,23 @@ function requestJson(method: "PATCH" | "DELETE", body: unknown): Request {
 describe("planning v3 transaction overrides API", () => {
   let root = "";
 
-  beforeEach(() => {
+  beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-overrides-api-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = root;
+    await saveBatch({
+      id: "batch-a",
+      createdAt: "2026-08-25T00:00:00.000Z",
+      source: "csv",
+      rowCount: 1,
+    }, [{
+      batchId: "batch-a",
+      txnId: "bbbbbbbbbbbbbbbbbbbbbbbb",
+      date: "2026-08-25",
+      amountKrw: -1000,
+      description: "fixture",
+      source: "csv",
+    }]);
   });
 
   afterEach(() => {
@@ -75,6 +89,21 @@ describe("planning v3 transaction overrides API", () => {
     };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INPUT");
+  });
+
+  it("returns 404 instead of creating a batch-scoped override for a missing batch", async () => {
+    const response = await overridesPATCH(requestJson("PATCH", {
+      csrf: "test",
+      batchId: "missing-batch",
+      txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+      categoryId: "food",
+    }));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: { code: "NO_DATA" },
+    });
   });
 
   it("supports get/patch/delete lifecycle", async () => {

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { FSS_PENSION_SNAPSHOT_MAX_AGE_DAYS } from "../src/lib/publicApis/providers/fssPension.mjs";
 
 const cwd = process.cwd();
 const dataDir = path.join(cwd, ".data");
@@ -7,9 +8,27 @@ const reportPath = path.join(cwd, "docs", "data-freshness-report.md");
 const cliArgs = process.argv.slice(2);
 const checkOnly = cliArgs.includes("--check-only");
 const logPrefix = checkOnly ? "[freshness:check]" : "[freshness:report]";
+const jsonReportOption = cliArgs.find((arg) => arg.startsWith("--json-report="));
+let evaluatedAt = null;
+
+// A companion receipt never replaces the strict result or changes snapshot data.
+function writeJsonReport(result) {
+  if (!jsonReportOption) return;
+  const configuredPath = jsonReportOption.slice("--json-report=".length).trim();
+  if (!configuredPath) throw new Error("--json-report requires a new JSON file path");
+  fs.writeFileSync(path.resolve(cwd, configuredPath), `${JSON.stringify({
+    schemaVersion: 1,
+    evaluatedAt,
+    strict: cliArgs.includes("--strict"),
+    checkOnly,
+    ...result,
+  }, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+}
 
 const SOURCE_RULES = [
   { source: "finlife", pattern: /^finlife_.*_snapshot\.json$/i, maxAgeDays: 3 },
+  // Quarterly/monthly disclosures: the receipt proves a recent check for the newest published period.
+  { source: "fss_pension", pattern: /^fss_pension_.*_snapshot\.json$/i, maxAgeDays: FSS_PENSION_SNAPSHOT_MAX_AGE_DAYS },
   { source: "benefits", pattern: /^benefits_.*\.json$/i, maxAgeDays: 7 },
   { source: "gov24", pattern: /^gov24_.*\.json$/i, maxAgeDays: 7 },
   { source: "exchange", pattern: /^exchange_snapshot\.json$/i, maxAgeDays: 1 },
@@ -175,6 +194,7 @@ function main() {
   const args = cliArgs;
   const strict = args.includes("--strict");
   const now = parseNow(args);
+  evaluatedAt = now.toISOString();
   const exceptions = parseExceptions(args, now);
 
   const allFileNames = listSnapshots();
@@ -247,6 +267,13 @@ function main() {
   );
 
   const blockingIssueCount = summary.stale + summary.missingTimestamp + summary.invalidTimestamp;
+  writeJsonReport({
+    passed: !strict || blockingIssueCount === 0,
+    rows,
+    summary,
+    ignoredFiles,
+    appliedExceptions,
+  });
 
   if (summary.missingTimestamp > 0) {
     console.warn(`${logPrefix} some snapshots do not expose meta.generatedAt or generatedAt`);
@@ -267,6 +294,11 @@ try {
   main();
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
+  try {
+    writeJsonReport({ passed: false, error: message, rows: null });
+  } catch (reportError) {
+    console.error(`${logPrefix} receipt failed: ${reportError instanceof Error ? reportError.message : String(reportError)}`);
+  }
   console.error(`${logPrefix} failed: ${message}`);
   process.exit(1);
 }

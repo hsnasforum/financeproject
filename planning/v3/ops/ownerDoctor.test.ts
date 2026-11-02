@@ -426,8 +426,8 @@ describe("planning owner doctor", () => {
     }))).toBe("OWNER_DOCTOR_SCHEMA_INVALID");
   });
 
-  it("validates each transaction override row contract", () => {
-    const txnId = "a".repeat(24);
+  it.each([16, 24])("validates each transaction override row contract with %i-character IDs", (length) => {
+    const txnId = "a".repeat(length);
     const cases = [
       {
         logicalPath: "txn-overrides/batch-a.json",
@@ -466,6 +466,20 @@ describe("planning owner doctor", () => {
       }),
     }))).toBe("OWNER_DOCTOR_SCHEMA_INVALID");
   });
+
+  it.each(["a".repeat(15), "a".repeat(17), "a".repeat(23), "a".repeat(25), "g".repeat(16), " " + "a".repeat(16)])(
+    "rejects malformed transaction IDs in override keys and rows: %s",
+    (invalidId) => {
+      const validId = "a".repeat(24);
+      for (const [key, txnId] of [[invalidId, validId], [validId, invalidId]]) {
+        expect(captureValidationCode(() => validatePlanningOwnerPayloadFile({
+          ownerId: "v3.transaction-overrides",
+          logicalPath: "txn-overrides/batch-a.json",
+          bytes: jsonBytes({ version: 1, items: { [key]: { batchId: "batch-a", txnId, categoryId: "debt", updatedAt: CHECKED_AT } } }),
+        }))).toBe("OWNER_DOCTOR_SCHEMA_INVALID");
+      }
+    },
+  );
 
   it("rejects a namespace mismatch before touching canonical files", () => {
     const root = makeTempRoot();

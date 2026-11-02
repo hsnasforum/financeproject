@@ -16,7 +16,7 @@ FINLIFE_REPLAY=1
 ## 2) 초기 시드/DB 준비
 
 ```bash
-pnpm prisma db push
+pnpm prisma:db:push
 pnpm seed:debug
 ```
 

@@ -27,7 +27,6 @@ type SchemaReportResponse =
 const PRODUCT_KINDS: FinlifeKind[] = [
   "deposit",
   "saving",
-  "pension",
   "mortgage-loan",
   "rent-house-loan",
   "credit-loan",
@@ -68,7 +67,7 @@ function KindTable({ title, rows, query }: { title: string; rows: KeyRows; query
 export function FinlifeSchemaReportClient() {
   const [topN, setTopN] = useState(30);
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<FinlifeKind>("pension");
+  const [kind, setKind] = useState<FinlifeKind>("deposit");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [payload, setPayload] = useState<SchemaReportResponse | null>(null);

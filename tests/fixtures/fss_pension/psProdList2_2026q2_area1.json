@@ -1,0 +1,49 @@
+{
+  "code": "000",
+  "message": "정상 처리 되었습니다.",
+  "count": 2,
+  "list": [
+    {
+      "area": "은행",
+      "company": "농협은행주식회사",
+      "product": "웰빙라이프연금저축신탁(채권형)",
+      "launchDate": "2004/06/01",
+      "productType": "채권형",
+      "rcvMethod": "연금 수령시 선택형",
+      "feeType": "증가형",
+      "sells": "N",
+      "guarantees": "Y",
+      "reserve": 1087468,
+      "reserve1": 1112471,
+      "reserve2": 1096491,
+      "reserve3": 1042470,
+      "earnRate3": 2.76,
+      "earnRate5": 2.03,
+      "earnRate7": 1.69,
+      "earnRate10": 1.57,
+      "avgTotalEarRate": 2.51,
+      "avgFeeRate": 4.46
+    },
+    {
+      "area": "은행",
+      "company": "신한은행",
+      "product": "연금저축신탁 안정형제1호",
+      "launchDate": "2005/03/23",
+      "productType": "안정형",
+      "rcvMethod": "연금 수령시 선택형",
+      "feeType": "증가형",
+      "sells": "N",
+      "guarantees": "Y",
+      "reserve": 1006682,
+      "reserve1": 1095863,
+      "reserve2": 1194991,
+      "reserve3": 1287333,
+      "earnRate3": 6.55,
+      "earnRate5": 4.03,
+      "earnRate7": 2.94,
+      "earnRate10": 2.51,
+      "avgTotalEarRate": 3.18,
+      "avgFeeRate": 9.05
+    }
+  ]
+}

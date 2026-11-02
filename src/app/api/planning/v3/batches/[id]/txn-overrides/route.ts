@@ -15,6 +15,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningBatchLifecycleErrorResponse } from "@/lib/planning/api/batchLifecycleErrorResponse";
 import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type RouteContext = {
@@ -96,6 +97,8 @@ export async function GET(request: Request, context: RouteContext) {
       const items = await getCurrentUserBatchTxnOverrides(id);
       return NextResponse.json({ ok: true, data: items, meta: userMeta });
     } catch (error) {
+      const lifecycleError = planningBatchLifecycleErrorResponse(error, userMeta);
+      if (lifecycleError) return lifecycleError;
       const storageError = planningStorageErrorResponse(error, userMeta);
       if (storageError) return storageError;
       if (error instanceof TxnOverridesStoreInputError) {
@@ -172,6 +175,8 @@ export async function POST(request: Request, context: RouteContext) {
       });
       return NextResponse.json({ ok: true, data: override, meta: userMeta });
     } catch (error) {
+      const lifecycleError = planningBatchLifecycleErrorResponse(error, userMeta);
+      if (lifecycleError) return lifecycleError;
       const storageError = planningStorageErrorResponse(error, userMeta);
       if (storageError) return storageError;
       if (error instanceof TxnOverridesStoreInputError) {

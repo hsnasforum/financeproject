@@ -50,12 +50,43 @@ export type UnifiedMergeItem = {
   [UNIFIED_RECENT_SORT_AT]?: string;
 };
 
+export type UnifiedCatalogKind = "deposit" | "saving";
+
 type UnifiedSortMode = "recent" | "name";
 
 const FINLIFE_SOURCE_ID = "finlife";
 
 function sourcePriority(sourceId: string): number {
   return sourceId === FINLIFE_SOURCE_ID ? 0 : 1;
+}
+
+function normalizeCatalogIdentity(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/(?:주식회사|\(주\)|㈜)/g, "")
+    .replace(/저축은행|은행/g, "")
+    .replace(/[^\p{L}\p{N}]/gu, "")
+    .trim();
+}
+
+function canonicalCatalogKey(item: UnifiedMergeItem): string {
+  const provider = normalizeCatalogIdentity(item.providerName ?? "");
+  const product = normalizeCatalogIdentity(item.productName ?? "");
+  if (!provider || !product) return `stable:${item.stableId || `${item.sourceId}:${item.externalKey}`}`;
+  return `catalog:${provider}|${product}`;
+}
+
+const KDB_DEPOSIT_EXCLUDED_NAME_PATTERN = /(적금|계좌|통장)/;
+
+export function isUnifiedCatalogItemEligible(input: {
+  item: UnifiedMergeItem;
+  kind: UnifiedCatalogKind;
+}): boolean {
+  if (input.item.sourceId !== "datago_kdb") return true;
+  if (input.kind !== "deposit") return true;
+  const productName = (input.item.productName ?? "").normalize("NFKC").replace(/\s+/g, "");
+  return !KDB_DEPOSIT_EXCLUDED_NAME_PATTERN.test(productName);
 }
 
 function toTimestamp(value?: string): number {
@@ -206,11 +237,13 @@ function mergeBadges(items: UnifiedMergeItem[]): string[] | undefined {
 export function buildStableUnifiedId(input: {
   sourceId: string;
   externalKey: string;
+  identityKey?: string | null;
   canonicalFinPrdtCd?: string | null;
+  canonicalFinlifeIdentity?: string | null;
 }): string {
   const externalKey = (input.externalKey ?? "").trim();
-  if (input.sourceId === FINLIFE_SOURCE_ID && externalKey) return externalKey;
-  const canonical = (input.canonicalFinPrdtCd ?? "").trim();
+  if (input.sourceId === FINLIFE_SOURCE_ID && externalKey) return (input.identityKey ?? "").trim() || externalKey;
+  const canonical = (input.canonicalFinlifeIdentity ?? input.canonicalFinPrdtCd ?? "").trim();
   if (canonical) return canonical;
   return `${input.sourceId}:${externalKey || "unknown"}`;
 }
@@ -235,45 +268,56 @@ export function mergeUnifiedCatalogRows(input: {
 }): UnifiedMergeItem[] {
   if (input.items.length === 0) return [];
 
-  const grouped = new Map<string, UnifiedMergeItem[]>();
+  function mergeBuckets(grouped: Map<string, UnifiedMergeItem[]>, preserveGroupKey: boolean): UnifiedMergeItem[] {
+    const merged: UnifiedMergeItem[] = [];
+    for (const [groupKey, bucket] of grouped.entries()) {
+      const sortedByWinner = [...bucket].sort(compareWinnerPriority);
+      const winner = sortedByWinner[0];
+      const mergedRecentSortAt = pickRecentSortAt(bucket);
+
+      const sourceIds = [...new Set(bucket.flatMap((item) => item.sourceIds ?? [item.sourceId]))]
+        .sort((a, b) => {
+          const pri = sourcePriority(a) - sourcePriority(b);
+          if (pri !== 0) return pri;
+          return a.localeCompare(b);
+        });
+
+      merged.push({
+        ...winner,
+        stableId: preserveGroupKey ? groupKey : winner.stableId,
+        ...(mergedRecentSortAt ? { [UNIFIED_RECENT_SORT_AT]: mergedRecentSortAt } : {}),
+        summary: pickSummary(bucket, winner),
+        firstSeenAt: pickTimestampIso({ items: bucket, field: "firstSeenAt", mode: "min" }),
+        lastSeenAt: pickTimestampIso({ items: bucket, field: "lastSeenAt", mode: "max" }),
+        updatedAt: pickTimestampIso({ items: bucket, field: "updatedAt", mode: "max" }),
+        badges: mergeBadges(bucket),
+        signals: mergeSignals(bucket, winner),
+        options: mergeOptionsByTerm(bucket),
+        sourceIds,
+      });
+    }
+    return merged;
+  }
+
+  const byStableId = new Map<string, UnifiedMergeItem[]>();
   for (const item of input.items) {
     const key = item.stableId || `${item.sourceId}:${item.externalKey}`;
-    const bucket = grouped.get(key) ?? [];
+    const bucket = byStableId.get(key) ?? [];
     bucket.push(item);
-    grouped.set(key, bucket);
+    byStableId.set(key, bucket);
   }
 
-  const merged: UnifiedMergeItem[] = [];
-  for (const [stableId, bucket] of grouped.entries()) {
-    const sortedByWinner = [...bucket].sort(compareWinnerPriority);
-    const winner = sortedByWinner[0];
-    const mergedRecentSortAt = pickRecentSortAt(bucket);
-
-    const sourceIds = [...new Set(bucket.map((item) => item.sourceId))]
-      .sort((a, b) => {
-        const pri = sourcePriority(a) - sourcePriority(b);
-        if (pri !== 0) return pri;
-        return a.localeCompare(b);
-      });
-
-    merged.push({
-      ...winner,
-      stableId,
-      ...(mergedRecentSortAt
-        ? { [UNIFIED_RECENT_SORT_AT]: mergedRecentSortAt }
-        : {}),
-      summary: pickSummary(bucket, winner),
-      firstSeenAt: pickTimestampIso({ items: bucket, field: "firstSeenAt", mode: "min" }),
-      lastSeenAt: pickTimestampIso({ items: bucket, field: "lastSeenAt", mode: "max" }),
-      updatedAt: pickTimestampIso({ items: bucket, field: "updatedAt", mode: "max" }),
-      badges: mergeBadges(bucket),
-      signals: mergeSignals(bucket, winner),
-      options: mergeOptionsByTerm(bucket),
-      sourceIds,
-    });
+  const stableMerged = mergeBuckets(byStableId, true);
+  const byCanonicalIdentity = new Map<string, UnifiedMergeItem[]>();
+  for (const item of stableMerged) {
+    const key = canonicalCatalogKey(item);
+    const bucket = byCanonicalIdentity.get(key) ?? [];
+    bucket.push(item);
+    byCanonicalIdentity.set(key, bucket);
   }
 
-  return merged.sort((a, b) => compareMergedItems(a, b, input.sort));
+  return mergeBuckets(byCanonicalIdentity, false)
+    .sort((a, b) => compareMergedItems(a, b, input.sort));
 }
 
 export type CanonicalIntegratedItem = {

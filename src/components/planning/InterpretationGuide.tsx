@@ -1,8 +1,9 @@
 "use client";
 
+import DiagnosisSummary from "@/components/planning/DiagnosisSummary";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import EvidencePanel from "@/components/planning/EvidencePanel";
 import { REPORT_SECTION_IDS } from "@/lib/planning/navigation/sectionIds";
 import {
@@ -118,13 +119,13 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
     },
     policy,
   );
-  const badge = verdictBadge(vm.verdict.code);
+  const badge = verdictBadge(vm.assessment.code);
   const className = props.className ? ` ${props.className}` : "";
   const primaryAction = vm.nextActions[0];
   const secondaryActions = vm.nextActions.slice(1, 3);
   const diagnosticCards = vm.diagnostics.slice(0, 3);
   const narrativeSummary = buildFallbackPlanningAiSummary({
-    verdictHeadline: vm.verdict.headline,
+    verdictHeadline: vm.assessment.headline,
     ...(primaryAction ? {
       primaryActionTitle: primaryAction.title,
       primaryActionDescription: primaryAction.description,
@@ -173,13 +174,13 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
             <h2 className="mt-1 text-2xl font-black tracking-tight text-navy">한눈에 보는 결과 해석</h2>
           </div>
           <Badge variant={badge.variant} className="rounded-full px-4 py-1 font-black">
-            {badge.label}
+            {vm.assessment.label}
           </Badge>
         </div>
 
         <section className="rounded-[2rem] bg-surface-muted p-8 border border-slate-100/50 shadow-inner">
           <p className="text-[10px] font-black uppercase tracking-widest text-primary">핵심 요약</p>
-          <p className="mt-3 text-xl font-black leading-snug text-navy">{vm.verdict.headline}</p>
+          <DiagnosisSummary assessment={vm.assessment} showLabel={false} />
           <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">
             {primaryAction
               ? `가장 먼저 할 일은 '${primaryAction.title}'입니다. 아래 핵심 지표 3가지를 통해 현재 상황을 파악해 보세요.`
@@ -289,11 +290,13 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                       바로 확인하기
                     </Button>
                   ) : (
-                    <Link href={primaryAction.href} className="block">
-                      <Button className="w-full rounded-2xl h-12 font-black shadow-lg shadow-navy/10" variant="primary">
-                        바로 확인하기
-                      </Button>
-                    </Link>
+                    <ButtonLink
+                      href={primaryAction.href}
+                      className="w-full rounded-2xl h-12 font-black shadow-lg shadow-navy/10"
+                      variant="primary"
+                    >
+                      바로 확인하기
+                    </ButtonLink>
                   )}
                 </div>
               ) : null}

@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AuditLogCard } from "@/components/AuditLogCard";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -287,9 +286,7 @@ export function MaintenanceSettingsClient() {
         title="유지 관리 (Maintenance)"
         description="임시 데이터 보관 정책을 관리하고 시스템 정리(Cleanup)를 수행합니다."
         action={
-          <Link href="/settings">
-            <Button variant="outline" className="rounded-xl font-black">설정 홈으로</Button>
-          </Link>
+          <ButtonLink href="/settings" variant="outline" className="rounded-xl font-black">설정 홈으로</ButtonLink>
         }
       />
 

@@ -1,3 +1,4 @@
+import { FinlifeIntegrityError, validateFinlifeResponse, mergeFinlifeProducts } from "../src/lib/finlife/identity.mjs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import {
@@ -33,10 +34,9 @@ export { FinlifeSyncPersistenceError } from "./finlife_persistence.mjs";
 ensureFetchAvailable();
 const require = createRequire(import.meta.url);
 let prismaClient = null;
-export const SUPPORTED_FINLIFE_KINDS = ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"];
-const DEFAULT_GROUPS_BY_KIND = {
-  pension: "050000,060000",
-};
+// Pension savings moved to the FSS 통합연금포털 OpenAPI (`pnpm pension:sync`); the FINLIFE
+// annuitySavingProductsSearch endpoint returns loan-shaped or empty pages.
+export const SUPPORTED_FINLIFE_KINDS = ["deposit", "saving", "mortgage-loan", "rent-house-loan", "credit-loan"];
 
 function parseArgs(argv) {
   const out = {
@@ -202,12 +202,10 @@ function parseGroupList(raw) {
 export function resolveFinlifeGroupsForKind(kind, env = process.env) {
   const kindKey = finlifeGroupEnvKey(kind);
   const kindRaw = (env[kindKey] || "").trim();
-  const defaultRaw = DEFAULT_GROUPS_BY_KIND[kind] ?? "";
   const globalRaw = (env.FINLIFE_TOPFIN_GRP_LIST || "").trim();
-  const sourceKey = kindRaw ? kindKey : (defaultRaw ? `${kindKey} default` : "FINLIFE_TOPFIN_GRP_LIST");
   return {
-    sourceKey,
-    groups: parseGroupList(kindRaw || defaultRaw || globalRaw),
+    sourceKey: kindRaw ? kindKey : "FINLIFE_TOPFIN_GRP_LIST",
+    groups: parseGroupList(kindRaw || globalRaw),
   };
 }
 
@@ -244,7 +242,10 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
   const replay = fromFile ? loadReplayDump(fromFile) : null;
   const replayKinds = replay?.kind ? [replay.kind] : kinds;
 
+  const failures = [];
   for (const kind of replayKinds) {
+    const startedAt = new Date().toISOString();
+    try {
     const groups = fromFile ? [] : (topFinGrpNo ? [topFinGrpNo] : parseGroups(kind));
     const pagesFetchedByGroup = {};
     const maxPageByGroup = {};
@@ -283,6 +284,7 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
             throw error;
           }
 
+          validateFinlifeResponse(kind, raw, { pageNo });
           const paging = parseFinlifePaging(raw);
           const lists = extractBaseAndOption(raw);
           if (pageNo === 1 && typeof paging.totalCount === "number") totalCount = paging.totalCount;
@@ -300,6 +302,9 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
           pageNo += 1;
         }
 
+        if (lastHasNextByGroup[group] === false && typeof totalCount === "number" && mergeFinlifeProducts(products, {kind}).length !== totalCount) {
+          throw new FinlifeIntegrityError("group product count mismatch");
+        }
         if (maxPageByGroup[group] === undefined) maxPageByGroup[group] = null;
         groupRows.push({ group, items: products, totalCount });
       }
@@ -367,7 +372,14 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
     console.log(`- db inventoryItems: ${dbSync.inventoryItems ?? "unavailable"}`);
     console.log(`- db inventoryDeltaItems: ${dbSync.inventoryDeltaItems ?? "unavailable"}`);
     console.log(`- db staleCandidateItems: ${dbSync.staleCandidateItems ?? "unavailable"}`);
+    } catch (error) {
+      const errorCode = error?.code === "FINLIFE_INTEGRITY_FAILED" || error?.phase === "integrity" ? "FINLIFE_INTEGRITY_FAILED" : "SYNC_FAILED";
+      failures.push({ kind, error });
+      if (!error?.phase) writeSyncAttempt(kind, { status: "failed", phase: errorCode === "FINLIFE_INTEGRITY_FAILED" ? "integrity" : "fetch", startedAt, updatedAt: new Date().toISOString(), errorCode });
+      console.error(`[finlife:sync] ${kind} failed (${errorCode}); previous snapshot preserved`);
+    }
   }
+  if (failures.length) throw new AggregateError(failures.map(row => row.error), `FINLIFE failed kinds: ${failures.map(row => row.kind).join(",")}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

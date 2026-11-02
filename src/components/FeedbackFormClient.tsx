@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -75,9 +74,7 @@ export function FeedbackFormClient() {
         title="의견과 도움 요청 남기기"
         description="문제 상황이나 개선 아이디어를 안전하게 접수합니다. 운영 기록은 로컬 운영 환경에서만 확인할 수 있습니다."
         action={
-          <Link href="/dashboard">
-            <Button variant="outline" size="sm">대시보드로 이동</Button>
-          </Link>
+          <ButtonLink href="/dashboard" variant="outline" size="sm">대시보드로 이동</ButtonLink>
         }
       />
 
@@ -126,8 +123,8 @@ export function FeedbackFormClient() {
             </div>
           </label>
 
-          {notice ? <p className="text-sm font-black text-primary bg-primary/5 p-4 rounded-2xl">{notice}</p> : null}
-          {error ? <p className="text-sm font-black text-rose-600 bg-rose-50 p-4 rounded-2xl">{error}</p> : null}
+          {notice ? <p role="status" aria-live="polite" className="text-sm font-black text-primary bg-primary/5 p-4 rounded-2xl">{notice}</p> : null}
+          {error ? <p role="alert" className="text-sm font-black text-rose-600 bg-rose-50 p-4 rounded-2xl">{error}</p> : null}
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <Button type="submit" variant="primary" className="h-11 px-8 rounded-2xl font-black shadow-md" disabled={submitting}>

@@ -3,6 +3,25 @@ import { LIMITS } from "../../../src/lib/planning/v2/limits";
 import { buildResultDtoV1, buildResultDtoV1FromRunRecord } from "../../../src/lib/planning/v2/resultDto";
 
 describe("buildResultDtoV1", () => {
+  it("keeps IDs, goal types and amounts together in the existing deadline/name display order", () => {
+    const goals = [
+      { goalId: "retire-late", name: "same", targetMonth: 24, targetAmount: 1_000, currentAmount: 100 },
+      { goalId: "emergency-early", name: "same", targetMonth: 12, targetAmount: 2_000, currentAmount: 500 },
+      { id: "other-early", name: "a", targetMonth: 12, targetAmount: 3_000, currentAmount: 900 },
+    ];
+    const before = structuredClone(goals);
+    const expected = [
+      { id: "other-early", title: "a", type: "lumpSum", targetKrw: 3_000, currentKrw: 900, shortfallKrw: 2_100 },
+      { id: "emergency-early", title: "same", type: "emergencyFund", targetKrw: 2_000, currentKrw: 500, shortfallKrw: 1_500 },
+      { id: "retire-late", title: "same", type: "retirement", targetKrw: 1_000, currentKrw: 100, shortfallKrw: 900 },
+    ];
+    for (const order of [goals, [...goals].reverse()]) {
+      const dto = buildResultDtoV1({ simulate: { goalsStatus: order } });
+      expect(dto.goals).toMatchObject(expected);
+    }
+    expect(goals).toEqual(before);
+  });
+
   it("calculates summary fields from simulate/debt/goals", () => {
     const dto = buildResultDtoV1({
       generatedAt: "2026-03-01T00:00:00.000Z",
@@ -191,6 +210,24 @@ describe("buildResultDtoV1", () => {
     expect(rawSimulate.traces?.length ?? 0).toBeLessThanOrEqual(LIMITS.tracesTop);
     expect(rawSimulate.timelineSampled?.length ?? 0).toBeLessThanOrEqual(LIMITS.tracesTop);
   });
+
+  it("carries engine operatingCashflow only when the raw row has a finite value", () => {
+    const dto = buildResultDtoV1({
+      simulate: {
+        keyTimelinePoints: [
+          { monthIndex: 0, row: { income: 4_100_000, expenses: 2_700_000, debtPayment: 21_400_000, operatingCashflow: 778_170, liquidAssets: 0, netWorth: -8_698_264.85, totalDebt: 38_820_488.56 } },
+          { monthIndex: 12, row: { income: 4_100_000, expenses: 2_754_000, debtPayment: 1_346_000, operatingCashflow: 0, liquidAssets: 0, netWorth: 7_849_982.99, totalDebt: 23_778_351.91 } },
+          { monthIndex: 119, row: { income: 4_100_000, expenses: 3_285_858.07, debtPayment: 0, operatingCashflow: null, liquidAssets: 61_488_078.24, netWorth: 140_354_917.05, totalDebt: 0 } },
+        ],
+      },
+    });
+    const [start, mid, end] = dto.timeline.points;
+
+    expect(start).toMatchObject({ label: "start", debtPaymentKrw: 21_400_000, operatingCashflowKrw: 778_170 });
+    expect(mid).toMatchObject({ label: "mid", operatingCashflowKrw: 0 });
+    expect(end?.label).toBe("end");
+    expect(end).not.toHaveProperty("operatingCashflowKrw");
+  });
 });
 
 describe("buildResultDtoV1FromRunRecord", () => {
@@ -219,5 +256,6 @@ describe("buildResultDtoV1FromRunRecord", () => {
     expect(dto.summary.endNetWorthKrw).toBe(12_000_000);
     expect(dto.warnings.aggregated[0]?.code).toBe("CONTRIBUTION_SKIPPED");
     expect(dto.timeline.points.length).toBeGreaterThan(0);
+    expect(dto.timeline.points[0]).not.toHaveProperty("operatingCashflowKrw");
   });
 });

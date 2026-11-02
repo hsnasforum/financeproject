@@ -22,11 +22,10 @@ function hostToHostname(host: string): string {
 }
 
 function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase();
+  const normalized = hostToHostname(hostname);
   return normalized === "localhost"
     || normalized === "127.0.0.1"
-    || normalized === "::1"
-    || normalized === "0.0.0.0";
+    || normalized === "::1";
 }
 
 function parseForwardedFor(value: string): string[] {
@@ -38,27 +37,6 @@ function parseForwardedFor(value: string): string[] {
       if (entry.startsWith("[") && entry.endsWith("]")) return entry.slice(1, -1);
       return entry;
     });
-}
-
-function parseForwardedHeader(value: string): string[] {
-  const out: string[] = [];
-  const tokens = value.split(",");
-  for (const token of tokens) {
-    const parts = token.split(";");
-    for (const part of parts) {
-      const [k, v] = part.split("=").map((row) => row.trim());
-      if (k?.toLowerCase() !== "for") continue;
-      const cleaned = (v ?? "").replace(/^"|"$/g, "").trim();
-      if (!cleaned) continue;
-      if (cleaned.startsWith("[")) {
-        const end = cleaned.indexOf("]");
-        out.push(end > 0 ? cleaned.slice(1, end) : cleaned);
-        continue;
-      }
-      out.push(cleaned.split(":")[0] ?? cleaned);
-    }
-  }
-  return out;
 }
 
 function normalizeIp(raw: string): string {
@@ -94,43 +72,88 @@ function isAllowRemote(env: NodeJS.ProcessEnv): boolean {
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
-function collectIpCandidates(request: RequestLike): string[] {
-  const fromRequestIp = asString(request.ip);
-  const xForwardedFor = parseForwardedFor(asString(request.headers.get("x-forwarded-for")));
-  const forwarded = parseForwardedHeader(asString(request.headers.get("forwarded")));
-  const xRealIp = asString(request.headers.get("x-real-ip"));
-  const cfIp = asString(request.headers.get("cf-connecting-ip"));
+function normalizeAuthority(raw: string): string {
+  const value = raw.trim().toLowerCase();
+  if (!value || value.includes(",")) return "";
+  try {
+    return new URL(`http://${value}`).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
 
-  return [
-    ...(fromRequestIp ? [fromRequestIp] : []),
-    ...xForwardedFor,
-    ...forwarded,
-    ...(xRealIp ? [xRealIp] : []),
-    ...(cfIp ? [cfIp] : []),
-  ]
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .filter((entry, index, all) => all.indexOf(entry) === index);
+function loopbackAuthoritiesMatch(left: string, right: string): boolean {
+  try {
+    const leftUrl = new URL(`http://${left}`);
+    const rightUrl = new URL(`http://${right}`);
+    return isLoopbackHostname(leftUrl.hostname)
+      && isLoopbackHostname(rightUrl.hostname)
+      && leftUrl.port === rightUrl.port;
+  } catch {
+    return false;
+  }
+}
+
+function readRequestUrl(raw: string): URL | null {
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
+}
+
+function hasUnsupportedProxyHeaders(request: RequestLike): boolean {
+  return ["forwarded", "x-real-ip", "cf-connecting-ip"]
+    .some((name) => asString(request.headers.get(name)).length > 0);
+}
+
+function forwardedHeadersMatchDirectRequest(
+  request: RequestLike,
+  authority: string,
+  requestUrl: URL,
+  env: NodeJS.ProcessEnv,
+): boolean {
+  // Forwarded values never establish locality. Only the exact loopback values
+  // that Next.js may synthesize for a direct request are accepted as consistency checks.
+  if (hasUnsupportedProxyHeaders(request)) return false;
+
+  const forwardedHost = asString(request.headers.get("x-forwarded-host"));
+  if (forwardedHost && normalizeAuthority(forwardedHost) !== authority) return false;
+
+  const forwardedPort = asString(request.headers.get("x-forwarded-port"));
+  const directPort = requestUrl.port;
+  if (forwardedPort && forwardedPort !== directPort) return false;
+
+  const forwardedProto = asString(request.headers.get("x-forwarded-proto")).toLowerCase();
+  const directProto = requestUrl.protocol.replace(":", "").toLowerCase();
+  if (forwardedProto && forwardedProto !== directProto) return false;
+
+  const rawForwardedFor = asString(request.headers.get("x-forwarded-for"));
+  const forwardedFor = parseForwardedFor(rawForwardedFor);
+  if (rawForwardedFor && forwardedFor.length < 1) return false;
+  const allowWslBridgeIp = isWslEnv(env);
+  return forwardedFor.every((ip) => isLoopbackIp(ip) || (allowWslBridgeIp && isWslBridgeIp(ip)));
+}
+
+function hasAllowedPeerIp(request: RequestLike, env: NodeJS.ProcessEnv): boolean {
+  const fromRequestIp = asString(request.ip);
+  if (!fromRequestIp) return true;
+  return isLoopbackIp(fromRequestIp) || (isWslEnv(env) && isWslBridgeIp(fromRequestIp));
 }
 
 export function isLocalRequest(request: RequestLike, env: NodeJS.ProcessEnv = process.env): boolean {
   if (isAllowRemote(env)) return true;
 
-  const host = asString(request.headers.get("x-forwarded-host"))
-    || asString(request.headers.get("host"))
-    || (() => {
-      try {
-        return new URL(request.url).host;
-      } catch {
-        return "";
-      }
-    })();
+  // 0.0.0.0 is a bind target, not a request identity. Both the canonical URL
+  // and the direct Host header must independently identify loopback.
+  const requestUrl = readRequestUrl(request.url);
+  if (!requestUrl || !isLoopbackHostname(requestUrl.hostname)) return false;
 
-  const hostname = hostToHostname(host);
-  if (!isLoopbackHostname(hostname)) return false;
+  const hostHeader = asString(request.headers.get("host"));
+  const authority = normalizeAuthority(hostHeader || requestUrl.host);
+  if (!authority || !isLoopbackHostname(authority)) return false;
+  if (hostHeader && !loopbackAuthoritiesMatch(authority, normalizeAuthority(requestUrl.host))) return false;
 
-  const ips = collectIpCandidates(request);
-  if (ips.length < 1) return true;
-  const allowWslBridgeIp = isWslEnv(env);
-  return ips.every((ip) => isLoopbackIp(ip) || (allowWslBridgeIp && isWslBridgeIp(ip)));
+  if (!forwardedHeadersMatchDirectRequest(request, authority, requestUrl, env)) return false;
+  return hasAllowedPeerIp(request, env);
 }

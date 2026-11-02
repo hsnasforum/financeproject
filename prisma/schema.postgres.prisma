@@ -86,7 +86,8 @@ model Provider {
 
 model Product {
   id               Int                    @id @default(autoincrement())
-  finPrdtCd        String                 @unique
+  finPrdtCd        String
+  identityKey     String?                @unique
   kind             String
   name             String?
   providerNameNorm String?
@@ -101,6 +102,7 @@ model Product {
   updatedAt        DateTime               @updatedAt
   externalMatches  ExternalProductMatch[]
 
+  @@index([finPrdtCd])
   @@index([providerNameNorm])
   @@index([productNameNorm])
   @@index([searchTextNorm])

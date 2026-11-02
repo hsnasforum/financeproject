@@ -13,6 +13,7 @@
 # testing
 /coverage
 /test-results/
+/output/
 
 # next.js
 /.next/
@@ -67,7 +68,7 @@ tmp/*.json
 # generic build/cache
 dist/
 .turbo/
-coverage/
+/coverage/
 *.log
 
 # prisma/sqlite local artifacts
@@ -103,3 +104,5 @@ work/local/
 work/*.tmp
 work/*.log
 work/test.js
+.data/
+__meta/

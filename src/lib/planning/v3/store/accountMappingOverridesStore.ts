@@ -1,6 +1,12 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
-import { readJsonFile, storageSchemaCorrupted, toStorageWriteError } from "../../storage/serverFileRead";
+import {
+  isStorageNotFoundError,
+  readJsonFile,
+  storageSchemaCorrupted,
+  toStorageWriteError,
+} from "../../storage/serverFileRead";
 import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
@@ -173,6 +179,43 @@ export async function getAccountMappingOverrides(batchId: unknown): Promise<Reco
   const safeBatchId = normalizeBatchId(batchId);
   const state = await readState(safeBatchId);
   return sortedObject(state.items);
+}
+
+export async function deleteBatchAccountMappingOverrides(batchId: unknown): Promise<void> {
+  assertServerOnly();
+  const safeBatchId = normalizeBatchId(batchId);
+  const filePath = resolveOverridesPath(safeBatchId);
+  await withAccountMappingWriteLock(filePath, async () => {
+    const state = await readState(safeBatchId, filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "account mapping overrides storage contains invalid items");
+    }
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if (!isStorageNotFoundError(error)) throw toStorageWriteError(error, filePath);
+    }
+  });
+}
+
+export async function restoreBatchAccountMappingOverrides(
+  batchId: unknown,
+  snapshot: Readonly<Record<string, AccountMappingOverride>>,
+): Promise<void> {
+  assertServerOnly();
+  if (Object.keys(snapshot).length === 0) return;
+  const safeBatchId = normalizeBatchId(batchId);
+  const filePath = resolveOverridesPath(safeBatchId);
+  await withAccountMappingWriteLock(filePath, async () => {
+    const state = await readState(safeBatchId, filePath);
+    if (state.hadInvalidItems) {
+      throw storageSchemaCorrupted(filePath, "account mapping overrides storage contains invalid items");
+    }
+    await writeState(filePath, {
+      version: 1,
+      items: sortedObject({ ...snapshot, ...state.items }),
+    });
+  });
 }
 
 export async function upsertAccountMappingOverride(input: {

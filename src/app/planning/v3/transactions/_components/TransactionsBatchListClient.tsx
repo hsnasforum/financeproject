@@ -31,7 +31,7 @@ type BatchRow = {
 type Account = {
   id: string;
   name: string;
-  kind: "checking" | "saving" | "card" | "cash" | "other";
+  kind: "checking" | "saving" | "card" | "cash" | "other" | "bank" | "broker";
   currency: "KRW";
   note?: string;
 };
@@ -88,7 +88,12 @@ function isAccount(value: unknown): value is Account {
   if (!isRecord(value)) return false;
   if (!asString(value.id) || !asString(value.name)) return false;
   const kind = asString(value.kind);
-  return ["checking", "saving", "card", "cash", "other"].includes(kind);
+  return ["checking", "saving", "card", "cash", "other", "bank", "broker"].includes(kind);
+}
+
+export function parseAccountsPayload(payload: unknown): Account[] {
+  if (!isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) return [];
+  return payload.items.filter(isAccount);
 }
 
 function isListResponse(payload: unknown): payload is ListResponse {
@@ -245,10 +250,8 @@ export function TransactionsBatchListClient({
       signal,
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
-      return [];
-    }
-    return payload.items.filter(isAccount);
+    if (!response.ok) return [];
+    return parseAccountsPayload(payload);
   }, []);
 
   const applyAccountsResult = useCallback((items: AccountsLoadResult) => {
@@ -436,6 +439,9 @@ export function TransactionsBatchListClient({
             </label>
             <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/accounts">
               계좌 관리
+            </BodyActionLink>
+            <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/categories/rules">
+              분류 규칙(베타)
             </BodyActionLink>
           </div>
 

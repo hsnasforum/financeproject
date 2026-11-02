@@ -1,4 +1,6 @@
 import { isLocalRequest } from "../../dev/localRequest";
+import { evaluateDesktopSessionRequest } from "../deployment/desktopSession.mjs";
+import { isDesktopLocalDeploymentRequested } from "../deployment/runtimePolicy.mjs";
 import {
   DEFAULT_PLANNING_USER_ID,
   PlanningStorageModeError,
@@ -7,7 +9,11 @@ import {
 } from "../store/namespace";
 import { runWithPlanningUserScope } from "../store/userScope";
 
-export type PlanningCurrentUserSource = "auth-session" | "trusted-header" | "local-namespace";
+export type PlanningCurrentUserSource =
+  | "auth-session"
+  | "trusted-header"
+  | "local-namespace"
+  | "desktop-local-session";
 
 export type PlanningCurrentUser = {
   id: string;
@@ -16,14 +22,25 @@ export type PlanningCurrentUser = {
 };
 
 export class PlanningAuthError extends Error {
-  readonly code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVALID_STORAGE_MODE";
+  readonly code:
+    | "UNAUTHENTICATED"
+    | "FORBIDDEN"
+    | "INVALID_STORAGE_MODE"
+    | "DEPLOYMENT_NOT_READY";
   readonly status: number;
+  readonly recovery: "sign-in" | "desktop-launcher";
 
-  constructor(code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVALID_STORAGE_MODE", message: string, status: number) {
+  constructor(
+    code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVALID_STORAGE_MODE" | "DEPLOYMENT_NOT_READY",
+    message: string,
+    status: number,
+    recovery: "sign-in" | "desktop-launcher" = "sign-in",
+  ) {
     super(message);
     this.name = "PlanningAuthError";
     this.code = code;
     this.status = status;
+    this.recovery = recovery;
   }
 }
 
@@ -64,6 +81,13 @@ function hasAuthRuntimeSecret(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean((env.AUTH_SECRET ?? env.NEXTAUTH_SECRET ?? "").trim());
 }
 
+function desktopSessionForbiddenMessage(code: string): string {
+  if (code === "HOST_FORBIDDEN") return "데스크톱 앱은 127.0.0.1 호스트에서만 사용할 수 있습니다.";
+  if (code === "FORWARDED_HEADERS_FORBIDDEN") return "데스크톱 앱은 전달 프록시 헤더가 있는 요청을 허용하지 않습니다.";
+  if (code === "RAW_IDENTITY_HEADERS_FORBIDDEN") return "데스크톱 앱은 원시 사용자 식별 헤더를 허용하지 않습니다.";
+  return "데스크톱 로컬 요청을 신뢰할 수 없습니다.";
+}
+
 async function readAuthSessionUserId(env: NodeJS.ProcessEnv = process.env): Promise<string> {
   if (!hasAuthRuntimeSecret(env)) return "";
   try {
@@ -88,6 +112,39 @@ export async function requireCurrentPlanningUser(
       throw new PlanningAuthError(error.code, error.message, error.status);
     }
     throw error;
+  }
+
+  if (isDesktopLocalDeploymentRequested(env)) {
+    const desktopSession = evaluateDesktopSessionRequest(request, env);
+    if (desktopSession.ok) {
+      return {
+        id: DEFAULT_PLANNING_USER_ID,
+        source: "desktop-local-session",
+        authRequired: true,
+      };
+    }
+    if (desktopSession.code === "DEPLOYMENT_NOT_READY") {
+      throw new PlanningAuthError(
+        "DEPLOYMENT_NOT_READY",
+        "데스크톱 로컬 실행 환경을 확인할 수 없습니다. 앱을 종료한 뒤 공식 실행 아이콘으로 다시 시작해 주세요.",
+        503,
+        "desktop-launcher",
+      );
+    }
+    if (desktopSession.code === "SESSION_REQUIRED") {
+      throw new PlanningAuthError(
+        "UNAUTHENTICATED",
+        "데스크톱 세션을 확인하지 못했습니다. 앱 실행 아이콘이나 시작 명령으로 다시 열어 주세요.",
+        401,
+        "desktop-launcher",
+      );
+    }
+    throw new PlanningAuthError(
+      "FORBIDDEN",
+      desktopSessionForbiddenMessage(desktopSession.code),
+      403,
+      "desktop-launcher",
+    );
   }
   const trustedHeaderUserId = readTrustedHeaderUserId(request);
 

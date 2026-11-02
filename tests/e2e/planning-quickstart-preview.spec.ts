@@ -45,14 +45,14 @@ async function readProfileRunIds(
 }
 
 async function prepareBeginnerQuickStart(page: import("@playwright/test").Page): Promise<string> {
-  await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /재무 진단|Planning v2/i })).toBeVisible({ timeout: 30_000 });
 
   const quickStartGate = page.getByTestId("planning-quickstart-gate");
   await expect(quickStartGate).toBeVisible({ timeout: 30_000 });
 
   await quickStartGate.getByLabel("월 실수령액(원)").fill("3,200,000");
   await quickStartGate.getByLabel("월 고정지출(원)").fill("1,700,000");
-  await quickStartGate.getByLabel("목표 이름").fill("비상금 1,000만 원");
+  await quickStartGate.getByLabel("목표 이름").fill("전세자금");
   await quickStartGate.getByLabel("목표 금액(원)").fill("10,000,000");
   await quickStartGate.getByLabel("목표까지 남은 개월").fill("12");
 
@@ -78,10 +78,23 @@ async function prepareBeginnerQuickStart(page: import("@playwright/test").Page):
   await expect(profileForm.getByLabel("월 실수령")).toHaveValue("3,200,000");
   await expect(profileForm.getByLabel("필수지출")).toHaveValue("1,700,000");
   await expect(profileForm.getByLabel("선택지출")).toHaveValue("0");
+  await expect(profileForm.getByLabel("목표 이름", { exact: true })).toHaveCount(1);
+  await expect(profileForm.getByLabel("목표 이름", { exact: true })).toHaveValue("전세자금");
+  await profileForm.getByRole("button", { name: "목표 추가", exact: true }).click();
+  await expect(profileForm.getByLabel("목표 이름", { exact: true })).toHaveCount(2);
+  await profileForm.getByRole("button", { name: "목표 2 삭제", exact: true }).click();
+  await expect(profileForm.getByLabel("목표 이름", { exact: true })).toHaveCount(1);
 
   await page.getByTestId("planning-quickstart-next-step").click();
   const createButton = page.getByTestId("planning-profile-create-button");
   await expect(createButton).toBeVisible({ timeout: 30_000 });
+  const benefitConditions = page.getByTestId("planning-benefit-conditions");
+  await expect(benefitConditions).not.toHaveAttribute("open");
+  await benefitConditions.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
+  await benefitConditions.getByLabel("출생연도").fill("1994");
+  await benefitConditions.locator(":scope > summary").click();
+  await expect(benefitConditions).not.toHaveAttribute("open");
   await createButton.click();
   await resolvePendingSuggestions(page);
 
@@ -209,15 +222,161 @@ async function enableQuickStartReviewFallback(page: import("@playwright/test").P
   });
 }
 
-test("planning quickstart previews before applying beginner draft", async ({ page }) => {
+test("planning quickstart previews before applying beginner draft", async ({ page: initialPage, context }) => {
+  let page = initialPage;
+  const browserErrors: string[] = [];
+  const observePage = (observedPage: import("@playwright/test").Page) => {
+    observedPage.on("pageerror", (error) => browserErrors.push(error.message));
+    observedPage.on("console", (message) => {
+      if (message.type() === "error") browserErrors.push(`${message.text()} (${message.location().url})`);
+    });
+  };
+  observePage(page);
+  context.on("page", observePage);
   await page.addInitScript(() => {
     window.localStorage.setItem("planning:v2:beginnerMode", "true");
-    window.localStorage.removeItem("planning:v2:selectedProfileId");
   });
 
-  await page.goto("/planning");
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "내 재무 현황", exact: true })).toBeVisible();
+  await page.getByRole("navigation", { name: "데스크톱 주 메뉴" }).getByRole("link", { name: "재무진단", exact: true }).click();
+  await page.getByRole("link", { name: "전체 입력 화면", exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(page.getByRole("heading", { name: "재무 진단", exact: true })).toBeVisible({ timeout: 30_000 });
+  const calculationOptions = page.getByTestId("planning-calculation-options");
+  await expect(calculationOptions).not.toHaveAttribute("open");
+  await expect(page.getByTestId("planning-what-if-options")).not.toHaveAttribute("open");
+  await page.screenshot({ path: test.info().outputPath("planning-input-after.png"), fullPage: true });
   const profileId = await prepareBeginnerQuickStart(page);
+  await expect(page.getByTestId("planning-quickstart-inputs")).not.toHaveAttribute("open");
+  const saveControl = page.getByTestId("planning-profile-update-button");
+  const saveColors = await saveControl.evaluate((element) => ({ foreground: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
+  expect(saveColors.foreground).not.toBe(saveColors.background);
+  await saveControl.screenshot({ path: test.info().outputPath("planning-save-control.png") });
+  const appliedDetails = page.getByTestId("planning-quickstart-applied-details");
+  await expect(appliedDetails).not.toHaveAttribute("open");
+  await appliedDetails.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(appliedDetails.getByText("quick rules · 배분 가능", { exact: true })).toBeVisible();
+  await appliedDetails.locator(":scope > summary").click();
+  await calculationOptions.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(calculationOptions.getByRole("button", { name: "10년 (120개월)", exact: true })).toBeVisible();
+  await calculationOptions.locator(":scope > summary").click();
   await completeFirstQuickStartRun(page, profileId);
+
+  const ids = await readProfileRunIds(page, profileId);
+  const storedProfile = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(id)}`);
+    return (await response.json()).data.profile;
+  }, profileId);
+  expect(storedProfile).toMatchObject({ monthlyIncomeNet: 3_200_000, monthlyEssentialExpenses: 1_700_000, monthlyDiscretionaryExpenses: 0, birthYear: 1994 });
+  expect(storedProfile.goals).toEqual([expect.objectContaining({ name: "전세자금", targetAmount: 10_000_000, targetMonth: 12 })]);
+  const result = page.getByTestId("planning-workspace-results");
+  await page.getByTestId("planning-result-jump").click();
+  await expect(result.getByRole("heading", { name: "진단 결과", exact: true })).toBeVisible();
+  await expect(result.getByTestId("planning-key-findings")).toBeVisible();
+  await expect(result.getByRole("button", { name: "핵심 요약", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(result.getByTestId("planning-result-summary")).toContainText("목표 달성1/1");
+  await expect(result.getByTestId("planning-result-summary")).toContainText("현금흐름 위험");
+  await expect(result.getByTestId("planning-result-summary")).not.toContainText("월 의무지출을 감당하지 못한 구간");
+  const evidence = result.getByTestId("planning-result-evidence");
+  await expect(evidence).not.toHaveAttribute("open");
+  await evidence.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(evidence.getByTestId("planning-metric-evidence")).toBeVisible();
+  await evidence.locator(":scope > summary").click();
+  const interpretation = result.getByTestId("planning-result-interpretation");
+  await expect(interpretation).not.toHaveAttribute("open");
+  await interpretation.locator(":scope > summary").click();
+  await expect(interpretation.getByTestId("interpretation-guide")).toBeVisible();
+  await interpretation.locator(":scope > summary").click();
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: test.info().outputPath("planning-complete-after.png"), fullPage: true });
+  await test.info().attach("result-position", { body: JSON.stringify(await result.boundingBox()), contentType: "application/json" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: test.info().outputPath("planning-mobile-after.png"), fullPage: true });
+  await result.getByRole("link", { name: "저장된 리포트 열기", exact: true }).click();
+  await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
+  expect(new URL(page.url()).searchParams.get("profileId")).toBe(profileId);
+  await page.reload();
+  await expect(page.getByTestId("report-dashboard")).toBeVisible();
+  const reportGoals = page.locator("#report-goals");
+  await expect(reportGoals.getByRole("cell", { name: "전세자금", exact: true })).toBeVisible();
+  await expect(reportGoals.locator("tbody tr")).toHaveCount(1);
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+
+  const savedReportUrl = page.url();
+  await page.close();
+  page = await context.newPage();
+  await page.goto(savedReportUrl);
+  await expect(page.getByTestId("report-dashboard")).toBeVisible();
+  await expect(page.locator("#report-goals").getByRole("cell", { name: "전세자금", exact: true })).toBeVisible();
+  await expect(page.locator("#report-goals tbody tr")).toHaveCount(1);
+  await page.screenshot({ path: test.info().outputPath("planning-report-reopened.png"), fullPage: true });
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+
+  await page.goto("/dashboard");
+  await page.getByRole("navigation", { name: "데스크톱 주 메뉴" }).getByRole("link", { name: "재무진단", exact: true }).click();
+  await page.getByRole("link", { name: "전체 입력 화면", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const restoredStatus = page.getByTestId("planning-workspace-quickstart-status");
+  await expect(restoredStatus).toContainText("프로필 저장 완료");
+  await expect(restoredStatus).not.toContainText("미저장");
+  const restoredForm = page.getByTestId("planning-profile-form");
+  await expect(restoredForm.getByLabel("월 실수령")).toHaveValue("3,200,000");
+  await expect(restoredForm.getByLabel("필수지출")).toHaveValue("1,700,000");
+  await expect(restoredForm.getByLabel("선택지출")).toHaveValue("0");
+  await expect(restoredForm.getByLabel("목표 이름", { exact: true })).toHaveCount(1);
+  await expect(restoredForm.getByLabel("목표 이름", { exact: true })).toHaveValue("전세자금");
+  const reopenedProfile = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(id)}`);
+    return (await response.json()).data.profile;
+  }, profileId);
+  expect(reopenedProfile).toEqual(storedProfile);
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await restoredForm.screenshot({ path: test.info().outputPath("planning-goals-mobile.png") });
+  await restoredForm.getByRole("button", { name: "목표 1 삭제", exact: true }).click();
+  await expect(restoredForm.getByText("등록된 목표가 없습니다.", { exact: true })).toBeVisible();
+  await page.getByTestId("planning-profile-update-button").click();
+  await resolvePendingSuggestions(page);
+  await expect(restoredStatus).toContainText("프로필 저장 완료");
+  await page.reload();
+  await expect(restoredStatus).toContainText("프로필 저장 완료");
+  await expect(restoredStatus).not.toContainText("미저장");
+  await expect(restoredForm.getByLabel("목표 이름", { exact: true })).toHaveCount(0);
+  await expect(restoredForm.getByText("등록된 목표가 없습니다.", { exact: true })).toBeVisible();
+  const emptyGoals = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(id)}`);
+    return (await response.json()).data.profile.goals;
+  }, profileId);
+  expect(emptyGoals).toEqual([]);
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+
+  await page.close();
+  page = await context.newPage();
+  await page.goto("/planning?view=full");
+  const reopenedEmptyForm = page.getByTestId("planning-profile-form");
+  await expect(reopenedEmptyForm.getByText("등록된 목표가 없습니다.", { exact: true })).toBeVisible();
+  expect(await readSelectedProfileId(page)).toBe(profileId);
+  await expect(reopenedEmptyForm.getByLabel("월 실수령")).toHaveValue("3,200,000");
+  await expect(reopenedEmptyForm.getByLabel("필수지출")).toHaveValue("1,700,000");
+  await expect(reopenedEmptyForm.getByLabel("목표 이름", { exact: true })).toHaveCount(0);
+  const reopenedEmptyProfile = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(id)}`);
+    return (await response.json()).data.profile;
+  }, profileId);
+  expect(reopenedEmptyProfile).toEqual({ ...storedProfile, goals: [] });
+  expect(await readProfileRunIds(page, profileId)).toEqual(ids);
+  await test.info().attach("persistence-and-browser-errors", {
+    body: JSON.stringify({ storedProfile, reopenedProfile, reopenedEmptyProfile, runIds: ids, browserErrors }, null, 2),
+    contentType: "application/json",
+  });
+  expect(browserErrors).toEqual([]);
 });
 
 test("planning arrival with profileId query focuses the next-step run target", async ({ page }) => {
@@ -226,7 +385,7 @@ test("planning arrival with profileId query focuses the next-step run target", a
     window.localStorage.removeItem("planning:v2:selectedProfileId");
   });
 
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   const profileId = await prepareBeginnerQuickStart(page);
 
   await page.goto(`/planning?profileId=${encodeURIComponent(profileId)}`);
@@ -250,7 +409,7 @@ test("planning quickstart keeps review fallback focused on runs history when pro
   });
   await enableQuickStartReviewFallback(page);
 
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   await expect.poll(async () => page.evaluate(() => {
     const marker = (globalThis as Record<string, unknown>).__e2eQuickStartFallbackCryptoPatched;
     return marker === true;

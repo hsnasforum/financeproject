@@ -3,10 +3,14 @@ import { type Dirent } from "node:fs";
 import path from "node:path";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
 import { atomicWriteJson } from "../storage/atomicWrite";
+import { readJsonFile, storageSchemaCorrupted, toStorageReadError } from "../storage/serverFileRead";
+import { PlanningV2ValidationError } from "../v2/types";
+import { validateProfileV2 } from "../v2/validate";
 import { type ProfileV2 } from "../v2/types";
 import { loadCanonicalProfile } from "../v2/loadCanonicalProfile";
 import { PROFILE_SCHEMA_VERSION } from "../v2/schemaVersion";
 import {
+  PROFILES_DIR,
   resolveProfilePath,
   resolveProfilePartitionsDir,
   resolveProfileRecordPath,
@@ -17,14 +21,20 @@ import {
   deleteFileFromTrash,
   moveFileToTrash,
   restoreFileFromTrash,
+  resolveTrashKindDir,
 } from "./trash";
 import { isPlanningNamespaceEnabled } from "./namespace";
 import { ensurePlanningStartupMigrations } from "./startupMigrationGate";
 import { type PlanningProfileMeta, type PlanningProfileRecord } from "./types";
+import { sha256Hex, stableStringify } from "../cache/key";
+import { withPlanningStoreWriteLock } from "../storage/storeWriteLock";
+
+export type ProfileMonthlyPatch = Partial<Pick<ProfileV2, "monthlyIncomeNet" | "monthlyEssentialExpenses" | "monthlyDiscretionaryExpenses">>;
 
 type ProfilePatch = {
   name?: string;
   profile?: ProfileV2;
+  monthlyCashflow?: ProfileMonthlyPatch;
 };
 
 type CreateProfileInput = {
@@ -74,7 +84,24 @@ function assertServerOnly(): void {
 
 assertServerOnly();
 
-async function ensureStartupMigrations(): Promise<void> {
+function withProfileWriteLock<T>(id: string, callback: () => Promise<T>): Promise<T> {
+  sanitizeRecordId(id);
+  // Existing mutations also refresh registry metadata and may migrate siblings.
+  // One user-store lock avoids acquiring profile locks in inconsistent orders.
+  return withPlanningStoreWriteLock(`planning:profiles:${resolveProfilePartitionsDir()}`, callback);
+}
+
+async function ensureStartupMigrations(preflightAllProfiles = false): Promise<void> {
+  // The startup runner scans this fixed legacy directory, ignoring store overrides.
+  // Check our bodies before it can normalize them or a same-ID legacy counterpart.
+  if (preflightAllProfiles) {
+    await assertProfileBodiesReadable();
+  } else if (resolveProfilesDir() === path.resolve(process.cwd(), PROFILES_DIR)) {
+    const legacy = await listLegacyProfiles(false);
+    for (const record of legacy) {
+      await readProfileFile(resolveProfileRecordPath(record.id), false);
+    }
+  }
   await ensurePlanningStartupMigrations({ mode: "best-effort" });
 }
 
@@ -166,27 +193,76 @@ function isRecoverableJsonReadError(error: unknown): boolean {
   return error instanceof SyntaxError;
 }
 
-async function readProfileFile(filePath: string): Promise<PlanningProfileRecord | null> {
+function storedValue(row: Record<string, unknown>, keys: string[], fallback: unknown): unknown {
+  const key = keys.find((candidate) => row[candidate] !== undefined);
+  return key === undefined ? fallback : row[key];
+}
+
+async function readProfileFile(filePath: string, rewriteToVault = true, preserveStoredRecord = false): Promise<PlanningProfileRecord | null> {
+  // Only the target file read may report absence. Decode/rewrite errors must propagate.
+  const loaded = await readJsonFile(filePath);
+  if (loaded.kind === "not-found") return null;
+  const decoded = await decodeStoragePayload(loaded.value);
+  const parsed = decoded.payload;
+  if (!isProfileRecord(parsed)) throw storageSchemaCorrupted(filePath);
+  let canonical: ReturnType<typeof loadCanonicalProfile>;
   try {
-    const raw = await fs.readFile(filePath, "utf-8");
-    const loaded = JSON.parse(raw) as unknown;
-    const decoded = await decodeStoragePayload(loaded);
-    const parsed = decoded.payload;
-    if (!isProfileRecord(parsed)) return null;
-    const canonical = loadCanonicalProfile(parsed.profile);
-    const record = {
-      ...parsed,
-      schemaVersion: PROFILE_SCHEMA_VERSION,
-      profile: canonical.profile,
-    };
-    if (decoded.rewriteToVault) {
-      await writeJsonAtomic(filePath, await toStoredPayload(record));
-    }
-    return record;
+    canonical = loadCanonicalProfile(parsed.profile);
+    // Keep omitted legacy defaults/aliases, but validate supplied amounts and months
+    // before normalization can hide invalid values. This projection is never stored.
+    const legacy = Number(parsed.schemaVersion ?? (parsed.profile as { schemaVersion?: unknown }).schemaVersion ?? 1) < PROFILE_SCHEMA_VERSION;
+    const raw = parsed.profile as unknown as Record<string, unknown>;
+    const cashflow = isRecord(raw.cashflow) ? raw.cashflow : {};
+    const assets = isRecord(raw.assets) ? raw.assets : {};
+    const debts = raw.debts !== undefined ? raw.debts : raw.liabilities;
+    const goals = raw.goals !== undefined ? raw.goals : raw.goalsV2;
+    validateProfileV2(legacy ? {
+      ...raw,
+      monthlyIncomeNet: raw.monthlyIncomeNet !== undefined ? raw.monthlyIncomeNet : cashflow.monthlyIncomeKrw,
+      monthlyEssentialExpenses: raw.monthlyEssentialExpenses !== undefined ? raw.monthlyEssentialExpenses : cashflow.monthlyFixedExpensesKrw,
+      monthlyDiscretionaryExpenses: raw.monthlyDiscretionaryExpenses !== undefined ? raw.monthlyDiscretionaryExpenses : cashflow.monthlyVariableExpensesKrw,
+      liquidAssets: raw.liquidAssets !== undefined ? raw.liquidAssets : assets.cashKrw,
+      investmentAssets: raw.investmentAssets !== undefined ? raw.investmentAssets : assets.investmentsKrw,
+      debts: Array.isArray(debts) ? debts.map((entry, index) => {
+        if (!isRecord(entry)) return entry;
+        const normalized = canonical.profile.debts[index];
+        return {
+          ...normalized,
+          balance: storedValue(entry, ["balance", "principalKrw", "principal"], normalized?.balance ?? 0),
+          minimumPayment: storedValue(entry, ["minimumPayment", "minimumPaymentKrw", "monthlyPaymentKrw", "monthlyPayment"], normalized?.minimumPayment ?? 0),
+          remainingMonths: storedValue(entry, ["remainingMonths", "termMonths"], normalized?.remainingMonths),
+        };
+      }) : debts,
+      goals: Array.isArray(goals) ? goals.map((entry, index) => {
+        if (!isRecord(entry)) return entry;
+        const normalized = canonical.profile.goals[index];
+        return {
+          ...normalized,
+          targetAmount: storedValue(entry, ["targetAmount", "amount"], normalized?.targetAmount ?? 0),
+          currentAmount: storedValue(entry, ["currentAmount", "savedAmount"], normalized?.currentAmount ?? 0),
+          minimumMonthlyContribution: storedValue(entry, ["minimumMonthlyContribution"], normalized?.minimumMonthlyContribution ?? 0),
+          targetMonth: storedValue(entry, ["targetMonth", "dueMonth"], normalized?.targetMonth),
+        };
+      }) : goals,
+    } : parsed.profile);
   } catch (error) {
-    if (isRecoverableJsonReadError(error)) return null;
+    if (error instanceof PlanningV2ValidationError) throw storageSchemaCorrupted(filePath);
     throw error;
   }
+  const record = {
+    ...parsed,
+    schemaVersion: PROFILE_SCHEMA_VERSION,
+    profile: canonical.profile,
+  };
+  if (rewriteToVault && decoded.rewriteToVault) {
+    return withProfileWriteLock(record.id, async () => {
+      const current = await readProfileFile(filePath, false, preserveStoredRecord);
+      if (!current) return null;
+      await writeJsonAtomic(filePath, await toStoredPayload(current));
+      return current;
+    });
+  }
+  return preserveStoredRecord ? parsed : record;
 }
 
 async function readProfileMetaState(): Promise<ProfileMetaState> {
@@ -293,7 +369,7 @@ async function syncProfileRegistry(records: PlanningProfileRecord[], defaultProf
   await writeProfileRegistryState(fileState);
 }
 
-async function listPartitionProfiles(): Promise<PlanningProfileRecord[]> {
+async function listPartitionProfiles(rewriteToVault = true): Promise<PlanningProfileRecord[]> {
   const dirPath = resolveProfilePartitionsDir();
   let entries: Dirent[];
   try {
@@ -301,7 +377,7 @@ async function listPartitionProfiles(): Promise<PlanningProfileRecord[]> {
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError?.code === "ENOENT") return [];
-    throw error;
+    throw toStorageReadError(error, dirPath);
   }
 
   const records: PlanningProfileRecord[] = [];
@@ -309,19 +385,20 @@ async function listPartitionProfiles(): Promise<PlanningProfileRecord[]> {
     if (!entry.isDirectory()) continue;
     const id = asString(entry.name);
     if (!id) continue;
+    let safeId: string;
     try {
-      const safeId = sanitizeRecordId(id);
-      const filePath = resolveProfileRecordPath(safeId);
-      const profile = await readProfileFile(filePath);
-      if (profile) records.push(profile);
+      safeId = sanitizeRecordId(id);
     } catch {
       continue;
     }
+    const filePath = resolveProfileRecordPath(safeId);
+    const profile = await readProfileFile(filePath, rewriteToVault);
+    if (profile) records.push(profile);
   }
   return records;
 }
 
-async function listLegacyProfiles(): Promise<PlanningProfileRecord[]> {
+async function listLegacyProfiles(rewriteToVault = true): Promise<PlanningProfileRecord[]> {
   const dirPath = resolveProfilesDir();
   let entries: Dirent[];
   try {
@@ -329,7 +406,7 @@ async function listLegacyProfiles(): Promise<PlanningProfileRecord[]> {
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError?.code === "ENOENT") return [];
-    throw error;
+    throw toStorageReadError(error, dirPath);
   }
 
   const records: PlanningProfileRecord[] = [];
@@ -337,7 +414,7 @@ async function listLegacyProfiles(): Promise<PlanningProfileRecord[]> {
     if (!entry.isFile()) continue;
     if (!entry.name.toLowerCase().endsWith(".json")) continue;
     const filePath = path.join(dirPath, entry.name);
-    const profile = await readProfileFile(filePath);
+    const profile = await readProfileFile(filePath, rewriteToVault);
     if (profile) records.push(profile);
   }
   return records;
@@ -348,11 +425,16 @@ async function migrateLegacyProfileRecord(profile: PlanningProfileRecord): Promi
   const partitionPath = resolveProfileRecordPath(safeId);
   const legacyPath = resolveProfilePath(safeId);
 
-  const existing = await readProfileFile(partitionPath);
-  if (!existing) {
-    await writeJsonAtomic(partitionPath, await toStoredPayload(profile));
-  }
-  await fs.unlink(legacyPath).catch(() => undefined);
+  await withProfileWriteLock(safeId, async () => {
+    const existing = await readProfileFile(partitionPath);
+    if (!existing) {
+      // A monthly update may have committed while this reader waited for the lock.
+      const current = await readProfileFile(legacyPath, false);
+      if (!current) return;
+      await writeJsonAtomic(partitionPath, await toStoredPayload(current));
+    }
+    await fs.unlink(legacyPath).catch(() => undefined);
+  });
 }
 
 function defaultProfileShape(): ProfileV2 {
@@ -386,6 +468,7 @@ async function ensureDefaultProfileRecord(records: PlanningProfileRecord[]): Pro
 }
 
 async function loadAllProfilesWithMigration(): Promise<PlanningProfileRecord[]> {
+  await assertProfileBodiesReadable();
   const partition = await listPartitionProfiles();
   const byId = new Map<string, PlanningProfileRecord>();
   for (const record of partition) {
@@ -402,6 +485,12 @@ async function loadAllProfilesWithMigration(): Promise<PlanningProfileRecord[]> 
 
   const ensured = await ensureDefaultProfileRecord([...byId.values()]);
   return sortByUpdatedAtDesc(ensured);
+}
+
+async function assertProfileBodiesReadable(): Promise<void> {
+  // Fail before migrating, rewriting to Vault, or mutating an otherwise healthy sibling.
+  await listPartitionProfiles(false);
+  await listLegacyProfiles(false);
 }
 
 async function resolveDefaultProfileId(records: PlanningProfileRecord[]): Promise<string | undefined> {
@@ -439,7 +528,7 @@ async function ensureDefaultProfileAfterMutation(): Promise<void> {
 
 async function loadProfilesWithDefault(): Promise<PlanningProfileListWithDefault> {
   assertServerOnly();
-  await ensureStartupMigrations();
+  await ensureStartupMigrations(true);
   const records = await loadAllProfilesWithMigration();
   const defaultProfileId = await resolveDefaultProfileId(records);
   return {
@@ -476,6 +565,7 @@ export async function getDefaultProfileId(): Promise<string | undefined> {
 export async function setDefaultProfile(profileId: string): Promise<string> {
   assertServerOnly();
   const safeProfileId = sanitizeRecordId(profileId);
+  await assertProfileBodiesReadable();
   const record = await getProfile(safeProfileId);
   if (!record) {
     throw new Error("PROFILE_NOT_FOUND");
@@ -502,7 +592,7 @@ async function readProfileRecordAfterStartupMigrations(
   if (!fromLegacy) return null;
 
   await migrateLegacyProfileRecord(fromLegacy);
-  return fromLegacy;
+  return await readProfileFile(partitionPath) ?? fromLegacy;
 }
 
 export async function getProfile(id: string): Promise<PlanningProfileRecord | null> {
@@ -513,9 +603,10 @@ export async function getProfile(id: string): Promise<PlanningProfileRecord | nu
 
 export async function createProfile(input: CreateProfileInput): Promise<PlanningProfileRecord> {
   assertServerOnly();
-  await ensureStartupMigrations();
+  await ensureStartupMigrations(true);
 
   const canonical = loadCanonicalProfile(input.profile);
+  await assertProfileBodiesReadable();
   const now = new Date().toISOString();
   const record: PlanningProfileRecord = {
     version: 1,
@@ -534,11 +625,16 @@ export async function createProfile(input: CreateProfileInput): Promise<Planning
 }
 
 export async function upsertProfileRecord(input: UpsertProfileRecordInput): Promise<PlanningProfileRecord> {
+  return withProfileWriteLock(input.id, () => upsertProfileRecordUnlocked(input));
+}
+
+async function upsertProfileRecordUnlocked(input: UpsertProfileRecordInput): Promise<PlanningProfileRecord> {
   assertServerOnly();
-  await ensureStartupMigrations();
+  await ensureStartupMigrations(true);
 
   const safeId = sanitizeRecordId(input.id);
   const canonical = loadCanonicalProfile(input.profile);
+  await assertProfileBodiesReadable();
   const fallbackNow = new Date().toISOString();
   const createdAt = normalizeIso(input.createdAt, fallbackNow);
   const updatedAt = normalizeIso(input.updatedAt, createdAt);
@@ -558,9 +654,77 @@ export async function upsertProfileRecord(input: UpsertProfileRecordInput): Prom
   return record;
 }
 
-export async function updateProfile(id: string, patch: ProfilePatch): Promise<PlanningProfileRecord | null> {
+export class ProfileUpdateConflictError extends Error {
+  constructor() {
+    super("프로필이 변경되어 preflight를 다시 확인해야 합니다.");
+    this.name = "ProfileUpdateConflictError";
+  }
+}
+
+async function readProfileUpdateSnapshot(id: string) {
+  const safeId = sanitizeRecordId(id);
+  for (const filePath of [resolveProfileRecordPath(safeId), resolveProfilePath(safeId)]) {
+    // A rejected draft must not trigger migrations, encryption rewrites or default creation.
+    const record = await readProfileFile(filePath, false, true);
+    if (record) return { record, filePath, revision: sha256Hex(stableStringify(record)) };
+  }
+  return null;
+}
+
+export async function getProfileUpdateSnapshot(id: string) {
   assertServerOnly();
-  await ensureStartupMigrations();
+  await assertProfileBodiesReadable();
+  const snapshot = await readProfileUpdateSnapshot(id);
+  return snapshot ? { record: snapshot.record, revision: snapshot.revision } : null;
+}
+
+export async function updateProfile(
+  id: string,
+  patch: ProfilePatch,
+  options?: { expectedRevision?: string },
+): Promise<PlanningProfileRecord | null> {
+  assertServerOnly();
+  const safeId = sanitizeRecordId(id);
+  return withProfileWriteLock(safeId, async () => {
+    if (patch.monthlyCashflow === undefined) return updateWholeProfile(safeId, patch);
+    if (!options?.expectedRevision) throw new ProfileUpdateConflictError();
+    await assertProfileBodiesReadable();
+    const snapshot = await readProfileUpdateSnapshot(safeId);
+    if (!snapshot) return null;
+    if (snapshot.revision !== options.expectedRevision) throw new ProfileUpdateConflictError();
+    const monthly = patch.monthlyCashflow;
+    const profile = {
+      ...snapshot.record.profile,
+      ...(monthly.monthlyIncomeNet !== undefined ? { monthlyIncomeNet: monthly.monthlyIncomeNet } : {}),
+      ...(monthly.monthlyEssentialExpenses !== undefined ? { monthlyEssentialExpenses: monthly.monthlyEssentialExpenses } : {}),
+      ...(monthly.monthlyDiscretionaryExpenses !== undefined ? { monthlyDiscretionaryExpenses: monthly.monthlyDiscretionaryExpenses } : {}),
+    };
+    const cashflow = profile.cashflow;
+    if (cashflow && typeof cashflow === "object" && !Array.isArray(cashflow)) {
+      // Legacy aliases take precedence on read. Synchronize only aliases for supplied monthly fields.
+      profile.cashflow = {
+        ...cashflow,
+        ...(monthly.monthlyIncomeNet !== undefined && "monthlyIncomeKrw" in cashflow ? { monthlyIncomeKrw: monthly.monthlyIncomeNet } : {}),
+        ...(monthly.monthlyEssentialExpenses !== undefined && "monthlyFixedExpensesKrw" in cashflow ? { monthlyFixedExpensesKrw: monthly.monthlyEssentialExpenses } : {}),
+        ...(monthly.monthlyDiscretionaryExpenses !== undefined && "monthlyVariableExpensesKrw" in cashflow ? { monthlyVariableExpensesKrw: monthly.monthlyDiscretionaryExpenses } : {}),
+      };
+    }
+    // Validate the canonical projection, but retain all non-target stored fields verbatim.
+    validateProfileV2(loadCanonicalProfile(profile).profile);
+    const previousTime = Date.parse(snapshot.record.updatedAt);
+    const updatedTime = Number.isFinite(previousTime) ? Math.max(Date.now(), previousTime + 1) : Date.now();
+    const updated = { ...snapshot.record, profile, updatedAt: new Date(updatedTime).toISOString() };
+    await writeJsonAtomic(snapshot.filePath, await toStoredPayload(updated));
+    // ID/name/default are unchanged. Derived registry metadata is refreshed by list readers.
+    // Keeping this a single atomic write avoids reporting failure after a profile was committed.
+    return updated;
+  });
+}
+
+async function updateWholeProfile(id: string, patch: ProfilePatch): Promise<PlanningProfileRecord | null> {
+  assertServerOnly();
+  await ensureStartupMigrations(true);
+  await assertProfileBodiesReadable();
 
   const existing = await readProfileRecordAfterStartupMigrations(id);
   if (!existing) return null;
@@ -584,9 +748,14 @@ export async function updateProfile(id: string, patch: ProfilePatch): Promise<Pl
 }
 
 export async function hardDeleteProfile(id: string): Promise<boolean> {
+  return withProfileWriteLock(id, () => hardDeleteProfileUnlocked(id));
+}
+
+async function hardDeleteProfileUnlocked(id: string): Promise<boolean> {
   assertServerOnly();
 
   const safeId = sanitizeRecordId(id);
+  await assertProfileBodiesReadable();
   const partitionPath = resolveProfileRecordPath(safeId);
   const legacyPath = resolveProfilePath(safeId);
 
@@ -613,9 +782,16 @@ export async function hardDeleteProfile(id: string): Promise<boolean> {
 }
 
 export async function restoreProfileFromTrash(id: string): Promise<boolean> {
+  return withProfileWriteLock(id, () => restoreProfileFromTrashUnlocked(id));
+}
+
+async function restoreProfileFromTrashUnlocked(id: string): Promise<boolean> {
   assertServerOnly();
 
   const safeId = sanitizeRecordId(id);
+  await assertProfileBodiesReadable();
+  const trashPath = path.join(resolveTrashKindDir("profiles"), `${safeId}.json`);
+  if (!await readProfileFile(trashPath, false)) return false;
   const filePath = resolveProfileRecordPath(safeId);
   const restored = await restoreFileFromTrash(filePath, {
     kind: "profiles",
@@ -639,9 +815,14 @@ export async function hardDeleteProfileFromTrash(id: string): Promise<boolean> {
 }
 
 export async function deleteProfile(id: string): Promise<boolean> {
+  return withProfileWriteLock(id, () => deleteProfileUnlocked(id));
+}
+
+async function deleteProfileUnlocked(id: string): Promise<boolean> {
   assertServerOnly();
 
   const safeId = sanitizeRecordId(id);
+  await assertProfileBodiesReadable();
   const partitionPath = resolveProfileRecordPath(safeId);
   const legacyPath = resolveProfilePath(safeId);
   let moved = await moveFileToTrash(partitionPath, {

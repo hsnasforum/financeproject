@@ -1,13 +1,63 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
-import { config, middleware } from "../middleware";
+import { config, middleware } from "../src/middleware";
+import { PLANNING_RUNTIME_ATTESTATION } from "../src/lib/planning/deployment/runtimePolicy.mjs";
 
 const originalAllowRemote = process.env.ALLOW_REMOTE;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
 const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
 const mutableEnv = process.env as Record<string, string | undefined>;
+const DESKTOP_ENV_KEYS = [
+  "PLANNING_DEPLOYMENT_MODE",
+  "PLANNING_RUNTIME_BIND_HOST",
+  "PLANNING_PROXY_MODE",
+  "PLANNING_FORWARDED_HEADERS_TRUSTED",
+  "PLANNING_DESKTOP_IDENTITY_MODE",
+  "PLANNING_DESKTOP_IDENTITY_PROVENANCE",
+  "PLANNING_DESKTOP_IDENTITY_READY",
+  "PLANNING_PROCESS_MODEL",
+  "PLANNING_WRITER_EXCLUSIVITY",
+  "PLANNING_SINGLE_USER_MODE",
+  "PLANNING_NAMESPACE_ENABLED",
+  "PLANNING_DATA_ROOT_KIND",
+  "PLANNING_DATABASE_PROVIDER",
+  "PLANNING_DATABASE_CONNECTION",
+  "PLANNING_RUNTIME_ATTESTATION",
+  "PLANNING_DESKTOP_SESSION_TOKEN",
+] as const;
+const originalDesktopEnv = Object.fromEntries(
+  DESKTOP_ENV_KEYS.map((key) => [key, process.env[key]]),
+) as Record<(typeof DESKTOP_ENV_KEYS)[number], string | undefined>;
+const DESKTOP_TOKEN = "m".repeat(43);
+
+function setDesktopEnv(overrides: Record<string, string | undefined> = {}) {
+  Object.assign(mutableEnv, {
+    NODE_ENV: "production",
+    PLANNING_DEPLOYMENT_MODE: "desktop-local",
+    PLANNING_RUNTIME_BIND_HOST: "127.0.0.1",
+    PLANNING_PROXY_MODE: "none",
+    PLANNING_FORWARDED_HEADERS_TRUSTED: "false",
+    PLANNING_TRUST_AUTH_HEADERS: "false",
+    PLANNING_DESKTOP_IDENTITY_MODE: "desktop-local-session",
+    PLANNING_DESKTOP_IDENTITY_PROVENANCE: "launcher-process",
+    PLANNING_DESKTOP_IDENTITY_READY: "true",
+    PLANNING_PROCESS_MODEL: "single",
+    PLANNING_WRITER_EXCLUSIVITY: "data-root-exclusive",
+    PLANNING_SINGLE_USER_MODE: "true",
+    PLANNING_NAMESPACE_ENABLED: "false",
+    PLANNING_DATA_ROOT_KIND: "local",
+    PLANNING_DATABASE_PROVIDER: "sqlite",
+    PLANNING_DATABASE_CONNECTION: "file",
+    PLANNING_RUNTIME_ATTESTATION,
+    PLANNING_DESKTOP_SESSION_TOKEN: DESKTOP_TOKEN,
+    ...overrides,
+  });
+  for (const [key, value] of Object.entries(overrides)) {
+    if (typeof value === "undefined") delete mutableEnv[key];
+  }
+}
 
 function makeRequest(url: string, init?: { method?: string; headers?: Record<string, string> }) {
   return new NextRequest(url, {
@@ -28,6 +78,11 @@ afterEach(() => {
   else delete mutableEnv.PLANNING_AUTH_REQUIRED;
   if (typeof originalPlanningTrustAuthHeaders === "string") mutableEnv.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
   else delete mutableEnv.PLANNING_TRUST_AUTH_HEADERS;
+  for (const key of DESKTOP_ENV_KEYS) {
+    const value = originalDesktopEnv[key];
+    if (typeof value === "string") mutableEnv[key] = value;
+    else delete mutableEnv[key];
+  }
 });
 
 describe("security middleware", () => {
@@ -91,6 +146,18 @@ describe("security middleware", () => {
     }
   });
 
+  it("keeps ops local-only even when prefetch headers are supplied", () => {
+    mutableEnv.NODE_ENV = "production";
+    const prefetchHeaders: Record<string, string>[] = [{ "next-router-prefetch": "1" }, { purpose: "prefetch" }];
+    for (const pathname of ["/ops", "/ops/about", "/api/ops/metrics"]) {
+      for (const headers of prefetchHeaders) {
+        const url = `http://example.com${pathname}`;
+        expect(unstable_doesMiddlewareMatch({ config, url, headers })).toBe(true);
+        expect(middleware(makeRequest(url, { headers })).status).toBe(403);
+      }
+    }
+  });
+
   it("keeps feedback management routes matched for prefetch requests", () => {
     for (const url of [
       "https://example.com/feedback/list",
@@ -112,7 +179,7 @@ describe("security middleware", () => {
   });
 
   it("rejects forwarded host on feedback management routes", () => {
-    for (const path of ["/feedback/list", "/api/feedback/list"]) {
+    for (const path of ["/feedback/list", "/feedback/feedback-id", "/api/feedback/list", "/api/feedback/feedback-id"]) {
       const response = middleware(makeRequest(`https://example.com${path}`, {
         headers: {
           host: "example.com",
@@ -163,6 +230,50 @@ describe("security middleware", () => {
 
     expect(response.status).toBe(401);
     expect(body.error?.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("keeps every settings backup API local-only", async () => {
+    for (const path of [
+      "/api/settings/backup/status",
+      "/api/settings/backup/export",
+      "/api/settings/backup/export/finalize",
+      "/api/settings/backup/preview",
+      "/api/settings/backup/restore",
+    ]) {
+      const response = middleware(makeRequest(`https://example.com${path}`, {
+        method: path.endsWith("/status") ? "GET" : "POST",
+        headers: { host: "example.com", cookie: "authjs.session-token=session" },
+      }));
+      expect(response.status).toBe(403);
+    }
+  });
+
+  it("requires an auth signal for every local settings backup API", async () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    for (const path of [
+      "/api/settings/backup/status",
+      "/api/settings/backup/export",
+      "/api/settings/backup/export/finalize",
+      "/api/settings/backup/preview",
+      "/api/settings/backup/restore",
+    ]) {
+      const response = middleware(makeRequest(`http://localhost:3000${path}`, {
+        method: path.endsWith("/status") ? "GET" : "POST",
+      }));
+      const body = await response.json() as { error?: { code?: string } };
+      expect(response.status).toBe(401);
+      expect(body.error?.code).toBe("UNAUTHENTICATED");
+    }
+  });
+
+  it("allows local settings backup APIs through the trusted auth bridge", () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    mutableEnv.PLANNING_TRUST_AUTH_HEADERS = "1";
+    const response = middleware(makeRequest("http://localhost:3000/api/settings/backup/status", {
+      headers: { "x-planning-user-id": "alice" },
+    }));
+
+    expect(response.status).toBe(200);
   });
 
   it("blocks planning API requests by default until local fallback is explicitly enabled", async () => {
@@ -277,6 +388,80 @@ describe("security middleware", () => {
     }));
 
     expect(response.status).toBe(200);
+  });
+
+  it.each([
+    "authjs.session-token",
+    "__Secure-authjs.session-token",
+    "next-auth.session-token",
+    "__Secure-next-auth.session-token",
+  ])("lets chunked %s sessions reach route authentication", (name) => {
+    mutableEnv.NODE_ENV = "production";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles", {
+      headers: { cookie: `${name}.0=first; ${name}.1=second` },
+    }));
+    expect(response.status).toBe(200);
+  });
+
+  it.each(["authjs.session-token.0=", "authjs.session-token.other=value", "authjs.session-token-extra.0=value"])(
+    "rejects missing or similarly named session signals: %s",
+    (cookie) => {
+      mutableEnv.NODE_ENV = "production";
+      expect(middleware(makeRequest("http://localhost:3000/api/planning/profiles", {
+        headers: { cookie },
+      })).status).toBe(401);
+    },
+  );
+
+  it("allows a launcher-attested desktop session on exact loopback", () => {
+    setDesktopEnv();
+    const response = middleware(makeRequest("http://127.0.0.1:3100/api/planning/profiles", {
+      headers: {
+        cookie: `planning.desktop-session=${DESKTOP_TOKEN}`,
+      },
+    }));
+
+    expect(response.status).toBe(200);
+  });
+
+  it("does not accept an Auth.js cookie as desktop-local identity", async () => {
+    setDesktopEnv();
+    const response = middleware(makeRequest("http://127.0.0.1:3100/api/planning/profiles", {
+      headers: {
+        cookie: "authjs.session-token=session",
+      },
+    }));
+    const body = await response.json() as { error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHENTICATED");
+    expect(body.error?.message).toBe("데스크톱 세션을 확인하지 못했습니다. 앱 실행 아이콘이나 시작 명령으로 다시 열어 주세요.");
+  });
+
+  it.each([
+    ["forwarded headers", { "x-forwarded-for": "203.0.113.10", cookie: `planning.desktop-session=${DESKTOP_TOKEN}` }],
+    ["raw identity headers", { "x-planning-user-id": "default", cookie: `planning.desktop-session=${DESKTOP_TOKEN}` }],
+    ["host aliases", { host: "localhost:3100", cookie: `planning.desktop-session=${DESKTOP_TOKEN}` }],
+  ])("blocks desktop-local %s", async (_label, headers) => {
+    setDesktopEnv();
+    const response = middleware(makeRequest("http://127.0.0.1:3100/api/planning/profiles", { headers }));
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(403);
+    expect(body.error?.code).toMatch(/FORBIDDEN|LOCAL_ONLY/);
+  });
+
+  it("fails closed when desktop runtime attestation is missing", async () => {
+    setDesktopEnv({ PLANNING_RUNTIME_ATTESTATION: undefined });
+    const response = middleware(makeRequest("http://127.0.0.1:3100/api/planning/profiles", {
+      headers: {
+        cookie: `planning.desktop-session=${DESKTOP_TOKEN}`,
+      },
+    }));
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(503);
+    expect(body.error?.code).toBe("DEPLOYMENT_NOT_READY");
   });
 
   it("blocks remote access to /api/dev in development", () => {

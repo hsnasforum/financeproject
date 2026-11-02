@@ -14,6 +14,7 @@ const FORBIDDEN_ROUTE_PATTERNS = [
   "appendOpsAuditEvent(",
   "appendOpsMetricEvent(",
   "buildPlanningDataVaultZip(",
+  "commitPlanningDataVaultExportCheckpoint(",
   "encryptPlanningDataVaultArchive(",
   "consumeVaultCsrfOrThrow(",
   "ensureVaultCsrfCookie(",

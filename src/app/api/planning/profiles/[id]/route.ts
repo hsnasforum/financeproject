@@ -7,6 +7,7 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../lib/http/apiResponse";
+import { planningStorageErrorResponse, planningProfileStorageErrorMessage } from "../../../../../lib/planning/api/storageErrorResponse";
 import {
   planningUserMeta,
   planningAuthErrorResponse as toAuthErrorResponse,
@@ -83,7 +84,9 @@ export async function GET(request: Request, context: RouteContext) {
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;
-    const message = error instanceof Error ? error.message : "프로필 조회에 실패했습니다.";
+    const storageError = planningStorageErrorResponse(error, undefined, { recoveryHref: null });
+    if (storageError) return storageError;
+    const message = planningProfileStorageErrorMessage(error, "프로필 조회에 실패했습니다.");
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }
@@ -128,7 +131,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;
-    const message = error instanceof Error ? error.message : "프로필 수정에 실패했습니다.";
+    const storageError = planningStorageErrorResponse(error, undefined, { recoveryHref: null });
+    if (storageError) return storageError;
+    const message = planningProfileStorageErrorMessage(error, "프로필 수정에 실패했습니다.");
     return jsonError("INPUT", message, { status: 400 });
   }
 }

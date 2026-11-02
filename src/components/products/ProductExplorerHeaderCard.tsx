@@ -122,7 +122,7 @@ export function ProductExplorerHeaderCard({
   const hasAnyFilters = activeFiltersCount > 0 || selectedFinCoNo !== null;
 
   return (
-    <Card className="sticky top-[72px] z-30 mb-8 rounded-[2rem] border border-slate-100 p-6 shadow-lg backdrop-blur-md bg-white/95">
+    <Card className="lg:sticky lg:top-[72px] z-30 mb-8 rounded-[2rem] border border-slate-100 p-6 shadow-lg backdrop-blur-md bg-white/95">
       <div className="space-y-8">
         <section className="space-y-4">
           <SubSectionHeader 

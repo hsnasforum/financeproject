@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 const productRouteKinds = [
   "deposit",
   "saving",
-  "pension",
   "mortgage-loan",
   "rent-house-loan",
   "credit-loan",

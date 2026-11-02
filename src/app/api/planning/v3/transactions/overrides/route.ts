@@ -11,6 +11,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningBatchLifecycleErrorResponse } from "@/lib/planning/api/batchLifecycleErrorResponse";
 import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 import {
   TxnOverridesStoreInputError,
@@ -103,6 +104,8 @@ export async function GET(request: Request) {
         meta: userMeta,
       });
     } catch (error) {
+      const lifecycleError = planningBatchLifecycleErrorResponse(error, userMeta);
+      if (lifecycleError) return lifecycleError;
       const storageError = planningStorageErrorResponse(error, userMeta);
       if (storageError) return storageError;
       return NextResponse.json(
@@ -147,6 +150,8 @@ export async function PATCH(request: Request) {
       });
       return NextResponse.json({ ok: true, override: result.override, scope: result.scope, meta: userMeta });
     } catch (error) {
+      const lifecycleError = planningBatchLifecycleErrorResponse(error, userMeta);
+      if (lifecycleError) return lifecycleError;
       const storageError = planningStorageErrorResponse(error, userMeta);
       if (storageError) return storageError;
       if (error instanceof TxnOverridesStoreInputError) {
@@ -192,6 +197,8 @@ export async function DELETE(request: Request) {
       });
       return NextResponse.json({ ok: true, deleted: result.deleted, scope: result.scope, meta: userMeta });
     } catch (error) {
+      const lifecycleError = planningBatchLifecycleErrorResponse(error, userMeta);
+      if (lifecycleError) return lifecycleError;
       const storageError = planningStorageErrorResponse(error, userMeta);
       if (storageError) return storageError;
       if (error instanceof TxnOverridesStoreInputError) {

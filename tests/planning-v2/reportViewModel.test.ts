@@ -358,9 +358,86 @@ describe("buildReportVM", () => {
       createdAt: run.createdAt,
     });
 
-    expect(vm.summaryCards.monthlySurplusKrw).toBe(3_370_000);
+    // Income/expense fallback from the run trace still feeds DSR and debt totals.
     expect(vm.summaryCards.totalMonthlyDebtPaymentKrw).toBe(800_000);
-    expect(vm.evidence?.summary.monthlySurplusKrw?.inputs.monthlyIncomeKrw).toBe(6_970_000);
-    expect(vm.evidence?.summary.monthlySurplusKrw?.inputs.monthlyExpensesKrw).toBe(2_800_000);
+    expect(vm.evidence?.summary.dsrPct?.inputs.monthlyIncomeKrw).toBe(6_970_000);
+    // Monthly surplus is the engine's finite operating cashflow (0 here), never a trace estimate.
+    expect(vm.summaryCards.monthlySurplusKrw).toBe(0);
+    expect(vm.evidence?.summary.monthlySurplusKrw?.inputs).toEqual({
+      monthlyIncomeKrw: 0,
+      monthlyExpensesKrw: 0,
+      monthlyDebtPaymentKrw: 0,
+    });
+  });
+
+  function withStartRows(rows: Array<Record<string, unknown>>, totalMonthlyPaymentKrw: number): PlanningRunRecord {
+    const run = sampleRunWithWarnings([]);
+    run.outputs.simulate = {
+      ...run.outputs.simulate,
+      ref: run.outputs.simulate?.ref ?? {
+        name: "simulate",
+        path: ".data/test/report-view-model/run-1/simulate.json",
+      },
+      keyTimelinePoints: rows.map((row, index) => ({ monthIndex: index * 12, row })),
+    } as PlanningRunRecord["outputs"]["simulate"];
+    run.outputs.debtStrategy = {
+      ...run.outputs.debtStrategy,
+      ref: run.outputs.debtStrategy?.ref ?? {
+        name: "debtStrategy",
+        path: ".data/test/report-view-model/run-1/debt-strategy.json",
+      },
+      summary: {
+        ...run.outputs.debtStrategy?.summary,
+        totalMonthlyPaymentKrw,
+      },
+    } as PlanningRunRecord["outputs"]["debtStrategy"];
+    run.outputs.resultDto = buildResultDtoV1FromRunRecord(run);
+    return run;
+  }
+
+  it("does not count a start-month extra repayment from existing cash as monthly spending", () => {
+    const run = withStartRows([
+      { income: 4_100_000, expenses: 2_700_000, debtPayment: 21_400_000, operatingCashflow: 778_170, liquidAssets: 0, netWorth: -8_698_264.85, totalDebt: 38_820_488.56 },
+      { income: 4_100_000, expenses: 2_754_000, debtPayment: 1_346_000, operatingCashflow: 0, liquidAssets: 0, netWorth: 7_849_982.99, totalDebt: 23_778_351.91 },
+    ], 621_830);
+
+    const vm = buildReportVMFromRun(run, { id: "report-extra", runId: run.id, createdAt: run.createdAt });
+
+    expect(vm.summaryCards.monthlySurplusKrw).toBe(778_170);
+    expect(vm.summaryCards.totalMonthlyDebtPaymentKrw).toBe(621_830);
+    expect(vm.evidence?.summary.monthlySurplusKrw?.inputs).toEqual({
+      monthlyIncomeKrw: 4_100_000,
+      monthlyExpensesKrw: 2_700_000,
+      monthlyDebtPaymentKrw: 621_830,
+    });
+  });
+
+  it("omits monthly surplus for a stored run without operating cashflow instead of estimating it", () => {
+    const run = withStartRows([
+      { income: 4_100_000, expenses: 2_700_000, debtPayment: 21_400_000, liquidAssets: 0, netWorth: -8_698_264.85, totalDebt: 38_820_488.56 },
+      { income: 4_100_000, expenses: 2_754_000, debtPayment: 1_346_000, liquidAssets: 0, netWorth: 7_849_982.99, totalDebt: 23_778_351.91 },
+    ], 621_830);
+    expect(run.outputs.resultDto?.timeline.points[0]).not.toHaveProperty("operatingCashflowKrw");
+
+    const vm = buildReportVMFromRun(run, { id: "report-legacy", runId: run.id, createdAt: run.createdAt });
+
+    expect(vm.summaryCards.monthlySurplusKrw).toBeUndefined();
+    expect(vm.evidence?.summary.monthlySurplusKrw).toBeUndefined();
+    expect(vm.summaryCards.totalMonthlyDebtPaymentKrw).toBe(621_830);
+  });
+
+  it("omits monthly surplus for a zero-income start row without operating cashflow even with a run-trace fallback", () => {
+    const run = withStartRows([
+      { income: 0, expenses: 0, debtPayment: 800_000, liquidAssets: 1_000, netWorth: 2_000, totalDebt: 500 },
+      { income: 0, expenses: 0, debtPayment: 800_000, liquidAssets: 1_050, netWorth: 2_100, totalDebt: 460 },
+    ], 0);
+    expect(run.outputs.resultDto?.timeline.points[0]).not.toHaveProperty("operatingCashflowKrw");
+
+    const vm = buildReportVMFromRun(run, { id: "report-zero-income-legacy", runId: run.id, createdAt: run.createdAt });
+
+    expect(vm.summaryCards.monthlySurplusKrw).toBeUndefined();
+    expect(vm.evidence?.summary.monthlySurplusKrw).toBeUndefined();
+    expect(vm.summaryCards.totalMonthlyDebtPaymentKrw).toBe(800_000);
+    expect(vm.evidence?.summary.dsrPct?.inputs.monthlyIncomeKrw).toBe(6_970_000);
   });
 });

@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { estimateDebtMonthlyPaymentKrw } from "@/lib/planning/ui/profileFormModel";
 import ProfileV2Form from "@/components/planning/ProfileV2Form";
 import { Button } from "@/components/ui/Button";
@@ -35,6 +36,7 @@ export function PlanningWorkspaceProfilePanel({
 }) {
   const {
     locale,
+    debugEnabled,
     beginnerMode,
     loadingProfiles,
     profiles,
@@ -52,8 +54,6 @@ export function PlanningWorkspaceProfilePanel({
     savingProfile,
     running,
     profileValidation,
-    beginnerGoals,
-    beginnerEmergencyMonths,
   } = profile;
   const {
     setSelectedProfileId,
@@ -68,9 +68,9 @@ export function PlanningWorkspaceProfilePanel({
     addGoalRow,
     removeGoalRow,
     updateGoalRow,
-    updateBeginnerGoal,
     replaceProfileFromJsonText,
     applyProfileJsonEditorAction,
+    discardProfileJsonDraftAction,
     copyProfileJsonEditorAction,
     loadSampleProfileAction,
     beginProfileSave,
@@ -80,6 +80,8 @@ export function PlanningWorkspaceProfilePanel({
     clearPendingSuggestions,
     toggleSuggestionCode,
   } = actions;
+  // Unique per panel instance and stable between server and client render; links the JSON error to the editor.
+  const jsonErrorId = useId();
   const selectNeedsPendingOption = Boolean(
     selectedProfileId
     && !profiles.some((profileOption) => profileOption.id === selectedProfileId),
@@ -126,6 +128,7 @@ export function PlanningWorkspaceProfilePanel({
           >
             {selectNeedsPendingOption ? <option hidden value={selectedProfileId} /> : null}
             {profiles.length === 0 ? <option value="">저장된 프로필 없음</option> : null}
+            {profiles.length > 0 && !selectedProfileId ? <option value="">선택 없음 · 저장 전 입력</option> : null}
             {profiles.map((profileOption) => (
               <option key={profileOption.id} value={profileOption.id}>{profileOption.name}</option>
             ))}
@@ -135,7 +138,7 @@ export function PlanningWorkspaceProfilePanel({
       </div>
 
       <div onFocusCapture={markProfileEditorLocalEdit}>
-        <label className={`block text-xs ${bodyLabelClassName}`}>
+        <label className={`block text-sm ${bodyLabelClassName}`}>
           프로필 이름
           <input
             className={cn(bodyFieldClassName, "h-11 rounded-xl border-slate-200 font-bold focus:border-primary focus:ring-primary/10")}
@@ -148,10 +151,12 @@ export function PlanningWorkspaceProfilePanel({
         </label>
       </div>
 
-      <div className="space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6" onFocusCapture={markProfileEditorLocalEdit}>
+      <details className="rounded-xl border border-slate-200 p-4" data-testid="planning-benefit-conditions" onFocusCapture={markProfileEditorLocalEdit}>
+        <summary className="cursor-pointer py-1 text-sm font-semibold text-slate-700">혜택 추천용 조건 (선택)</summary>
+        <div className="mt-4 space-y-3">
         <SubSectionHeader title="혜택 추천용 기본 조건" titleClassName="text-sm" description="출생연도, 성별, 지역을 입력하여 추천 범위를 좁힙니다." />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             출생연도
             <input
               className={cn(bodyFieldClassName, "h-10 rounded-xl border-slate-200")}
@@ -165,7 +170,7 @@ export function PlanningWorkspaceProfilePanel({
               }}
             />
           </label>
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             성별
             <select
               className={cn(bodyFieldClassName, "h-10 rounded-xl border-slate-200")}
@@ -180,7 +185,7 @@ export function PlanningWorkspaceProfilePanel({
               <option value="M">남성</option>
             </select>
           </label>
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             시/도
             <select
               className={cn(bodyFieldClassName, "h-10 rounded-xl border-slate-200")}
@@ -200,7 +205,7 @@ export function PlanningWorkspaceProfilePanel({
               ))}
             </select>
           </label>
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             시/군/구
             <select
               className={cn(bodyFieldClassName, "h-10 rounded-xl border-slate-200")}
@@ -216,11 +221,12 @@ export function PlanningWorkspaceProfilePanel({
           </label>
         </div>
       </div>
+      </details>
 
-      <div className="space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6" onFocusCapture={markProfileEditorLocalEdit}>
+      <div className="space-y-4 border-t border-slate-200 py-5" onFocusCapture={markProfileEditorLocalEdit}>
         <SubSectionHeader title="월 현금흐름" titleClassName="text-sm" />
         <div className="grid gap-3 sm:grid-cols-3">
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             월 실수령
             <div className="mt-1 flex items-center gap-2">
               <input
@@ -231,10 +237,10 @@ export function PlanningWorkspaceProfilePanel({
                 value={formatGroupedIntegerInput(profileForm.monthlyIncomeNet)}
                 onChange={(event) => updateProfileField("monthlyIncomeNet", toFiniteNumber(event.target.value))}
               />
-              <span className="text-[11px] font-medium text-slate-500">(원)</span>
+              <span className="shrink-0 text-xs font-medium text-slate-500">(원)</span>
             </div>
           </label>
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             필수지출
             <div className="mt-1 flex items-center gap-2">
               <input
@@ -245,10 +251,10 @@ export function PlanningWorkspaceProfilePanel({
                 value={formatGroupedIntegerInput(profileForm.monthlyEssentialExpenses)}
                 onChange={(event) => updateProfileField("monthlyEssentialExpenses", toFiniteNumber(event.target.value))}
               />
-              <span className="text-[11px] font-medium text-slate-500">(원)</span>
+              <span className="shrink-0 text-xs font-medium text-slate-500">(원)</span>
             </div>
           </label>
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             선택지출
             <div className="mt-1 flex items-center gap-2">
               <input
@@ -259,16 +265,16 @@ export function PlanningWorkspaceProfilePanel({
                 value={formatGroupedIntegerInput(profileForm.monthlyDiscretionaryExpenses)}
                 onChange={(event) => updateProfileField("monthlyDiscretionaryExpenses", toFiniteNumber(event.target.value))}
               />
-              <span className="text-[11px] font-medium text-slate-500">(원)</span>
+              <span className="shrink-0 text-xs font-medium text-slate-500">(원)</span>
             </div>
           </label>
         </div>
       </div>
 
-      <div className="space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6" onFocusCapture={markProfileEditorLocalEdit}>
+      <div className="space-y-4 border-t border-slate-200 py-5" onFocusCapture={markProfileEditorLocalEdit}>
         <SubSectionHeader title="자산" titleClassName="text-sm" />
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             현금(예금)
             <div className="mt-1 flex items-center gap-2">
               <input
@@ -279,10 +285,10 @@ export function PlanningWorkspaceProfilePanel({
                 value={formatGroupedIntegerInput(profileForm.liquidAssets)}
                 onChange={(event) => updateProfileField("liquidAssets", toFiniteNumber(event.target.value))}
               />
-              <span className="text-[11px] font-medium text-slate-500">(원)</span>
+              <span className="shrink-0 text-xs font-medium text-slate-500">(원)</span>
             </div>
           </label>
-          <label className={`block text-xs ${bodyLabelClassName}`}>
+          <label className={`block text-sm ${bodyLabelClassName}`}>
             투자자산
             <div className="mt-1 flex items-center gap-2">
               <input
@@ -293,13 +299,13 @@ export function PlanningWorkspaceProfilePanel({
                 value={formatGroupedIntegerInput(profileForm.investmentAssets)}
                 onChange={(event) => updateProfileField("investmentAssets", toFiniteNumber(event.target.value))}
               />
-              <span className="text-[11px] font-medium text-slate-500">(원)</span>
+              <span className="shrink-0 text-xs font-medium text-slate-500">(원)</span>
             </div>
           </label>
         </div>
       </div>
 
-      <div className="space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6" onFocusCapture={markProfileEditorLocalEdit}>
+      <div className="space-y-4 border-t border-slate-200 py-5" onFocusCapture={markProfileEditorLocalEdit}>
         <SubSectionHeader
           title="부채 리스트"
           titleClassName="text-sm"
@@ -330,7 +336,7 @@ export function PlanningWorkspaceProfilePanel({
               return (
                 <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm" key={debt.id || `debt-${index}`}>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
                       부채 ID
                       <input
                         className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
@@ -338,7 +344,7 @@ export function PlanningWorkspaceProfilePanel({
                         onChange={(event) => updateDebtRow(index, { ...debt, id: event.target.value })}
                       />
                     </label>
-                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
                       이름
                       <input
                         className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
@@ -348,7 +354,7 @@ export function PlanningWorkspaceProfilePanel({
                     </label>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
                       대출 잔액
                       <div className="mt-1 flex min-w-0 items-center gap-2">
                         <input
@@ -359,10 +365,10 @@ export function PlanningWorkspaceProfilePanel({
                           value={formatGroupedIntegerInput(debt.balance)}
                           onChange={(event) => updateDebtRow(index, { ...debt, balance: toFiniteNumber(event.target.value) })}
                         />
-                        <span className="text-[11px] font-medium text-slate-500">(원)</span>
+                        <span className="shrink-0 text-xs font-medium text-slate-500">(원)</span>
                       </div>
                     </label>
-                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
                       금리
                       <div className="mt-1 flex min-w-0 items-center gap-2">
                         <input
@@ -372,10 +378,10 @@ export function PlanningWorkspaceProfilePanel({
                           value={debt.aprPct}
                           onChange={(event) => updateDebtRow(index, { ...debt, aprPct: toFiniteNumber(event.target.value) })}
                         />
-                        <span className="text-[11px] font-medium text-slate-500">(%)</span>
+                        <span className="shrink-0 text-xs font-medium text-slate-500">(%)</span>
                       </div>
                     </label>
-                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
                       최소 상환액
                       <div className="mt-1 flex min-w-0 items-center gap-2">
                         <input
@@ -387,14 +393,14 @@ export function PlanningWorkspaceProfilePanel({
                           value={formatGroupedIntegerInput(debt.monthlyPayment)}
                           onChange={(event) => updateDebtRow(index, { ...debt, monthlyPayment: Math.max(0, toFiniteNumber(event.target.value)) })}
                         />
-                        <span className="text-[11px] font-medium text-slate-500">(원)</span>
+                        <span className="shrink-0 text-xs font-medium text-slate-500">(원)</span>
                       </div>
                     </label>
                   </div>
                   <details className="mt-4 rounded-xl border border-slate-100 bg-surface-muted p-4">
                     <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-500">상환 조건(고급)</summary>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <label className={`block text-xs ${bodyLabelClassName}`}>
+                      <label className={`block text-sm ${bodyLabelClassName}`}>
                         상환 방식
                         <select
                           className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
@@ -408,7 +414,7 @@ export function PlanningWorkspaceProfilePanel({
                           <option value="interestOnly">이자만 상환</option>
                         </select>
                       </label>
-                      <label className={`block text-xs ${bodyLabelClassName}`}>
+                      <label className={`block text-sm ${bodyLabelClassName}`}>
                         남은 개월
                         <div className="mt-1 flex min-w-0 items-center gap-2">
                           <input
@@ -419,7 +425,7 @@ export function PlanningWorkspaceProfilePanel({
                             value={debt.remainingMonths}
                             onChange={(event) => updateDebtRow(index, { ...debt, remainingMonths: Math.max(1, Math.trunc(toFiniteNumber(event.target.value, 1))) })}
                           />
-                          <span className="text-[11px] font-medium text-slate-500">(개월)</span>
+                          <span className="shrink-0 text-xs font-medium text-slate-500">(개월)</span>
                         </div>
                       </label>
                     </div>
@@ -456,197 +462,123 @@ export function PlanningWorkspaceProfilePanel({
         )}
       </div>
 
-      <div className="space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6" onFocusCapture={markProfileEditorLocalEdit}>
+      <div className="space-y-4 border-t border-slate-200 py-5" onFocusCapture={markProfileEditorLocalEdit}>
         <SubSectionHeader
           title="목표"
           titleClassName="text-sm"
-          action={!beginnerMode && <Button onClick={addGoalRow} size="sm" variant="outline" className="rounded-xl bg-white font-bold">목표 추가</Button>}
+          action={<Button onClick={addGoalRow} size="sm" variant="outline" className="rounded-xl bg-white font-bold">목표 추가</Button>}
         />
-        {beginnerMode ? (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
-                비상금 목표(개월)
-                <input
-                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
-                  min={1}
-                  type="number"
-                  value={beginnerEmergencyMonths}
-                  onChange={(event) => {
-                    const months = Math.max(1, Math.trunc(toFiniteNumber(event.target.value, beginnerEmergencyMonths)));
-                    const monthlyExpenses = Math.max(0, profileForm.monthlyEssentialExpenses + profileForm.monthlyDiscretionaryExpenses);
-                    updateBeginnerGoal("emergency", {
-                      targetAmount: Math.round(monthlyExpenses * months),
-                    });
-                  }}
-                />
-              </label>
-            </div>
-            <div className="grid gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:grid-cols-2">
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
-                목돈 목표 금액(KRW)
-                <input
-                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
-                  min={0}
-                  inputMode="numeric"
-                  type="text"
-                  value={formatGroupedIntegerInput(beginnerGoals.lumpSum.targetAmount)}
-                  onChange={(event) => updateBeginnerGoal("lumpSum", { targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
-                />
-              </label>
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
-                목돈 목표까지 남은 기간(개월)
-                <input
-                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
-                  inputMode="numeric"
-                  max={1200}
-                  min={1}
-                  step={1}
-                  type="number"
-                  value={monthOffsetToInput(beginnerGoals.lumpSum.targetMonth)}
-                  onChange={(event) => updateBeginnerGoal("lumpSum", { targetMonth: inputToMonthOffset(event.target.value, beginnerGoals.lumpSum.targetMonth) })}
-                />
-              </label>
-            </div>
-            <div className="grid gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:grid-cols-2">
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
-                은퇴 목표 금액(KRW)
-                <input
-                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
-                  min={0}
-                  inputMode="numeric"
-                  type="text"
-                  value={formatGroupedIntegerInput(beginnerGoals.retirement.targetAmount)}
-                  onChange={(event) => updateBeginnerGoal("retirement", { targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
-                />
-              </label>
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
-                은퇴 목표까지 남은 기간(개월)
-                <input
-                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
-                  inputMode="numeric"
-                  max={1200}
-                  min={1}
-                  step={1}
-                  type="number"
-                  value={monthOffsetToInput(beginnerGoals.retirement.targetMonth)}
-                  onChange={(event) => updateBeginnerGoal("retirement", { targetMonth: inputToMonthOffset(event.target.value, beginnerGoals.retirement.targetMonth) })}
-                />
-              </label>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {profileForm.goals.length === 0 ? (
-              <EmptyState
-                className="border-dashed bg-white/50"
-                description="목돈 마련이나 은퇴 목표가 있다면 추가하여 달성 가능성을 비교해 보세요."
-                title="등록된 목표가 없습니다."
-              />
-            ) : (
-              <div className="space-y-3">
-                {profileForm.goals.map((goal, index) => (
-                  <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm" key={goal.id || `goal-${index}`}>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className={`block text-xs ${bodyLabelClassName}`}>
-                        목표 ID
-                        <input
-                          className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
-                          value={goal.id}
-                          onChange={(event) => updateGoalRow(index, { ...goal, id: event.target.value })}
-                          placeholder="goal-id"
-                        />
-                      </label>
-                      <label className={`block text-xs ${bodyLabelClassName}`}>
-                        목표 이름
-                        <input
-                          className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
-                          value={goal.name}
-                          onChange={(event) => updateGoalRow(index, { ...goal, name: event.target.value })}
-                          placeholder="목표 이름"
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <label className={`block text-xs ${bodyLabelClassName}`}>
-                        목표 금액
-                        <input
-                          className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
-                          inputMode="numeric"
-                          type="text"
-                          value={formatGroupedIntegerInput(goal.targetAmount)}
-                          onChange={(event) => updateGoalRow(index, { ...goal, targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
-                        />
-                      </label>
-                      <label className={`block text-xs ${bodyLabelClassName}`}>
-                        현재 금액
-                        <input
-                          className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
-                          inputMode="numeric"
-                          type="text"
-                          value={formatGroupedIntegerInput(goal.currentAmount)}
-                          onChange={(event) => updateGoalRow(index, { ...goal, currentAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
-                        />
-                      </label>
-                      <label className={`block text-xs ${bodyLabelClassName}`}>
-                        목표까지 남은 기간(개월)
-                        <input
-                          className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
-                          inputMode="numeric"
-                          max={1200}
-                          min={1}
-                          step={1}
-                          type="number"
-                          value={monthOffsetToInput(goal.targetMonth)}
-                          onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value, goal.targetMonth) })}
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-slate-50 pt-4">
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          우선순위
-                          <input
-                            className="h-7 w-12 rounded border-slate-200 text-center font-bold text-slate-700"
-                            type="number"
-                            min={1}
-                            value={goal.priority}
-                            onChange={(event) => updateGoalRow(index, { ...goal, priority: Math.max(1, Math.trunc(toFiniteNumber(event.target.value, 1))) })}
-                          />
-                        </label>
-                        <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          최소 납입
-                          <input
-                            className="h-7 w-24 rounded border-slate-200 text-center font-bold text-slate-700"
-                            inputMode="numeric"
-                            type="text"
-                            value={formatGroupedIntegerInput(goal.minimumMonthlyContribution)}
-                            onChange={(event) => updateGoalRow(index, { ...goal, minimumMonthlyContribution: Math.max(0, toFiniteNumber(event.target.value)) })}
-                          />
-                        </label>
-                      </div>
-                      <Button aria-label={`목표 ${index + 1} 삭제`} onClick={() => removeGoalRow(index)} size="sm" variant="ghost" className="h-8 font-bold text-rose-600 hover:bg-rose-50">
-                        삭제
-                      </Button>
-                    </div>
+        <div className="space-y-3">
+          {profileForm.goals.length === 0 ? (
+            <EmptyState
+              className="border-dashed bg-white/50"
+              description="목돈 마련이나 은퇴 목표가 있다면 추가하여 달성 가능성을 비교해 보세요."
+              title="등록된 목표가 없습니다."
+            />
+          ) : (
+            <div className="space-y-3">
+              {profileForm.goals.map((goal, index) => (
+                <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm" key={goal.id || `goal-${index}`}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {!beginnerMode && <label className={`block text-sm ${bodyLabelClassName}`}>
+                      목표 ID
+                      <input
+                        className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
+                        value={goal.id}
+                        onChange={(event) => updateGoalRow(index, { ...goal, id: event.target.value })}
+                        placeholder="goal-id"
+                      />
+                    </label>}
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
+                      목표 이름
+                      <input
+                        className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
+                        value={goal.name}
+                        onChange={(event) => updateGoalRow(index, { ...goal, name: event.target.value })}
+                        placeholder="목표 이름"
+                      />
+                    </label>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
+                      목표 금액
+                      <input
+                        className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
+                        inputMode="numeric"
+                        type="text"
+                        value={formatGroupedIntegerInput(goal.targetAmount)}
+                        onChange={(event) => updateGoalRow(index, { ...goal, targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
+                      />
+                    </label>
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
+                      현재 금액
+                      <input
+                        className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
+                        inputMode="numeric"
+                        type="text"
+                        value={formatGroupedIntegerInput(goal.currentAmount)}
+                        onChange={(event) => updateGoalRow(index, { ...goal, currentAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
+                      />
+                    </label>
+                    <label className={`block text-sm ${bodyLabelClassName}`}>
+                      목표까지 남은 기간(개월)
+                      <input
+                        className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
+                        inputMode="numeric"
+                        max={1200}
+                        min={1}
+                        step={1}
+                        type="number"
+                        value={monthOffsetToInput(goal.targetMonth)}
+                        onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value, goal.targetMonth) })}
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-slate-50 pt-4">
+                    <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
+                      <label className="block whitespace-nowrap text-xs font-bold text-slate-600">
+                        우선순위
+                        <input
+                          className="mt-1 h-9 w-full min-w-0 rounded border border-slate-200 px-2 font-bold text-slate-700"
+                          type="number"
+                          min={1}
+                          value={goal.priority}
+                          onChange={(event) => updateGoalRow(index, { ...goal, priority: Math.max(1, Math.trunc(toFiniteNumber(event.target.value, 1))) })}
+                        />
+                      </label>
+                      <label className="block whitespace-nowrap text-xs font-bold text-slate-600">
+                        최소 납입
+                        <input
+                          className="mt-1 h-9 w-full min-w-0 rounded border border-slate-200 px-2 font-bold text-slate-700"
+                          inputMode="numeric"
+                          type="text"
+                          value={formatGroupedIntegerInput(goal.minimumMonthlyContribution)}
+                          onChange={(event) => updateGoalRow(index, { ...goal, minimumMonthlyContribution: Math.max(0, toFiniteNumber(event.target.value)) })}
+                        />
+                      </label>
+                    </div>
+                    <Button aria-label={`목표 ${index + 1} 삭제`} onClick={() => removeGoalRow(index)} size="sm" variant="ghost" className="h-8 font-bold text-rose-600 hover:bg-rose-50">
+                      삭제
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-3 rounded-[2rem] border border-primary/10 bg-primary/5 p-6 text-xs">
         <div className="flex items-center justify-between">
-          <span className="font-bold text-navy">월 잉여금</span>
-          <span className="text-lg font-black tabular-nums text-success">{formatKrw(locale, liveSummary.monthlySurplus)}</span>
+          <span className="font-semibold text-navy">생활지출 후 남는 돈</span>
+          <span className={cn("text-lg font-bold tabular-nums", liveSummary.monthlySurplus < 0 ? "text-rose-800" : "text-navy")}>{formatKrw(locale, liveSummary.monthlySurplus)}</span>
         </div>
-        <div className="h-px bg-primary/50" />
-        <div className="grid grid-cols-2 gap-4 text-[11px] font-bold text-navy">
+        <p className="text-sm leading-6 text-slate-600">수입 − 필수지출 − 선택지출 · 부채 상환 전 금액입니다.</p>
+        <div className="h-px bg-slate-200" />
+        <div className="grid gap-3 text-sm text-navy sm:grid-cols-2">
           <p className="flex justify-between"><span>DSR</span> <span>{formatPct(locale, liveSummary.dsrPct)}</span></p>
           <p className="flex justify-between"><span>총 월상환</span> <span>{formatKrw(locale, liveSummary.totalMonthlyDebtPayment)}</span></p>
-          <p className="flex justify-between"><span>비상금 목표</span> <span>{formatKrw(locale, liveSummary.emergencyTargetKrw)}</span></p>
+          <p className="flex justify-between"><span>비상금 기준(6개월)</span> <span>{formatKrw(locale, liveSummary.emergencyTargetKrw)}</span></p>
           <p className="flex justify-between"><span>비상금 부족</span> <span className="text-rose-600">{formatKrw(locale, liveSummary.emergencyGapKrw)}</span></p>
         </div>
       </div>
@@ -673,6 +605,7 @@ export function PlanningWorkspaceProfilePanel({
         </div>
       ) : null}
 
+      {debugEnabled ? (
       <details className="rounded-2xl border border-slate-200 p-4" data-testid="planning-advanced-panel" onFocusCapture={markProfileEditorLocalEdit}>
         <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-400" data-testid="planning-advanced-toggle">
           고급(개발자): Profile JSON
@@ -684,14 +617,18 @@ export function PlanningWorkspaceProfilePanel({
             data-testid="planning-json-editor"
             value={profileJsonDraft}
             onChange={(event) => replaceProfileFromJsonText(event.target.value)}
+            aria-invalid={profileJsonError ? true : undefined}
+            aria-describedby={profileJsonError ? jsonErrorId : undefined}
           />
-          {profileJsonError ? <p className="mt-2 text-xs text-rose-700">{profileJsonError}</p> : null}
+          {profileJsonError ? <p id={jsonErrorId} role="alert" className="mt-2 text-xs text-rose-700">{profileJsonError}</p> : null}
         </label>
         <div className="mt-4 flex gap-2">
           <Button onClick={() => applyProfileJsonEditorAction()} size="sm" variant="outline" className="h-9 rounded-lg bg-white font-bold">Apply JSON</Button>
+          <Button onClick={() => discardProfileJsonDraftAction()} size="sm" variant="ghost" className="h-9 rounded-lg font-bold">초안 버리기</Button>
           <Button onClick={() => void copyProfileJsonEditorAction()} size="sm" variant="ghost" className="h-9 rounded-lg font-bold">Copy</Button>
         </div>
       </details>
+      ) : null}
 
       {pendingSuggestions.length > 0 ? (
         <div className="space-y-4 rounded-[2rem] border border-amber-100 bg-amber-50 p-6">
@@ -719,9 +656,9 @@ export function PlanningWorkspaceProfilePanel({
       ) : null}
 
       <div className="flex flex-wrap gap-2 border-t border-slate-50 pt-4">
-        <Button data-testid="planning-profile-create-button" disabled={savingProfile} id="planning-profile-create-button" onClick={() => beginProfileSave("create")} variant="primary" className="h-10 rounded-full px-6 font-bold">새로 만들기</Button>
+        <Button data-testid="planning-profile-create-button" disabled={savingProfile} id="planning-profile-create-button" onClick={() => beginProfileSave("create")} variant={selectedProfileId ? "outline" : "primary"} className="h-10 rounded-full px-6 font-bold">새로 만들기</Button>
         <Button disabled={savingProfile || !selectedProfileId} onClick={() => beginProfileSave("duplicate")} variant="outline" className="h-10 rounded-full bg-white px-6 font-bold">복제</Button>
-        <Button data-testid="planning-profile-update-button" disabled={savingProfile || !selectedProfileId} id="planning-profile-update-button" onClick={() => beginProfileSave("update")} variant="outline" className="h-10 rounded-full bg-white px-6 font-bold">저장</Button>
+        <Button data-testid="planning-profile-update-button" disabled={savingProfile || !selectedProfileId} id="planning-profile-update-button" onClick={() => beginProfileSave("update")} variant={selectedProfileId ? "primary" : "outline"} className="h-10 rounded-full px-6 font-bold">저장</Button>
         <Button disabled={savingProfile || !selectedProfileId} onClick={() => void deleteProfileAction()} variant="ghost" className="h-10 rounded-full px-6 font-bold text-rose-600 hover:bg-rose-50">삭제</Button>
         <Button data-testid="planning-profile-refresh-button" disabled={loadingProfiles} id="planning-profile-refresh-button" onClick={() => void loadProfiles(selectedProfileId)} variant="ghost" className="h-10 rounded-full px-4 font-bold">새로고침</Button>
         <Button disabled={savingProfile} onClick={loadSampleProfileAction} variant="ghost" className="h-10 rounded-full px-4 font-bold">샘플 프로필</Button>

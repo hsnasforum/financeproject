@@ -271,6 +271,9 @@ export function fromProfileJson(json: unknown, name = "기본 프로필"): Profi
   const rawGoals = Array.isArray(row.goals) ? row.goals : [];
   const usedGoalIds = new Set<string>();
   const usedDebtIds = new Set<string>();
+  const birthYear = typeof row.birthYear === "number" && Number.isFinite(row.birthYear)
+    ? Math.max(1900, Math.trunc(row.birthYear))
+    : undefined;
 
   const goals: ProfileFormGoal[] = rawGoals.map((goal, index) => {
     const goalRow = asRecord(goal);
@@ -289,7 +292,7 @@ export function fromProfileJson(json: unknown, name = "기본 프로필"): Profi
 
   return {
     name: name.trim() || defaults.name,
-    ...(typeof asNumber(row.birthYear) === "number" ? { birthYear: Math.max(1900, Math.trunc(asNumber(row.birthYear))) } : {}),
+    ...(typeof birthYear === "number" ? { birthYear } : {}),
     ...(asString(row.gender) === "M" || asString(row.gender) === "F" ? { gender: asString(row.gender) as "M" | "F" } : {}),
     ...(asString(row.sido) ? { sido: asString(row.sido) } : {}),
     ...(asString(row.sigungu) ? { sigungu: asString(row.sigungu) } : {}),
@@ -319,7 +322,7 @@ export function fromProfileJson(json: unknown, name = "기본 프로필"): Profi
         repaymentType,
       };
     }),
-    goals: goals.length > 0 ? goals : defaults.goals,
+    goals,
     ...(row.cashflow && typeof row.cashflow === "object" ? { cashflow: row.cashflow as ProfileCashflowV2 } : {}),
     ...(parseDefaultsApplied(row.defaultsApplied) ? { defaultsApplied: parseDefaultsApplied(row.defaultsApplied) } : {}),
   };

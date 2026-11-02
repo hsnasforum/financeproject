@@ -74,7 +74,9 @@ describe("planning v3 buildProfileDraftEstimateFromCashflow", () => {
 
     expect(result.patch.monthlyEssentialExpenses).toBe(450_000);
     expect(result.patch.monthlyDiscretionaryExpenses).toBe(150_000);
-    expect(result.patch.emergencyFundTargetKrw).toBe(1_350_000);
+    // essential expense median 450,000 x the 6-month emergency fund standard
+    expect(result.patch.emergencyFundTargetKrw).toBe(2_700_000);
+    expect(result.patch.assumptions).toContain("emergency fund target = essential expense x 6 months (assumption)");
   });
 
   it("uses the most recent N months and excludes missing months naturally", () => {

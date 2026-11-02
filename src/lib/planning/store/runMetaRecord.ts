@@ -93,6 +93,12 @@ export function compactRunOutputs(
   const simulateEngine = isEngineEnvelopeLike(simulateSource.engine)
     ? simulateSource.engine
     : undefined;
+  const scenarios = asRecord(source.scenarios);
+  const shortWhyByScenario = isRecord(scenarios.shortWhyByScenario)
+    ? Object.fromEntries(
+      Object.entries(scenarios.shortWhyByScenario).map(([key, value]) => [key, takeTop(asArray(value), LIMITS.actionsTop)]),
+    )
+    : undefined;
 
   if (options?.storeRawOutputs !== true) {
     const dto = asRecord(resultDto);
@@ -106,6 +112,10 @@ export function compactRunOutputs(
       resultDto: lightDto as PlanningRunRecord["outputs"]["resultDto"],
       ...(rootEngine ? { engine: rootEngine } : {}),
       ...(simulateEngine ? { simulate: { engine: simulateEngine } as PlanningRunRecord["outputs"]["simulate"] } : {}),
+      // Keep only the bounded ID-to-explanation map here; withStageBlobRefs adds the blob ref.
+      ...(shortWhyByScenario && Object.keys(shortWhyByScenario).length > 0
+        ? { scenarios: { shortWhyByScenario } as PlanningRunRecord["outputs"]["scenarios"] }
+        : {}),
     };
   }
 
@@ -141,19 +151,12 @@ export function compactRunOutputs(
     }
   }
 
-  const scenarios = asRecord(source.scenarios);
   if (Object.keys(scenarios).length > 0) {
     const scenariosRef = pickRunBlobRef(scenarios.ref);
     const scenariosOutput = {
       ...(scenariosRef ? { ref: scenariosRef } : {}),
       ...(Array.isArray(scenarios.table) ? { table: takeTop(scenarios.table, LIMITS.tracesTop) } : {}),
-      ...(isRecord(scenarios.shortWhyByScenario)
-        ? {
-          shortWhyByScenario: Object.fromEntries(
-            Object.entries(scenarios.shortWhyByScenario).map(([key, value]) => [key, takeTop(asArray(value), LIMITS.actionsTop)]),
-          ),
-        }
-        : {}),
+      ...(shortWhyByScenario ? { shortWhyByScenario } : {}),
     };
     if (Object.keys(scenariosOutput).length > 0) {
       compacted.scenarios = scenariosOutput as PlanningRunRecord["outputs"]["scenarios"];

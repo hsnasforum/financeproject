@@ -28,6 +28,24 @@ export const PLANNING_DATA_OWNER_IDS = [
 
 export type PlanningDataOwnerId = typeof PLANNING_DATA_OWNER_IDS[number];
 
+export const PLANNING_CURRENT_USER_V3_OWNER_IDS = [
+  "v3.accounts",
+  "v3.opening-balances",
+  "v3.batches",
+  "v3.drafts",
+  "v3.category-rules",
+  "v3.transaction-overrides",
+  "v3.news",
+  "v3.alerts",
+  "v3.journal",
+  "v3.exposure",
+  "v3.csv-drafts",
+  "v3.routines",
+  "v3.scenario-overrides",
+] as const satisfies readonly PlanningDataOwnerId[];
+
+export type PlanningCurrentUserV3OwnerId = typeof PLANNING_CURRENT_USER_V3_OWNER_IDS[number];
+
 export type PlanningOwnerNamespace =
   | { mode: "shared" }
   | { mode: "user"; userId: string };
@@ -452,6 +470,8 @@ const descriptors: readonly PlanningDataOwnerDescriptor[] = [
 
 export const PLANNING_DATA_OWNER_REGISTRY: readonly PlanningDataOwnerDescriptor[] = Object.freeze(descriptors);
 
+const planningCurrentUserV3OwnerIdSet = new Set<PlanningDataOwnerId>(PLANNING_CURRENT_USER_V3_OWNER_IDS);
+
 export function createPlanningArchiveContext(input: PlanningArchiveContextInput = {}): PlanningArchiveContext {
   const cwd = path.resolve(input.cwd ?? process.cwd());
   const env = Object.freeze({ ...(input.env ?? process.env) });
@@ -557,6 +577,28 @@ export function resolvePlanningDataOwners(
   }));
   validateResolvedOwners(owners, context.platform);
   return Object.freeze(owners);
+}
+
+export function resolvePlanningCurrentUserV3Owners(
+  context: PlanningArchiveContext,
+): readonly ResolvedPlanningDataOwner[] {
+  if (!context.namespaceEnabled || !context.userId) {
+    throw new PlanningOwnerContractError("OWNER_USER_NAMESPACE_REQUIRED");
+  }
+  const registry = PLANNING_DATA_OWNER_REGISTRY.filter((descriptor) => (
+    planningCurrentUserV3OwnerIdSet.has(descriptor.ownerId as PlanningDataOwnerId)
+  ));
+  const owners = resolvePlanningDataOwners(context, registry);
+  if (
+    owners.length !== PLANNING_CURRENT_USER_V3_OWNER_IDS.length
+    || owners.some((owner) => (
+      owner.namespace.mode !== "user"
+      || owner.namespace.userId !== context.userId
+    ))
+  ) {
+    throw new PlanningOwnerContractError("OWNER_USER_V3_SCOPE_INVALID");
+  }
+  return owners;
 }
 
 export function findPlanningDataOwnerForPath(

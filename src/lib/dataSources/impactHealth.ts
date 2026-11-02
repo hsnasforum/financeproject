@@ -44,50 +44,105 @@ export const DATA_SOURCE_IMPACT_CARD_LABELS: Record<string, string> = {
 
 const DATA_SOURCE_IMPACT_CARD_ORDER = ["dart", "planning"] as const;
 
+function hasUsableDartIndex(status: CorpIndexStatus): boolean {
+  return status.exists && status.usable !== false;
+}
+
+function getDartFreshnessDetail(status: CorpIndexStatus): DataSourceImpactHealthDetail {
+  if (!hasUsableDartIndex(status)) {
+    return {
+      label: "인덱스 상태",
+      value: status.exists ? "파일 읽기 실패" : "검색 인덱스 없음",
+    };
+  }
+  const freshness = status.freshness;
+  if (freshness?.state === "fresh") {
+    return { label: "인덱스 상태", value: "사용 가능" };
+  }
+  if (freshness?.state === "stale") {
+    return {
+      label: "인덱스 상태",
+      value: `${freshness.ageDays ?? "-"}일 경과 · ${freshness.thresholdDays}일 기준 오래됨`,
+    };
+  }
+  return { label: "인덱스 상태", value: "최근 생성 시점 확인 없음" };
+}
+
+function getDartFreshnessDescription(status: CorpIndexStatus): string {
+  if (!hasUsableDartIndex(status)) {
+    return status.exists
+      ? "회사 검색 인덱스 파일을 읽지 못해 최신 기준을 제공하지 못합니다."
+      : "회사 검색 인덱스가 없어 최신 기준을 제공하지 못합니다.";
+  }
+  const freshness = status.freshness;
+  if (freshness?.state === "stale") {
+    return `회사 검색 인덱스는 사용할 수 있지만 생성 후 ${freshness.ageDays ?? "-"}일이 지나 ${freshness.thresholdDays}일 기준보다 오래됐습니다.`;
+  }
+  if (freshness?.state !== "fresh") {
+    return "회사 검색 인덱스는 있지만 생성 시점을 확인할 수 없어 최신 여부를 판단하지 못했습니다.";
+  }
+  return "회사 검색 인덱스 기준입니다. 신규 공시 접수 시각과는 다를 수 있습니다.";
+}
+
+function getDartFreshnessCheckedAt(status: CorpIndexStatus): string | null {
+  return status.freshness?.state === "fresh" || status.freshness?.state === "stale"
+    ? status.meta?.generatedAt ?? null
+    : null;
+}
+
 function buildDartReadOnlyHealth(input: {
   openDartConfigured: boolean;
   openDartIndexStatus: CorpIndexStatus;
 }): DataSourceImpactReadOnlyHealth {
-  const generatedAt = input.openDartIndexStatus.meta?.generatedAt ?? null;
   const details: DataSourceImpactHealthDetail[] = [];
 
   if (typeof input.openDartIndexStatus.meta?.count === "number") {
     details.push({ label: "인덱스 건수", value: `${input.openDartIndexStatus.meta.count}개` });
   }
+  if (input.openDartIndexStatus.exists) {
+    details.push(getDartFreshnessDetail(input.openDartIndexStatus));
+  }
 
-  if (input.openDartIndexStatus.exists && input.openDartConfigured) {
+  if (hasUsableDartIndex(input.openDartIndexStatus) && input.openDartConfigured) {
+    const freshnessIsFresh = input.openDartIndexStatus.freshness?.state === "fresh";
     return {
-      tone: "info",
+      tone: freshnessIsFresh ? "info" : "warning",
       title: "운영 최신 기준",
-      description: "회사 검색 인덱스 기준입니다. 신규 공시 접수 시각과는 다를 수 있습니다.",
-      statusLabel: "정상",
+      description: getDartFreshnessDescription(input.openDartIndexStatus),
+      statusLabel: freshnessIsFresh ? "정상" : "주의",
       checkedAtLabel: "검색 인덱스 생성",
-      checkedAt: generatedAt,
+      checkedAt: getDartFreshnessCheckedAt(input.openDartIndexStatus),
       details,
     };
   }
 
-  if (input.openDartIndexStatus.exists) {
+  if (hasUsableDartIndex(input.openDartIndexStatus)) {
     return {
       tone: "warning",
       title: "운영 최신 기준",
-      description: "회사 검색 인덱스는 있지만 OPENDART 키가 없어 사용자 경로에 바로 연결되지는 않습니다.",
+      description: `OPENDART 키가 없어 사용자 경로에 바로 연결되지는 않습니다. ${getDartFreshnessDescription(input.openDartIndexStatus)}`,
       statusLabel: "주의",
       checkedAtLabel: "검색 인덱스 생성",
-      checkedAt: generatedAt,
+      checkedAt: getDartFreshnessCheckedAt(input.openDartIndexStatus),
       details,
     };
   }
+
+  const indexUnavailableDescription = input.openDartIndexStatus.exists
+    ? "회사 검색 인덱스 파일을 읽지 못해 최신 기준을 함께 보여주지 못합니다."
+    : "회사 검색 인덱스가 없어 최신 기준을 함께 보여주지 못합니다.";
 
   return {
     tone: "warning",
     title: "운영 최신 기준",
     description: input.openDartConfigured
-      ? "회사 검색 인덱스가 없어 최신 기준을 함께 보여주지 못합니다."
-      : "OPENDART 키와 회사 검색 인덱스가 없어 최신 기준을 확인하지 못합니다.",
+      ? indexUnavailableDescription
+      : input.openDartIndexStatus.exists
+        ? "OPENDART 키가 없고 회사 검색 인덱스 파일도 읽지 못해 최신 기준을 확인하지 못합니다."
+        : "OPENDART 키와 회사 검색 인덱스가 없어 최신 기준을 확인하지 못합니다.",
     statusLabel: "주의",
     checkedAt: null,
-    details: [{ label: "상태", value: "검색 인덱스 없음" }],
+    details: [{ label: "상태", value: input.openDartIndexStatus.exists ? "인덱스 읽기 실패" : "검색 인덱스 없음" }],
   };
 }
 
@@ -127,34 +182,38 @@ function buildDartHealthSummary(input: {
   openDartConfigured: boolean;
   dartStatus: CorpIndexStatus;
 }): DataSourceImpactHealthSummary {
-  const details = typeof input.dartStatus.meta?.count === "number"
-    ? [{ label: "건수", value: `${input.dartStatus.meta.count}개` }]
-    : [];
+  const details: DataSourceImpactHealthDetail[] = [
+    ...(typeof input.dartStatus.meta?.count === "number"
+      ? [{ label: "건수", value: `${input.dartStatus.meta.count}개` }]
+      : []),
+    ...(input.dartStatus.exists ? [getDartFreshnessDetail(input.dartStatus)] : []),
+  ];
 
-  if (input.dartStatus.exists && input.openDartConfigured) {
+  if (hasUsableDartIndex(input.dartStatus) && input.openDartConfigured) {
+    const freshnessIsFresh = input.dartStatus.freshness?.state === "fresh";
     return {
-      latestCheckedAt: input.dartStatus.meta?.generatedAt ?? null,
+      latestCheckedAt: getDartFreshnessCheckedAt(input.dartStatus),
       items: [
         {
           label: "corpCodes 인덱스",
-          summaryText: "DART 검색에 쓰는 회사 인덱스를 확인했습니다.",
-          checkedAt: input.dartStatus.meta?.generatedAt ?? null,
-          tone: "ok",
-          statusLabel: "정상",
+          summaryText: getDartFreshnessDescription(input.dartStatus),
+          checkedAt: getDartFreshnessCheckedAt(input.dartStatus),
+          tone: freshnessIsFresh ? "ok" : "error",
+          statusLabel: freshnessIsFresh ? "정상" : "주의",
           ...(details.length > 0 ? { details } : {}),
         },
       ],
     };
   }
 
-  if (input.dartStatus.exists) {
+  if (hasUsableDartIndex(input.dartStatus)) {
     return {
-      latestCheckedAt: input.dartStatus.meta?.generatedAt ?? null,
+      latestCheckedAt: getDartFreshnessCheckedAt(input.dartStatus),
       items: [
         {
           label: "corpCodes 인덱스",
-          summaryText: "검색 인덱스는 있지만 OPENDART 키가 없어 사용자 경로에 바로 연결되지는 않습니다.",
-          checkedAt: input.dartStatus.meta?.generatedAt ?? null,
+          summaryText: `OPENDART 키가 없어 사용자 경로에 바로 연결되지는 않습니다. ${getDartFreshnessDescription(input.dartStatus)}`,
+          checkedAt: getDartFreshnessCheckedAt(input.dartStatus),
           tone: "error",
           statusLabel: "주의",
           ...(details.length > 0 ? { details } : {}),
@@ -169,10 +228,13 @@ function buildDartHealthSummary(input: {
       items: [
         {
           label: "corpCodes 인덱스",
-          summaryText: "OPENDART 키가 없어 최신 인덱스를 다시 확인하지 못했습니다.",
+          summaryText: input.dartStatus.exists
+            ? "OPENDART 키가 없고 회사 검색 인덱스 파일도 읽지 못해 최신 기준을 확인하지 못했습니다."
+            : "OPENDART 키가 없어 최신 인덱스를 다시 확인하지 못했습니다.",
           checkedAt: null,
           tone: "error",
           statusLabel: "주의",
+          ...(details.length > 0 ? { details } : {}),
         },
       ],
     };
@@ -183,10 +245,13 @@ function buildDartHealthSummary(input: {
     items: [
       {
         label: "corpCodes 인덱스",
-        summaryText: "아직 인덱스가 없습니다. 아래 OpenDART 카드에서 상태 새로고침 또는 인덱스 생성을 확인하세요.",
+        summaryText: input.dartStatus.exists
+          ? "회사 검색 인덱스 파일을 읽지 못했습니다. 아래 OpenDART 카드에서 상태 새로고침 또는 인덱스 생성을 확인하세요."
+          : "아직 인덱스가 없습니다. 아래 OpenDART 카드에서 상태 새로고침 또는 인덱스 생성을 확인하세요.",
         checkedAt: null,
         tone: "error",
         statusLabel: "주의",
+        ...(details.length > 0 ? { details } : {}),
       },
     ],
   };

@@ -8,6 +8,7 @@ export const DAILY_REFRESH_RESULT_SCHEMA_VERSION = 1;
 export const DAILY_REFRESH_STEP_NAMES = [
   "warm:if-stale",
   "finlife:sync:if-stale",
+  "pension:sync:if-stale",
   "datago:sync",
   "gov24:sync:if-stale",
   "news:refresh",
@@ -23,9 +24,10 @@ export const DAILY_REFRESH_APPROVED_PR_PATHS = [
   ".data/finlife_credit-loan_snapshot.json",
   ".data/finlife_deposit_snapshot.json",
   ".data/finlife_mortgage-loan_snapshot.json",
-  ".data/finlife_pension_snapshot.json",
   ".data/finlife_rent-house-loan_snapshot.json",
   ".data/finlife_saving_snapshot.json",
+  ".data/fss_pension_guaranteed_snapshot.json",
+  ".data/fss_pension_products_snapshot.json",
   "docs/dart-daily-brief.md",
   "docs/dart-disclosure-alerts.md",
   "docs/dart-disclosure-digest.md",
@@ -39,9 +41,10 @@ export const DAILY_REFRESH_CANONICAL_SNAPSHOT_FILES = [
   "finlife_credit-loan_snapshot.json",
   "finlife_deposit_snapshot.json",
   "finlife_mortgage-loan_snapshot.json",
-  "finlife_pension_snapshot.json",
   "finlife_rent-house-loan_snapshot.json",
   "finlife_saving_snapshot.json",
+  "fss_pension_guaranteed_snapshot.json",
+  "fss_pension_products_snapshot.json",
 ];
 
 export const DAILY_REFRESH_DIAGNOSTIC_ARTIFACT_PATHS = [
@@ -58,9 +61,10 @@ export const DAILY_REFRESH_DIAGNOSTIC_ARTIFACT_PATHS = [
   ".data/finlife_credit-loan_snapshot.json",
   ".data/finlife_deposit_snapshot.json",
   ".data/finlife_mortgage-loan_snapshot.json",
-  ".data/finlife_pension_snapshot.json",
   ".data/finlife_rent-house-loan_snapshot.json",
   ".data/finlife_saving_snapshot.json",
+  ".data/fss_pension_guaranteed_snapshot.json",
+  ".data/fss_pension_products_snapshot.json",
   "docs/dart-daily-brief.md",
   "docs/dart-disclosure-alerts.md",
   "docs/dart-disclosure-digest.md",
@@ -73,6 +77,7 @@ const STEP_STATUSES = new Set(["ok", "skipped", "failed"]);
 const DAILY_REFRESH_ENV_REQUIREMENTS = [
   { label: "FINLIFE_API_KEY", anyOf: ["FINLIFE_API_KEY"] },
   { label: "FINLIFE_TOPFIN_GRP_LIST", anyOf: ["FINLIFE_TOPFIN_GRP_LIST"] },
+  { label: "FSS_PENSION_API_KEY", anyOf: ["FSS_PENSION_API_KEY"] },
   { label: "KDB_DATAGO_SERVICE_KEY or DATAGO_SERVICE_KEY", anyOf: ["KDB_DATAGO_SERVICE_KEY", "DATAGO_SERVICE_KEY"] },
   { label: "BOK_ECOS_API_KEY or ECOS_API_KEY", anyOf: ["BOK_ECOS_API_KEY", "ECOS_API_KEY"] },
   { label: "EXIM_EXCHANGE_API_KEY", anyOf: ["EXIM_EXCHANGE_API_KEY"] },

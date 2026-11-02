@@ -110,7 +110,7 @@ export function PlanningWorkspaceModalPanel({
         >
           <BodyDialogSurface className="max-w-xl">
             <div id="planning-feedback-title"><SubSectionHeader title="피드백 보내기" /></div>
-            <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">/planning 사용 중 발견한 불편한 점이나 버그를 알려주세요. 피드백은 브라우저 로컬 저장소에 안전하게 보관됩니다.</p>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">/planning 사용 중 발견한 불편한 점이나 버그를 알려주세요. 제출에 성공한 피드백은 브라우저가 아니라 현재 사용자의 로컬 데이터 폴더에 저장됩니다.</p>
 
             <div className="animate-in fade-in slide-in-from-bottom-2 mt-8 space-y-6 duration-300">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -129,26 +129,30 @@ export function PlanningWorkspaceModalPanel({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">제목</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">제목 (필수)</label>
                   <input
                     className={cn(bodyFieldClassName, "h-11 rounded-xl border-slate-200 font-bold")}
-                    placeholder="제목 (선택 사항)"
+                    placeholder="2~160자로 입력해 주세요."
                     value={feedbackTitle}
                     onChange={(event) => setFeedbackTitle(event.target.value)}
+                    minLength={2}
                     maxLength={160}
+                    required
                     disabled={feedbackSubmitting}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">내용</label>
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">내용 (필수)</label>
                 <textarea
                   className={cn(bodyTextAreaClassName, "min-h-[160px] rounded-2xl")}
-                  placeholder="구체적인 내용을 입력해 주세요 (재현 단계 등)."
+                  placeholder="5~5000자로 구체적인 내용과 재현 단계를 입력해 주세요."
                   value={feedbackMessage}
                   onChange={(event) => setFeedbackMessage(event.target.value)}
+                  minLength={5}
                   maxLength={5000}
+                  required
                   disabled={feedbackSubmitting}
                 />
               </div>
@@ -178,7 +182,7 @@ export function PlanningWorkspaceModalPanel({
                 variant="primary"
                 className="h-10 rounded-xl px-6 font-bold"
                 onClick={() => void submitPlanningFeedbackAction()}
-                disabled={feedbackSubmitting || !feedbackMessage.trim()}
+                disabled={feedbackSubmitting || feedbackTitle.trim().length < 2 || feedbackMessage.trim().length < 5}
               >
                 {feedbackSubmitting ? "저장 중..." : "저장"}
               </Button>

@@ -1,5 +1,7 @@
 "use client";
 
+import DiagnosisSummary from "@/components/planning/DiagnosisSummary";
+import type { DiagnosisAssessment } from "@/lib/planning/v2/insights/diagnosisAssessment";
 import { useState } from "react";
 import { BodyEmptyState, BodyTableFrame } from "@/components/ui/BodyTone";
 import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
@@ -18,10 +20,11 @@ type ResultGuideCardProps = {
   locale: Locale;
   status: ResultBadgeStatus;
   reason: string;
-  minCashKrw: number;
+  minCashKrw: number | undefined;
+  assessment?: DiagnosisAssessment;
   achievedGoals: number;
   totalGoals: number;
-  maxDsr: number;
+  maxDsr: number | undefined;
   topActions: string[];
 };
 
@@ -68,8 +71,8 @@ const SEVERITY_COLOR: Record<AggregatedWarningRow["severity"], string> = {
   info: "text-sky-600 bg-sky-50",
 };
 
-function toDsrPct(value: number): string {
-  if (!Number.isFinite(value)) return "-";
+function toDsrPct(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "확인되지 않음";
   return `${(value * 100).toFixed(1)}%`;
 }
 
@@ -88,7 +91,7 @@ function monthRangeLabel(row: AggregatedWarningRow): string {
 export function ResultGuideCard(props: ResultGuideCardProps) {
   return (
     <section className="rounded-[2.5rem] border border-slate-200 bg-white p-7 shadow-sm transition-all hover:shadow-md">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      {props.assessment ? <DiagnosisSummary assessment={props.assessment} /> : <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex-1 min-w-[240px]">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">10초 요약</p>
           <p className="mt-3 text-lg font-bold text-navy leading-snug tracking-tight">{props.reason}</p>
@@ -96,12 +99,12 @@ export function ResultGuideCard(props: ResultGuideCardProps) {
         <span className={cn("rounded-full border px-4 py-1.5 text-xs font-black tracking-tight", BADGE_STYLE[props.status])}>
           상태: {BADGE_LABEL[props.status]}
         </span>
-      </div>
+      </div>}
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
         <div className="rounded-[1.5rem] bg-surface-muted px-5 py-4 border border-slate-100/80">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">현금 최저</p>
-          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{formatKrw(props.locale, props.minCashKrw)}</p>
+          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{typeof props.minCashKrw === "number" ? formatKrw(props.locale, props.minCashKrw) : "확인되지 않음"}</p>
         </div>
         <div className="rounded-[1.5rem] bg-surface-muted px-5 py-4 border border-slate-100/80">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">목표 달성</p>
@@ -146,7 +149,7 @@ export function WarningsTable(props: WarningsTableProps) {
         <p className="mt-1 text-xs text-slate-500 font-medium">동일 경고 코드는 합쳐서 표시합니다. 반복 횟수와 발생 구간을 확인하세요.</p>
       </div>
       {props.warnings.length === 0 ? (
-        <BodyEmptyState className="rounded-[2.5rem] border-primary/10 bg-primary/30 px-6 py-8" description="현재 가정에서는 위험 신호가 관측되지 않았습니다." title="경고가 없습니다." />
+        <BodyEmptyState className="rounded-[2.5rem] border-primary/10 bg-primary/30 px-6 py-8" description="저장된 실행 경고가 없습니다. 지표에서 확인한 개별 위험 신호는 위 요약에서 함께 확인하세요." title="경고가 없습니다." />
       ) : (
         <BodyTableFrame>
           <table className="min-w-full divide-y divide-slate-100">

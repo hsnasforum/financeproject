@@ -94,7 +94,7 @@ type PreviewApiPayload = {
 type Account = {
   id: string;
   name: string;
-  kind: "checking" | "saving" | "card" | "cash" | "other";
+  kind: "checking" | "saving" | "card" | "cash" | "other" | "bank" | "broker";
   currency: "KRW";
   note?: string;
 };
@@ -248,7 +248,12 @@ function isPreviewApiPayload(payload: unknown): payload is PreviewApiPayload {
 function isAccount(payload: unknown): payload is Account {
   if (!isRecord(payload)) return false;
   if (!asString(payload.id) || !asString(payload.name)) return false;
-  return ["checking", "saving", "card", "cash", "other"].includes(asString(payload.kind));
+  return ["checking", "saving", "card", "cash", "other", "bank", "broker"].includes(asString(payload.kind));
+}
+
+export function parseAccountsPayload(payload: unknown): Account[] {
+  if (!isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) return [];
+  return payload.items.filter(isAccount);
 }
 
 function validationErrorsFromResult(result: CsvMappingValidationResult): CsvMappingValidationError[] {
@@ -350,7 +355,7 @@ export function ImportCsvClient() {
         });
         const payload = await response.json().catch(() => null);
         if (signal.aborted) return;
-        if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
+        if (!response.ok) {
           if (!signal.aborted) {
             setAccounts([]);
           }
@@ -358,7 +363,7 @@ export function ImportCsvClient() {
         }
 
         if (!signal.aborted) {
-          const items = payload.items.filter(isAccount);
+          const items = parseAccountsPayload(payload);
           setAccounts(items);
           if (items.length > 0) {
             setSelectedAccountId((prev) => prev || items[0].id);

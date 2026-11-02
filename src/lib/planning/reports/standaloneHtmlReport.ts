@@ -1,3 +1,4 @@
+import type { DiagnosisAssessment } from "@/lib/planning/v2/insights/diagnosisAssessment";
 import { type AssumptionsOverrideEntry } from "../assumptions/overrides";
 import { type CalcEvidence } from "../calc";
 import { roundKrw } from "../calc/roundingPolicy";
@@ -51,6 +52,7 @@ export type StandaloneReportRenderInput = {
     currentAmount: number;
     shortfall: number;
     achieved: boolean;
+    comment?: string;
   }>;
   actions: Array<{
     title: string;
@@ -89,6 +91,7 @@ export type StandaloneReportRenderInput = {
     totalInterestRemainingKrw: number;
     payoffMonthIndex?: number;
   }>;
+  assessment?: DiagnosisAssessment;
   verdict: {
     label: string;
     headline: string;
@@ -187,7 +190,7 @@ export function renderStandaloneHtml(input: StandaloneReportRenderInput): string
           <td class="right">${escapeHtml(formatMoney(goal.targetAmount))}</td>
           <td class="right">${escapeHtml(formatMoney(goal.currentAmount))}</td>
           <td class="right">${escapeHtml(formatMoney(goal.shortfall))}</td>
-          <td>${goal.achieved ? "달성" : "진행 중"}</td>
+          <td>${escapeHtml(goal.achieved ? goal.comment || "달성" : "진행 중")}</td>
         </tr>
       `)
       .join("")
@@ -463,8 +466,16 @@ ${printModeScript}
   <section>
     <div class="hero">
       <p class="eyebrow">Executive Summary</p>
-      <p><strong>10초 판정: ${escapeHtml(input.verdict.label)}</strong></p>
-      <p>${escapeHtml(input.verdict.headline)}</p>
+      ${input.assessment ? `
+      <p><strong>${escapeHtml(input.assessment.label)}</strong></p>
+      <p>${escapeHtml(input.assessment.headline)}</p>
+      <p><strong>${escapeHtml(input.assessment.basisLabel)}</strong></p>
+      <p>${escapeHtml(input.assessment.basisDescription)}</p>
+      <p>개별 위험 신호 · 기간 중 최저 현금, 목표와 경고</p>
+      <ul>${input.assessment.signals.map((signal) => `<li><strong>${escapeHtml(signal.title)} · ${escapeHtml(signal.evidence)}</strong>: ${escapeHtml(signal.description)}</li>`).join("")}</ul>
+      ${input.assessment.missingMetrics.length ? `<p>확인되지 않음: ${escapeHtml(input.assessment.missingMetrics.join(" · "))}. 누락된 값을 0으로 간주하지 않습니다.</p>` : ""}
+      ` : `<p><strong>10초 판정: ${escapeHtml(input.verdict.label)}</strong></p>
+      <p>${escapeHtml(input.verdict.headline)}</p>`}
     </div>
     <h2>핵심 숫자</h2>
     <div class="grid">

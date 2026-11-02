@@ -1,3 +1,4 @@
+import { EMERGENCY_FUND_TARGET_MONTHS } from "../calc/emergencyFundPolicy";
 import type { EngineInput } from "./types";
 
 const NON_NEGATIVE_FIELDS = [
@@ -33,7 +34,7 @@ export function validateEngineInput(input: EngineInput): EngineInput {
 
   return {
     ...input,
-    emergencyFundMonths: input.emergencyFundMonths ?? 6,
+    emergencyFundMonths: input.emergencyFundMonths ?? EMERGENCY_FUND_TARGET_MONTHS,
     liquidAssets: input.liquidAssets ?? 0,
     debtBalance: input.debtBalance ?? 0,
   };

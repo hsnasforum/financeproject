@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PATCH as patchTransferOverride } from "../src/app/api/planning/v3/transactions/transfer-overrides/route";
+import { runWithPlanningUserScope } from "../src/lib/planning/store/userScope";
+import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -31,10 +33,26 @@ function requestPatch(body: unknown, userId = "alice"): Request {
   });
 }
 
+async function saveBatchFixture(userId: string): Promise<void> {
+  await runWithPlanningUserScope({ userId, authSource: "test" }, () => saveBatch({
+    id: "batch-a",
+    createdAt: "2026-08-25T00:00:00.000Z",
+    source: "csv",
+    rowCount: 1,
+  }, [{
+    batchId: "batch-a",
+    txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+    date: "2026-08-25",
+    amountKrw: -1000,
+    description: "fixture",
+    source: "csv",
+  }]));
+}
+
 describe("planning v3 transfer-overrides API", () => {
   let root = "";
 
-  beforeEach(() => {
+  beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-transfer-overrides-api-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = root;
@@ -44,6 +62,8 @@ describe("planning v3 transfer-overrides API", () => {
     env.PLANNING_USER_ID = "default";
     delete env.AUTH_SECRET;
     delete env.NEXTAUTH_SECRET;
+    await saveBatchFixture("alice");
+    await saveBatchFixture("bob");
   });
 
   afterEach(() => {
@@ -78,6 +98,22 @@ describe("planning v3 transfer-overrides API", () => {
     const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INPUT");
+  });
+
+  it("returns 404 instead of creating a transfer override for a missing batch", async () => {
+    const response = await patchTransferOverride(requestPatch({
+      csrf: "test",
+      batchId: "missing-batch",
+      txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+      forceTransfer: true,
+    }));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: { code: "NO_DATA" },
+      meta: { userId: "alice", authSource: "trusted-header" },
+    });
   });
 
   it("stores override on valid request", async () => {

@@ -188,7 +188,7 @@ describe("FINLIFE inventory report", () => {
       type: "normalized-dump",
       fileName: "finlife_deposit.normalized.json",
       qualityVerified: null,
-      candidateCodes: ["DEPOSIT_SAMPLE_001", "DEPOSIT_SAMPLE_002"],
+      candidateCodes: ["finlife:deposit:0010001:DEPOSIT_SAMPLE_001", "finlife:deposit:0010002:DEPOSIT_SAMPLE_002"],
     });
   });
 
@@ -253,6 +253,9 @@ describe("FINLIFE inventory report", () => {
     expect(findMany).toHaveBeenCalledWith({
       select: {
         finPrdtCd: true,
+        identityKey: true,
+        raw: true,
+        provider: { select: { code: true } },
         kind: true,
         _count: {
           select: {

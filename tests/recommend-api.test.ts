@@ -7,7 +7,7 @@ const mocked = vi.hoisted(() => {
     externalProductFindMany: vi.fn(),
     externalProductMatchFindMany: vi.fn(),
     recommendCandidates: vi.fn(),
-    applyDepositProtectionPolicy: vi.fn(),
+    getProductFreshnessSummary: vi.fn(),
   };
 });
 
@@ -16,6 +16,11 @@ vi.mock("@/lib/sources/unified", () => {
     getUnifiedProducts: mocked.getUnifiedProducts,
   };
 });
+
+vi.mock("@/lib/sources/productFreshness", () => ({
+  getProductFreshnessSummary: mocked.getProductFreshnessSummary,
+  applyProductSourceIssues: (summary: unknown) => summary,
+}));
 
 vi.mock("@/lib/db/prisma", () => {
   return {
@@ -42,12 +47,6 @@ vi.mock("@/lib/finlife/best", () => {
 vi.mock("@/lib/recommend/score", () => {
   return {
     recommendCandidates: mocked.recommendCandidates,
-  };
-});
-
-vi.mock("@/lib/recommend/depositProtection", () => {
-  return {
-    applyDepositProtectionPolicy: mocked.applyDepositProtectionPolicy,
   };
 });
 
@@ -113,6 +112,10 @@ type RecommendApiJson = {
       inferenceSource?: string;
     };
     fallback?: { reason?: string };
+    freshness?: {
+      checkedAt?: string;
+      sources?: Array<{ sourceAsOf?: string | null; freshness?: string }>;
+    };
     weights?: { rate: number; term: number; liquidity: number };
     weightNormalization?: {
       applied?: boolean;
@@ -186,7 +189,22 @@ describe("POST /api/recommend", () => {
     mocked.externalProductFindMany.mockReset();
     mocked.externalProductMatchFindMany.mockReset();
     mocked.recommendCandidates.mockReset();
-    mocked.applyDepositProtectionPolicy.mockReset();
+    mocked.getProductFreshnessSummary.mockReset();
+    mocked.getProductFreshnessSummary.mockResolvedValue({
+      checkedAt: "2026-07-12T00:00:00.000Z",
+      overall: "stale",
+      sources: [{
+        sourceId: "finlife",
+        kind: "deposit",
+        sourceAsOf: "2026-07-10T00:00:00.000Z",
+        checkedAt: "2026-07-12T00:00:00.000Z",
+        ttlMs: 60_000,
+        ageMs: 120_000,
+        freshness: "stale",
+        fallbackUsed: false,
+        message: "설정된 갱신 주기를 지난 데이터입니다.",
+      }],
+    });
   });
 
   afterEach(() => {
@@ -381,7 +399,6 @@ describe("POST /api/recommend", () => {
         normalizationPolicy: "금리 점수는 후보군 min/max로 0..1 정규화",
       },
     });
-    mocked.applyDepositProtectionPolicy.mockImplementation(({ items }: { items: unknown[] }) => items);
 
     const { status, json } = await callRecommend({
       purpose: "seed-money",
@@ -430,6 +447,13 @@ describe("POST /api/recommend", () => {
       userId: "default",
       authSource: "local-namespace",
     });
+    expect(json.meta?.freshness).toMatchObject({
+      checkedAt: "2026-07-12T00:00:00.000Z",
+      sources: [expect.objectContaining({
+        sourceAsOf: "2026-07-10T00:00:00.000Z",
+        freshness: "stale",
+      })],
+    });
     expect(json.meta?.weights?.rate).toBeCloseTo(1 / 3, 12);
     expect(json.meta?.weights?.term).toBeCloseTo(1 / 3, 12);
     expect(json.meta?.weights?.liquidity).toBeCloseTo(1 / 3, 12);
@@ -446,6 +470,10 @@ describe("POST /api/recommend", () => {
           liquidity: expect.closeTo(1 / 3, 12),
         }),
       }),
+      depositProtection: {
+        mode: "any",
+        matchedFinPrdtCdSet: expect.any(Set),
+      },
     }));
     expect(json).not.toHaveProperty("engine");
     expect(json).not.toHaveProperty("stage");
@@ -594,7 +622,6 @@ describe("POST /api/recommend", () => {
         normalizationPolicy: "금리 점수는 후보군 min/max로 0..1 정규화",
       },
     });
-    mocked.applyDepositProtectionPolicy.mockReturnValue([]);
 
     const { status, json } = await callRecommend({
       purpose: "seed-money",

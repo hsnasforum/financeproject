@@ -15,6 +15,11 @@ import {
   type ProfileJsonEditorState,
   type ProfileFormModel,
 } from "@/lib/planning/ui/profileFormModel";
+import {
+  classifyPlanningWriteResponse,
+  DIAGNOSIS_UNCLEAR_SAVE_MESSAGE,
+  type PlanningWriteResult,
+} from "@/lib/planning/ui/planningDiagnosisWizard";
 import { buildWorkspaceLiveSummary } from "@/lib/planning/ui/workspaceQuickStart";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -156,6 +161,125 @@ export function shouldApplyProfileHydrationForEditVersion(input: {
   return input.currentLocalEditVersion === input.hydrationLocalEditVersion;
 }
 
+// A detail read only applies to the selection it was started for. The generation also
+// changes on A -> B -> A, and the data epoch changes after a committed save or delete.
+export function shouldApplyProfileDetailResponse(input: {
+  requestedProfileId: string;
+  currentSelectedProfileId: string;
+  requestSelectionGeneration: number;
+  currentSelectionGeneration: number;
+  requestDataEpoch: number;
+  currentDataEpoch: number;
+}): boolean {
+  return input.requestedProfileId.length > 0
+    && input.requestedProfileId === input.currentSelectedProfileId
+    && input.requestSelectionGeneration === input.currentSelectionGeneration
+    && input.requestDataEpoch === input.currentDataEpoch;
+}
+
+export function isLatestProfileListResponse(input: {
+  requestSequence: number;
+  latestSequence: number;
+}): boolean {
+  return input.requestSequence === input.latestSequence;
+}
+
+// Checked when the list response is applied: a selection or content edit made while the
+// list was loading keeps the current selection instead of the id requested at start.
+export function resolveProfileListSelectionRequest(input: {
+  nextSelectedId?: string;
+  currentSelectedProfileId: string;
+  requestSelectionGeneration: number;
+  currentSelectionGeneration: number;
+  editedSinceRequest: boolean;
+}): string {
+  if (input.requestSelectionGeneration !== input.currentSelectionGeneration || input.editedSinceRequest) {
+    return input.currentSelectedProfileId;
+  }
+  return input.nextSelectedId || input.currentSelectedProfileId;
+}
+
+// The content version counts form, name and JSON draft edits; focus alone does not count.
+export function hasProfileEditsSinceDispatch(input: {
+  dispatchContentVersion: number;
+  currentContentVersion: number;
+}): boolean {
+  return input.currentContentVersion !== input.dispatchContentVersion;
+}
+
+// Content versions only grow. A selection change discards earlier edits, so only edits made
+// after both the save dispatch and the current selection are still on screen and unsaved.
+export function hasUnsavedProfileEditsAfterSave(input: {
+  dispatchContentVersion: number;
+  selectionContentVersion: number;
+  currentContentVersion: number;
+}): boolean {
+  return input.currentContentVersion !== Math.max(input.dispatchContentVersion, input.selectionContentVersion);
+}
+
+// Content that is not yet stored: the version moved past the last confirmed one (a hydrate of stored
+// values or a successful save). Focus alone never changes the content version.
+export function hasUnconfirmedProfileContent(input: {
+  confirmedContentVersion: number;
+  currentContentVersion: number;
+}): boolean {
+  return input.currentContentVersion !== input.confirmedContentVersion;
+}
+
+// The list falls back to its first profile when the requested or current selection is missing or empty.
+// That automatic move would replace unconfirmed content, so the draft stays with no selection instead.
+export function shouldKeepUnconfirmedDraftOverProfileFallback(input: {
+  requestedId: string;
+  loadedProfileIds: string[];
+  currentSelectedProfileId: string;
+  fallbackProfileId: string;
+  hasUnconfirmedContent: boolean;
+}): boolean {
+  if (!input.hasUnconfirmedContent) return false;
+  if (input.requestedId && input.loadedProfileIds.includes(input.requestedId)) return false;
+  return input.fallbackProfileId !== input.currentSelectedProfileId;
+}
+
+// A skipped hydration keeps the editor content. When that content was never the selected profile's own
+// stored values (for example the server-rendered profile shown while a restored selection loads), saving it
+// would write another profile's values into the selection, so the selection is released instead.
+export function shouldReleaseSelectionForForeignDraft(input: {
+  profileId: string;
+  selectedProfileId: string;
+  editorContentProfileId: string;
+  hasUnconfirmedContent: boolean;
+}): boolean {
+  const profileId = normalizeProfileId(input.profileId);
+  return input.hasUnconfirmedContent
+    && profileId.length > 0
+    && normalizeProfileId(input.selectedProfileId) === profileId
+    && normalizeProfileId(input.editorContentProfileId) !== profileId;
+}
+
+// The local-edit skip protects input made on a profile's own values. Content that started from another
+// profile and holds no unconfirmed input (a focus only) protects nothing, so the selection's values apply.
+export function shouldHydrateOverForeignContent(input: {
+  profileId: string;
+  editorContentProfileId: string;
+  hasUnconfirmedContent: boolean;
+}): boolean {
+  const profileId = normalizeProfileId(input.profileId);
+  return !input.hasUnconfirmedContent
+    && profileId.length > 0
+    && normalizeProfileId(input.editorContentProfileId) !== profileId;
+}
+
+// An update writes the editor content into the target profile. It is only allowed when that content
+// started from the target's own stored values; otherwise (for example the server-rendered profile still
+// on screen while a restored selection loads) it would overwrite the target with another profile's data.
+export function isProfileUpdateTargetForeign(input: {
+  targetProfileId: string;
+  editorContentProfileId: string;
+}): boolean {
+  const targetProfileId = normalizeProfileId(input.targetProfileId);
+  return targetProfileId.length > 0 && normalizeProfileId(input.editorContentProfileId) !== targetProfileId;
+}
+
 export function clearProfileSuggestionState() {
   return {
     pendingProfileSave: null,
@@ -199,6 +323,52 @@ export function resolveProfileSaveFeedback(mode: ProfileSaveMode, beginnerMode: 
     errorMessage,
     successMessage,
   };
+}
+
+export type ProfileSaveFollowUp = {
+  nextSelectedId?: string;
+  clearLocalEdits: boolean;
+};
+
+// Decided when the save response arrives. The follow-up list re-checks selection and
+// edits again when it is applied, because the user can keep working while it loads.
+export function resolveProfileSaveFollowUp(input: {
+  mode: ProfileSaveMode;
+  savedProfileId: string;
+  selectionChanged: boolean;
+  hasEditsSinceDispatch: boolean;
+}): ProfileSaveFollowUp {
+  const keepCurrentSelection = input.selectionChanged || (input.mode !== "update" && input.hasEditsSinceDispatch);
+  return {
+    nextSelectedId: keepCurrentSelection ? undefined : (input.savedProfileId || undefined),
+    clearLocalEdits: !input.selectionChanged && !input.hasEditsSinceDispatch,
+  };
+}
+
+// Decided after the follow-up list so the notice matches what the screen actually shows.
+export function resolveProfileSaveCompletionNotice(input: {
+  mode: ProfileSaveMode;
+  beginnerMode: boolean;
+  savedProfileName: string;
+  savedProfileSelected: boolean;
+  hasUnsavedEdits: boolean;
+}): string {
+  const savedLabel = input.mode === "create"
+    ? "새 프로필을 저장했습니다"
+    : input.mode === "duplicate"
+      ? "프로필 복제본을 저장했습니다"
+      : "프로필 수정 내용을 저장했습니다";
+  const savedLine = `${savedLabel}: ${input.savedProfileName || "이름 없는 프로필"}`;
+  const unsavedLine = "저장 요청 이후 입력한 내용은 아직 저장되지 않았습니다.";
+  const successMessage = resolveProfileSaveFeedback(input.mode, input.beginnerMode).successMessage;
+  if (input.savedProfileSelected) {
+    return input.hasUnsavedEdits
+      ? `${successMessage}\n${unsavedLine} 반영하려면 저장을 한 번 더 누르세요.`
+      : successMessage;
+  }
+  return input.hasUnsavedEdits
+    ? `${savedLine}\n${unsavedLine} 현재 선택과 입력을 그대로 유지했습니다.`
+    : `${savedLine}\n현재 선택한 프로필과 입력은 그대로 유지했습니다.`;
 }
 
 export function resolveProfileSavePayloadName(mode: ProfileSaveMode, profileName: string): string {
@@ -386,12 +556,47 @@ function rememberHydratedProfile(profile: PlanningProfileRecord): void {
   profileHydrationCache.set(profile.id, profile);
 }
 
+// Wizard path: one POST for an explicit new profile. It reads no editor state and writes none, so
+// the selected profile, its JSON draft and performProfileSave's boolean contract stay untouched.
+export async function createPlanningProfileRecord(input: {
+  locale: Locale;
+  name: string;
+  profile: ProfileV2 | Record<string, unknown>;
+}): Promise<PlanningWriteResult<PlanningProfileRecord>> {
+  const fallbackMessage = "프로필 저장에 실패했습니다.";
+  let payloadProfile: ReturnType<typeof normalizeDraftWithDisclosure>;
+  try {
+    payloadProfile = normalizeDraftWithDisclosure(input.profile as unknown as FormDraft, input.name);
+  } catch (error) {
+    return { status: "failed", message: error instanceof Error ? error.message : fallbackMessage };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch("/api/planning/v2/profiles", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(withDevCsrf({
+        name: input.name,
+        profile: payloadProfile.profile,
+      })),
+    });
+  } catch {
+    return { status: "unknown", message: DIAGNOSIS_UNCLEAR_SAVE_MESSAGE };
+  }
+  const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord> | null;
+  return classifyPlanningWriteResponse<PlanningProfileRecord>({
+    response: res,
+    payload,
+    message: parseApiPayload(input.locale, res, payload, fallbackMessage).errorMessage,
+  });
+}
+
 export function useWorkspaceProfileBundle({
   locale,
   initialSelectedProfileId,
   initialSelectedProfile = null,
   beginnerMode,
-  beginnerModeLoaded,
   isMountedRef,
   profileDeleteDialog,
   setProfileDeleteDialog,
@@ -404,11 +609,23 @@ export function useWorkspaceProfileBundle({
   const profileEditorHasLocalEditsRef = useRef(false);
   const profileEditorLocalEditVersionRef = useRef(0);
   const selectedProfileIdRef = useRef(initialHydratedProfileId);
+  const selectionGenerationRef = useRef(0);
+  const profileListRequestSequenceRef = useRef(0);
+  const profileDataEpochRef = useRef(0);
+  const profileEditorContentVersionRef = useRef(0);
+  // Content version at the last selection change, when the previous selection's edits were dropped.
+  const selectionContentVersionRef = useRef(0);
+  // Content version of the last confirmed editor content (stored values hydrated or a save completed).
+  const confirmedContentVersionRef = useRef(0);
+  const profileDetailRequestSequenceRef = useRef(0);
+  const profileDetailInFlightKeyRef = useRef("");
   const cachedSelectedProfile = useMemo(() => {
     if (initialSelectedProfile) return initialSelectedProfile;
     const normalizedProfileId = normalizeProfileId(initialSelectedProfileId);
     return normalizedProfileId ? profileHydrationCache.get(normalizedProfileId) ?? null : null;
   }, [initialSelectedProfile, initialSelectedProfileId]);
+  // The profile whose stored values the editor content started from ("" for the built-in template).
+  const editorContentProfileIdRef = useRef(normalizeProfileId(cachedSelectedProfile?.id));
   const initialProfileEditorState = useMemo(() => {
     if (cachedSelectedProfile) {
       return hydrateProfileJsonEditorState(cachedSelectedProfile.profile, cachedSelectedProfile.name);
@@ -421,10 +638,15 @@ export function useWorkspaceProfileBundle({
 
   const [profiles, setProfiles] = useState<PlanningProfileRecord[]>(() => (cachedSelectedProfile ? [cachedSelectedProfile] : []));
   const [selectedProfileId, setSelectedProfileId] = useState(initialHydratedProfileId);
-  const [profileName, setProfileName] = useState("기본 프로필");
-  const [profileJson, setProfileJson] = useState(initialProfileEditorState.json);
-  const [profileJsonDraft, setProfileJsonDraft] = useState(initialProfileEditorState.jsonDraft);
-  const [profileJsonError, setProfileJsonError] = useState(initialProfileEditorState.jsonError);
+  const [profileName, setProfileName] = useState(cachedSelectedProfile?.name || "기본 프로필");
+  // The canonical JSON, the editor draft and its error change together, so every transition reads the latest
+  // values in one functional update (no comparison against a render closure that may be one event behind).
+  const [profileJsonEditor, setProfileJsonEditor] = useState<{ json: string; jsonDraft: string; jsonError: string }>(() => ({
+    json: initialProfileEditorState.json,
+    jsonDraft: initialProfileEditorState.jsonDraft,
+    jsonError: initialProfileEditorState.jsonError,
+  }));
+  const { json: profileJson, jsonDraft: profileJsonDraft, jsonError: profileJsonError } = profileJsonEditor;
   const [profileForm, setProfileForm] = useState<ProfileFormModel>(initialProfileEditorState.form);
   const [loadingProfiles, setLoadingProfiles] = useState(!cachedSelectedProfile);
   const [profilesLoadError, setProfilesLoadError] = useState("");
@@ -441,6 +663,11 @@ export function useWorkspaceProfileBundle({
     profileEditorHasLocalEditsRef.current = true;
     profileEditorLocalEditVersionRef.current += 1;
   }, []);
+  // Called synchronously from every content change, unlike focus which only marks a local edit.
+  const markProfileEditorContentEdit = useCallback((): void => {
+    markProfileEditorLocalEdit();
+    profileEditorContentVersionRef.current += 1;
+  }, [markProfileEditorLocalEdit]);
   const applyProfileEditorState = useCallback((
     nextState: ProfileJsonEditorState,
     nextProfileName?: string,
@@ -448,9 +675,7 @@ export function useWorkspaceProfileBundle({
     const resolvedProfileName = (nextProfileName ?? nextState.form.name ?? "기본 프로필") || "기본 프로필";
     setProfileName(resolvedProfileName);
     setProfileForm(nextState.form);
-    setProfileJson(nextState.json);
-    setProfileJsonDraft(nextState.jsonDraft);
-    setProfileJsonError(nextState.jsonError);
+    setProfileJsonEditor({ json: nextState.json, jsonDraft: nextState.jsonDraft, jsonError: nextState.jsonError });
   }, []);
   const applyHydratedProfileEditorState = useCallback((
     nextState: ProfileJsonEditorState,
@@ -464,33 +689,42 @@ export function useWorkspaceProfileBundle({
     });
     setProfileName((current) => (shouldApply() ? resolvedProfileName : current));
     setProfileForm((current) => (shouldApply() ? nextState.form : current));
-    setProfileJson((current) => (shouldApply() ? nextState.json : current));
-    setProfileJsonDraft((current) => (shouldApply() ? nextState.jsonDraft : current));
-    setProfileJsonError((current) => (shouldApply() ? nextState.jsonError : current));
+    setProfileJsonEditor((current) => (shouldApply()
+      ? { json: nextState.json, jsonDraft: nextState.jsonDraft, jsonError: nextState.jsonError }
+      : current));
   }, []);
   const applyLocalProfileEditorState = useCallback((
     nextState: ProfileJsonEditorState,
     nextProfileName?: string,
   ): void => {
-    markProfileEditorLocalEdit();
+    markProfileEditorContentEdit();
     applyProfileEditorState(nextState, nextProfileName);
-  }, [applyProfileEditorState, markProfileEditorLocalEdit]);
+  }, [applyProfileEditorState, markProfileEditorContentEdit]);
   const setEditableProfileName = useCallback((nextProfileName: SetStateAction<string>): void => {
-    markProfileEditorLocalEdit();
+    markProfileEditorContentEdit();
     setProfileName(nextProfileName);
-  }, [markProfileEditorLocalEdit]);
-  const selectProfileId = useCallback((nextProfileId: SetStateAction<string>): void => {
-    profileEditorHasLocalEditsRef.current = false;
+  }, [markProfileEditorContentEdit]);
+  // The ref follows every selection synchronously so in-flight responses can compare against it.
+  const commitSelectedProfileId = useCallback((nextProfileId: string): void => {
+    if (selectedProfileIdRef.current !== nextProfileId) selectionGenerationRef.current += 1;
+    selectedProfileIdRef.current = nextProfileId;
     setSelectedProfileId(nextProfileId);
+  }, []);
+  const selectProfileId = useCallback((nextProfileId: SetStateAction<string>): void => {
+    const resolvedProfileId = typeof nextProfileId === "function"
+      ? nextProfileId(selectedProfileIdRef.current)
+      : nextProfileId;
+    profileEditorHasLocalEditsRef.current = false;
+    selectionContentVersionRef.current = profileEditorContentVersionRef.current;
+    selectionGenerationRef.current += 1;
+    selectedProfileIdRef.current = resolvedProfileId;
+    setSelectedProfileId(resolvedProfileId);
   }, []);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
     [profiles, selectedProfileId],
   );
-  useEffect(() => {
-    selectedProfileIdRef.current = selectedProfileId;
-  }, [selectedProfileId]);
   const benefitSigunguOptions = useMemo(() => {
     const selectedBenefitSidoCode = SIDO_ADMIN_2025.find((entry) => entry.name === (profileForm.sido ?? ""))?.code ?? "";
     return selectedBenefitSidoCode ? SIGUNGU_BY_SIDO_CODE_2025[selectedBenefitSidoCode] ?? [] : [];
@@ -515,7 +749,10 @@ export function useWorkspaceProfileBundle({
     setAcceptedSuggestionCodes(cleared.acceptedSuggestionCodes);
   }, []);
 
-  const hydrateSelectedProfileIfNeeded = useCallback((profile: PlanningProfileRecord | null): boolean => {
+  const hydrateSelectedProfileIfNeeded = useCallback((
+    profile: PlanningProfileRecord | null,
+    requestContentVersion?: number,
+  ): boolean => {
     const nextStamp = buildSelectedProfileHydrationStamp(profile);
     if (!profile) {
       lastHydratedProfileStampRef.current = "";
@@ -524,12 +761,33 @@ export function useWorkspaceProfileBundle({
     if (!shouldHydrateSelectedProfile(nextStamp, lastHydratedProfileStampRef.current)) {
       return false;
     }
-    if (shouldSkipSelectedProfileHydrationAfterLocalEdit({
+    const hasUnconfirmedContent = hasUnconfirmedProfileContent({
+      confirmedContentVersion: confirmedContentVersionRef.current,
+      currentContentVersion: profileEditorContentVersionRef.current,
+    });
+    // Content edits made after the read started win; leave stamp, cache and dirty state untouched.
+    const skipForLocalEdits = !shouldHydrateOverForeignContent({
+      profileId: profile.id,
+      editorContentProfileId: editorContentProfileIdRef.current,
+      hasUnconfirmedContent,
+    }) && ((requestContentVersion !== undefined && hasProfileEditsSinceDispatch({
+      dispatchContentVersion: requestContentVersion,
+      currentContentVersion: profileEditorContentVersionRef.current,
+    })) || shouldSkipSelectedProfileHydrationAfterLocalEdit({
       profileId: profile.id,
       selectedProfileId: selectedProfileIdRef.current,
       lastHydratedProfileStamp: lastHydratedProfileStampRef.current,
       hasLocalEdits: profileEditorHasLocalEditsRef.current,
-    })) {
+    }));
+    if (skipForLocalEdits) {
+      if (shouldReleaseSelectionForForeignDraft({
+        profileId: profile.id,
+        selectedProfileId: selectedProfileIdRef.current,
+        editorContentProfileId: editorContentProfileIdRef.current,
+        hasUnconfirmedContent,
+      })) {
+        commitSelectedProfileId("");
+      }
       return false;
     }
     const nextHydration = buildSelectedProfileHydration(profile);
@@ -539,59 +797,121 @@ export function useWorkspaceProfileBundle({
     clearPendingSuggestions();
     lastHydratedProfileStampRef.current = nextStamp;
     profileEditorHasLocalEditsRef.current = false;
+    confirmedContentVersionRef.current = profileEditorContentVersionRef.current;
+    editorContentProfileIdRef.current = profile.id;
     return true;
-  }, [applyHydratedProfileEditorState, clearPendingSuggestions]);
+  }, [applyHydratedProfileEditorState, clearPendingSuggestions, commitSelectedProfileId]);
 
   const loadSelectedProfileRecord = useCallback(async (profileId?: string): Promise<void> => {
     const normalizedProfileId = normalizeProfileId(profileId);
     if (!normalizedProfileId) return;
+    const requestSelectionGeneration = selectionGenerationRef.current;
+    const requestDataEpoch = profileDataEpochRef.current;
+    const requestContentVersion = profileEditorContentVersionRef.current;
+    // The mount effect and the initial timer can ask for the same selection; send it once.
+    const requestKey = `${normalizedProfileId}:${requestSelectionGeneration}:${requestDataEpoch}`;
+    if (profileDetailInFlightKeyRef.current === requestKey) return;
+    profileDetailInFlightKeyRef.current = requestKey;
+    profileDetailRequestSequenceRef.current += 1;
+    const requestSequence = profileDetailRequestSequenceRef.current;
     try {
       const res = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(normalizedProfileId)}`, {
         cache: "no-store",
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord> | null;
       if (!isMountedRef.current) return;
+      if (requestSequence !== profileDetailRequestSequenceRef.current) return;
+      if (!shouldApplyProfileDetailResponse({
+        requestedProfileId: normalizedProfileId,
+        currentSelectedProfileId: normalizeProfileId(selectedProfileIdRef.current),
+        requestSelectionGeneration,
+        currentSelectionGeneration: selectionGenerationRef.current,
+        requestDataEpoch,
+        currentDataEpoch: profileDataEpochRef.current,
+      })) return;
       const parsedPayload = parseApiPayload(locale, res, payload, "프로필을 불러오지 못했습니다.");
-      if (!parsedPayload.ok || !(payload as ApiResponse<PlanningProfileRecord>)?.data) return;
-      hydrateSelectedProfileIfNeeded((payload as ApiResponse<PlanningProfileRecord>).data ?? null);
+      const record = (payload as ApiResponse<PlanningProfileRecord> | null)?.data;
+      if (!parsedPayload.ok || !record || record.id !== normalizedProfileId) return;
+      hydrateSelectedProfileIfNeeded(record, requestContentVersion);
     } catch {
       // ignore profile detail warmup failures; list refresh will surface blocking errors
+    } finally {
+      if (requestSequence === profileDetailRequestSequenceRef.current) profileDetailInFlightKeyRef.current = "";
     }
   }, [hydrateSelectedProfileIfNeeded, isMountedRef, locale]);
 
   const loadProfiles = useCallback(async (nextSelectedId?: string): Promise<void> => {
+    profileListRequestSequenceRef.current += 1;
+    const requestSequence = profileListRequestSequenceRef.current;
+    const requestSelectionGeneration = selectionGenerationRef.current;
+    const requestContentVersion = profileEditorContentVersionRef.current;
+    // Superseded responses, including failures and finally, must not touch list, selection or loading.
+    const isCurrentRequest = () => isMountedRef.current && isLatestProfileListResponse({
+      requestSequence,
+      latestSequence: profileListRequestSequenceRef.current,
+    });
     setLoadingProfiles(true);
     setProfilesLoadError("");
     try {
       const res = await fetch("/api/planning/v2/profiles", { cache: "no-store" });
       const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord[]> | null;
-      if (!isMountedRef.current) return;
+      if (!isCurrentRequest()) return;
       if (!payload?.ok || !Array.isArray(payload.data)) {
         setProfiles([]);
-        setSelectedProfileId("");
+        commitSelectedProfileId("");
         setProfilesLoadError(resolveApiErrorMessage(locale, payload?.error, "프로필 목록을 불러오지 못했습니다."));
         return;
       }
 
-      const requestedId = normalizeProfileId(nextSelectedId) || normalizeProfileId(selectedProfileIdRef.current);
+      const currentSelectedProfileId = normalizeProfileId(selectedProfileIdRef.current);
+      const requestedId = resolveProfileListSelectionRequest({
+        nextSelectedId: normalizeProfileId(nextSelectedId),
+        currentSelectedProfileId,
+        requestSelectionGeneration,
+        currentSelectionGeneration: selectionGenerationRef.current,
+        editedSinceRequest: hasProfileEditsSinceDispatch({
+          dispatchContentVersion: requestContentVersion,
+          currentContentVersion: profileEditorContentVersionRef.current,
+        }),
+      });
       setProfiles(payload.data);
       const pickedId = selectLoadedProfileId(payload.data, requestedId);
-      setSelectedProfileId(pickedId);
+      if (shouldKeepUnconfirmedDraftOverProfileFallback({
+        requestedId,
+        loadedProfileIds: payload.data.map((item) => item.id),
+        currentSelectedProfileId,
+        fallbackProfileId: pickedId,
+        hasUnconfirmedContent: hasUnconfirmedProfileContent({
+          confirmedContentVersion: confirmedContentVersionRef.current,
+          currentContentVersion: profileEditorContentVersionRef.current,
+        }),
+      })) {
+        // The draft, local-edit state and JSON stay as they are; only the list is refreshed.
+        commitSelectedProfileId("");
+        return;
+      }
+      // Moving the selection here (no edits since the request, or the current one is gone)
+      // behaves like a user selection: the new profile's stored values replace the editor.
+      const selectionMoves = pickedId !== currentSelectedProfileId;
+      if (selectionMoves) {
+        profileEditorHasLocalEditsRef.current = false;
+        selectionContentVersionRef.current = profileEditorContentVersionRef.current;
+      }
+      commitSelectedProfileId(pickedId);
 
       const picked = payload.data.find((item) => item.id === pickedId);
       if (picked) {
-        hydrateSelectedProfileIfNeeded(picked);
+        hydrateSelectedProfileIfNeeded(picked, selectionMoves ? undefined : requestContentVersion);
       }
     } catch (error) {
-      if (!isMountedRef.current) return;
+      if (!isCurrentRequest()) return;
       setProfilesLoadError(error instanceof Error ? error.message : "프로필 목록 조회 중 오류가 발생했습니다.");
       setProfiles([]);
-      setSelectedProfileId("");
+      commitSelectedProfileId("");
     } finally {
-      if (!isMountedRef.current) return;
-      setLoadingProfiles(false);
+      if (isCurrentRequest()) setLoadingProfiles(false);
     }
-  }, [hydrateSelectedProfileIfNeeded, isMountedRef, locale]);
+  }, [commitSelectedProfileId, hydrateSelectedProfileIfNeeded, isMountedRef, locale]);
 
   useEffect(() => {
     initialProfileLoadSettledRef.current = false;
@@ -605,7 +925,7 @@ export function useWorkspaceProfileBundle({
         }
       }
       if (preferredProfileId) {
-        setSelectedProfileId(preferredProfileId);
+        commitSelectedProfileId(preferredProfileId);
         void loadSelectedProfileRecord(preferredProfileId);
       }
       void loadProfiles(preferredProfileId || undefined).finally(() => {
@@ -613,7 +933,7 @@ export function useWorkspaceProfileBundle({
       });
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [initialSelectedProfileId, loadProfiles, loadSelectedProfileRecord]);
+  }, [commitSelectedProfileId, initialSelectedProfileId, loadProfiles, loadSelectedProfileRecord]);
 
   useEffect(() => {
     if (!initialProfileLoadSettledRef.current) {
@@ -639,25 +959,6 @@ export function useWorkspaceProfileBundle({
     void loadSelectedProfileRecord(selectedProfileId);
   }, [loadSelectedProfileRecord, selectedProfile, selectedProfileId]);
 
-  useEffect(() => {
-    if (!beginnerModeLoaded || !beginnerMode) return;
-    const context = beginnerGoalContext(profileForm);
-    const nextGoals = ensureBeginnerGoals(profileForm.goals, context);
-    if (nextGoals.length === profileForm.goals.length) return;
-
-    const nextForm = {
-      ...profileForm,
-      goals: nextGoals,
-    };
-    const localEditVersion = profileEditorLocalEditVersionRef.current;
-    const timeoutId = window.setTimeout(() => {
-      if (profileEditorLocalEditVersionRef.current !== localEditVersion) return;
-      applyLocalProfileEditorState(buildProfileJsonEditorState(nextForm, profileName));
-      clearPendingSuggestions();
-    }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [applyLocalProfileEditorState, beginnerMode, beginnerModeLoaded, clearPendingSuggestions, profileForm, profileName]);
-
   function toggleSuggestionCode(code: string, checked: boolean): void {
     setAcceptedSuggestionCodes((prev) => {
       if (checked) return prev.includes(code) ? prev : [...prev, code];
@@ -665,37 +966,42 @@ export function useWorkspaceProfileBundle({
     });
   }
 
+  // The canonical JSON always follows the form. The editor follows too only when it holds no unapplied draft;
+  // an unapplied draft and its parse error stay as typed until Apply (take the draft) or discard (take the form).
   function syncProfileJsonFromForm(nextForm: ProfileFormModel): void {
     const nextState = buildProfileJsonEditorState(nextForm, profileName);
-    if (profileJson !== nextState.json) {
-      setProfileJson(nextState.json);
-    }
-    setProfileJsonDraft(nextState.jsonDraft);
-    setProfileJsonError(nextState.jsonError);
+    setProfileJsonEditor((current) => (current.jsonDraft === current.json
+      ? { json: nextState.json, jsonDraft: nextState.jsonDraft, jsonError: nextState.jsonError }
+      : { ...current, json: nextState.json }));
   }
 
   function applyProfileForm(nextForm: ProfileFormModel): void {
-    markProfileEditorLocalEdit();
+    markProfileEditorContentEdit();
     setProfileForm(nextForm);
     syncProfileJsonFromForm(nextForm);
     if (pendingSuggestions.length > 0) clearPendingSuggestions();
   }
 
   function replaceProfileFromJsonText(nextJson: string): void {
-    markProfileEditorLocalEdit();
-    setProfileJsonDraft(nextJson);
-    setProfileJsonError("");
+    markProfileEditorContentEdit();
+    setProfileJsonEditor((current) => ({ ...current, jsonDraft: nextJson, jsonError: "" }));
   }
 
   function applyProfileJsonEditorAction(): void {
     const parsed = parseProfileJsonEditorDraft(profileJsonDraft, profileName);
     if (!parsed.ok) {
-      setProfileJsonError(parsed.error);
+      setProfileJsonEditor((current) => ({ ...current, jsonError: parsed.error }));
       return;
     }
     applyLocalProfileEditorState(buildProfileJsonEditorState(parsed.form, profileName));
     setLastNormalizationDisclosure(parsed.normalization);
     if (pendingSuggestions.length > 0) clearPendingSuggestions();
+  }
+
+  // Explicit user choice: drop the unapplied draft and show the current form as canonical JSON again.
+  function discardProfileJsonDraftAction(): void {
+    markProfileEditorContentEdit();
+    setProfileJsonEditor((current) => ({ ...current, jsonDraft: current.json, jsonError: "" }));
   }
 
   async function copyProfileJsonEditorAction(): Promise<void> {
@@ -795,13 +1101,47 @@ export function useWorkspaceProfileBundle({
     pushWorkspaceNotice("샘플 프로필을 편집 영역에 불러왔습니다. Save를 눌러야 실제 저장됩니다.");
   }
 
+  const ensureProfileUpdateTarget = useCallback((targetProfileId: string): boolean => {
+    if (isProfileUpdateTargetForeign({
+      targetProfileId,
+      editorContentProfileId: editorContentProfileIdRef.current,
+    })) {
+      // Nothing is written. Unconfirmed input stays on screen as a draft without a selection (save it as a
+      // new profile); without input the selected profile's stored values are still on their way.
+      const keepsDraft = shouldReleaseSelectionForForeignDraft({
+        profileId: targetProfileId,
+        selectedProfileId: selectedProfileIdRef.current,
+        editorContentProfileId: editorContentProfileIdRef.current,
+        hasUnconfirmedContent: hasUnconfirmedProfileContent({
+          confirmedContentVersion: confirmedContentVersionRef.current,
+          currentContentVersion: profileEditorContentVersionRef.current,
+        }),
+      });
+      if (keepsDraft) commitSelectedProfileId("");
+      pushWorkspaceError(keepsDraft
+        ? "선택한 프로필의 저장값을 아직 불러오지 못해 현재 입력을 그 프로필에 저장하지 않았습니다. 입력은 그대로 두었으니 새로 만들기로 저장하세요."
+        : "선택한 프로필의 저장값을 불러오는 중이라 저장하지 않았습니다. 불러온 뒤 다시 저장하세요.");
+      return false;
+    }
+    return true;
+  }, [commitSelectedProfileId, pushWorkspaceError]);
+
   async function performProfileSave(mode: ProfileSaveMode, profile: ProfileV2 | Record<string, unknown>): Promise<boolean> {
+    // An unapplied JSON draft is not what would be sent; nothing is written and the draft stays as typed.
+    if (profileJsonDraft !== profileJson) {
+      pushWorkspaceNotice("JSON 편집 내용을 먼저 적용한 뒤 저장해 주세요.");
+      return false;
+    }
     if (mode === "update" && !selectedProfileId) {
       pushWorkspaceError("수정할 프로필을 먼저 선택하세요.");
       return false;
     }
+    if (mode === "update" && !ensureProfileUpdateTarget(selectedProfileId)) return false;
 
     const feedback = resolveProfileSaveFeedback(mode, beginnerMode);
+    const dispatchSelectionGeneration = selectionGenerationRef.current;
+    const dispatchContentVersion = profileEditorContentVersionRef.current;
+    const payloadName = resolveProfileSavePayloadName(mode, profileName);
     setSavingProfile(true);
     try {
       const method = mode === "update" ? "PATCH" : "POST";
@@ -814,7 +1154,7 @@ export function useWorkspaceProfileBundle({
         method,
         headers: { "content-type": "application/json" },
         body: JSON.stringify(withDevCsrf({
-          name: resolveProfileSavePayloadName(mode, profileName),
+          name: payloadName,
           profile: payloadProfile.profile,
         })),
       });
@@ -824,14 +1164,39 @@ export function useWorkspaceProfileBundle({
         pushWorkspaceError(parsedPayload.errorMessage);
         return false;
       }
-      const typedPayload = payload as ApiResponse<PlanningProfileRecord>;
+      const savedRecord = (payload as ApiResponse<PlanningProfileRecord>).data;
+      // Reads started before this write can no longer hydrate over it.
+      profileDataEpochRef.current += 1;
+      // The content sent with this save is stored now; edits typed after the dispatch stay unconfirmed.
+      confirmedContentVersionRef.current = Math.max(confirmedContentVersionRef.current, dispatchContentVersion);
+      const savedProfileId = savedRecord?.id ?? "";
+      const followUp = resolveProfileSaveFollowUp({
+        mode,
+        savedProfileId,
+        selectionChanged: dispatchSelectionGeneration !== selectionGenerationRef.current,
+        hasEditsSinceDispatch: hasProfileEditsSinceDispatch({
+          dispatchContentVersion,
+          currentContentVersion: profileEditorContentVersionRef.current,
+        }),
+      });
 
-      const normalizationFromResponse = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
-      setLastNormalizationDisclosure(normalizationFromResponse ?? payloadProfile.normalization);
-
-      profileEditorHasLocalEditsRef.current = false;
-      await loadProfiles(typedPayload.data?.id);
-      pushWorkspaceNotice(feedback.successMessage);
+      if (followUp.nextSelectedId) {
+        const normalizationFromResponse = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
+        setLastNormalizationDisclosure(normalizationFromResponse ?? payloadProfile.normalization);
+      }
+      if (followUp.clearLocalEdits) profileEditorHasLocalEditsRef.current = false;
+      await loadProfiles(followUp.nextSelectedId);
+      pushWorkspaceNotice(resolveProfileSaveCompletionNotice({
+        mode,
+        beginnerMode,
+        savedProfileName: savedRecord?.name ?? payloadName,
+        savedProfileSelected: Boolean(savedProfileId) && normalizeProfileId(selectedProfileIdRef.current) === savedProfileId,
+        hasUnsavedEdits: hasUnsavedProfileEditsAfterSave({
+          dispatchContentVersion,
+          selectionContentVersion: selectionContentVersionRef.current,
+          currentContentVersion: profileEditorContentVersionRef.current,
+        }),
+      }));
       return true;
     } catch (error) {
       pushWorkspaceError(error instanceof Error ? error.message : feedback.errorMessage);
@@ -842,6 +1207,10 @@ export function useWorkspaceProfileBundle({
   }
 
   function beginProfileSave(mode: ProfileSaveMode): void {
+    if (profileJsonDraft !== profileJson) {
+      pushWorkspaceNotice("JSON 편집 내용을 먼저 적용한 뒤 저장해 주세요.");
+      return;
+    }
     if (profileValidation.errors.length > 0) {
       pushWorkspaceError(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
       return;
@@ -901,6 +1270,7 @@ export function useWorkspaceProfileBundle({
         return;
       }
 
+      profileDataEpochRef.current += 1;
       await loadProfiles();
       setProfileDeleteDialog(null);
       pushWorkspaceNotice("프로필을 휴지통으로 이동했습니다.");
@@ -939,6 +1309,7 @@ export function useWorkspaceProfileBundle({
     applyLocalProfileEditorState,
     markProfileEditorLocalEdit,
     loadProfiles,
+    ensureProfileUpdateTarget,
     updateProfileField,
     applyProfileForm,
     addDebtRow,
@@ -950,6 +1321,7 @@ export function useWorkspaceProfileBundle({
     updateBeginnerGoal,
     replaceProfileFromJsonText,
     applyProfileJsonEditorAction,
+    discardProfileJsonDraftAction,
     copyProfileJsonEditorAction,
     loadSampleProfileAction,
     beginProfileSave,

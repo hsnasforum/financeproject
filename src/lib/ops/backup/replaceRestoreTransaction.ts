@@ -31,6 +31,15 @@ export type ReplaceRestoreTransactionHooks = {
   faultInjection?: ReplaceRestoreFaultInjection;
 };
 
+export class ReplaceRestoreJournalError extends Error {
+  readonly code = "REPLACE_RESTORE_JOURNAL_INVALID";
+
+  constructor(detail: string) {
+    super(`REPLACE_RESTORE_JOURNAL_INVALID:${detail}`);
+    this.name = "ReplaceRestoreJournalError";
+  }
+}
+
 export async function callReplaceRestoreFaultInjection(
   faultInjection: ReplaceRestoreFaultInjection | undefined,
   operation: ReplaceRestoreFaultOperation,
@@ -58,7 +67,7 @@ function asString(value: unknown): string {
 
 export async function writeReplaceRestoreJournal(snapshot: ReplaceRestoreSnapshot): Promise<void> {
   await atomicWriteJson(snapshot.journalPath, {
-    version: 1,
+    version: 2,
     kind: "planning-data-vault-replace-restore-journal",
     createdAt: new Date().toISOString(),
     snapshotRoot: snapshot.root,
@@ -135,28 +144,52 @@ export async function cleanupReplaceRestoreSnapshot(
   await fs.rm(snapshot.journalPath, { force: true }).catch(() => undefined);
 }
 
-export async function readPendingReplaceRestoreSnapshot(journalPath: string): Promise<ReplaceRestoreSnapshot | null> {
+function normalizedPath(value: string): string {
+  const resolved = path.resolve(value).replaceAll("\\", "/").replace(/\/+$/u, "") || "/";
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function isPathInside(parentPath: string, candidatePath: string): boolean {
+  const parent = normalizedPath(parentPath);
+  const candidate = normalizedPath(candidatePath);
+  return candidate.startsWith(`${parent}/`);
+}
+
+export async function readPendingReplaceRestoreSnapshot(input: {
+  journalPath: string;
+  allowedTargets: readonly string[];
+  allowedSnapshotParent: string;
+}): Promise<ReplaceRestoreSnapshot | null> {
   let raw: unknown;
   try {
-    raw = JSON.parse(await fs.readFile(journalPath, "utf-8")) as unknown;
+    raw = JSON.parse(await fs.readFile(input.journalPath, "utf-8")) as unknown;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError?.code === "ENOENT") return null;
     throw error;
   }
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ReplaceRestoreJournalError("object");
+  }
   const record = raw as Record<string, unknown>;
-  if (record.kind !== "planning-data-vault-replace-restore-journal") return null;
+  if (record.kind !== "planning-data-vault-replace-restore-journal") {
+    throw new ReplaceRestoreJournalError("kind");
+  }
+  if (record.version !== 1 && record.version !== 2) {
+    throw new ReplaceRestoreJournalError("version");
+  }
   const root = asString(record.snapshotRoot);
   const rows = Array.isArray(record.entries) ? record.entries : [];
-  if (!root) return null;
+  if (!root || !path.isAbsolute(root) || !isPathInside(input.allowedSnapshotParent, root)) {
+    throw new ReplaceRestoreJournalError("snapshot-root");
+  }
   const entries = rows
     .map((entry) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
       const entryRecord = entry as Record<string, unknown>;
       const targetPath = asString(entryRecord.targetPath);
       const backupPath = asString(entryRecord.backupPath);
-      if (!targetPath || !backupPath) return null;
+      if (!targetPath || !backupPath || !path.isAbsolute(targetPath) || !path.isAbsolute(backupPath)) return null;
       return {
         targetPath,
         backupPath,
@@ -164,18 +197,34 @@ export async function readPendingReplaceRestoreSnapshot(journalPath: string): Pr
       };
     })
     .filter((entry): entry is ReplaceRestoreSnapshotEntry => entry !== null);
-  if (entries.length < 1) return null;
+  if (entries.length < 1 || entries.length !== rows.length) {
+    throw new ReplaceRestoreJournalError("entries");
+  }
+  const allowedTargets = new Set(input.allowedTargets.map(normalizedPath));
+  const seenTargets = new Set<string>();
+  for (const [index, entry] of entries.entries()) {
+    const normalizedTarget = normalizedPath(entry.targetPath);
+    if (!allowedTargets.has(normalizedTarget) || seenTargets.has(normalizedTarget)) {
+      throw new ReplaceRestoreJournalError("target");
+    }
+    seenTargets.add(normalizedTarget);
+    if (normalizedPath(entry.backupPath) !== normalizedPath(path.join(root, `${index}`))) {
+      throw new ReplaceRestoreJournalError("backup-path");
+    }
+  }
   return {
     root,
-    journalPath,
+    journalPath: input.journalPath,
     entries,
   };
 }
 
 export async function recoverPendingReplaceRestoreSnapshot(input: {
   journalPath: string;
+  allowedTargets: readonly string[];
+  allowedSnapshotParent: string;
 } & ReplaceRestoreTransactionHooks): Promise<void> {
-  const snapshot = await readPendingReplaceRestoreSnapshot(input.journalPath);
+  const snapshot = await readPendingReplaceRestoreSnapshot(input);
   if (!snapshot) return;
   await rollbackReplaceRestoreSnapshot(snapshot, input);
   await cleanupReplaceRestoreSnapshot(snapshot, input);

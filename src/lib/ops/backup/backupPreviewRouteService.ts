@@ -1,5 +1,6 @@
 import { append as appendAuditLog } from "../../audit/auditLogStore";
 import { consumeVaultCsrfOrThrow, ensureVaultCsrfCookie } from "../../planning/security/vaultCsrf";
+import { resolvePlanningUserId } from "../../planning/store/namespace";
 import { appendOpsMetricEvent } from "../metricsLog";
 import { loadOpsPolicy } from "../opsPolicy";
 import { appendOpsAuditEvent } from "../securityAuditLog";
@@ -11,6 +12,7 @@ import {
 import {
   decryptPlanningDataVaultArchive,
   previewPlanningDataVaultZip,
+  type PlanningDataVaultScope,
   type VaultPreviewSummary,
 } from "./planningDataVault";
 import {
@@ -112,6 +114,7 @@ export async function previewOpsBackupArchive(input: {
   file: File;
   passphrase: string;
   startedAt: number;
+  scope: PlanningDataVaultScope;
 }): Promise<OpsBackupPreviewPayload> {
   const policy = loadOpsPolicy();
   const encryptedBytes = await readUploadBufferViaTemp(input.file, "planning-backup-preview");
@@ -120,6 +123,8 @@ export async function previewOpsBackupArchive(input: {
     maxEntries: policy.backup.maxEntries,
     maxBytes: policy.backup.maxUploadBytes,
     maxPreviewIds: policy.backup.maxPreviewIds,
+    scope: input.scope,
+    userId: resolvePlanningUserId(),
   });
 
   appendBackupPreviewAudit("SUCCESS", {

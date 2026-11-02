@@ -13,10 +13,10 @@ describe("formatSnapshotLabel", () => {
       },
     }, "latest");
 
-    expect(label).toContain("LATEST");
+    expect(label).toContain("최신");
     expect(label).toContain("기준금리 2.50%");
-    expect(label).toContain("CPI 2.00%");
-    expect(label).toContain("(stale 12d)");
+    expect(label).toContain("소비자물가 2.00%");
+    expect(label).toContain("12일 경과");
   });
 
   it("returns stale badge thresholds for 45/120 day boundaries", () => {

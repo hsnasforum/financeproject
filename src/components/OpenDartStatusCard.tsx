@@ -8,8 +8,15 @@ import { cn } from "@/lib/utils";
 
 type OpenDartStatusPayload = {
   exists?: boolean;
+  usable?: boolean;
+  issue?: "INVALID_INDEX";
   primaryPath?: string;
   triedPaths?: string[];
+  freshness?: {
+    state: "fresh" | "stale" | "unknown";
+    ageDays: number | null;
+    thresholdDays: number;
+  };
   meta?: {
     loadedPath?: string;
     generatedAt?: string;
@@ -36,18 +43,67 @@ function formatDateTime(value: string | undefined): string {
 }
 
 function configuredLabel(configured: boolean) {
-  return configured ? "연결됨" : "설정 필요";
+  return configured ? "설정됨" : "설정 필요";
 }
 
-function userSummary(configured: boolean, exists: boolean | null) {
-  if (!configured) {
-    return "OpenDART API 키가 없어 회사 검색과 공시 상세는 제한된 기준으로만 읽습니다.";
+type OpenDartBasisState = "checking" | "unchecked" | "available" | "stale" | "failed";
+
+function resolveBasisState(input: {
+  loading: boolean;
+  status: OpenDartStatusPayload | null;
+  error: string;
+}): OpenDartBasisState {
+  if (input.loading) return "checking";
+  if (input.error) return "failed";
+  if (input.status?.exists && input.status.usable === false) return "failed";
+  if (!input.status?.exists || input.status.freshness?.state === "unknown") return "unchecked";
+  if (input.status.freshness?.state === "stale") return "stale";
+  if (input.status.freshness?.state === "fresh") return "available";
+  return "unchecked";
+}
+
+function basisStateLabel(state: OpenDartBasisState): string {
+  if (state === "checking") return "확인 중";
+  if (state === "available") return "사용 가능";
+  if (state === "stale") return "오래됨";
+  if (state === "failed") return "확인 실패";
+  return "최근 확인 없음";
+}
+
+function basisStateClass(state: OpenDartBasisState): string {
+  if (state === "available") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  if (state === "stale" || state === "unchecked") return "bg-amber-50 text-amber-700 border-amber-100";
+  if (state === "failed") return "bg-rose-50 text-rose-700 border-rose-100";
+  return "bg-surface-muted text-slate-600 border-slate-200";
+}
+
+function userSummary(
+  configured: boolean,
+  status: OpenDartStatusPayload | null,
+  error: string,
+) {
+  if (error) {
+    return "공시 검색 기준을 불러오지 못했습니다. 다른 화면은 계속 사용할 수 있으며 잠시 뒤 다시 확인할 수 있습니다.";
   }
-  if (exists === null) {
+  if (status === null) {
     return "공시 검색과 상세 화면의 기준을 확인하는 중입니다. 아래 최신 기준과 연결 상태를 함께 봅니다.";
   }
-  if (!exists) {
-    return "API 키는 준비되어 있지만 공시 검색용 인덱스가 없어 일부 회사 검색과 상세 흐름이 제한될 수 있습니다.";
+  if (!status.exists) {
+    return configured
+      ? "OpenDART API 키는 설정됐지만 공시 검색용 인덱스가 없어 일부 회사 검색과 상세 흐름이 제한될 수 있습니다."
+      : "OpenDART API 키와 공시 검색용 인덱스가 없어 회사 검색과 공시 상세가 제한된 기준으로 표시됩니다.";
+  }
+  if (status.usable === false) {
+    return "공시 검색용 인덱스 파일을 읽을 수 없어 회사 검색과 공시 상세가 제한됩니다. 다른 화면은 계속 사용할 수 있습니다.";
+  }
+  if (status.freshness?.state === "stale") {
+    return `공시 검색용 인덱스는 사용할 수 있지만 생성 후 ${status.freshness.ageDays ?? "-"}일이 지나 ${status.freshness.thresholdDays}일 기준보다 오래됐습니다.`;
+  }
+  if (status.freshness?.state !== "fresh") {
+    return "공시 검색용 인덱스는 있지만 마지막 생성 시점을 확인할 수 없어 최신 여부를 판단하지 못했습니다.";
+  }
+  if (!configured) {
+    return "공시 검색용 인덱스는 사용할 수 있지만 OpenDART API 키가 없어 공시 상세는 제한된 기준으로 표시됩니다.";
   }
   return "공시 검색과 상세 화면은 현재 준비된 인덱스와 마지막 생성 기준을 바탕으로 읽습니다.";
 }
@@ -110,7 +166,8 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
     return () => window.clearTimeout(timeoutId);
   }, []);
 
-  const exists = status?.exists === true;
+  const usable = status?.exists === true && status.usable !== false;
+  const basisState = resolveBasisState({ loading, status, error });
 
   return (
     <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
@@ -119,15 +176,23 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
           <SubSectionHeader title="공시 데이터 연결 상태" className="mb-0" />
           <p className="mt-1 text-sm font-bold text-slate-500">상단 상태 표시와 사용자용 요약으로 회사 검색과 공시 상세의 현재 기준을 먼저 읽고, 개발용 인덱스 정보와 점검 액션은 아래 관리 구간에서만 확인합니다.</p>
         </div>
-        <div className="flex flex-col gap-1 sm:items-end">
-          <span className={cn(
-            "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
-            configured ? "bg-primary/5 text-navy border-primary/10" : "bg-amber-50 text-amber-700 border-amber-100"
-          )}>
-            API 키 {configuredLabel(configured)}
-          </span>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <span className={cn(
+              "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
+              configured ? "bg-primary/5 text-navy border-primary/10" : "bg-amber-50 text-amber-700 border-amber-100"
+            )}>
+              API 키 {configuredLabel(configured)}
+            </span>
+            <span className={cn(
+              "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
+              basisStateClass(basisState),
+            )}>
+              데이터 기준 {basisStateLabel(basisState)}
+            </span>
+          </div>
           <p className="text-[10px] font-bold leading-relaxed text-slate-400 sm:text-right">
-            이 상태 표시는 API 키 설정 여부만 빠르게 보여 줍니다.
+            API 키 설정 여부와 실제 데이터 기준 상태는 서로 다른 근거로 표시합니다.
           </p>
         </div>
       </div>
@@ -140,7 +205,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
               <p className="mb-2 text-[10px] font-bold leading-relaxed text-slate-400">
                 위 상태 표시로 설정 여부를 먼저 보고, 아래 문장으로 그 상태가 회사 검색과 공시 상세에 무엇을 뜻하는지 읽습니다.
               </p>
-              <p className="text-xs font-bold leading-relaxed text-slate-700">{userSummary(configured, status ? exists : null)}</p>
+              <p className="text-xs font-bold leading-relaxed text-slate-700">{userSummary(configured, status, error)}</p>
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">지금 읽는 기준</p>
             {loading ? (
@@ -157,8 +222,13 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
               </p>
               <dl className="grid gap-y-3 text-xs">
                 <div className="flex justify-between border-b border-slate-100 pb-2">
-                  <dt className="font-bold text-slate-500">1. 인덱스 준비 상태</dt>
-                  <dd className={cn("font-black", exists ? "text-success" : "text-danger")}>{exists ? "준비됨" : "확인 필요"}</dd>
+                  <dt className="font-bold text-slate-500">1. 인덱스 데이터 상태</dt>
+                  <dd className={cn(
+                    "font-black",
+                    basisState === "available" ? "text-success" : basisState === "failed" ? "text-danger" : "text-amber-700",
+                  )}>
+                    {basisStateLabel(basisState)}
+                  </dd>
                 </div>
                 <div className="border-b border-slate-100 pb-2">
                   <div className="flex justify-between gap-3">
@@ -166,7 +236,11 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
                     <dd className="font-bold text-slate-700 tabular-nums">{formatDateTime(status.meta?.generatedAt)}</dd>
                   </div>
                   <dd className="mt-1 text-[10px] font-bold leading-relaxed text-slate-400">
-                    위 시점은 현재 공시 검색과 상세 화면이 마지막으로 읽는 생성 기준입니다.
+                    {status.freshness?.state === "fresh"
+                      ? `생성 후 ${status.freshness.ageDays ?? 0}일이 지나 ${status.freshness.thresholdDays}일 기준 안에 있습니다.`
+                      : status.freshness?.state === "stale"
+                        ? `생성 후 ${status.freshness.ageDays ?? "-"}일이 지나 ${status.freshness.thresholdDays}일 기준보다 오래됐습니다.`
+                        : "마지막 생성 시점을 확인할 수 없어 최신 여부를 판단하지 않습니다."}
                   </dd>
                 </div>
                 <div>
@@ -201,13 +275,13 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
             )}
           </div>
           
-          {!exists && status?.message && (
+          {!usable && status?.message && (
             <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-amber-600">
                 제한 상태를 한 번 더 확인해 주세요
               </p>
               <p className="text-xs font-bold text-amber-700 leading-relaxed">
-                위 기준에서 본 것처럼 공시 검색용 준비 파일이 아직 없어 일부 회사 검색과 공시 상세는 제한된 상태로 읽힙니다.
+                {status.message}
               </p>
               <p className="mt-2 text-[10px] font-bold leading-relaxed text-amber-700/80">
                 새로운 운영 경고가 아니라, 위 요약과 읽는 기준에서 본 제한 상태를 다시 짚는 사용자 안내입니다.

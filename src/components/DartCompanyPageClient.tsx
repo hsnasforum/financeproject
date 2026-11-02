@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -201,11 +201,15 @@ export function DartCompanyPageClient() {
         description="선택한 기업의 개황을 현재 기준으로 다시 읽고, 필요하면 공시 모니터링으로 이어 보는 화면입니다."
         action={
           <div className="flex items-center gap-2">
-            <Link href={searchBackHref} onClick={() => clearPendingCompanyHref()}>
-              <Button size="sm" variant="outline" className="rounded-xl font-black">
-                {fromQuery ? "검색 결과로 돌아가기" : "검색으로 돌아가기"}
-              </Button>
-            </Link>
+            <ButtonLink
+              href={searchBackHref}
+              onClick={() => clearPendingCompanyHref()}
+              size="sm"
+              variant="outline"
+              className="rounded-xl font-black"
+            >
+              {fromQuery ? "검색 결과로 돌아가기" : "검색으로 돌아가기"}
+            </ButtonLink>
             <Button size="sm" variant="outline" className={cn("rounded-xl font-black transition-all", favoriteOn ? "border-primary/20 text-primary bg-primary/5" : "bg-white")} onClick={toggleFavorite} disabled={!corpCode}>
               {favoriteOn ? "★ 즐겨찾기 해제" : "☆ 즐겨찾기 추가"}
             </Button>

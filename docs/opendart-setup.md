@@ -4,7 +4,7 @@
 
 - `OPENDART_API_KEY`: OpenDART 인증키 (필수)
 - `OPENDART_BASE_URL`: 기본값 `https://opendart.fss.or.kr` (선택, 권장)
-- `OPENDART_API_URL`: legacy alias. 이미 `.env.local`에서 이 이름을 쓰고 있으면 그대로 동작합니다.
+- `OPENDART_API_URL`: legacy alias. 이미 `.env.local`에서 이 이름을 쓰고 있으면 그대로 동작합니다. `https://opendart.fss.or.kr`와 `https://opendart.fss.or.kr/api` 형식을 모두 받으며, 끝의 `/api`는 중복되지 않게 정리합니다.
 - `DART_CORPCODES_INDEX_PATH`: corpCodes 인덱스 경로 (선택, 기본 `tmp/dart/corpCodes.index.json`)
 - `DART_INDEX_BUILD_TOKEN`: production에서 인덱스 빌드 보호 토큰 (선택)
 

@@ -35,6 +35,7 @@ import {
 import {
   buildPlanningWorkspaceRunButtonDescribedBy,
 } from "@/components/planning/workspace/controllerUtils";
+import { usePlanningDiagnosisWizard } from "@/components/planning/workspace/usePlanningDiagnosisWizard";
 import { useWorkspaceArrivalHandoff } from "@/components/planning/workspace/useWorkspaceArrivalHandoff";
 import { useWorkspaceExecutionOptionsBundle } from "@/components/planning/workspace/useWorkspaceExecutionOptionsBundle";
 import { useWorkspaceFeedbackUiBundle } from "@/components/planning/workspace/useWorkspaceFeedbackUiBundle";
@@ -265,6 +266,7 @@ export function usePlanningWorkspaceController({
       profileName: profileBundle.profileName,
       profileForm: profileBundle.profileForm,
       profileValidationErrors: profileBundle.profileValidation.errors,
+      ensureProfileUpdateTarget: profileBundle.ensureProfileUpdateTarget,
       loadProfiles: profileBundle.loadProfiles,
       setPendingProfileSave: profileBundle.setPendingProfileSave,
       setPendingSuggestions: profileBundle.setPendingSuggestions,
@@ -325,6 +327,46 @@ export function usePlanningWorkspaceController({
     },
   });
   const runNeedsWarningConfirmation = preflightWarnIssues.length > 0 && !runtimeState.runWarningConfirmed;
+  const diagnosisRunConfig = useMemo(() => ({
+    policyId: execution.policyId,
+    runTitle: execution.runTitle,
+    assumptionsForm: execution.assumptionsForm,
+    assumptionsExtraOverrides: execution.assumptionsExtraOverrides,
+    effectiveSnapshotSelection,
+    selectedSnapshotId,
+    selectedSnapshotItem,
+    effectiveRunScenariosEnabled: execution.effectiveRunScenariosEnabled,
+    effectiveRunMonteCarloEnabled: execution.effectiveRunMonteCarloEnabled,
+    effectiveRunActionsEnabled: execution.effectiveRunActionsEnabled,
+    effectiveRunDebtEnabled: execution.effectiveRunDebtEnabled,
+    effectiveIncludeProducts: execution.effectiveIncludeProducts,
+    maxCandidatesPerAction: execution.maxCandidatesPerAction,
+    monteCarloPaths: execution.monteCarloPaths,
+    monteCarloSeed: execution.monteCarloSeed,
+    debtExtraPaymentKrw: execution.debtExtraPaymentKrw,
+  }), [
+    effectiveSnapshotSelection,
+    execution.assumptionsExtraOverrides,
+    execution.assumptionsForm,
+    execution.debtExtraPaymentKrw,
+    execution.effectiveIncludeProducts,
+    execution.effectiveRunActionsEnabled,
+    execution.effectiveRunDebtEnabled,
+    execution.effectiveRunMonteCarloEnabled,
+    execution.effectiveRunScenariosEnabled,
+    execution.maxCandidatesPerAction,
+    execution.monteCarloPaths,
+    execution.monteCarloSeed,
+    execution.policyId,
+    execution.runTitle,
+    selectedSnapshotId,
+    selectedSnapshotItem,
+  ]);
+  const diagnosisWizard = usePlanningDiagnosisWizard({
+    locale,
+    config: diagnosisRunConfig,
+    loadProfiles: profileBundle.loadProfiles,
+  });
   const quickStartHandoff = useWorkspaceQuickStartHandoff({
     profileName: profileBundle.profileName,
     selectedProfileId: profileBundle.selectedProfileId,
@@ -492,6 +534,7 @@ export function usePlanningWorkspaceController({
     workspaceError: feedback.workspaceError,
     workspaceNotice: feedback.workspaceNotice,
     beginnerMode: execution.beginnerMode,
+    beginnerModeLoaded: execution.beginnerModeLoaded,
     savingProfile: profileBundle.savingProfile,
     running: runtimeState.running,
     quickStartNextStep,
@@ -516,6 +559,7 @@ export function usePlanningWorkspaceController({
 
   const profile = {
     locale,
+    debugEnabled: featureFlags.debugEnabled,
     beginnerMode: execution.beginnerMode,
     loadingProfiles: profileBundle.loadingProfiles,
     profiles: profileBundle.profiles,
@@ -543,6 +587,7 @@ export function usePlanningWorkspaceController({
 
   const executionGroup = {
     locale,
+    debugEnabled: featureFlags.debugEnabled,
     beginnerMode: execution.beginnerMode,
     selectedProfileId: profileBundle.selectedProfileId,
     snapshotItemsWarning,
@@ -601,6 +646,7 @@ export function usePlanningWorkspaceController({
 
   const results = {
     locale,
+    debugEnabled: featureFlags.debugEnabled,
     optimizeCandidates,
     optimizeResult: runtimeState.optimizeResult,
     runResult: runtimeState.runResult,
@@ -700,6 +746,7 @@ export function usePlanningWorkspaceController({
     updateBeginnerGoal: profileBundle.updateBeginnerGoal,
     replaceProfileFromJsonText: profileBundle.replaceProfileFromJsonText,
     applyProfileJsonEditorAction: profileBundle.applyProfileJsonEditorAction,
+    discardProfileJsonDraftAction: profileBundle.discardProfileJsonDraftAction,
     copyProfileJsonEditorAction: profileBundle.copyProfileJsonEditorAction,
     beginProfileSave: profileBundle.beginProfileSave,
     applySuggestedProfileSaveAction: profileBundle.applySuggestedProfileSaveAction,
@@ -754,6 +801,7 @@ export function usePlanningWorkspaceController({
     results,
     dialogs,
     actions,
+    diagnosisWizard,
   };
 }
 

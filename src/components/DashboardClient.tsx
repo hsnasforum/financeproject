@@ -1,358 +1,116 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { resolveActionCatalogById } from "@/lib/planning/catalog/actionCatalog";
-import { Card } from "@/components/ui/Card";
-import { PageShell } from "@/components/ui/PageShell";
-import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
-import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { withDevCsrf, writeDevCsrfToken } from "@/lib/dev/clientCsrf";
 import {
-  ReportHeroCard,
-  ReportHeroStatCard,
-  ReportHeroStatGrid,
-} from "@/components/ui/ReportTone";
+  postPlanningRun,
+  resolvePlanningRunIdempotencyRequest,
+  type PendingPlanningRunRequest,
+} from "@/components/planning/workspace/useWorkspaceRunExecutionActions";
+import { DashboardFxSection } from "@/components/dashboard/DashboardFxSection";
+import { PageShell } from "@/components/ui/PageShell";
+import { cn } from "@/lib/utils";
 import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
+import {
+  DASHBOARD_REQUEST_TIMEOUT_ERROR_NAME,
+  DASHBOARD_REQUEST_TIMEOUT_MESSAGE,
+  INITIAL_DASHBOARD_STATE as INITIAL_STATE,
+  asDashboardString as asString,
+  describeDashboardExchangeFailure as describeExchangeFailure,
+  describeDashboardFxFailure as describeFxFailure,
+  fetchDashboardJson,
+  formatDashboardDate as formatDate,
+  formatDashboardDateTime as formatDateTime,
+  formatDashboardKrw as formatKrw,
+  formatDashboardPct as formatPct,
+  formatDashboardRunStatus as formatRunStatus,
+  getDashboardResourceLoadCopy,
+  getDashboardRunActions as runActions,
+  getDashboardRunCandidates as runCandidates,
+  getDashboardRunSummary as runSummary,
+  isDashboardRecord as isRecord,
+  parseDashboardBenefits as parseBenefits,
+  parseDashboardDataSources as parseDataSources,
+  parseDashboardExchange as parseExchange,
+  parseDashboardFx as parseFx,
+  parseDashboardSourceStatuses as parseSourceStatuses,
+  truncateDashboardText as truncate,
+  DASHBOARD_UNKNOWN_PROFILE_LABEL,
+  type DashboardInitialViewModel,
+  type DashboardProfileSelection,
+  type DashboardState,
+} from "@/components/dashboard/dashboardClientModel";
 
-export type DashboardRun = {
-  id: string;
-  profileId: string;
-  title: string;
-  createdAt: string;
-  overallStatus?: string;
-  input?: {
-    horizonMonths?: number;
-  };
-  meta?: {
-    snapshot?: {
-      asOf?: string;
-    };
-  };
-  outputs?: Record<string, unknown>;
-};
-
-export type DashboardRunsLoadState = "loaded" | "failed";
-
-export type DashboardInitialViewModel = {
-  runs: DashboardRun[];
-  runsLoadState: DashboardRunsLoadState;
-  runsErrorMessage?: string;
-};
-
-type DashboardDataSource = {
-  id: string;
-  label: string;
-  priority: string;
-  status?: {
-    state?: string;
-    message?: string;
-  };
-};
-
-type DashboardSourceStatus = {
-  sourceId: string;
-  kind: string;
-  isFresh: boolean;
-  counts: number;
-  lastSyncedAt?: string | null;
-};
-
-type DashboardFxItem = {
-  currency: string;
-  amount: number;
-  rate: number | null;
-  asOfDate: string | null;
-  krw: number | null;
-};
-
-type DashboardBenefit = {
-  serviceId: string;
-  title: string;
-  summary: string;
-  org: string;
-};
-
-type DashboardCandidate = {
-  id: string;
-  kind: string;
-  providerName: string;
-  productName: string;
-  termMonths: number | null;
-  rateMinPct: number | null;
-  rateMaxPct: number | null;
-  notes: string[];
-  whyThis: string[];
-};
-
-type DashboardAction = {
-  code: string;
-  title: string;
-  summary: string;
-  steps: string[];
-  href: string;
-};
-
-type DashboardState = {
-  runs: DashboardRun[];
-  runsLoadState: DashboardRunsLoadState;
-  runsErrorMessage?: string;
-  dataSources: DashboardDataSource[];
-  sourceStatuses: DashboardSourceStatus[];
-  fxItems: DashboardFxItem[];
-  exchangeAsOf: string;
-  exchangeUsdRate: number | null;
-  benefits: DashboardBenefit[];
-  warnings: string[];
-};
-
-const INITIAL_STATE: DashboardState = {
-  runs: [],
-  runsLoadState: "loaded",
-  dataSources: [],
-  sourceStatuses: [],
-  fxItems: [],
-  exchangeAsOf: "",
-  exchangeUsdRate: null,
-  benefits: [],
-  warnings: [],
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function asNumber(value: unknown): number | null {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "-";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return "-";
-  return new Date(parsed).toLocaleString("ko-KR", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "-";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toLocaleDateString("ko-KR", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatKrw(value: number | null | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-  if (Math.abs(value) >= 100_000_000) return `${(value / 100_000_000).toFixed(1)}억원`;
-  if (Math.abs(value) >= 10_000) return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만원`;
-  return `${Math.round(value).toLocaleString("ko-KR")}원`;
-}
-
-function formatPct(value: number | null | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-  return `${value.toFixed(value >= 10 ? 1 : 2)}%`;
-}
-
-function formatRunStatus(status: string | undefined): string {
-  if (status === "SUCCESS") return "성공";
-  if (status === "PARTIAL_SUCCESS") return "부분 성공";
-  if (status === "FAILED") return "실패";
-  if (status === "RUNNING") return "실행 중";
-  return "저장됨";
-}
-
-function truncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength - 1)}…`;
-}
-
-function parseDataSources(payload: unknown): DashboardDataSource[] {
-  const rows = isRecord(payload) ? asArray(payload.data) : [];
-  return rows
-    .map((entry) => {
-      const row = isRecord(entry) ? entry : {};
-      const status = isRecord(row.status) ? row.status : {};
-      return {
-        id: asString(row.id),
-        label: asString(row.label),
-        priority: asString(row.priority),
-        status: {
-          state: asString(status.state),
-          message: asString(status.message),
-        },
-      };
-    })
-    .filter((row) => row.id);
-}
-
-function parseSourceStatuses(payload: unknown): DashboardSourceStatus[] {
-  const rows = isRecord(payload) ? asArray(payload.data) : [];
-  return rows
-    .map((entry) => {
-      const row = isRecord(entry) ? entry : {};
-      return {
-        sourceId: asString(row.sourceId),
-        kind: asString(row.kind),
-        isFresh: row.isFresh === true,
-        counts: asNumber(row.counts) ?? 0,
-        lastSyncedAt: asString(row.lastSyncedAt) || null,
-      };
-    })
-    .filter((row) => row.sourceId && row.kind);
-}
-
-function parseFxItems(payload: unknown): DashboardFxItem[] {
-  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : {};
-  return asArray(data.items)
-    .map((entry) => {
-      const row = isRecord(entry) ? entry : {};
-      return {
-        currency: asString(row.currency),
-        amount: asNumber(row.amount) ?? 0,
-        rate: asNumber(row.rate),
-        asOfDate: asString(row.asOfDate) || null,
-        krw: asNumber(row.krw),
-      };
-    })
-    .filter((row) => row.currency);
-}
-
-function parseBenefits(payload: unknown): DashboardBenefit[] {
-  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : {};
-  return asArray(data.items)
-    .map((entry) => {
-      const row = isRecord(entry) ? entry : {};
-      return {
-        serviceId: asString(row.serviceId),
-        title: asString(row.title),
-        summary: asString(row.summary),
-        org: asString(row.org),
-      };
-    })
-    .filter((row) => row.title);
-}
-
-function parseCandidates(actionsPayload: unknown): DashboardCandidate[] {
-  const actions = isRecord(actionsPayload) ? asArray(actionsPayload.actions) : [];
-  const rows: DashboardCandidate[] = [];
-
-  actions.forEach((entry, actionIndex) => {
-    const action = isRecord(entry) ? entry : {};
-    const candidates = asArray(action.candidates);
-    candidates.forEach((candidateEntry, candidateIndex) => {
-      const candidate = isRecord(candidateEntry) ? candidateEntry : {};
-      const providerName = asString(candidate.company);
-      const productName = asString(candidate.name);
-      rows.push({
-        id: `${actionIndex}:${candidateIndex}:${providerName}:${productName}`,
-        kind: asString(candidate.kind),
-        providerName,
-        productName,
-        termMonths: asNumber(candidate.termMonths),
-        rateMinPct: asNumber(candidate.rateMinPct),
-        rateMaxPct: asNumber(candidate.rateMaxPct),
-        notes: asArray(candidate.notes).map((item) => asString(item)).filter(Boolean),
-        whyThis: asArray(candidate.whyThis).map((item) => asString(item)).filter(Boolean),
-      });
-    });
-  });
-
-  return rows.filter((row) => row.productName);
-}
-
-function parseActions(actionsPayload: unknown): DashboardAction[] {
-  const actions = isRecord(actionsPayload) ? asArray(actionsPayload.actions) : [];
-  return actions
-    .map((entry) => {
-      const action = isRecord(entry) ? entry : {};
-      const code = asString(action.code);
-      const catalog = resolveActionCatalogById(code);
-      return {
-        code,
-        title: asString(action.title),
-        summary: asString(action.summary),
-        steps: asArray(action.steps).map((item) => asString(item)).filter(Boolean),
-        href: catalog?.href ?? "/planning/reports",
-      };
-    })
-    .filter((row) => row.title);
-}
-
-function runSummary(run: DashboardRun | null): {
-  monthlySurplusKrw: number | null;
-  endNetWorthKrw: number | null;
-  worstCashKrw: number | null;
-  topAction: string;
-} {
-  if (!run || !isRecord(run.outputs)) {
-    return {
-      monthlySurplusKrw: null,
-      endNetWorthKrw: null,
-      worstCashKrw: null,
-      topAction: "",
-    };
-  }
-
-  const outputs = run.outputs;
-  const resultDto = isRecord(outputs.resultDto) ? outputs.resultDto : {};
-  const dtoSummary = isRecord(resultDto.summary) ? resultDto.summary : {};
-  const simulate = isRecord(outputs.simulate) ? outputs.simulate : {};
-  const simulateSummary = isRecord(simulate.summary) ? simulate.summary : {};
-  const actions = isRecord(outputs.actions) ? outputs.actions : {};
-  const actionRows = asArray(actions.actions);
-  const firstAction = actionRows.find((entry) => isRecord(entry) && asString(entry.title));
-
-  return {
-    monthlySurplusKrw: asNumber(dtoSummary.monthlySurplusKrw) ?? asNumber(simulateSummary.monthlySurplusKrw),
-    endNetWorthKrw: asNumber(dtoSummary.endNetWorthKrw) ?? asNumber(simulateSummary.endNetWorthKrw) ?? asNumber(simulateSummary.endNetWorth),
-    worstCashKrw: asNumber(dtoSummary.worstCashKrw) ?? asNumber(simulateSummary.worstCashKrw),
-    topAction: firstAction && isRecord(firstAction) ? asString(firstAction.title) : "",
-  };
-}
-
-function runCandidates(run: DashboardRun | null): DashboardCandidate[] {
-  if (!run || !isRecord(run.outputs)) return [];
-  const actions = isRecord(run.outputs.actions) ? run.outputs.actions : {};
-  return parseCandidates(actions).slice(0, 4);
-}
-
-function runActions(run: DashboardRun | null): DashboardAction[] {
-  if (!run || !isRecord(run.outputs)) return [];
-  const actions = isRecord(run.outputs.actions) ? run.outputs.actions : {};
-  return parseActions(actions).slice(0, 3);
-}
-
-async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url, { cache: "no-store" });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !isRecord(payload) || payload.ok !== true) {
-    const message = isRecord(payload) && isRecord(payload.error) ? asString(payload.error.message) : "";
-    throw new Error(message || `${url} 요청에 실패했습니다.`);
-  }
-  return payload;
-}
-
+export {
+  DASHBOARD_REQUEST_TIMEOUT_MESSAGE,
+  DASHBOARD_REQUEST_TIMEOUT_MS,
+  fetchDashboardJson,
+  getDashboardResourceLoadCopy,
+} from "@/components/dashboard/dashboardClientModel";
+export type {
+  DashboardCurrentPlan,
+  DashboardCurrentProfile,
+  DashboardInitialViewModel,
+  DashboardRun,
+  DashboardRunsLoadState,
+} from "@/components/dashboard/dashboardClientModel";
 type DashboardClientProps = {
   initialViewModel: DashboardInitialViewModel;
+  csrf?: string;
 };
 
-export function DashboardClient({ initialViewModel }: DashboardClientProps) {
+const dashboardTextLinkClassName = "inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
+const dashboardPrimaryButtonClassName = "inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60";
+const dashboardSecondaryButtonClassName = "inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
+
+function DashboardMetric({ label, value, description, emphasis = false, negative = false }: {
+  label: string;
+  value: string | number;
+  description?: string;
+  emphasis?: boolean;
+  negative?: boolean;
+}) {
+  return (
+    <div className="min-w-0" role="group" aria-label={label}>
+      <p className="text-sm font-medium text-slate-600">{label}</p>
+      <p className={cn("mt-2 break-words font-bold tracking-tight tabular-nums", emphasis ? "text-4xl sm:text-5xl" : "text-xl", negative ? "text-rose-800" : "text-navy")}>{value}</p>
+      {description ? <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p> : null}
+    </div>
+  );
+}
+
+// A native GET form: the choice lives in /dashboard?profileId=, survives reload and is rendered by the server.
+function DashboardProfileSelector({ selection }: { selection: DashboardProfileSelection }) {
+  const duplicateLabels = new Set(
+    selection.options
+      .map((option) => option.label)
+      .filter((label, index, labels) => labels.indexOf(label) !== index),
+  );
+  return (
+    <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-3" data-testid="dashboard-profile-selector">
+      <label className="flex min-w-0 flex-col gap-1 text-sm font-medium text-slate-700">
+        표시할 프로필
+        <select
+          name="profileId"
+          required
+          defaultValue={selection.selectedProfileId}
+          className="min-h-11 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {selection.selectedProfileId ? null : <option value="" disabled>프로필을 선택하세요</option>}
+          {selection.options.map((option, index) => (
+            <option key={option.id} value={option.id}>
+              {`${option.label}${duplicateLabels.has(option.label) ? ` (${index + 1}번째)` : ""}${option.isDefault ? " · 기본 지정" : ""}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" className={dashboardSecondaryButtonClassName}>이 프로필 보기</button>
+    </form>
+  );
+}
+
+export function DashboardClient({ initialViewModel, csrf = "" }: DashboardClientProps) {
   const [state, setState] = useState<DashboardState>({
     ...INITIAL_STATE,
     runs: initialViewModel.runs,
@@ -360,10 +118,18 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
     runsErrorMessage: initialViewModel.runsErrorMessage,
   });
   const [loading, setLoading] = useState(true);
+  const [hasOpenedSecondaryTools, setHasOpenedSecondaryTools] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [rerunning, setRerunning] = useState(false);
+  const [rerunError, setRerunError] = useState("");
+  const rerunInFlight = useRef(false);
+  const pendingRerun = useRef<PendingPlanningRunRequest | null>(null);
 
   useEffect(() => {
+    if (!hasOpenedSecondaryTools) return;
+
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadDashboard(): Promise<void> {
       setRefreshing(true);
@@ -376,11 +142,11 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
       };
 
       const results = await Promise.allSettled([
-        fetchJson("/api/data-sources/status"),
-        fetchJson("/api/sources/status"),
-        fetchJson("/api/public/fx?pairs=USD:1000,JPY:100000,EUR:1000"),
-        fetchJson("/api/public/exchange"),
-        fetchJson("/api/public/benefits/search?limit=3&includeFacets=0"),
+        fetchDashboardJson("/api/data-sources/status", { signal: controller.signal }),
+        fetchDashboardJson("/api/sources/status", { signal: controller.signal }),
+        fetchDashboardJson("/api/public/fx?pairs=USD:1000,JPY:100000,EUR:1000", { signal: controller.signal }),
+        fetchDashboardJson("/api/public/exchange", { signal: controller.signal }),
+        fetchDashboardJson("/api/public/benefits/search?limit=3&includeFacets=0", { signal: controller.signal }),
       ]);
 
       const labels = [
@@ -390,23 +156,31 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
         "기준 환율",
         "혜택 탐색",
       ];
+      const failedCount = results.filter((result) => result.status === "rejected").length;
+      nextState.resourceLoadState = failedCount === 0
+        ? "loaded"
+        : failedCount === results.length
+          ? "failed"
+          : "partial";
 
       results.forEach((result, index) => {
         if (result.status === "rejected") {
-          nextState.warnings.push(`${labels[index]} 정보를 불러오지 못했습니다.`);
+          if (index === 2) nextState.fx = describeFxFailure(result.reason);
+          if (index === 3) nextState.exchange = describeExchangeFailure(result.reason);
+          const timedOut = result.reason instanceof Error
+            && result.reason.name === DASHBOARD_REQUEST_TIMEOUT_ERROR_NAME;
+          nextState.warnings.push(
+            timedOut
+              ? `${labels[index]} ${DASHBOARD_REQUEST_TIMEOUT_MESSAGE}`
+              : `${labels[index]} 정보를 불러오지 못했습니다.`,
+          );
           return;
         }
 
         if (index === 0) nextState.dataSources = parseDataSources(result.value);
         if (index === 1) nextState.sourceStatuses = parseSourceStatuses(result.value);
-        if (index === 2) nextState.fxItems = parseFxItems(result.value);
-        if (index === 3) {
-          const payload = isRecord(result.value) ? result.value : {};
-          const data = isRecord(payload.data) ? payload.data : {};
-          const rates = isRecord(data.rates) ? data.rates : {};
-          nextState.exchangeAsOf = asString(data.asOf);
-          nextState.exchangeUsdRate = asNumber(rates.USD);
-        }
+        if (index === 2) nextState.fx = parseFx(result.value);
+        if (index === 3) nextState.exchange = parseExchange(result.value);
         if (index === 4) nextState.benefits = parseBenefits(result.value);
       });
 
@@ -421,12 +195,116 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [initialViewModel]);
+  }, [hasOpenedSecondaryTools, initialViewModel]);
 
   const latestRun = state.runs[0] ?? null;
+  const currentProfile = initialViewModel.currentProfile;
+  const currentPlan = initialViewModel.currentPlan;
+  const profileSelection = initialViewModel.profileSelection;
+  const selectionPending = currentProfile.state === "selection-required" || currentProfile.state === "selection-invalid";
+  const showProfileSelector = Boolean(profileSelection && profileSelection.options.length > 0
+    && (selectionPending || profileSelection.options.length > 1));
+  const currentRun = "run" in currentPlan ? currentPlan.run : null;
+  const currentSummary = useMemo(() => runSummary(currentRun), [currentRun]);
+  // An explicitly selected empty profile keeps its id so planning opens that profile, not the default.
+  const currentPlanningProfileId = currentProfile.state === "loaded" || currentProfile.state === "missing"
+    ? currentProfile.id ?? ""
+    : "";
+  const currentPlanningHref = currentPlanningProfileId
+    ? `/planning?profileId=${encodeURIComponent(currentPlanningProfileId)}`
+    : "/planning";
+  const currentReportHref = currentRun
+    ? `/planning/reports?runId=${encodeURIComponent(currentRun.id)}&profileId=${encodeURIComponent(currentRun.profileId)}`
+    : "/planning/reports";
+  const currentProfileHeading = currentProfile.state === "loaded"
+    ? `${currentProfile.source === "selected" ? "선택한 프로필" : "기본 프로필"}: ${currentProfile.name} · 저장 시점 ${formatDateTime(currentProfile.updatedAt)}`
+    : selectionPending
+      ? "대시보드에 표시할 프로필을 선택해 주세요."
+      : "저장된 기본 프로필 기준";
+  const currentPlanMessage = currentPlan.state === "current"
+    ? "현재 저장 프로필과 같은 조건으로 계산된 플랜입니다."
+    : currentPlan.state === "stale"
+      ? "현재 프로필이 이 플랜 이후 변경되었습니다. 미래 결과를 다시 계산해야 합니다."
+      : currentPlan.state === "unverified"
+        ? "과거 실행이라 현재 프로필과 일치 여부를 자동 확인할 수 없습니다."
+        : currentPlan.state === "failed"
+          ? currentPlan.message
+          : selectionPending
+            ? "프로필을 선택하면 그 프로필로 저장한 플랜을 보여 드립니다."
+            : "현재 프로필로 저장한 플랜이 없습니다.";
   const runsLoadFailed = state.runsLoadState === "failed";
-  const latestSummary = useMemo(() => runSummary(latestRun), [latestRun]);
+  // The create API resolves an omitted or "latest" snapshot to today's data, so only a stored
+  // snapshot id can repeat the previous plan's conditions. Without one, send the user to review.
+  const staleRerunSnapshotId = currentPlan.state === "stale" ? currentPlan.rerunInput.snapshotId?.trim() ?? "" : "";
+  const staleRerunPinned = Boolean(staleRerunSnapshotId) && staleRerunSnapshotId.toLowerCase() !== "latest";
+
+  async function rerunCurrentPlan(): Promise<void> {
+    if (
+      rerunInFlight.current
+      || currentPlan.state !== "stale"
+      || currentProfile.state !== "loaded"
+      || currentPlan.run.profileId !== currentProfile.id
+    ) return;
+
+    setRerunError("");
+    const snapshotId = currentPlan.rerunInput.snapshotId?.trim();
+    // An omitted/latest snapshot would resolve today's conditions in the existing create API.
+    if (!snapshotId || snapshotId.toLowerCase() === "latest") {
+      setRerunError("이전 플랜의 기준 자료를 특정할 수 없습니다. 계산 조건을 검토해 주세요.");
+      return;
+    }
+
+    rerunInFlight.current = true;
+    setRerunning(true);
+    try {
+      const pending = resolvePlanningRunIdempotencyRequest({
+        body: {
+          profileId: currentProfile.id,
+          rerunOfRunId: currentPlan.run.id,
+          input: currentPlan.rerunInput,
+        },
+        pending: pendingRerun.current,
+        createKey: () => crypto.randomUUID(),
+      });
+      // Keep the same key after uncertain responses and explicit retries, including after success until navigation.
+      pendingRerun.current = pending;
+      writeDevCsrfToken(csrf);
+      const response = await postPlanningRun(
+        withDevCsrf(JSON.parse(pending.bodyText)),
+        pending.idempotencyKey,
+      );
+      const payload: unknown = await response.json().catch(() => null);
+      if (
+        !response.ok
+        || !isRecord(payload)
+        || payload.ok !== true
+        || !isRecord(payload.data)
+        || !asString(payload.data.id)
+        || payload.data.profileId !== currentProfile.id
+      ) {
+        const error = isRecord(payload) && isRecord(payload.error) ? payload.error : {};
+        throw new Error(
+          error.code === "SNAPSHOT_NOT_FOUND"
+            ? "이전 플랜의 기준 자료를 찾을 수 없습니다. 계산 조건을 검토해 주세요."
+            : "다시 계산하지 못했습니다. 잠시 뒤 재시도하거나 계산 조건을 검토해 주세요.",
+        );
+      }
+      window.location.assign(
+        `/planning/reports?runId=${encodeURIComponent(asString(payload.data.id))}&profileId=${encodeURIComponent(currentProfile.id)}`,
+      );
+    } catch (error) {
+      setRerunError(
+        error instanceof Error
+          ? error.message
+          : "다시 계산하지 못했습니다. 잠시 뒤 재시도해 주세요.",
+      );
+      rerunInFlight.current = false;
+      setRerunning(false);
+    }
+  }
+
   const latestActions = useMemo(() => runActions(latestRun), [latestRun]);
   const latestCandidates = useMemo(() => runCandidates(latestRun), [latestRun]);
   const configuredP0 = useMemo(
@@ -441,459 +319,265 @@ export function DashboardClient({ initialViewModel }: DashboardClientProps) {
     () => state.sourceStatuses.filter((row) => row.isFresh).length,
     [state.sourceStatuses],
   );
-  const usdPreview = useMemo(
-    () => state.fxItems.find((item) => item.currency === "USD") ?? null,
-    [state.fxItems],
-  );
   const latestRunReportHref = latestRun ? `/planning/reports?runId=${encodeURIComponent(latestRun.id)}` : "/planning/reports";
-  const latestRunPlanningHref = latestRun ? `/planning?profileId=${encodeURIComponent(latestRun.profileId)}` : "/planning";
+  // The primary guidance follows only the shown profile; another profile's run is never substituted.
+  const nextActionRunSummary = useMemo(() => runSummary(currentRun), [currentRun]);
+  const nextActionTarget = currentProfile.state === "loaded" ? `현재 프로필 ${currentProfile.name}` : "현재 프로필";
+  const nextActionSummary = selectionPending
+    ? "표시할 프로필을 고르면 그 프로필의 현재 지표와 최근 계산 결과를 함께 확인할 수 있습니다. 기본 프로필 설정은 바뀌지 않습니다."
+    : currentRun
+      ? nextActionRunSummary.topAction
+        ? `${nextActionTarget}의 ${truncate(nextActionRunSummary.topAction, 48)} 항목을 먼저 확인하세요.`
+        : `${nextActionTarget} 리포트를 다시 열어 재무 상태와 주의 신호부터 확인하세요.`
+      : currentPlan.state === "missing" && runsLoadFailed
+        ? "최근 플랜을 다시 불러와 저장된 기록의 현재 상태부터 확인하세요."
+        : "재무 상태 진단을 시작해 현재 입력 기준의 첫 리포트를 저장하세요.";
   const visibleWarnings = [
     ...(runsLoadFailed ? [state.runsErrorMessage || "최근 플랜 정보를 불러오지 못했습니다."] : []),
     ...state.warnings,
   ];
+  const resourceLoadCopy = getDashboardResourceLoadCopy(state.resourceLoadState);
 
   return (
     <PageShell>
       <div className="space-y-8" data-testid="dashboard-root">
-        <ReportHeroCard
-          kicker="시작 요약"
-          title={runsLoadFailed
-            ? "최근 플랜 정보를 다시 불러와야 합니다"
-            : latestRun ? "최근 플랜 기준으로 재무 상태부터 다시 확인하세요" : "재무 상태 진단부터 시작하세요"}
-          description={runsLoadFailed
-            ? "저장된 기록이 없어진 것은 아닙니다. 최근 실행 목록을 불러오지 못한 상태라 새로고침 후 다시 확인하고, 필요하면 새 진단을 시작할 수 있습니다."
-            : latestRun
-            ? `${latestRun.title || "최근 플랜"} 기준으로 먼저 리포트에서 현재 재무 상태를 다시 확인하고, 필요하면 추천 허브에서 조건에 맞는 상품 비교로 이어갈 수 있습니다.`
-            : "먼저 플래닝에서 현재 재무 상태를 진단하고, 필요하면 추천 허브에서 조건에 맞는 상품 비교로 이어갈 수 있습니다."}
-          action={(
-            runsLoadFailed ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="rounded-full bg-primary px-6 py-2 text-sm font-black text-white shadow-lg shadow-primary/10 transition hover:bg-navy active:scale-95"
-                >
-                  {refreshing ? "새로고침 중..." : "최근 플랜 다시 불러오기"}
-                </button>
-                <Link
-                  href="/planning"
-                  prefetch={devPlanningPrefetch("/planning")}
-                  className="rounded-full border border-primary/20 bg-primary/5 px-5 py-2 text-sm font-black text-navy transition hover:bg-primary/10 active:scale-95"
-                >
-                  새 재무 진단 시작
-                </Link>
-              </>
-            ) : latestRun ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-surface-muted active:scale-95"
-                >
-                  {refreshing ? "새로고침 중..." : "새로고침"}
-                </button>
-                <Link
-                  href={latestRunReportHref}
-                  prefetch={devPlanningPrefetch(latestRunReportHref)}
-                  className="rounded-full bg-primary px-6 py-2 text-sm font-black text-white shadow-lg shadow-primary/10 transition hover:bg-navy active:scale-95"
-                >
-                  재무 상태 다시 보기
-                </Link>
-                <Link
-                  href="/recommend"
-                  prefetch={devPlanningPrefetch("/recommend")}
-                  className="rounded-full border border-primary/20 bg-primary/5 px-5 py-2 text-sm font-black text-navy transition hover:bg-primary/10 active:scale-95"
-                >
-                  조건에 맞는 상품 비교
-                </Link>
-                <Link
-                  href={latestRunPlanningHref}
-                  prefetch={devPlanningPrefetch(latestRunPlanningHref)}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-surface-muted active:scale-95"
-                >
-                  같은 조건으로 다시 계산
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/planning"
-                  prefetch={devPlanningPrefetch("/planning")}
-                  className="rounded-full bg-primary px-6 py-2 text-sm font-black text-white shadow-lg shadow-primary/10 transition hover:bg-navy active:scale-95"
-                >
-                  재무 상태 진단 시작
-                </Link>
-                <Link
-                  href="/recommend"
-                  prefetch={devPlanningPrefetch("/recommend")}
-                  className="rounded-full border border-primary/20 bg-primary/5 px-5 py-2 text-sm font-black text-navy transition hover:bg-primary/10 active:scale-95"
-                >
-                  조건에 맞는 상품 비교
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-surface-muted active:scale-95"
-                >
-                  {refreshing ? "새로고침 중..." : "새로고침"}
-                </button>
-              </>
-            )
-          )}
-        >
-          <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-400">
-            <p>
-              최근 실행 {runsLoadFailed ? "불러오기 실패" : latestRun ? `${formatDateTime(latestRun.createdAt)} · ${formatRunStatus(latestRun.overallStatus)}` : "없음"}
-            </p>
-            <div className="h-1 w-1 rounded-full bg-slate-200" />
-            <p className="text-primary">
-              {runsLoadFailed
-                ? "기록 없음과 로드 실패를 구분해 보여줍니다."
-                : latestRun
-                ? "먼저 재무 상태를 다시 확인하고, 상품 비교는 필요할 때 추천 허브로 이어집니다."
-                : "먼저 재무 상태 진단을 시작하고, 상품 비교는 필요할 때 추천 허브에서 이어집니다."}
-            </p>
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-5">
+          <div>
+            <p className="text-sm font-semibold text-slate-500">재무 대시보드</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">내 재무 현황</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">현재 상태를 확인하고, 다음에 할 한 가지를 이어가세요.</p>
           </div>
-          <ReportHeroStatGrid className="xl:grid-cols-5">
-            <ReportHeroStatCard
-              label="저장된 실행"
-              value={runsLoadFailed ? "-" : state.runs.length}
-              description={runsLoadFailed ? "불러오기 실패" : latestRun ? `최근 실행 ${formatDateTime(latestRun.createdAt)}` : "기록 없음"}
-            />
-            <ReportHeroStatCard
-              label="월 잉여금"
-              value={formatKrw(latestSummary.monthlySurplusKrw)}
-              description="최근 저장 요약"
-            />
-            <ReportHeroStatCard
-              label="말기 순자산"
-              value={formatKrw(latestSummary.endNetWorthKrw)}
-              description="최근 저장 요약"
-            />
-            <ReportHeroStatCard
-              label="P0 데이터 연결"
-              value={`${configuredP0}/${totalP0 || 0}`}
-              description={totalP0 > 0 && configuredP0 < totalP0 ? "보완 필요" : "기준 소스"}
-            />
-            <ReportHeroStatCard
-              label="USD 1,000"
-              value={usdPreview ? formatKrw(usdPreview.krw) : "-"}
-              description={usdPreview?.asOfDate ? `${formatDate(usdPreview.asOfDate)}` : "데이터 대기"}
-            />
-          </ReportHeroStatGrid>
-          <div className="flex flex-wrap gap-2 text-xs font-black">
-            <span className="rounded-full border border-slate-100 bg-surface-muted px-3 py-1 text-slate-400">
-              상품 소스 freshness {freshSources}/{state.sourceStatuses.length || 0}
-            </span>
-            <span className="rounded-full border border-slate-100 bg-surface-muted px-3 py-1 text-slate-400">
-              최저 현금 {formatKrw(latestSummary.worstCashKrw)}
-            </span>
-            <Link href="/recommend" className="rounded-full border border-primary/10 bg-primary/5 px-3 py-1 text-primary hover:bg-primary/10 transition-colors">
-              상품 비교로 이어보기 →
-            </Link>
-          </div>
-          {visibleWarnings.length > 0 ? (
-            <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3 text-xs text-amber-100">
-              <p className="font-semibold text-amber-200">일부 정보는 아직 준비되지 않았습니다.</p>
-              <div className="mt-1 space-y-1">
-                {visibleWarnings.slice(0, 4).map((message) => (
-                  <p key={message}>- {message}</p>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </ReportHeroCard>
+          <button type="button" onClick={() => window.location.reload()} className={dashboardSecondaryButtonClassName}>
+            {refreshing ? "새로고침 중..." : "새로고침"}
+          </button>
+        </header>
 
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="p-8 space-y-8">
-            <SubSectionHeader
-              title="최근 플랜"
-              description="저장된 실행 결과를 먼저 다시 열고, 필요하면 같은 조건으로 다시 계산합니다."
-              action={
-                <Link
-                  href="/planning/runs"
-                  prefetch={devPlanningPrefetch("/planning/runs")}
-                  className="text-sm font-black text-primary hover:underline uppercase tracking-widest"
-                >
-                  View All →
-                </Link>
-              }
-            />
-            {runsLoadFailed ? (
-              <div
-                className="rounded-[2.5rem] border border-amber-200 bg-amber-50 px-5 py-12 text-center"
-                data-testid="dashboard-runs-load-failed"
-              >
-                <p className="text-sm font-black text-amber-900">최근 실행 기록을 불러오지 못했습니다.</p>
-                <p className="mx-auto mt-2 max-w-lg text-xs font-medium leading-relaxed text-amber-700">
-                  저장된 기록이 없다는 뜻은 아닙니다. 잠시 뒤 새로고침하거나 플래닝 화면에서 새 진단을 이어갈 수 있습니다.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="mt-8 inline-flex h-11 items-center rounded-2xl bg-amber-600 px-8 text-xs font-black text-white transition-all hover:bg-amber-700 active:scale-95"
-                >
-                  다시 불러오기
-                </button>
-              </div>
-            ) : loading && state.runs.length < 1 ? (
-              <p className="text-sm text-slate-400 animate-pulse">최근 실행을 불러오는 중입니다.</p>
-            ) : state.runs.length < 1 ? (
-              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-surface-muted/50 px-5 py-16 text-center">
-                <p className="text-sm font-black text-navy">저장된 실행이 아직 없습니다.</p>
-                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">플래닝을 한 번 저장하면 이곳에서 먼저 리포트를 다시 열고, 필요하면 같은 조건으로 다시 계산할 수 있습니다.</p>
-              </div>
-            ) : (
-              <div className="grid gap-6 lg:grid-cols-3">
-                {state.runs.slice(0, 3).map((run) => {
-                  const summary = runSummary(run);
-                  return (
-                    <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:border-primary/10 hover:bg-white" key={run.id}>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{formatDate(run.createdAt)}</p>
-                      <p className="mt-4 text-lg font-black tracking-tight text-navy">{truncate(run.title || "플래닝 실행", 24)}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">{formatRunStatus(run.overallStatus)} · {run.input?.horizonMonths ?? "-"}개월</p>
-                      <div className="mt-6 space-y-2 text-xs font-medium text-slate-600">
-                        <p className="flex justify-between"><span>말기 순자산</span> <span className="font-black text-navy tabular-nums">{formatKrw(summary.endNetWorthKrw)}</span></p>
-                        <p className="flex justify-between"><span>최저 현금</span> <span className="font-black text-navy tabular-nums">{formatKrw(summary.worstCashKrw)}</span></p>
-                      </div>
-                      <div className="mt-8 flex items-center gap-6">
-                        <Link
-                          className="text-xs font-black text-primary hover:underline uppercase tracking-widest"
-                          href={`/planning/reports?runId=${encodeURIComponent(run.id)}`}
-                          prefetch={devPlanningPrefetch("/planning/reports")}
-                        >
-                          리포트 다시 보기 →
-                        </Link>
-                        <Link
-                          className="text-xs font-black text-slate-400 hover:text-navy uppercase tracking-widest"
-                          href={`/planning?profileId=${encodeURIComponent(run.profileId)}`}
-                          prefetch={devPlanningPrefetch("/planning")}
-                        >
-                          같은 조건으로 다시 계산
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          <Card className="p-8 space-y-8">
-            <SubSectionHeader
-              title="플랜 액션과 비교 후보"
-              description="저장된 액션을 다시 확인하고, 후보 비교는 허브에서 이어서 살펴봅니다."
-              action={
-                <Link
-                  href={latestRun ? latestRunReportHref : "/recommend"}
-                  prefetch={devPlanningPrefetch(latestRun ? latestRunReportHref : "/recommend")}
-                  className="text-sm font-black text-primary hover:underline uppercase tracking-widest"
-                >
-                  {latestRun ? "Action Hub →" : "Pick Hub →"}
-                </Link>
-              }
-            />
-            {latestRun && (latestActions.length > 0 || latestCandidates.length > 0) ? (
-              <div className="space-y-6">
-                {latestActions.length > 0 ? (
-                  <div className="space-y-4">
-                    {latestActions.map((action) => (
-                      <div className="rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 p-5 group hover:bg-white transition-all" key={action.code || action.title}>
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-black text-navy group-hover:text-primary transition-colors">{action.title}</p>
-                            <p className="mt-1 text-xs font-medium text-slate-500 leading-relaxed">{action.summary}</p>
-                          </div>
-                          <Link className="text-[10px] font-black text-primary hover:underline uppercase tracking-widest" href={action.href}>액션 이어보기 →</Link>
-                        </div>
-                        {action.steps.length > 0 ? (
-                          <div className="mt-4 space-y-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                            {action.steps.slice(0, 2).map((step) => (
-                              <p key={`${action.code}:${step}`} className="flex items-center gap-2">
-                                <span className="w-1 h-1 rounded-full bg-slate-200" />
-                                {step}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                {latestCandidates.length > 0 ? (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {latestCandidates.map((candidate) => (
-                      <div className="rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-sm hover:border-primary/10 transition-all" key={candidate.id}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-navy truncate">{candidate.productName}</p>
-                            <p className="mt-1 text-[10px] font-black text-slate-400 uppercase tracking-[0.12em]">
-                              {candidate.providerName} · {candidate.termMonths ? `${candidate.termMonths}개월` : "기간 미상"}
-                            </p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rate</p>
-                            <p className="text-sm font-black text-primary tabular-nums">
-                              {candidate.rateMaxPct && candidate.rateMaxPct > (candidate.rateMinPct ?? 0)
-                                ? `${formatPct(candidate.rateMinPct)} ~ ${formatPct(candidate.rateMaxPct)}`
-                                : formatPct(candidate.rateMinPct)}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500 italic">
-                          {truncate(candidate.whyThis[0] || candidate.notes[0] || "상세 조건은 리포트에서 확인하세요.", 96)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-surface-muted/50 px-5 py-16 text-center">
-                <p className="text-sm font-black text-navy">저장된 액션과 후보가 없습니다.</p>
-                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">먼저 플랜을 저장하면 이곳에서 저장된 액션을 다시 보고, 필요하면 추천 허브에서 직접 비교를 이어갈 수 있습니다.</p>
-              </div>
-            )}
-          </Card>
-        </section>
-
-        <section className="grid gap-8 xl:grid-cols-[0.9fr_1.1fr]">
-          <Card className="p-8 space-y-8">
-            <SubSectionHeader
-              title="혜택 바로보기"
-              description="보조금24 탐색 API 기반 최근 후보"
-              action={<Link href="/benefits" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">All Benefits →</Link>}
-            />
-            {state.benefits.length > 0 ? (
-              <div className="space-y-4">
-                {state.benefits.map((item) => (
-                  <div className="rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 p-5 group hover:bg-white transition-all" key={item.serviceId || item.title}>
-                    <p className="text-sm font-black text-navy">{item.title}</p>
-                    <p className="mt-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.org || "주관 기관 미상"}</p>
-                    <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500 line-clamp-2">{item.summary}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400 italic py-10 text-center">혜택 정보를 불러오지 못했습니다.</p>
-            )}
-          </Card>
-
-          <div className="grid gap-8">
-            <Card className="p-8 space-y-8">
-              <SubSectionHeader
-                title="환율과 생활 도구"
-                description="공식 환율 API와 계산 도구"
-                action={<Link href="/tools/fx" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">FX Tool ▶</Link>}
-              />
-              <div className="grid gap-4 md:grid-cols-3">
-                {state.fxItems.map((item) => (
-                  <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5" key={item.currency}>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.currency} {item.amount.toLocaleString("ko-KR")}</p>
-                    <p className="mt-3 text-xl font-black text-navy tabular-nums">{formatKrw(item.krw)}</p>
-                    <p className="mt-1.5 text-[10px] font-bold text-slate-400">Rate: {typeof item.rate === "number" ? item.rate.toLocaleString("ko-KR") : "-"}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-2xl border border-primary/10 bg-primary/30 p-5 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-primary uppercase tracking-widest">Market Standard</p>
-                  <p className="text-sm font-black text-navy">USD 1 = {state.exchangeUsdRate ? `${state.exchangeUsdRate.toLocaleString("ko-KR")}원` : "-"}</p>
-                </div>
-                <p className="text-[10px] font-bold text-primary/80 tabular-nums">As of {state.exchangeAsOf || "-"}</p>
-              </div>
-            </Card>
-
-            <Card className="p-8 space-y-8">
-              <SubSectionHeader
-                title="데이터 신뢰 상태"
-                description="추천과 탐색에 쓰는 주요 데이터 기준 점검"
-                action={<Link href="/settings/data-sources" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">데이터 신뢰 ▶</Link>}
-              />
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Critical ENV</p>
-                  <div className="space-y-2">
-                    {state.dataSources.filter((row) => row.priority === "P0").map((row) => (
-                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-surface-muted/50 px-5 py-4" key={row.id}>
-                        <div>
-                          <p className="text-xs font-black text-navy">{row.label}</p>
-                          {row.status?.message ? <p className="mt-1 text-[10px] font-medium text-slate-400 truncate max-w-[120px]">{row.status.message}</p> : null}
-                        </div>
-                        <span className={cn(
-                          "rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border",
-                          row.status?.state === "configured" ? "bg-primary/5 text-primary border-primary/10" : "bg-amber-50 text-amber-600 border-amber-100"
-                        )}>
-                          {row.status?.state === "configured" ? "ACTIVE" : "CHECK"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Data Freshness</p>
-                  <div className="space-y-2">
-                    {state.sourceStatuses.map((row) => (
-                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-surface-muted/50 px-5 py-4" key={`${row.sourceId}:${row.kind}`}>
-                        <div>
-                          <p className="text-xs font-black text-navy">{row.sourceId} · {row.kind}</p>
-                          <p className="mt-1 text-[10px] font-bold text-slate-400 tabular-nums">{row.counts.toLocaleString("ko-KR")}건 · {formatDate(row.lastSyncedAt || "")}</p>
-                        </div>
-                        <span className={cn(
-                          "rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border",
-                          row.isFresh ? "bg-primary/5 text-primary border-primary/10" : "bg-amber-50 text-amber-600 border-amber-100"
-                        )}>
-                          {row.isFresh ? "FRESH" : "SYNC"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </section>
-
-        <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
-          <Card className="p-8 space-y-8">
-            <SubSectionHeader
-              title="바로 이동"
-              description="필요한 화면을 빠르게 여는 바로가기 모음"
-            />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              {[
-                { href: "/planning", title: "플래닝", description: "플래닝 화면 바로 열기" },
-                { href: "/planning/reports", title: "리포트", description: "저장한 리포트 빠르게 보기" },
-                { href: "/recommend", title: "추천 허브", description: "비교 허브 바로 열기" },
-                { href: "/products/catalog", title: "상품 탐색", description: "상품 카탈로그 둘러보기" },
-                { href: "/public/dart", title: "공시 탐색", description: "기업 공시 바로 확인하기" },
-              ].map((item) => (
-                <Link className="group rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:border-primary/20 hover:bg-white" href={item.href} key={item.href}>
-                  <p className="text-base font-black text-navy group-hover:text-primary transition-colors">{item.title}</p>
-                  <p className="mt-3 text-[11px] font-medium leading-relaxed text-slate-500">{item.description}</p>
-                </Link>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-8 space-y-8">
-            <SubSectionHeader
-              title="의견과 도움 요청"
-              description="문제 상황과 개선 아이디어를 운영자에게 안전하게 전달합니다"
-              action={<Link href="/feedback" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">의견 남기기 →</Link>}
-            />
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-surface-muted/40 px-6 py-10 text-center">
-              <p className="text-sm font-black text-navy">공개 화면에는 운영 피드백 기록을 표시하지 않습니다.</p>
-              <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-500">
-                의견 제출은 계속 사용할 수 있으며, 첨부 진단과 운영 메모는 로컬 운영자만 확인합니다.
+        <div className="grid items-start gap-8 xl:grid-cols-[1.15fr_1fr]" data-testid="dashboard-primary-workspace">
+          <section aria-label="현재 재무 상태" data-testid="dashboard-current-state" className="min-w-0 space-y-5">
+            <div>
+              <h2 className="text-lg font-bold text-navy">현재 재무 상태</h2>
+              <p className="mt-1 break-words text-sm leading-6 text-slate-500" data-testid="dashboard-current-profile-label">
+                {currentProfileHeading}
               </p>
-              <Link href="/feedback" className="mt-5 inline-block text-xs font-black text-primary hover:underline">
-                의견 남기기 →
-              </Link>
             </div>
-          </Card>
+            {showProfileSelector && profileSelection ? <DashboardProfileSelector selection={profileSelection} /> : null}
+            {currentProfile.state === "selection-required" ? (
+              <div role="status" className="rounded-2xl bg-slate-100 p-6 sm:p-7" data-testid="dashboard-selection-required">
+                <p className="text-xl font-bold text-navy">표시할 프로필을 선택하세요.</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">자동으로 만들어진 빈 기본 프로필 외에 저장한 프로필이 있습니다. 위에서 대시보드에 표시할 프로필을 고르세요. 기본 프로필 설정은 바뀌지 않습니다.</p>
+              </div>
+            ) : currentProfile.state === "selection-invalid" ? (
+              <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900" data-testid="dashboard-selection-invalid">
+                <p>{currentProfile.message}</p>
+              </div>
+            ) : currentProfile.state === "loaded" ? (
+              <>
+                <div className="rounded-2xl bg-slate-100 p-6 sm:p-7">
+                  <DashboardMetric label="월 잉여금" value={formatKrw(currentProfile.monthlySurplusKrw)} description="순수입 − 생활지출 − 최소 부채상환액" emphasis negative={currentProfile.monthlySurplusKrw < 0} />
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-5 lg:grid-cols-3">
+                  <DashboardMetric label="월 순수입" value={formatKrw(currentProfile.monthlyIncomeKrw)} />
+                  <DashboardMetric label="월 생활지출" value={formatKrw(currentProfile.monthlyExpensesKrw)} description="필수지출 + 선택지출" />
+                  <DashboardMetric label="월 최소 부채상환액" value={formatKrw(currentProfile.monthlyDebtPaymentKrw)} />
+                  <DashboardMetric label="총 부채" value={formatKrw(currentProfile.totalDebtKrw)} />
+                  <DashboardMetric label="현재 순자산" value={formatKrw(currentProfile.netWorthKrw)} description="자산과 목표 자금에서 부채를 뺀 금액" />
+                </div>
+                <p className="border-t border-slate-200 pt-4 text-sm leading-6 text-slate-500">플래닝 계산에서는 목표에 모은 금액을 현금성·투자자산과 별도 자금으로 반영합니다.</p>
+              </>
+            ) : currentProfile.state === "failed" ? (
+              <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
+                <p>{currentProfile.message}</p>
+                <button type="button" onClick={() => window.location.reload()} className="mt-3 min-h-11 font-semibold underline underline-offset-4">현재 프로필 다시 불러오기</button>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-slate-100 p-6 sm:p-7">
+                <p className="text-xl font-bold text-navy">수입과 지출부터 입력해 보세요.</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">아직 입력된 재무 정보가 없습니다. 입력한 금액으로 현재 상태를 확인하고 첫 플랜을 저장할 수 있습니다.</p>
+                <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline underline-offset-4">재무 상태 진단 시작</Link>
+              </div>
+            )}
+          </section>
+
+          <section aria-label="현재 프로필의 최근 플랜 결과" data-testid="dashboard-current-plan" data-state={currentPlan.state} className="min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+            <div data-testid="dashboard-next-action">
+              <p className="text-sm font-semibold text-primary">다음에 할 한 가지</p>
+              <h2 className="mt-2 text-xl font-bold leading-8 tracking-tight text-navy">
+                {selectionPending ? "표시할 프로필을 먼저 선택하세요" : currentPlan.state === "failed" ? "저장된 플랜을 다시 확인하세요" : currentPlan.state === "stale" ? "바뀐 재무 정보로 다시 계산하세요" : currentRun ? "저장된 결과에서 우선순위를 확인하세요" : "첫 재무 진단을 시작하세요"}
+              </h2>
+              <p className="mt-2 break-words text-sm leading-6 text-slate-600">{currentPlan.state === "stale"
+                ? staleRerunPinned
+                  ? "프로필이 바뀌어 이전 결과와 현재 상태가 다릅니다. 이전 계산 조건으로 새 결과를 저장합니다."
+                  : "프로필이 바뀌어 이전 결과와 현재 상태가 다릅니다. 이전 플랜의 계산 기준 자료가 고정되어 있지 않아 같은 조건으로 바로 다시 계산할 수 없습니다. 재무 진단에서 계산 조건을 확인한 뒤 다시 계산해 주세요."
+                : nextActionSummary}</p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {selectionPending ? null : currentPlan.state === "failed" ? (
+                  <button type="button" onClick={() => window.location.reload()} className={dashboardPrimaryButtonClassName}>최근 플랜 다시 불러오기</button>
+                ) : currentPlan.state === "stale" && staleRerunPinned ? (
+                  <button type="button" onClick={() => void rerunCurrentPlan()} disabled={rerunning} className={dashboardPrimaryButtonClassName}>
+                    {rerunning ? "다시 계산 중..." : "현재 프로필로 다시 계산"}
+                  </button>
+                ) : currentPlan.state === "stale" ? (
+                  <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className={dashboardPrimaryButtonClassName}>계산 조건 검토 후 다시 계산</Link>
+                ) : currentRun ? (
+                  <Link href={currentReportHref} prefetch={devPlanningPrefetch(currentReportHref)} className={dashboardPrimaryButtonClassName}>최근 플랜 리포트 보기</Link>
+                ) : (
+                  <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className={dashboardPrimaryButtonClassName}>재무 상태 진단 시작</Link>
+                )}
+              </div>
+            </div>
+            <div className="space-y-3 border-t border-slate-200 pt-5">
+              <h3 className="text-base font-bold text-navy">최근 플랜 결과</h3>
+              <p role={currentPlan.state === "failed" ? "alert" : "status"} className={cn("text-sm leading-6", currentPlan.state === "stale" || currentPlan.state === "failed" ? "font-medium text-amber-800" : "text-slate-600")}>{currentPlanMessage}</p>
+              {currentPlan.state === "stale" ? (
+                <div className="space-y-2 text-sm leading-6 text-slate-600">
+                  {staleRerunPinned ? <p>기간·정책·가정은 이전 플랜 조건을 사용합니다.</p> : null}
+                  {rerunError ? <p role="alert" className="rounded-lg bg-amber-50 p-3 font-semibold text-amber-900">{rerunError}</p> : null}
+                  <div className="flex flex-wrap gap-x-5 gap-y-2">
+                    <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className={dashboardTextLinkClassName}>계산 조건 검토</Link>
+                    <Link href={currentReportHref} prefetch={devPlanningPrefetch(currentReportHref)} className={dashboardTextLinkClassName}>최근 플랜 리포트 보기</Link>
+                  </div>
+                </div>
+              ) : currentRun ? (
+                <Link href={currentPlanningHref} prefetch={devPlanningPrefetch(currentPlanningHref)} className={dashboardTextLinkClassName}>현재 조건으로 다시 계산</Link>
+              ) : null}
+              {currentRun ? (
+                <>
+                  <p className="text-sm text-slate-500">최근 실행 {formatDateTime(currentRun.createdAt)} · {formatRunStatus(currentRun.overallStatus)}</p>
+                  <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                    <DashboardMetric label="최저 현금" value={formatKrw(currentSummary.worstCashKrw)} description="시뮬레이션 기간 중" />
+                    <DashboardMetric label="말기 순자산" value={formatKrw(currentSummary.endNetWorthKrw)} description={`${currentRun.input?.horizonMonths ?? "-"}개월 시뮬레이션 말기`} />
+                  </div>
+                  <p className="text-sm leading-6 text-slate-500">저장 당시 조건으로 계산한 미래 시뮬레이션 결과입니다. 현재 잔액이나 보장된 수익이 아닙니다.</p>
+                </>
+              ) : null}
+            </div>
+          </section>
+        </div>
+
+        {visibleWarnings.length > 0 ? (
+          <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900" data-testid={`dashboard-resources-${state.resourceLoadState}`}>
+            <p className="font-semibold">{resourceLoadCopy?.title ?? "일부 정보는 아직 준비되지 않았습니다."}</p>
+            <p className="mt-1">{resourceLoadCopy?.guidance ?? "저장된 기록과 현재 재무 정보는 별도로 확인할 수 있습니다."}</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer py-2 font-medium">불러오지 못한 정보 확인</summary>
+              {visibleWarnings.map((message) => <p key={message}>{message}</p>)}
+            </details>
+            <Link href="/settings/data-sources" className={dashboardTextLinkClassName}>데이터 연결 설정 확인 →</Link>
+          </div>
+        ) : null}
+
+        <section aria-labelledby="dashboard-recent-title" className="border-t border-slate-200 pt-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 id="dashboard-recent-title" className="text-lg font-bold text-navy">최근 플랜</h2>
+            <Link href="/planning/runs" prefetch={devPlanningPrefetch("/planning/runs")} className={dashboardTextLinkClassName}>전체 실행 보기 →</Link>
+          </div>
+          <p className="mt-1 text-sm leading-6 text-slate-500">모든 프로필의 최근 기록입니다. 저장 당시 조건의 미래 시뮬레이션 결과를 다시 보거나 입력 조건을 검토할 수 있습니다.</p>
+          {runsLoadFailed ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900" data-testid="dashboard-runs-load-failed">
+              <p className="font-semibold">최근 실행 기록을 불러오지 못했습니다.</p>
+              <p>저장된 기록이 없다는 뜻은 아닙니다. 새로고침해 다시 확인해 주세요.</p>
+              <button type="button" onClick={() => window.location.reload()} className="mt-2 min-h-11 font-semibold underline underline-offset-4">다시 불러오기</button>
+            </div>
+          ) : state.runs.length < 1 ? (
+            <p className="mt-4 rounded-xl bg-slate-100 p-5 text-sm leading-6 text-slate-600">저장된 실행이 아직 없습니다. 첫 플랜을 저장하면 이곳에서 다시 열 수 있습니다.</p>
+          ) : (
+            <div className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
+              {state.runs.slice(0, 3).map((run) => {
+                const summary = runSummary(run);
+                return (
+                  <article className="grid min-w-0 gap-4 py-5 lg:grid-cols-[1.3fr_1fr_auto] lg:items-center" key={run.id}>
+                    <div className="min-w-0">
+                      <p className="break-words text-base font-semibold text-navy">{run.title || "플래닝 실행"}</p>
+                      <p className="mt-1 break-words text-sm leading-6 text-slate-600">{`프로필: ${run.profileLabel || DASHBOARD_UNKNOWN_PROFILE_LABEL}`}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-500">{formatDate(run.createdAt)} · {formatRunStatus(run.overallStatus)} · {run.input?.horizonMonths ?? "-"}개월</p>
+                    </div>
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm leading-6 text-slate-600">
+                      <p>말기 순자산 <span className="font-semibold tabular-nums text-navy">{formatKrw(summary.endNetWorthKrw)}</span></p>
+                      <p>최저 현금 <span className="font-semibold tabular-nums text-navy">{formatKrw(summary.worstCashKrw)}</span></p>
+                    </div>
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 lg:flex-col lg:items-end">
+                      <Link href={`/planning/reports?runId=${encodeURIComponent(run.id)}`} prefetch={devPlanningPrefetch("/planning/reports")} className={dashboardTextLinkClassName}>리포트 다시 보기 →</Link>
+                      {/* planning selects another profile for an unknown id, so only a confirmed profile gets this link. */}
+                      {run.profileLinked ? (
+                        <Link href={`/planning?profileId=${encodeURIComponent(run.profileId)}`} prefetch={devPlanningPrefetch("/planning")} className="inline-flex min-h-11 items-center text-sm text-slate-600 underline underline-offset-4">같은 조건으로 다시 계산</Link>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
+
+        <details
+          className="group rounded-xl border border-slate-200 bg-white"
+          data-testid="dashboard-secondary-tools"
+          onToggle={(event) => {
+            if (event.currentTarget.open) setHasOpenedSecondaryTools(true);
+          }}
+        >
+          <summary className="cursor-pointer px-5 py-5 text-base font-semibold text-navy outline-none focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:px-6">상품·혜택·환율과 데이터 상태 <span className="ml-2 text-sm font-normal text-slate-500">필요할 때 펼쳐보기</span></summary>
+          <div className="space-y-8 border-t border-slate-200 px-5 py-6 sm:px-6">
+            <nav aria-label="보조 도구" className="flex flex-wrap gap-x-6 gap-y-2">
+              {[{ href: "/recommend", title: "조건에 맞는 상품 비교" }, { href: "/products/catalog", title: "상품 탐색" }, { href: "/public/dart", title: "공시 탐색" }, { href: "/benefits", title: "혜택 전체 보기" }, { href: "/tools/fx", title: "환율 계산기" }, { href: "/settings/data-sources", title: "데이터 연결 설정" }].map((item) => <Link key={item.href} href={item.href} className={dashboardTextLinkClassName}>{item.title} →</Link>)}
+            </nav>
+            <section className="space-y-3">
+              <h2 className="text-base font-bold text-navy">플랜 액션과 비교 후보</h2>
+              <p className="break-words text-sm leading-6 text-slate-500">{latestRun ? `최근 실행 ${latestRun.title || "플래닝 실행"} · 프로필 ${latestRun.profileLabel || DASHBOARD_UNKNOWN_PROFILE_LABEL} 대상 액션입니다.` : "플랜을 저장하면 실행 계획과 비교 후보를 확인할 수 있습니다."}</p>
+              {latestActions.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {latestActions.map((action) => (
+                    <div key={action.code || action.title} className="py-3">
+                      <p className="font-semibold text-navy">{action.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{action.summary}</p>
+                      {action.steps.slice(0, 2).map((step) => <p key={step} className="text-sm leading-6 text-slate-500">{step}</p>)}
+                      <Link href={action.href} className={dashboardTextLinkClassName}>액션 이어보기 →</Link>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-slate-500">저장된 액션이 없습니다.</p>}
+              {latestCandidates.map((candidate) => (
+                <div key={candidate.id} className="space-y-1 border-t border-slate-100 py-3">
+                  <p className="font-semibold text-navy">{candidate.productName}</p>
+                  <p className="text-sm leading-6 text-slate-600">{candidate.providerName} · {candidate.termMonths ? `${candidate.termMonths}개월` : "기간 미상"} · 대표 금리 {candidate.rateMaxPct && candidate.rateMaxPct > (candidate.rateMinPct ?? 0) ? `${formatPct(candidate.rateMinPct)} ~ ${formatPct(candidate.rateMaxPct)}` : formatPct(candidate.rateMinPct)}</p>
+                  <p className="text-sm leading-6 text-slate-500">{candidate.whyThis[0] || candidate.notes[0] || "상세 조건은 리포트에서 확인하세요."}</p>
+                </div>
+              ))}
+              {latestRun ? <Link href={latestRunReportHref} className={dashboardTextLinkClassName}>실행 계획 보기 →</Link> : null}
+            </section>
+            <div className="grid gap-8 lg:grid-cols-2">
+              <section className="space-y-3">
+                <h2 className="text-base font-bold text-navy">혜택 바로보기</h2>
+                {loading ? <p className="text-sm text-slate-500">보조 정보를 불러오는 중입니다.</p> : state.benefits.length > 0 ? state.benefits.map((item) => (
+                  <div key={item.serviceId || item.title} className="space-y-1 border-b border-slate-100 pb-3">
+                    <p className="text-sm font-semibold text-navy">{item.title}</p>
+                    <p className="text-sm text-slate-500">{item.org || "주관 기관 미상"}</p>
+                    <p className="text-sm leading-6 text-slate-600">{item.summary}</p>
+                  </div>
+                )) : <p className="text-sm text-slate-500">혜택 정보가 없습니다. 혜택 탐색에서 데이터 상태와 조건을 확인해 주세요.</p>}
+              </section>
+              <DashboardFxSection fx={state.fx} exchange={state.exchange} loading={loading} />
+            </div>
+            <section className="space-y-3 border-t border-slate-200 pt-5">
+              <h2 className="text-base font-bold text-navy">데이터 신뢰 상태</h2>
+              <p className="text-sm leading-6 text-slate-600">주요 데이터 연결 {configuredP0}/{totalP0 || 0} · 최신 상품 데이터 {freshSources}/{state.sourceStatuses.length || 0}</p>
+              <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                {state.dataSources.filter((row) => row.priority === "P0").map((row) => (
+                  <div key={row.id} className="text-sm leading-6">
+                    <p className="font-medium text-navy">{row.label} · {row.status?.state === "configured" ? "설정됨" : "확인 필요"}</p>
+                    {row.status?.message ? <p className="break-words text-slate-500">{row.status.message}</p> : null}
+                  </div>
+                ))}
+                {state.sourceStatuses.map((row) => <p key={`${row.sourceId}:${row.kind}`} className="break-words text-sm leading-6 text-slate-600">{row.sourceId} · {row.kind} · {row.counts.toLocaleString("ko-KR")}건 · {row.isFresh ? "최신" : "갱신 필요"} · {formatDate(row.lastSyncedAt || "")}</p>)}
+              </div>
+            </section>
+          </div>
+        </details>
+        <footer className="flex flex-wrap gap-x-6 gap-y-2 border-t border-slate-200 pt-4">
+          <Link href="/planning/reports" className={dashboardTextLinkClassName}>저장한 리포트</Link>
+          <Link href="/help" className={dashboardTextLinkClassName}>사용 도움말</Link>
+          <Link href="/feedback" className={dashboardTextLinkClassName}>의견 남기기</Link>
+        </footer>
       </div>
     </PageShell>
   );

@@ -29,16 +29,15 @@ describe("SnapshotPicker", () => {
 
     expect(html).toContain('data-testid="snapshot-selector"');
     expect(html).toContain('data-testid="planning-snapshot-select"');
-    expect(html).toContain("LATEST · unavailable");
-    expect(html).toContain("Stale 120d");
+    expect(html).toContain("최신 데이터 없음");
+    expect(html).toContain("120일 경과");
     expect(html).toContain("위험");
     expect(html).toContain("경고 3");
-    expect(html).toContain("latest 스냅샷이 없습니다.");
-    expect(html).toContain("/ops/assumptions에서 동기화 권장");
-    expect(html).toContain('data-testid="planning-snapshot-ops-link"');
-    expect(html).toContain('href="/ops/assumptions"');
-    expect(html).toContain('href="/ops/assumptions/history"');
-    expect(html).toContain("Details");
+    expect(html).toContain("최신 계산 기준 데이터가 없습니다.");
+    expect(html).toContain("데이터 상태 확인하기");
+    expect(html).toContain('href="/settings/data-sources"');
+    expect(html).not.toContain('href="/ops/assumptions');
+    expect(html).toContain("세부 정보");
     expect(html).toContain('aria-controls="snapshot-details-panel"');
     expect(html).not.toContain('id="snapshot-details-panel"');
   });
@@ -65,17 +64,17 @@ describe("SnapshotPicker", () => {
       />,
     );
 
-    expect(html).toContain("LATEST · asOf 2026-01-31");
+    expect(html).toContain("최신 · 기준일 2026-01-31");
     expect(html).toContain("기준금리 2.50%");
-    expect(html).toContain("CPI 2.00%");
+    expect(html).toContain("소비자물가 2.00%");
     expect(html).toContain("예금 3.10%");
-    expect(html).toContain("(stale 12d)");
-    expect(html).toContain("Fresh");
+    expect(html).toContain("12일 경과");
+    expect(html).toContain("최신 기준");
     expect(html).not.toContain("위험");
     expect(html).not.toContain("주의");
     expect(html).not.toContain("경고 ");
-    expect(html).not.toContain("latest 스냅샷이 없습니다.");
-    expect(html).not.toContain("동기화 권장");
-    expect(html).not.toContain("Details");
+    expect(html).not.toContain("최신 계산 기준 데이터가 없습니다.");
+    expect(html).not.toContain("데이터 상태 확인하기");
+    expect(html).not.toContain("세부 정보");
   });
 });

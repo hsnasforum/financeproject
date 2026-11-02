@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { TextDecoder } from "node:util";
 import { z } from "zod";
+import { isTxnId } from "../../planning/v3/service/txnId";
 import { isPlanningEncryptedEnvelope } from "../../planning/crypto/encrypt";
 import { isVaultEncryptedEnvelope } from "../../planning/crypto/vaultCrypto";
 import { AlertEventSchema, AlertRuleOverridesSchema } from "../../planning/v3/alerts/contracts";
@@ -168,7 +169,7 @@ type SourceIdentityState = {
 const SafeIdSchema = z.string().regex(SAFE_ID_RE);
 const IsoLikeSchema = z.string().refine((value) => Number.isFinite(Date.parse(value)));
 const JsonRecordSchema = z.record(z.string(), z.unknown());
-const TxnIdSchema = z.string().regex(/^[a-f0-9]{24}$/u);
+const TxnIdSchema = z.string().refine((value) => value === value.trim() && isTxnId(value));
 const CategoryIdSchema = z.enum([
   "income",
   "transfer",

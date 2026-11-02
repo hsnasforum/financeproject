@@ -13,7 +13,7 @@
 ## 월간 루틴
 1. DB 상태 점검
    - Prisma 스키마/마이그레이션 필요 여부 확인
-   - `pnpm prisma:generate` / `pnpm exec prisma db push` 검토
+   - `pnpm prisma:generate` / `pnpm prisma:db:push` 검토
 2. Seed 정책 점검
    - `scripts/seed_debug.mjs` 데이터 유효성 확인
    - 테스트/개발 시드 불일치 여부 확인

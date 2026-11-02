@@ -20,7 +20,9 @@ import {
   parseCreatePlanningRunCommand,
 } from "../../src/lib/planning/server/runs/createRunService";
 import { resolvePlanningRunIdempotency } from "../../src/lib/planning/server/runs/createRunIdempotency";
-import { getRun } from "../../src/lib/planning/store/runStore";
+import { getRun, listRuns } from "../../src/lib/planning/store/runStore";
+import { computeProfileHash } from "../../src/lib/planning/v2/reproducibility";
+import { applyProfilePatch } from "../../src/lib/planning/v2/profilePatch";
 import {
   resolveProfileRunDir,
   resolveProfileRunMetaPath,
@@ -795,6 +797,59 @@ describe("planning v2 persistence routes", () => {
     expect(deleteResponse.status).toBe(400);
     expect(deletePayload.ok).toBe(false);
     expect(deletePayload.error?.code).toBe("CONFIRM_MISMATCH");
+  });
+
+  it.each([false, true])("reruns stored input once and rejects changed conditions without writing (scenario=%s)", async (withScenario) => {
+    const snapshotId = "rerun-fixed-snapshot";
+    const snapshot = assumptionsSnapshotFixture("2026-09-07", "2026-09-07T00:00:00.000Z");
+    const snapshotPath = path.join(String(env.PLANNING_ASSUMPTIONS_HISTORY_DIR), `${snapshotId}.json`);
+    await writeJson(snapshotPath, snapshot);
+    const profileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Rerun profile A", profile: sampleProfile(),
+    }));
+    const profileId = (await profileResponse.json()).data.id as string;
+    const oldResponse = await runsPOST(buildJsonRequest("POST", "/api/planning/v2/runs", { profileId, input: {
+      horizonMonths: 36, snapshotId, policyId: "balanced", assumptionsOverride: { inflationPct: 2.4 },
+      runScenarios: false, getActions: true, analyzeDebt: false, includeProducts: false,
+      debtStrategy: { options: { extraPaymentKrw: 5000, compareTermsMonths: [24, 36] } },
+      ...(withScenario ? { scenario: { title: "동일 시나리오", patch: [{ op: "mul", field: "monthlyIncomeNet", value: 1.1 }] } } : {}),
+    } }));
+    expect(oldResponse.status).toBe(201);
+    const oldRun = (await oldResponse.json()).data;
+    const oldStored = await getRun(oldRun.id);
+    const patchResponse = await profilePATCH(buildJsonRequest("PATCH", `/api/planning/v2/profiles/${profileId}`, {
+      profile: { ...sampleProfile(), monthlyIncomeNet: 5_300_000 },
+    }), { params: Promise.resolve({ id: profileId }) });
+    expect(patchResponse.status).toBe(200);
+    const profile = (await (await profileByIdGET(buildGetRequest(`/api/planning/v2/profiles/${profileId}`), {
+      params: Promise.resolve({ id: profileId }),
+    })).json()).data.profile;
+    const body = { profileId, rerunOfRunId: oldRun.id, input: oldRun.input };
+    const post = (key: string, data = body) => runsPOST(buildJsonRequest("POST", "/api/planning/v2/runs", data, LOCAL_HOST, { "idempotency-key": key }));
+    const [first, duplicate] = await Promise.all([post("rerun-click-0001"), post("rerun-click-0001")]);
+    expect(first.status).toBe(201);
+    expect(duplicate.status).toBe(201);
+    const newRun = (await first.json()).data;
+    expect((await duplicate.json()).data.id).toBe(newRun.id);
+    expect(newRun.profileId).toBe(profileId);
+    expect(newRun.input).toEqual(oldRun.input);
+    expect(newRun.reproducibility.profileHash).toBe(computeProfileHash(withScenario ? applyProfilePatch(profile, oldRun.input.scenario.patch) : profile));
+    expect(newRun.reproducibility.effectiveAssumptionsHash).toBe(oldRun.reproducibility.effectiveAssumptionsHash);
+    expect(await listRuns({ profileId })).toHaveLength(2);
+    await fs.promises.unlink(snapshotPath);
+    // A lost successful response can still be replayed even if the historical snapshot is subsequently removed.
+    expect((await (await post("rerun-click-0001")).json()).data.id).toBe(newRun.id);
+    const missing = await post("rerun-click-0002");
+    expect(missing.status).toBe(400);
+    expect((await missing.json()).error.code).toBe("SNAPSHOT_NOT_FOUND");
+    expect(await listRuns({ profileId })).toHaveLength(2);
+    await writeJson(snapshotPath, { ...snapshot, korea: { ...snapshot.korea, policyRatePct: 9 } });
+    expect((await post("rerun-click-0003")).status).toBe(409);
+    await writeJson(snapshotPath, snapshot);
+    expect((await post("rerun-click-0004", { ...body, input: { ...body.input, horizonMonths: 12 } })).status).toBe(409);
+    expect((await post("rerun-click-0005", { ...body, profileId: "other-profile" })).status).toBe(409);
+    expect(await listRuns({ profileId })).toHaveLength(2);
+    expect(await getRun(oldRun.id)).toEqual(oldStored);
   });
 
   it("persists exactly one run for concurrent, replayed, and deprecated-route requests with the same idempotency key", async () => {

@@ -785,16 +785,10 @@ function toWarningAgg(dto: ResultDtoV1, run: PlanningRunRecord | null): Dashboar
   return fallbackWarningAggFromDto(dto);
 }
 
-function toInsightWarnings(rows: DashboardWarningAggRow[]): ReportVM["insight"]["aggregatedWarnings"] {
+function toInsightWarnings(rows: ResultDtoV1["warnings"]["aggregated"]): ReportVM["insight"]["aggregatedWarnings"] {
   return rows.map((row) => ({
-    code: row.code,
-    severity: row.severityMax,
-    count: row.count,
-    ...(typeof row.firstMonth === "number" ? { firstMonth: row.firstMonth } : {}),
-    ...(typeof row.lastMonth === "number" ? { lastMonth: row.lastMonth } : {}),
-    ...(row.sampleMessage ? { sampleMessage: row.sampleMessage } : {}),
-    ...(row.suggestedActionId ? { suggestedActionId: row.suggestedActionId } : {}),
-    ...(row.subjectLabel ? { subjectLabel: row.subjectLabel } : {}),
+    ...row,
+    severity: row.severity === "critical" || row.severity === "warn" ? row.severity : "info",
   }));
 }
 
@@ -810,6 +804,7 @@ function toGuideWarnings(rows: DashboardWarningAggRow[]): AggregatedWarningRow[]
 }
 
 function toGuideGoals(dto: ResultDtoV1): GoalStatusRow[] {
+  const commentsById = new Map(dto.goals.map((goal) => [goal.id, goal.comment]));
   return mapGoalStatus(dto.goals.map((goal) => ({
     goalId: goal.id,
     name: goal.title,
@@ -818,7 +813,10 @@ function toGuideGoals(dto: ResultDtoV1): GoalStatusRow[] {
     targetAmount: goal.targetKrw,
     currentAmount: goal.currentKrw,
     shortfall: goal.shortfallKrw,
-  })));
+  }))).map((goal) => ({
+    ...goal,
+    interpretation: asString(commentsById.get(goal.goalId)) || (goal.achieved ? "달성" : goal.interpretation),
+  }));
 }
 
 function toGuideTimelineRows(timelinePoints: TimelineRow[], dsrPct: number | undefined): TimelinePointRow[] {
@@ -905,7 +903,8 @@ function toActionRows(dto: ResultDtoV1, run: PlanningRunRecord | null): ReportAc
 function toScenarioRows(dto: ResultDtoV1, run: PlanningRunRecord | null): ReportScenarioRow[] {
   const scenarios = dto?.scenarios ? asRecord(dto.scenarios) : asRecord(run?.outputs?.scenarios);
   const table = asArray(scenarios.table);
-  const shortWhyByScenario = asRecord(scenarios.shortWhyByScenario);
+  // Canonical scenario tables flatten shortWhy; compact run metadata retains the IDs.
+  const shortWhyByScenario = asRecord(scenarios.shortWhyByScenario ?? run?.outputs?.scenarios?.shortWhyByScenario);
   return table.map((row, index) => {
     const record = asRecord(row);
     const id = asString(record.id) || `scenario-${index + 1}`;
@@ -1169,7 +1168,7 @@ export function buildReportVM(
       ...(goalsAchieved ? { goalsAchievedText: goalsAchieved } : {}),
     },
     summaryEvidence,
-    aggregatedWarnings: toInsightWarnings(warningAgg),
+    aggregatedWarnings: toInsightWarnings(dto.warnings.aggregated),
     goals: guideGoals,
     outcomes: {
       actionsTop: topActions,
@@ -1271,7 +1270,7 @@ export function buildReportVM(
         ...(goalsAchieved ? { goalsAchievedText: goalsAchieved } : {}),
       },
       summaryEvidence,
-      aggregatedWarnings: toInsightWarnings(warningAgg),
+      aggregatedWarnings: toInsightWarnings(dto.warnings.aggregated),
       goals: goalsTable,
       outcomes: {
         actionsTop: topActions,

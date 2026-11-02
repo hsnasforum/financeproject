@@ -373,22 +373,27 @@ describe("planning deployment policy", () => {
     expect(moduleSource).not.toContain(".headers");
   });
 
-  it("remains disconnected from all Phase B runtime consumers", () => {
-    const runtimeConsumers = [
-      "middleware.ts",
-      "src/lib/dev/localRequest.ts",
-      "src/lib/planning/api/routeAuth.ts",
-      "src/lib/planning/auth/currentUser.ts",
-      "src/lib/planning/store/namespace.ts",
-      "scripts/next_prod_safe.mjs",
-      "scripts/start_local.mjs",
-      "scripts/planning_v2_desktop_launch.mjs",
-    ];
+  it("is consumed by the Phase C startup, middleware, and current-user boundaries", () => {
+    const expectedConsumerSignals = new Map([
+      ["src/lib/planning/deployment/runtimePolicy.mjs", "resolvePlanningDeploymentPolicy"],
+      ["scripts/planning_runtime_startup.mjs", "assertPlanningRuntimePolicy"],
+      ["scripts/planning_v2_desktop_launch.mjs", "assertPlanningRuntimePolicy"],
+      ["scripts/next_prod_safe.mjs", "verifyPlanningDesktopRuntimeStartup"],
+      ["src/middleware.ts", "evaluateDesktopSessionRequest"],
+      ["src/lib/planning/auth/currentUser.ts", "evaluateDesktopSessionRequest"],
+      ["src/lib/planning/api/routeAuth.ts", "requireCurrentPlanningUser"],
+      ["scripts/start_local.mjs", "planning_v2_desktop_launch.mjs"],
+      ["playwright.config.ts", "planning_v2_desktop_launch.mjs"],
+    ]);
 
-    for (const file of runtimeConsumers) {
+    for (const [file, signal] of expectedConsumerSignals) {
       const source = fs.readFileSync(path.resolve(process.cwd(), file), "utf8");
-      expect(source, file).not.toContain("planning/deployment/policy");
-      expect(source, file).not.toContain("resolvePlanningDeploymentPolicy");
+      expect(source, file).toContain(signal);
     }
+
+    const playwrightSource = fs.readFileSync(path.resolve(process.cwd(), "playwright.config.ts"), "utf8");
+    expect(playwrightSource).toContain("PLANNING_E2E_DESKTOP_SESSION_TOKEN");
+    expect(playwrightSource).toContain("planning.desktop-session");
+    expect(playwrightSource).not.toContain("node scripts/next_prod_safe.mjs");
   });
 });

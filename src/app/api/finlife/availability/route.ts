@@ -10,7 +10,6 @@ function isKind(value: string | null): value is FinlifeKind {
   return (
     value === "deposit" ||
     value === "saving" ||
-    value === "pension" ||
     value === "mortgage-loan" ||
     value === "rent-house-loan" ||
     value === "credit-loan"

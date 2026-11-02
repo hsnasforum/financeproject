@@ -12,13 +12,24 @@ function normalizeId(id: string): string {
   return id.trim();
 }
 
+// A bare FINLIFE code and "finlife:<code>" are the same unscoped product lookup, so they count as one basket entry.
+// Scoped ids ("finlife:<kind>:<company>:<code>"), other sources and other prefixes compare by their trimmed text.
+export function compareIdKey(id: string): string {
+  const trimmed = normalizeId(id);
+  if (!trimmed.startsWith("finlife:")) return trimmed;
+  const code = trimmed.slice("finlife:".length).trim();
+  return code && !code.includes(":") ? code : trimmed;
+}
+
+// Keeps the first stored text of each product and the basket order.
 function normalizeList(ids: string[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const raw of ids) {
     const id = normalizeId(raw);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
+    const key = compareIdKey(id);
+    if (!id || seen.has(key)) continue;
+    seen.add(key);
     out.push(id);
   }
   return out;
@@ -39,14 +50,16 @@ export function addCompareId(ids: string[], id: string, max = DEFAULT_COMPARE_LI
   const normalizedId = normalizeId(id);
   if (!normalizedId) return limitCompareIds(ids, max);
   const next = [...normalizeList(ids)];
-  if (!next.includes(normalizedId)) next.push(normalizedId);
+  const key = compareIdKey(normalizedId);
+  if (!next.some((entry) => compareIdKey(entry) === key)) next.push(normalizedId);
   return limitCompareIds(next, max);
 }
 
 export function removeCompareId(ids: string[], id: string): string[] {
   const normalizedId = normalizeId(id);
   if (!normalizedId) return normalizeList(ids);
-  return normalizeList(ids).filter((item) => item !== normalizedId);
+  const key = compareIdKey(normalizedId);
+  return normalizeList(ids).filter((item) => compareIdKey(item) !== key);
 }
 
 export function loadCompareIds(raw: string | null, max = DEFAULT_COMPARE_LIMIT): string[] {

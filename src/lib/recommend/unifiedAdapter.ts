@@ -121,6 +121,7 @@ export function unifiedProductsToRecommendCandidates(input: {
 
     out.push({
       sourceId: item.sourceId,
+      sourceIds: item.sourceIds ?? [item.sourceId],
       product,
       badges: [...new Set([...(item.badges ?? []), item.sourceId === "finlife" ? "FINLIFE" : "KDB"])],
       extraReasons: picked.reasons,

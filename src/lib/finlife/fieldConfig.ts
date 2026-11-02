@@ -13,19 +13,6 @@ export type FinlifeFieldConfig = {
 };
 
 export const FINLIFE_FIELD_CONFIG: Partial<Record<FinlifeKind, FinlifeFieldConfig>> = {
-  pension: {
-    productFields: [
-      { label: "가입방법", keys: ["join_way", "join_way_dtl"], help: "가입 가능한 채널 안내입니다." },
-      { label: "가입대상", keys: ["join_member", "join_member_desc"], help: "누가 가입할 수 있는지 설명합니다." },
-      { label: "우대조건", keys: ["spcl_cnd"], help: "추가 혜택을 받기 위한 조건입니다." },
-    ],
-    optionFields: [
-      { label: "기간", keys: ["save_trm"] },
-      { label: "이자 방식", keys: ["intr_rate_type_nm"] },
-      { label: "기본금리(연)", keys: ["intr_rate"] },
-      { label: "최고금리(연, 우대포함)", keys: ["intr_rate2"] },
-    ],
-  },
   deposit: {
     productFields: [
       { label: "가입방법", keys: ["join_way"], help: "영업점/비대면 등 가입 채널입니다." },

@@ -130,8 +130,9 @@ export const DATA_SOURCES: DataSourceDef[] = [
     label: "한국수출입은행 환율",
     priority: "P0",
     env: [
-      { key: "EXIM_EXCHANGE_API_KEY", label: "EXIM API Key" },
-      { key: "EXIM_EXCHANGE_API_URL", label: "EXIM API URL" },
+      { key: "EXIM_EXCHANGE_API_KEY", label: "EXIM API Key (기준 환율, KEXIM 키가 없으면 환율 계산에도 사용)" },
+      { key: "EXIM_EXCHANGE_API_URL", label: "EXIM API URL (EXIM 키와 함께 사용하는 https 주소)" },
+      { key: "KEXIM_API_KEY", label: "KEXIM API Key (선택: 환율 계산 전용 키, 있으면 우선 사용)", optional: true },
     ],
   }),
   defineDataSource({

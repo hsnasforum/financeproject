@@ -29,7 +29,7 @@ describe("snapshotPickerModel", () => {
   });
 
   it("returns the correct details button labels", () => {
-    expect(getSnapshotDetailsToggleLabel(false)).toBe("Details");
-    expect(getSnapshotDetailsToggleLabel(true)).toBe("Details 닫기");
+    expect(getSnapshotDetailsToggleLabel(false)).toBe("세부 정보");
+    expect(getSnapshotDetailsToggleLabel(true)).toBe("세부 정보 닫기");
   });
 });

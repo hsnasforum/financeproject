@@ -72,6 +72,8 @@ export type ResultDtoV1 = {
       incomeKrw?: number;
       expensesKrw?: number;
       debtPaymentKrw?: number;
+      /** Recurring cashflow: income - expenses - required minimum debt payment (excludes extra repayment). */
+      operatingCashflowKrw?: number;
       cashKrw?: number;
       netWorthKrw?: number;
       totalDebtKrw?: number;
@@ -214,9 +216,10 @@ function pickGoalRows(simulate: Record<string, unknown>): unknown[] {
 }
 
 function buildGoalsDto(rawGoalRows: unknown[]): ResultDtoV1["goals"] {
-  const mapped = mapGoals(rawGoalRows);
-  return mapped.map((goal, index) => {
-    const raw = asRecord(rawGoalRows[index]);
+  return rawGoalRows.map((entry, index) => {
+    const raw = asRecord(entry);
+    // Keep each ID with its normalized amounts before applying report display order.
+    const [goal] = mapGoals([{ ...raw, name: asString(raw.name) || `목표 ${index + 1}` }]);
     const goalId = asString(raw.goalId) || asString(raw.id) || `goal-${index + 1}`;
     const lowered = `${goalId} ${goal.name}`.toLowerCase();
     const type = lowered.includes("emergency") || lowered.includes("비상")
@@ -235,6 +238,11 @@ function buildGoalsDto(rawGoalRows: unknown[]): ResultDtoV1["goals"] {
       achieved: goal.achieved,
       ...(goal.comment ? { comment: goal.comment } : {}),
     };
+  }).sort((a, b) => {
+    const aMonth = a.targetMonth ?? Number.POSITIVE_INFINITY;
+    const bMonth = b.targetMonth ?? Number.POSITIVE_INFINITY;
+    if (aMonth !== bMonth) return aMonth - bMonth;
+    return a.title.localeCompare(b.title);
   }).slice(0, LIMITS.goalsTop);
 }
 
@@ -244,14 +252,23 @@ function buildTimelinePoints(simulate: Record<string, unknown>): ResultDtoV1["ti
     : simulate.timeline;
   const rows = pickTimelinePoints(source);
   return rows.map((row) => {
+    // The report picker fills missing values for display. The canonical DTO must keep
+    // missing cashflow metrics absent so a legacy run cannot masquerade as a zero plan.
+    const rawEntry = asRecord(asArray(source).find((entry, index) => {
+      const item = asRecord(entry);
+      return Math.max(0, Math.trunc(asNumber(item.monthIndex) ?? index)) === row.monthIndex;
+    }));
+    const nested = asRecord(rawEntry.row);
+    const rawRow = Object.keys(nested).length > 0 ? nested : rawEntry;
     const label: ResultDtoV1["timeline"]["points"][number]["label"] =
       row.label === "시작" ? "start" : row.label === "중간" ? "mid" : "end";
     return {
       label,
       monthIndex: row.monthIndex,
-      ...(typeof row.income === "number" ? { incomeKrw: row.income } : {}),
-      ...(typeof row.expenses === "number" ? { expensesKrw: row.expenses } : {}),
-      ...(typeof row.debtPayment === "number" ? { debtPaymentKrw: row.debtPayment } : {}),
+      ...(typeof asNumber(rawRow.income) === "number" ? { incomeKrw: row.income } : {}),
+      ...(typeof asNumber(rawRow.expenses) === "number" ? { expensesKrw: row.expenses } : {}),
+      ...(typeof asNumber(rawRow.debtPayment) === "number" ? { debtPaymentKrw: row.debtPayment } : {}),
+      ...(typeof asNumber(rawRow.operatingCashflow) === "number" ? { operatingCashflowKrw: row.operatingCashflow } : {}),
       ...(typeof row.cash === "number" ? { cashKrw: row.cash } : {}),
       ...(typeof row.netWorth === "number" ? { netWorthKrw: row.netWorth } : {}),
       ...(typeof row.totalDebt === "number" ? { totalDebtKrw: row.totalDebt } : {}),

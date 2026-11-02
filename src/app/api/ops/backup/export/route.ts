@@ -11,6 +11,7 @@ import {
   toOpsBackupExportClientError,
   type OpsBackupExportMode,
 } from "../../../../../lib/ops/backup/backupExportRouteService";
+import { readBoundedBackupJson, toBackupJsonRequestError } from "../../../../../lib/ops/backup/backupJsonRequest";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 
@@ -36,10 +37,21 @@ export async function POST(request: Request) {
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
+  } catch (error) {
+    const guard = toGuardErrorResponse(error);
+    const response = opsErrorResponse({
+      code: guard?.code ?? "INTERNAL",
+      message: guard?.message ?? "요청 검증 중 오류가 발생했습니다.",
+      status: guard?.status ?? 500,
+    });
+    ensureOpsBackupExportVaultCsrfCookie(request, response);
+    return response;
+  }
 
-    const body = await request.json().catch(() => null) as { csrf?: unknown; passphrase?: unknown; mode?: unknown; gzip?: unknown } | null;
-    assertOpsBackupExportVaultCsrf(request, asString(body?.csrf));
-    return await withPlanningRouteUser(request, async () => {
+  return await withPlanningRouteUser(request, async () => {
+    try {
+      const body = await readBoundedBackupJson(request) as { csrf?: unknown; passphrase?: unknown; mode?: unknown; gzip?: unknown } | null;
+      assertOpsBackupExportVaultCsrf(request, asString(body?.csrf));
       const passphrase = asString(body?.passphrase);
       const mode: OpsBackupExportMode = asString(body?.mode).toLowerCase() === "delta" ? "delta" : "full";
       const gzipRequested = asBool(body?.gzip) || supportsGzip(request);
@@ -49,6 +61,7 @@ export async function POST(request: Request) {
         mode,
         gzipRequested,
         startedAt,
+        scope: "ops",
       });
       const baseStream = Readable.from(exported.encryptedBytes, { highWaterMark: 64 * 1024 });
       const streamed = gzipRequested ? baseStream.pipe(createGzip()) : baseStream;
@@ -59,40 +72,51 @@ export async function POST(request: Request) {
           "content-disposition": `attachment; filename="${exported.fileName}"`,
           "cache-control": "no-store",
           "x-transfer-mode": "stream",
+          "x-planning-backup-export-receipt": exported.receipt,
           ...(gzipRequested ? { "content-encoding": "gzip", vary: "accept-encoding" } : {}),
         },
       });
       ensureOpsBackupExportVaultCsrfCookie(request, response);
       return response;
-    }, process.env, (response) => {
-      ensureOpsBackupExportVaultCsrfCookie(request, response);
-      return response;
-    });
-  } catch (error) {
-    const guard = toGuardErrorResponse(error);
-    if (guard) {
-      const response = opsErrorResponse({
-        code: guard.code,
-        message: guard.message,
-        status: guard.status,
+    } catch (error) {
+      const guard = toGuardErrorResponse(error);
+      if (guard) {
+        const response = opsErrorResponse({
+          code: guard.code,
+          message: guard.message,
+          status: guard.status,
+        });
+        ensureOpsBackupExportVaultCsrfCookie(request, response);
+        return response;
+      }
+      const jsonError = toBackupJsonRequestError(error);
+      if (jsonError) {
+        const response = opsErrorResponse({
+          code: "VALIDATION",
+          message: jsonError.message,
+          status: jsonError.status,
+        });
+        ensureOpsBackupExportVaultCsrfCookie(request, response);
+        return response;
+      }
+      const clientError = toOpsBackupExportClientError(error);
+      const contractError = toOpsContractError({
+        code: clientError.code,
+        message: clientError.message,
+        status: clientError.status,
       });
+      await recordOpsBackupExportError({
+        message: contractError.body.error.message,
+        code: contractError.body.error.code,
+        status: contractError.status,
+        startedAt,
+      });
+      const response = NextResponse.json(contractError.body, { status: contractError.status });
       ensureOpsBackupExportVaultCsrfCookie(request, response);
       return response;
     }
-    const clientError = toOpsBackupExportClientError(error);
-    const contractError = toOpsContractError({
-      code: clientError.code,
-      message: clientError.message,
-      status: clientError.status,
-    });
-    await recordOpsBackupExportError({
-      message: contractError.body.error.message,
-      code: contractError.body.error.code,
-      status: contractError.status,
-      startedAt,
-    });
-    const response = NextResponse.json(contractError.body, { status: contractError.status });
+  }, process.env, (response) => {
     ensureOpsBackupExportVaultCsrfCookie(request, response);
     return response;
-  }
+  });
 }

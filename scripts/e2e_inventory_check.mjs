@@ -37,6 +37,17 @@ export function classifyE2EInventory(filePaths) {
   const unaccounted = [];
 
   for (const filePath of candidates) {
+    // All ignore entries name directories. Match each ancestor so hidden children
+    // such as node_modules/.pnpm stay ignored. Playwright matches without case.
+    const directories = filePath.split("/").slice(0, -1);
+    const ignoredPattern = PLAYWRIGHT_TEST_IGNORE.find((pattern) => {
+      const directoryPattern = pattern.slice("**/".length, -"/**".length);
+      return directories.some((directory) => path.posix.matchesGlob(directory.toLowerCase(), directoryPattern.toLowerCase()));
+    });
+    if (ignoredPattern) {
+      excluded.push({ filePath, reason: `Playwright testIgnore: ${ignoredPattern}` });
+      continue;
+    }
     if (isPlaywrightIncludedPath(filePath)) {
       included.push(filePath);
       continue;

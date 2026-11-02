@@ -82,6 +82,20 @@ function makeInput(index: number): SavedRunInput {
 }
 
 describe("saved runs store", () => {
+  it.each(["finlife", "datago_kdb"])("preserves a scoped FINLIFE recommendation identity from %s in saved history", (sourceId) => {
+    const run = buildRunFromRecommend(recommendOwnerId("alice"), makeInput(1).profile, {
+      items: [{
+        sourceId,
+        finPrdtCd: "finlife:deposit:0000001:SAME",
+        providerName: "은행A",
+        productName: "상품A",
+        kind: "deposit",
+        selectedOption: { termMonths: 12, appliedRate: 3 },
+      }],
+    });
+    expect(run.items[0]?.unifiedId).toBe("finlife:deposit:0000001:SAME");
+  });
+
   it("supports save/list/get/remove/clear with max 50 cap", () => {
     const storage = createMemoryStorage();
     const ownerId = recommendOwnerId("alice");

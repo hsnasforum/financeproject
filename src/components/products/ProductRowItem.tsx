@@ -7,6 +7,7 @@ import { formatGlossaryValue } from "@/lib/finlife/glossary";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type NormalizedProduct } from "@/lib/finlife/types";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
+import { ProductDisclosureMeta } from "@/components/products/ProductDisclosureMeta";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -33,7 +34,7 @@ function formatRate(value: number | null | undefined): string {
 function formatFreshnessStatusLabel(status: NonNullable<FinlifeCardFreshnessMeta["freshnessStatus"]>): string {
   switch (status) {
     case "ok":
-      return "최신";
+      return "수집 주기 내";
     case "stale":
       return "기준 지남";
     case "error":
@@ -43,13 +44,6 @@ function formatFreshnessStatusLabel(status: NonNullable<FinlifeCardFreshnessMeta
     default:
       return "기준 정보 없음";
   }
-}
-
-function formatKoreanDateTime(value?: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("ko-KR", { hour12: false });
 }
 
 export function ProductRowItem({
@@ -104,13 +98,13 @@ export function ProductRowItem({
             <h3 className="truncate text-lg font-black text-navy tracking-tight group-hover:text-primary transition-colors">
               {product.fin_prdt_nm ?? "-"}
             </h3>
+            <ProductDisclosureMeta
+              className="mt-2"
+              disclosureMonth={product.raw.dcls_month}
+              collectedAt={freshnessMeta?.lastSyncedAt}
+            />
             {freshnessMeta ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black">
-                {freshnessMeta.lastSyncedAt ? (
-                  <span className="rounded-full border border-slate-200 bg-surface-muted px-2.5 py-1 text-slate-500">
-                    기준 확인 {formatKoreanDateTime(freshnessMeta.lastSyncedAt)}
-                  </span>
-                ) : null}
                 {freshnessMeta.freshnessStatus ? (
                   <span
                     className={cn(
@@ -200,6 +194,7 @@ export function ProductRowItem({
         kind={kind}
         product={product}
         initialOption={product.best}
+        collectedAt={freshnessMeta?.lastSyncedAt}
         amountWonDefault={amountWonDefault}
       />
     </>

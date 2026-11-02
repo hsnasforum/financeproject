@@ -4,7 +4,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/route";
 import { POST as runsPOST } from "../../src/app/api/planning/v2/runs/route";
+import { GET as runGET } from "../../src/app/api/planning/v2/runs/[id]/route";
 import { GET as exportHtmlGET } from "../../src/app/api/planning/reports/[runId]/export.html/route";
+import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 import { saveAssumptionsOverrides } from "../../src/lib/planning/assumptions/overridesStorage";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
@@ -158,6 +160,18 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
 
     const runId = await createRunForExport();
 
+    const storedResponse = await runGET(
+      buildGetRequest(`/api/planning/v2/runs/${runId}`),
+      { params: Promise.resolve({ id: runId }) },
+    );
+    expect(storedResponse.status).toBe(200);
+    const storedPayload = await storedResponse.json() as { data: PlanningRunRecord };
+    const explanations = storedPayload.data.outputs.scenarios?.shortWhyByScenario as Record<string, string[]> | undefined;
+    const scenarioTable = storedPayload.data.outputs.resultDto?.scenarios?.table as { id: string; title: string }[] | undefined;
+    expect(explanations?.conservative?.[0]).toBeTruthy();
+    expect(explanations?.aggressive?.[0]).toBeTruthy();
+    expect(explanations?.conservative?.[0]).not.toBe(explanations?.aggressive?.[0]);
+
     const response = await exportHtmlGET(
       buildGetRequest(`/api/planning/reports/${runId}/export.html`),
       { params: Promise.resolve({ runId }) },
@@ -191,6 +205,13 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     expect(html).not.toContain("GITHUB_TOKEN");
     expect(html).not.toContain("ECOS_API_KEY");
     expect(html).not.toContain("Bearer ");
+    for (const id of ["conservative", "aggressive"]) {
+      const scenario = scenarioTable?.find((row) => row.id === id);
+      expect(scenario).toBeDefined();
+      const exportedRow = html.split(`<td>${scenario?.title}</td>`)[1]?.split("</tr>")[0];
+      expect(exportedRow).toContain(explanations?.[id]?.[0]);
+      expect(exportedRow).not.toContain("기준 대비 순자산/경고 변화를 함께 확인하세요.");
+    }
   });
 
   it("keeps local html download available in production builds for authenticated local bridge requests", async () => {

@@ -26,6 +26,7 @@ export type UnifiedItem = {
   providerName: string;
   productName: string;
   summary?: string;
+  disclosureMonth?: string | null;
   badges?: string[];
   options?: UnifiedOption[];
 };

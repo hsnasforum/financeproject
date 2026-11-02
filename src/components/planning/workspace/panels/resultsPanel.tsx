@@ -28,11 +28,24 @@ import {
 } from "@/components/planning/workspace/panels/shared";
 import { t, type Locale } from "@/lib/planning/i18n";
 import { formatKrw, formatPct } from "@/lib/planning/i18n/format";
+import { resolveWarningCatalog } from "@/lib/planning/catalog/warningCatalog";
 import { appendProfileIdQuery } from "@/lib/planning/profileScope";
-import { buildEvidence } from "@/lib/planning/v2/insights/evidence";
+import { resolveWorkspaceInterpretationInput } from "@/lib/planning/ui/workspaceResultInsights";
+import { buildInterpretationVM } from "@/lib/planning/v2/insights/interpretationVm";
+import { buildResultSummaryMetrics } from "@/lib/planning/v2/resultSummary";
 import { LIMITS } from "@/lib/planning/v2/limits";
 import { aggregateWarnings as aggregateGuideWarnings } from "@/lib/planning/v2/resultGuide";
 import { cn } from "@/lib/utils";
+
+const RESULT_TAB_LABELS_KO = {
+  summary: "핵심 요약", warningsGoals: "주의 신호·목표", actions: "실행 계획",
+  scenarios: "조건별 비교", monteCarlo: "확률 분석", debt: "부채 분석",
+} as const;
+
+function warningSummaryLabel(code: string): string {
+  const entry = resolveWarningCatalog(code);
+  return entry.title === code ? entry.plainDescription : entry.title;
+}
 
 function formatNumber(locale: Locale, value: unknown): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
@@ -71,6 +84,7 @@ export function PlanningWorkspaceResultsPanel({
 }) {
   const {
     locale,
+    debugEnabled,
     optimizeCandidates,
     optimizeResult,
     runResult,
@@ -93,7 +107,6 @@ export function PlanningWorkspaceResultsPanel({
     summaryEvidence,
     summaryCriticalWarnings,
     aggregatedWarningsForInsight,
-    goalsForInsight,
     actionsTopForInsight,
     workspaceSnapshotState,
     monteDepletionProb,
@@ -140,6 +153,48 @@ export function PlanningWorkspaceResultsPanel({
     setShowAllActions,
   } = actions;
 
+  const dto = runResult?.resultDto;
+  const summaryMetrics = dto ? buildResultSummaryMetrics(dto, { debtMonthlyPaymentKrw: debtMeta.totalMonthlyPaymentKrw }) : undefined;
+  const dsrPct = typeof dto?.summary.dsrPct === "number" ? dto.summary.dsrPct : summaryMetrics?.dsrPct;
+  const goalCounts = dto?.summary.goalsAchieved;
+  const fallbackProps = {
+    summaryMetrics: {
+      monthlySurplusKrw: summaryMonthlySurplusKrw,
+      emergencyFundMonths: summaryEmergencyFundMonths,
+      endNetWorthKrw: summaryEndNetWorthKrw,
+      worstCashKrw: summaryWorstCashKrw,
+      worstCashMonthIndex: summaryWorstCashMonth,
+      dsrPct,
+      goalsAchievedText: goalCounts ? `${goalCounts.achieved}/${goalCounts.total}` : undefined,
+    },
+    summaryEvidence,
+    aggregatedWarnings: aggregatedWarningsForInsight,
+    goals: goalTableRows,
+    outcomes: {
+      actionsTop: actionsTopForInsight,
+      snapshotMeta: workspaceSnapshotState.outcomesMeta,
+      monteCarlo: { retirementDepletionBeforeEnd: monteDepletionProb },
+      runId: savedRun?.id,
+    },
+    policy: savedRun?.reproducibility?.policy,
+  };
+  const interpretationInput = resolveWorkspaceInterpretationInput(savedRun, {
+    summary: fallbackProps.summaryMetrics,
+    aggregatedWarnings: fallbackProps.aggregatedWarnings,
+    goals: fallbackProps.goals,
+    outcomes: fallbackProps.outcomes,
+    summaryEvidence,
+  });
+  const interpretationProps = {
+    summaryMetrics: interpretationInput.summary,
+    aggregatedWarnings: interpretationInput.aggregatedWarnings,
+    goals: interpretationInput.goals,
+    outcomes: interpretationInput.outcomes,
+    summaryEvidence: interpretationInput.summaryEvidence,
+    policy: savedRun?.reproducibility?.policy,
+  };
+  const assessment = buildInterpretationVM(interpretationInput, interpretationProps.policy).assessment;
+
   return (
     <>
       {optimizeCandidates.length > 0 ? (
@@ -183,16 +238,26 @@ export function PlanningWorkspaceResultsPanel({
       ) : null}
 
       {runResult ? (
-        <div className="animate-in fade-in mt-8 space-y-8 duration-500">
-          <div className="sticky top-4 z-20">
+        <div className="mt-8 scroll-mt-28 space-y-6 outline-none" id="planning-workspace-results" data-testid="planning-workspace-results" tabIndex={-1}>
+          <header className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-6">
+            <div><h2 className="text-2xl font-bold tracking-tight text-navy">진단 결과</h2><p className="mt-1 text-sm leading-6 text-slate-600">핵심 상태와 할 일부터 확인하고, 근거는 필요할 때 펼쳐보세요.</p></div>
+            <div className="flex flex-wrap gap-4 text-sm font-semibold">
+              {savedRun ? <BodyActionLink href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(savedRun.id)}`, savedRun.profileId)}>저장된 리포트 열기</BodyActionLink> : null}
+              <a className="inline-flex min-h-11 items-center text-primary hover:underline" href="#planning-input-section">입력으로 돌아가기</a>
+            </div>
+          </header>
+          {currentStepStatuses.some((step) => step.state === "FAILED") ? <BodyStatusInset tone="warning">일부 계산을 완료하지 못했습니다: {currentStepStatuses.filter((step) => step.state === "FAILED").map((step) => STEP_LABELS[step.id]).join(", ")}</BodyStatusInset> : null}
+          {savedRun ? <p className="text-sm leading-6 text-slate-600">계산 기록이 저장되었습니다. <BodyActionLink href={runsPageHref}>실행 내역 확인</BodyActionLink></p> : <p role="status" className="text-sm leading-6 text-amber-900">계산 기록의 저장 여부를 확인해 주세요. 현재 화면의 결과를 저장된 리포트로 간주하지 마세요.</p>}
+          <div className="min-w-0">
             <ResultGuideCard
               locale={locale}
               status={guideBadge.status}
               reason={guideBadge.reason}
-              minCashKrw={guideBadge.minCashKrw}
-              achievedGoals={achievedGoalCount}
-              totalGoals={goalTableRows.length}
-              maxDsr={guideBadge.maxDsr}
+              minCashKrw={interpretationInput.summary.worstCashKrw}
+              assessment={assessment}
+              achievedGoals={goalCounts?.achieved ?? achievedGoalCount}
+              totalGoals={goalCounts?.total ?? goalTableRows.length}
+              maxDsr={typeof interpretationInput.summary.dsrPct === "number" && Number.isFinite(interpretationInput.summary.dsrPct) ? interpretationInput.summary.dsrPct / 100 : undefined}
               topActions={topActionTitles}
             />
           </div>
@@ -205,19 +270,19 @@ export function PlanningWorkspaceResultsPanel({
               </summary>
               <div className="mt-4 grid gap-3 text-[11px] font-bold text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
                 <p className="rounded-xl border border-slate-100 bg-white p-3">
-                  <span className="mb-1 block text-primary">NEGATIVE_CASHFLOW</span>
+                  <span className="mb-1 block text-primary">월 현금흐름 적자</span>
                   월 적자 상태입니다. 지출 절감 또는 부채/적립 조정을 먼저 점검하세요.
                 </p>
                 <p className="rounded-xl border border-slate-100 bg-white p-3">
-                  <span className="mb-1 block text-primary">HIGH_DEBT_SERVICE</span>
+                  <span className="mb-1 block text-primary">부채 상환 부담 높음</span>
                   DSR이 높습니다. 상환 기간/금리/추가상환 시나리오를 비교하세요.
                 </p>
                 <p className="rounded-xl border border-slate-100 bg-white p-3">
-                  <span className="mb-1 block text-primary">SNAPSHOT_STALE</span>
-                  가정 최신성이 낮습니다. `/ops/assumptions` 동기화 후 재실행을 권장합니다.
+                  <span className="mb-1 block text-primary">계산 기준 데이터 오래됨</span>
+                  계산 기준 데이터가 오래됐습니다. 데이터 상태를 확인한 뒤 다시 실행해 보세요.
                 </p>
                 <p className="rounded-xl border border-slate-100 bg-white p-3">
-                  <span className="mb-1 block text-slate-400">Monte Carlo 확률</span>
+                  <span className="mb-1 block text-slate-400">확률 시뮬레이션</span>
                   통계 기반 참고값이며 보장값이 아닙니다.
                 </p>
                 <p className="rounded-xl border border-slate-100 bg-white p-3">
@@ -228,81 +293,92 @@ export function PlanningWorkspaceResultsPanel({
             </details>
           </div>
 
-          <Card className="space-y-8 p-8">
-            <div className="w-fit rounded-2xl border border-slate-200 bg-surface-muted p-1">
+          <Card className="min-w-0 space-y-6 p-4 sm:p-6">
+            <div className="max-w-full border-b border-slate-200 pb-3" aria-label="진단 결과 항목">
               <div className="flex flex-wrap gap-2">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
+                    type="button"
+                    aria-pressed={activeTab === tab.id}
                     className={cn(
-                      "rounded-xl px-6 py-2.5 text-xs font-black transition-all",
+                      "min-h-11 rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
                       activeTab === tab.id ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700",
                     )}
                     onClick={() => setActiveTab(tab.id)}
                   >
-                    {tab.label}
+                    {locale === "ko-KR" ? RESULT_TAB_LABELS_KO[tab.id] : tab.label}
                   </button>
                 ))}
               </div>
             </div>
 
             {activeTab === "summary" ? (
-              <div className="space-y-8">
-                <InterpretabilityGuideCard
-                  summaryMetrics={{
-                    ...(typeof summaryMonthlySurplusKrw === "number" ? { monthlySurplusKrw: summaryMonthlySurplusKrw } : {}),
-                    ...(typeof summaryEmergencyFundMonths === "number" ? { emergencyFundMonths: summaryEmergencyFundMonths } : {}),
-                    endNetWorthKrw: summaryEndNetWorthKrw,
-                    worstCashKrw: summaryWorstCashKrw,
-                    worstCashMonthIndex: summaryWorstCashMonth,
-                    ...(typeof summaryDsr === "number" ? { dsrPct: summaryDsr } : {}),
-                    ...(summaryGoalsText !== "-" ? { goalsAchievedText: summaryGoalsText } : {}),
-                  }}
-                  summaryEvidence={buildEvidence(
-                    {
-                      summaryCards: {
-                        monthlySurplusKrw: summaryMonthlySurplusKrw ?? undefined,
-                        dsrPct: summaryDsr ?? undefined,
-                        emergencyFundMonths: summaryEmergencyFundMonths ?? undefined,
-                      },
-                    },
-                    undefined,
-                    summaryEvidence,
+              <div className="space-y-6" data-testid="planning-result-summary">
+                {keyFindings.length > 0 ? (
+                  <section aria-label="이번 진단에서 확인할 점" className="rounded-xl bg-slate-50 p-4 sm:p-5" data-testid="planning-key-findings">
+                    <h3 className="text-base font-semibold text-navy">이번 진단에서 확인할 점</h3>
+                    <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+                      {keyFindings.slice(0, 3).map((line, index) => <li key={`finding-${index}`} className="flex gap-3"><span className="shrink-0 font-semibold text-primary">{index + 1}.</span><span>{line}</span></li>)}
+                    </ol>
+                  </section>
+                ) : null}
+                <p className="text-sm leading-6 text-slate-600" data-testid="planning-result-basis">기준일 {resultDto?.meta.snapshot.asOf ?? "미확인"} · 계산 시점 {formatDateTime(locale, resultDto?.meta.generatedAt)}{resultDto?.meta.snapshot.missing ? " · 기준 데이터 누락" : ""}</p>
+                <BodyInset>
+                  <p className="font-semibold text-navy">주의 신호 요약 (최대 5개)</p>
+                  {warningsSummaryTop5.length === 0 ? (
+                    <p className="mt-1">경고가 없습니다.</p>
+                  ) : (
+                    <div className="mt-1 space-y-1">
+                      {warningsSummaryTop5.map((warning) => (
+                        <p key={`${warning.code}:${warning.severity}`}>
+                          [{formatSeverityKo(warning.severity)}] {warningSummaryLabel(warning.code)} · {warning.count}회
+                        </p>
+                      ))}
+                    </div>
                   )}
-                  aggregatedWarnings={aggregatedWarningsForInsight.map((warning) => ({
-                    code: warning.code,
-                    severity: warning.severity,
-                    count: warning.count,
-                    ...(typeof warning.firstMonth === "number" ? { firstMonth: warning.firstMonth } : {}),
-                    ...(typeof warning.lastMonth === "number" ? { lastMonth: warning.lastMonth } : {}),
-                    ...(typeof warning.sampleMessage === "string" ? { sampleMessage: warning.sampleMessage } : {}),
-                  }))}
-                  goals={goalsForInsight.map((goal) => ({
-                    goalId: goal.id,
-                    name: goal.name,
-                    achieved: goal.achieved,
-                    targetMonth: goal.targetMonth,
-                    progressPct: goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0,
-                    shortfallKrw: goal.shortfall,
-                    interpretation: goal.comment,
-                  }))}
-                  outcomes={{
-                    ...(actionsTopForInsight.length > 0 ? { actionsTop: actionsTopForInsight } : {}),
-                    snapshotMeta: workspaceSnapshotState.outcomesMeta,
-                    monteCarlo: {
-                      retirementDepletionBeforeEnd: monteDepletionProb,
-                    },
-                    ...(savedRun?.id ? { runId: savedRun.id } : {}),
-                  }}
-                />
+                </BodyInset>
 
-                <div className="space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted p-6" data-testid="planning-metric-evidence">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <p className="mb-1 text-sm font-semibold uppercase text-slate-400">말기 순자산</p>
+                    <p className="text-sm font-semibold tabular-nums text-navy">{formatKrw(locale, summaryEndNetWorthKrw)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <p className="mb-1 text-sm font-semibold uppercase text-slate-400">최저 현금(월)</p>
+                    <p className="text-sm font-semibold tabular-nums text-navy">{typeof summaryWorstCashKrw === "number" ? formatKrw(locale, summaryWorstCashKrw) : "확인되지 않음"} {typeof summaryWorstCashKrw === "number" ? <span className="ml-1 text-sm font-bold text-slate-400">(M{summaryWorstCashMonth + 1})</span> : null}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <p className="mb-1 text-sm font-semibold uppercase text-slate-400">목표 달성</p>
+                    <p className="text-sm font-semibold text-primary">{summaryGoalsText}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <p className="mb-1 text-sm font-semibold uppercase text-slate-400">DSR</p>
+                    <p className="text-sm font-semibold text-navy">{typeof summaryDsr === "number" ? formatRatioPct(locale, summaryDsr) : "-"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <p className="mb-1 text-sm font-semibold uppercase text-slate-400">치명 경고</p>
+                    <p className={cn("text-sm font-semibold", summaryCriticalWarnings > 0 ? "text-danger" : "text-success")}>{summaryCriticalWarnings}</p>
+                  </div>
+                </div>
+
+                <details className="rounded-xl border border-slate-200 p-4 sm:p-5" data-testid="planning-result-interpretation">
+                  <summary className="cursor-pointer py-1 text-sm font-semibold text-navy">자세한 해석과 실행 제안</summary>
+                  <div className="mt-5 min-w-0">
+                <InterpretabilityGuideCard {...interpretationProps} />
+
+                  </div>
+                </details>
+                <details className="rounded-xl border border-slate-200 p-4 sm:p-5" data-testid="planning-result-evidence">
+                  <summary className="cursor-pointer py-1 text-sm font-semibold text-navy">계산 근거와 적용 데이터</summary>
+                  <div className="mt-5 min-w-0 space-y-6">
+                <div className="space-y-4" data-testid="planning-metric-evidence">
                   <SubSectionHeader
                     title="계산 근거"
                     titleClassName="text-sm"
                     description="현재 입력값과 선택한 정책 기준으로 계산된 중간 단계 데이터입니다."
                   />
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                  <div className="overflow-x-auto">
                     <EvidencePanel
                       items={metricEvidenceItems}
                       locale={locale}
@@ -313,29 +389,6 @@ export function PlanningWorkspaceResultsPanel({
 
                 <div className="overflow-hidden rounded-[2rem]">
                   <DisclosuresPanel report={combinedNormalizationReport} />
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                    <p className="mb-1 text-[10px] font-black uppercase text-slate-400">말기 순자산</p>
-                    <p className="text-sm font-black tabular-nums text-navy">{formatKrw(locale, summaryEndNetWorthKrw)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                    <p className="mb-1 text-[10px] font-black uppercase text-slate-400">최저 현금(월)</p>
-                    <p className="text-sm font-black tabular-nums text-navy">{formatKrw(locale, summaryWorstCashKrw)} <span className="ml-1 text-[10px] font-bold text-slate-400">(M{summaryWorstCashMonth + 1})</span></p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                    <p className="mb-1 text-[10px] font-black uppercase text-slate-400">목표 달성</p>
-                    <p className="text-sm font-black text-primary">{summaryGoalsText}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                    <p className="mb-1 text-[10px] font-black uppercase text-slate-400">DSR</p>
-                    <p className="text-sm font-black text-navy">{typeof summaryDsr === "number" ? formatRatioPct(locale, summaryDsr) : "-"}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                    <p className="mb-1 text-[10px] font-black uppercase text-slate-400">치명 경고</p>
-                    <p className={cn("text-sm font-black", summaryCriticalWarnings > 0 ? "text-danger" : "text-success")}>{summaryCriticalWarnings}</p>
-                  </div>
                 </div>
 
                 {Object.keys(summaryEvidence).length > 0 ? (
@@ -378,58 +431,17 @@ export function PlanningWorkspaceResultsPanel({
                   </details>
                 ) : null}
 
-                <div className="rounded-[2rem] bg-primary p-6 text-white shadow-xl shadow-navy/20">
-                  <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">Key Findings</p>
-                  <div className="space-y-3">
-                    {keyFindings.slice(0, 3).map((line, index) => (
-                      <p className="flex items-start gap-3 text-sm font-bold leading-relaxed" key={`finding-${index}`}>
-                        <span className="mt-1 text-primary/30">★</span>
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-
-                <BodyInset>
-                  <p className="font-semibold text-navy">Warnings Summary (Top 5)</p>
-                  {warningsSummaryTop5.length === 0 ? (
-                    <p className="mt-1">경고가 없습니다.</p>
-                  ) : (
-                    <div className="mt-1 space-y-1">
-                      {warningsSummaryTop5.map((warning) => (
-                        <p key={`${warning.code}:${warning.severity}`}>
-                          [{formatSeverityKo(warning.severity)}] {warning.code} · {warning.count}회
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </BodyInset>
-
                 <div className="grid gap-2 md:grid-cols-2">
                   <BodyInset>{t(locale, "SUMMARY_LABEL_GENERATED_AT")}: <span className="font-semibold">{formatDateTime(locale, resultDto?.meta.generatedAt)}</span></BodyInset>
-                  <BodyInset>{t(locale, "SUMMARY_LABEL_SNAPSHOT_ID")}: <span className="font-semibold">{resultDto?.meta.snapshot.id ?? "latest"}</span></BodyInset>
+                  <BodyInset>{t(locale, "SUMMARY_LABEL_SNAPSHOT_ID")}: <span className="font-semibold">{resultDto?.meta.snapshot.id ?? "최신 데이터"}</span></BodyInset>
                   <BodyInset>{t(locale, "SUMMARY_LABEL_SNAPSHOT_AS_OF")}: <span className="font-semibold">{resultDto?.meta.snapshot.asOf ?? "-"}</span></BodyInset>
                   <BodyInset>{t(locale, "SUMMARY_LABEL_SNAPSHOT_FETCHED_AT")}: <span className="font-semibold">{formatDateTime(locale, resultDto?.meta.snapshot.fetchedAt)}</span></BodyInset>
-                  <BodyInset>snapshot staleDays: <span className="font-semibold">{formatNumber(locale, resultDto?.meta.health?.snapshotStaleDays)}</span></BodyInset>
-                  <BodyInset>snapshot missing: <span className="font-semibold">{resultDto?.meta.snapshot.missing ? "true" : "false"}</span></BodyInset>
+                  <BodyInset>기준일 경과 일수: <span className="font-semibold">{formatNumber(locale, resultDto?.meta.health?.snapshotStaleDays)}</span></BodyInset>
+                  <BodyInset>기준 데이터 누락: <span className="font-semibold">{resultDto?.meta.snapshot.missing ? "예" : "아니요"}</span></BodyInset>
                 </div>
 
-                {currentStepStatuses.some((step) => step.state === "FAILED") ? (
-                  <BodyStatusInset tone="warning">
-                    부분 실패 단계: {currentStepStatuses.filter((step) => step.state === "FAILED").map((step) => STEP_LABELS[step.id]).join(", ")}
-                  </BodyStatusInset>
-                ) : null}
-                {savedRun ? (
-                  <BodyStatusInset tone="success">
-                    저장된 실행 기록: {savedRun.id}
-                    {" · "}
-                    <BodyActionLink href={runsPageHref}>/planning/runs로 이동</BodyActionLink>
-                    {" · "}
-                    <BodyActionLink href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(savedRun.id)}`, savedRun.profileId)}>
-                      리포트 보기
-                    </BodyActionLink>
-                  </BodyStatusInset>
-                ) : null}
+                  </div>
+                </details>
               </div>
             ) : null}
 
@@ -464,7 +476,7 @@ export function PlanningWorkspaceResultsPanel({
                   </div>
                 </div>
 
-                {warningsGoalsDebugSections.length > 0 ? (
+                {debugEnabled && warningsGoalsDebugSections.length > 0 ? (
                   <AdvancedJsonPanel
                     sections={warningsGoalsDebugSections}
                     title="고급 보기 (canonical 요약)"
@@ -548,7 +560,7 @@ export function PlanningWorkspaceResultsPanel({
                       )}
                     </div>
 
-                    {scenariosDebugSections.length > 0 ? (
+                    {debugEnabled && scenariosDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
                         sections={scenariosDebugSections}
                         title="고급 보기 (scenario summary)"
@@ -610,7 +622,7 @@ export function PlanningWorkspaceResultsPanel({
                     </div>
                   </>
                 )}
-                {monteCarloDebugSections.length > 0 ? (
+                {debugEnabled && monteCarloDebugSections.length > 0 ? (
                   <AdvancedJsonPanel
                     sections={monteCarloDebugSections}
                     title="고급 보기 (monte carlo summary)"
@@ -715,7 +727,7 @@ export function PlanningWorkspaceResultsPanel({
                       </div>
                     ) : null}
 
-                    {actionsDebugSections.length > 0 ? (
+                    {debugEnabled && actionsDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
                         sections={actionsDebugSections}
                         title="고급 보기 (actions summary)"
@@ -851,7 +863,7 @@ export function PlanningWorkspaceResultsPanel({
                       </BodyTableFrame>
                     </div>
 
-                    {debtDebugSections.length > 0 ? (
+                    {debugEnabled && debtDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
                         sections={debtDebugSections}
                         title="고급 보기 (debt summary)"

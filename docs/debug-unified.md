@@ -133,7 +133,7 @@ Run in order:
 
 ```bash
 pnpm prisma:generate
-pnpm prisma db push
+pnpm prisma:db:push
 pnpm live:smoke
 ```
 

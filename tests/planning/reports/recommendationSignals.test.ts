@@ -6,6 +6,7 @@ import {
   type CandidateRecommendationsPayload,
 } from "../../../src/lib/planning/reports/recommendationSignals";
 import { type ReportVM } from "../../../src/lib/planning/reports/reportViewModel";
+import { DEFAULT_PLANNING_POLICY } from "../../../src/lib/planning/catalog/planningPolicy";
 
 function buildVm(input?: {
   monthlySurplusKrw?: number;
@@ -118,6 +119,24 @@ describe("planning report recommendation signals", () => {
     expect(signals.preferredTermMonths[0]).toBe(6);
     expect(ranked.rows[0]?.kind).toBe("saving");
     expect(ranked.rows[0]?.appliedTermMonths).toBe(6);
+  });
+
+  it("treats an emergency fund below the run's caution standard as the emergency priority", () => {
+    const payload = buildPayload();
+    const current = buildVm({ monthlySurplusKrw: 600_000, emergencyFundMonths: 4 });
+
+    const signals = buildPlanningRecommendationSignals(current, payload);
+    expect(signals.priority).toBe("emergency");
+    expect(signals.cautions.join(" ")).toContain("비상금이 6개월 미만이면");
+
+    const atStandard = buildVm({ monthlySurplusKrw: 600_000, emergencyFundMonths: 6 });
+    expect(buildPlanningRecommendationSignals(atStandard, payload).priority).not.toBe("emergency");
+
+    const savedUnderPreviousPolicy = {
+      ...current,
+      reproducibility: { policy: { ...DEFAULT_PLANNING_POLICY, emergencyFundMonths: { caution: 3, risk: 1 } } },
+    } as unknown as ReportVM;
+    expect(buildPlanningRecommendationSignals(savedUnderPreviousPolicy, payload).priority).not.toBe("emergency");
   });
 
   it("switches to recover mode when monthly surplus is negative", () => {

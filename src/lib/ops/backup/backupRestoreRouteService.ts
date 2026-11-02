@@ -1,5 +1,6 @@
 import { append as appendAuditLog } from "../../audit/auditLogStore";
 import { consumeVaultCsrfOrThrow, ensureVaultCsrfCookie } from "../../planning/security/vaultCsrf";
+import { resolvePlanningUserId } from "../../planning/store/namespace";
 import { appendOpsMetricEvent } from "../metricsLog";
 import { loadOpsPolicy } from "../opsPolicy";
 import { appendOpsAuditEvent } from "../securityAuditLog";
@@ -12,6 +13,7 @@ import {
   RESTORE_NOT_COMMITTED_MESSAGE,
   decryptPlanningDataVaultArchive,
   restorePlanningDataVaultZip,
+  type PlanningDataVaultScope,
   type VaultRestoreSummary,
 } from "./planningDataVault";
 import { readBackupPreviewSessionFromRequest } from "./previewSession";
@@ -145,6 +147,7 @@ export async function restoreOpsBackupArchive(input: {
   passphrase: string;
   previewToken: string;
   startedAt: number;
+  scope: PlanningDataVaultScope;
 }): Promise<OpsBackupRestoreResult> {
   const policy = loadOpsPolicy();
   const encryptedBytes = await readUploadBufferViaTemp(input.file, "planning-backup-restore");
@@ -197,6 +200,8 @@ export async function restoreOpsBackupArchive(input: {
     mode: input.mode,
     maxEntries: policy.backup.maxEntries,
     maxBytes: policy.backup.maxUploadBytes,
+    scope: input.scope,
+    userId: resolvePlanningUserId(),
   });
 
   if (input.mode === "replace" && !restored.committed) {

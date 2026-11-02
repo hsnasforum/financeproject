@@ -28,21 +28,21 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 9.15.9
 
       - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: "20"
+          node-version: "22.22.2"
           cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 make g++
+          sudo apt-get install -y python3 make g++ ripgrep
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -51,7 +51,7 @@ jobs:
         run: pnpm prisma:generate
 
       - name: Prisma db push
-        run: pnpm exec prisma db push
+        run: pnpm prisma:db:push
 
       - name: Verify (lint/schema/rules)
         run: pnpm validate:dumps:fixtures && pnpm data:doctor && pnpm dart:rules:gate && pnpm lint && pnpm typecheck:planning && pnpm planning:v2:engine:guard && pnpm planner:deprecated:guard && pnpm components:app-import:guard
@@ -71,4 +71,74 @@ jobs:
           test -z "$(git ls-files '.dist/**')"
           test -f .dist/planning-v2-desktop/desktop-manifest.json
           install_root="$(mktemp -d)"
-          pnpm planning:v2:desktop:install -- --skip-install --from=.dist/planning-v2-desktop --to="$install_root/planning-v2-desktop"
+          pnpm planning:v2:desktop:install -- --skip-install --skip-shortcuts --from=.dist/planning-v2-desktop --to="$install_root/planning-v2-desktop"
+
+  windows_native:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: "file:./windows-ci.db"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22.22.2"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # pwsh does not stop on a failing native command and the step reports only the last exit
+      # code, so every command below checks $LASTEXITCODE (same pattern as release.yml).
+      - name: Prepare database and build
+        shell: pwsh
+        run: |
+          pnpm prisma:generate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm prisma:db:push
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Windows writer and process-tree contracts
+        shell: pwsh
+        run: |
+          pnpm exec vitest run tests/desktop-artifact-provenance.test.ts -t "Windows standalone"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec vitest run tests/planning/deployment/planningRuntimeRoot.test.ts tests/planning/deployment/planningWriterLease.test.ts tests/planning/deployment/planningDesktopSessionServer.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and install desktop artifact
+        shell: pwsh
+        run: |
+          pnpm planning:v2:desktop:build -- --no-next-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installRoot = Join-Path $env:RUNNER_TEMP "planning-v2-desktop"
+          pnpm planning:v2:desktop:install -- --skip-install --skip-shortcuts --from=.dist/planning-v2-desktop --to=$installRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "PLANNING_WINDOWS_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Native Windows production and desktop smoke
+        shell: pwsh
+        # The smoke scripts create their SQLite files under the OS temp directory, which must be
+        # on the install volume (RUNNER_TEMP, D:) because desktop-local rejects cross-volume databases.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+        run: |
+          pnpm planning:v2:prod:smoke -- --app-dir=$env:PLANNING_WINDOWS_INSTALL_ROOT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm planning:v2:desktop:smoke -- --use-installed-database --app-dir=$env:PLANNING_WINDOWS_INSTALL_ROOT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

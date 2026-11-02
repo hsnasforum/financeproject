@@ -25,8 +25,16 @@ function findWorstCash(plan: PlanResultV2): { monthIndex: number; liquidAssets: 
 
 function buildGoalMissedAnswer(plan: PlanResultV2) {
   const goalMissWarnings = plan.warnings.filter((warning) => warning.reasonCode === "GOAL_MISSED");
-  const missedGoals = plan.goalStatus.filter((goal) => !goal.achieved && goal.targetMonth <= plan.timeline.length);
-  const largestShortfall = [...missedGoals].sort((a, b) => b.shortfall - a.shortfall)[0];
+  const missedGoals = plan.goalStatus.filter((goal) => goal.targetMonth <= plan.timeline.length
+    && (!goal.achieved || (goal.achievedMonth !== null && goal.achievedMonth > goal.targetMonth)));
+  const largestShortfall = missedGoals.map((goal) => {
+    const recordedShortfall = goalMissWarnings.find((warning) => warning.meta?.goalId === goal.goalId)?.meta?.shortfall;
+    // A late achievement can have zero final shortfall; use the recorded warning evidence.
+    const shortfall = typeof recordedShortfall === "number" && Number.isFinite(recordedShortfall) && recordedShortfall > 0
+      ? recordedShortfall
+      : goal.shortfall;
+    return { name: goal.name, shortfall };
+  }).filter((goal) => goal.shortfall > 0).sort((a, b) => b.shortfall - a.shortfall)[0];
 
   const bullets = [
     goalMissWarnings.length > 0

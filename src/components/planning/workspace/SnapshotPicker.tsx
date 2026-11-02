@@ -40,9 +40,9 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
   const staleBeyondThreshold = freshness !== "ok";
   const shouldSuggestSync = latestMissing || staleBeyondThreshold;
   const freshnessBadge = (() => {
-    if (!selected) return "Unknown";
-    if (typeof selectedStaleDays !== "number") return "Fresh";
-    return selectedStaleDays >= SNAPSHOT_STALE_CAUTION_DAYS ? `Stale ${selectedStaleDays}d` : "Fresh";
+    if (!selected) return "기준 정보 없음";
+    if (typeof selectedStaleDays !== "number") return "기준일 확인 필요";
+    return selectedStaleDays >= SNAPSHOT_STALE_CAUTION_DAYS ? `${selectedStaleDays}일 경과` : "최신 기준";
   })();
 
   const selectValue = buildSnapshotPickerSelectValue(props.value);
@@ -58,7 +58,7 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
     <div className="space-y-3 rounded-xl border border-slate-200 p-3" data-testid="snapshot-selector">
       <p className="text-xs font-semibold text-slate-700">스냅샷 선택</p>
       <label className="block text-xs font-semibold text-slate-600">
-        Snapshot
+        계산 기준 데이터
         <select
           className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
           data-testid="planning-snapshot-select"
@@ -71,7 +71,7 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
           <option value="latest">
             {props.items.latest
               ? formatSnapshotLabel(props.items.latest, "latest")
-              : "LATEST · unavailable"}
+              : "최신 데이터 없음"}
           </option>
           {props.items.history.map((item) => (
             <option key={item.id} value={`history:${item.id}`}>
@@ -112,27 +112,16 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
             {getSnapshotDetailsToggleLabel(detailsOpen)}
           </Button>
         ) : null}
-        <Button
-          disabled={props.value.mode !== "history"}
-          onClick={() => void copySnapshotId()}
-          size="sm"
-          variant="outline"
-        >
-          Copy snapshotId
-        </Button>
-        <Link
-          className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-navy"
-          data-testid="planning-snapshot-ops-link"
-          href="/ops/assumptions"
-        >
-          /ops/assumptions
-        </Link>
-        <Link
-          className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-navy"
-          href="/ops/assumptions/history"
-        >
-          /ops/assumptions/history
-        </Link>
+        {props.advancedEnabled ? (
+          <Button
+            disabled={props.value.mode !== "history"}
+            onClick={() => void copySnapshotId()}
+            size="sm"
+            variant="outline"
+          >
+            기준 데이터 ID 복사
+          </Button>
+        ) : null}
       </div>
       {copyMessage ? (
         <p className={`text-xs font-semibold ${copyError ? "text-rose-700" : "text-navy"}`}>{copyMessage}</p>
@@ -153,10 +142,10 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
 
       {shouldSuggestSync ? (
         <p className="text-xs text-amber-800">
-          {latestMissing ? "latest 스냅샷이 없습니다." : ""}
-          {staleBeyondThreshold ? ` staleDays ${selectedStaleDays}d (기준 ${SNAPSHOT_STALE_CAUTION_DAYS}d 초과).` : ""}
+          {latestMissing ? "최신 계산 기준 데이터가 없습니다." : ""}
+          {staleBeyondThreshold ? ` 기준일이 ${selectedStaleDays}일 지나 권장 기준 ${SNAPSHOT_STALE_CAUTION_DAYS}일을 초과했습니다.` : ""}
           {" "}
-          <Link className="font-semibold underline" href="/ops/assumptions">/ops/assumptions에서 동기화 권장</Link>
+          <Link className="font-semibold underline" href="/settings/data-sources">데이터 상태 확인하기</Link>
         </p>
       ) : null}
     </div>

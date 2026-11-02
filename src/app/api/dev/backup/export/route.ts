@@ -39,7 +39,10 @@ function resolveSafePath(cwd: string, relativePath: string): string | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = guardDevReadRequest(request);
+  const blocked = guardDevReadRequest(request, {
+    requireUnlock: true,
+    strictLocal: true,
+  });
   if (blocked) return blocked;
 
   const cwd = process.cwd();

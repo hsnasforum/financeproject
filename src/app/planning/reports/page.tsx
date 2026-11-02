@@ -3,9 +3,11 @@ import PlanningReportsDashboardBoundary from "@/components/PlanningReportsDashbo
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
 import { appendProfileIdQuery, normalizeProfileId } from "@/lib/planning/profileScope";
 import { loadCurrentUserReportRunScope } from "@/lib/planning/reports/reportRunScopeLoader";
 
+export const metadata = PUBLIC_PAGE_METADATA["/planning/reports"];
 export const dynamic = "force-dynamic";
 
 type PlanningReportsPageProps = {
@@ -45,12 +47,12 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
       <PageShell>
         <PageHeader
           title="재무설계 리포트"
-          description="저장된 상담 결과를 다시 읽는 도착 화면이지만, 아직 저장된 상담 기록이 없어 열 수 있는 리포트가 없습니다."
-          action={<Link className="font-semibold text-navy" href={planningHref}>플래닝으로 돌아가 실행·기록 저장하기</Link>}
+          description="저장한 재무 진단을 다시 확인하는 곳입니다."
+          action={<Link className="font-semibold text-navy" href={planningHref}>재무 진단 시작</Link>}
         />
         <EmptyState
           title="아직 저장된 상담 기록이 없습니다"
-          description="먼저 /planning에서 상담 결과를 저장해 두면, 여기서 결과를 다시 보고 상담 기록 화면과 비교할 수 있습니다."
+          description="아직 보관된 결과가 없습니다. 재무 진단에서 첫 결과를 저장해 주세요."
           icon="data"
         />
       </PageShell>

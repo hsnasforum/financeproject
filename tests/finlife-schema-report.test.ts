@@ -16,9 +16,9 @@ afterEach(() => {
 
 describe("finlife schema report", () => {
   it("counts baseList and optionList keys by kind", () => {
-    writeFixture("product__pension__020000__1.json", {
+    writeFixture("product__deposit__020000__1.json", {
       scope: "product",
-      kind: "pension",
+      kind: "deposit",
       raw: {
         result: {
           baseList: [{ fin_prdt_cd: "P1", fin_prdt_nm: "A" }, { fin_prdt_cd: "P2", join_way: "online" }],
@@ -31,10 +31,10 @@ describe("finlife schema report", () => {
     expect(report.ok).toBe(true);
     if (!report.ok) return;
 
-    const pension = report.report.product.pension;
-    expect(pension?.baseKeys).toContainEqual(["fin_prdt_cd", 2]);
-    expect(pension?.optionKeys).toContainEqual(["fin_prdt_cd", 2]);
-    expect(pension?.optionKeys).toContainEqual(["intr_rate", 1]);
-    expect(pension?.optionKeys).toContainEqual(["save_trm", 1]);
+    const deposit = report.report.product.deposit;
+    expect(deposit?.baseKeys).toContainEqual(["fin_prdt_cd", 2]);
+    expect(deposit?.optionKeys).toContainEqual(["fin_prdt_cd", 2]);
+    expect(deposit?.optionKeys).toContainEqual(["intr_rate", 1]);
+    expect(deposit?.optionKeys).toContainEqual(["save_trm", 1]);
   });
 });

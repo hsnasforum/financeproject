@@ -36,10 +36,10 @@ export type FinlifeSnapshot = {
 
 export type FinlifeSyncAttempt = {
   status: "running" | "failed";
-  phase: "db" | "snapshot" | "completion";
+  phase: "db" | "snapshot" | "completion" | "integrity" | "fetch";
   startedAt: string;
   updatedAt: string;
-  errorCode?: "DB_SYNC_FAILED" | "SNAPSHOT_WRITE_FAILED" | "COMPLETION_WRITE_FAILED";
+  errorCode?: "DB_SYNC_FAILED" | "SNAPSHOT_WRITE_FAILED" | "COMPLETION_WRITE_FAILED" | "FINLIFE_INTEGRITY_FAILED" | "SYNC_FAILED";
 };
 
 const memoryCache = new Map<string, { identity: FileIdentity; snapshot: FinlifeSnapshot }>();
@@ -56,7 +56,7 @@ export function loadFinlifeSyncAttempt(kind: FinlifeSnapshotKind): FinlifeSyncAt
   try {
     const parsed = JSON.parse(fs.readFileSync(syncAttemptPath(kind), "utf-8")) as Partial<FinlifeSyncAttempt>;
     if (parsed.status !== "running" && parsed.status !== "failed") return null;
-    if (parsed.phase !== "db" && parsed.phase !== "snapshot" && parsed.phase !== "completion") return null;
+    if (parsed.phase !== "db" && parsed.phase !== "snapshot" && parsed.phase !== "completion" && parsed.phase !== "integrity" && parsed.phase !== "fetch") return null;
     if (typeof parsed.startedAt !== "string" || typeof parsed.updatedAt !== "string") return null;
     return {
       status: parsed.status,
@@ -66,6 +66,8 @@ export function loadFinlifeSyncAttempt(kind: FinlifeSnapshotKind): FinlifeSyncAt
       ...(parsed.errorCode === "DB_SYNC_FAILED"
         || parsed.errorCode === "SNAPSHOT_WRITE_FAILED"
         || parsed.errorCode === "COMPLETION_WRITE_FAILED"
+        || parsed.errorCode === "FINLIFE_INTEGRITY_FAILED"
+        || parsed.errorCode === "SYNC_FAILED"
         ? { errorCode: parsed.errorCode }
         : {}),
     };

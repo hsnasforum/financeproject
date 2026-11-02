@@ -414,11 +414,10 @@ describe("planning reports page fallback", () => {
     }));
 
     expect(html).toContain("재무설계 리포트");
-    expect(html).toContain("저장된 상담 결과를 다시 읽는 도착 화면이지만");
+    expect(html).toContain("저장한 재무 진단을 다시 확인하는 곳입니다.");
     expect(html).toContain("아직 저장된 상담 기록이 없습니다");
-    expect(html).toContain("먼저 /planning에서 상담 결과를 저장해 두면");
-    expect(html).toContain("상담 기록 화면과 비교할 수 있습니다.");
-    expect(html).toContain("플래닝으로 돌아가 실행·기록 저장하기");
+    expect(html).toContain("아직 보관된 결과가 없습니다. 재무 진단에서 첫 결과를 저장해 주세요.");
+    expect(html).toContain("재무 진단 시작");
     expect(html).toContain("href=\"/planning?profileId=profile-1\"");
   });
 });

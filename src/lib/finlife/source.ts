@@ -6,6 +6,8 @@ import { extractPagingMeta } from "./meta";
 import { normalizeFinlifeProducts } from "./normalize";
 import { type FinlifeKind, type FinlifeParams, type FinlifeSourceResult } from "./types";
 import { buildSchemaMismatchError } from "../publicApis/schemaDrift";
+import { deriveBestFromOptions } from "./best";
+import { FinlifeIntegrityError, mergeFinlifeProducts, validateFinlifeResponse } from "./identity.mjs";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -64,6 +66,34 @@ function buildFinlifeSchemaMismatch(input: {
   } satisfies FinlifeSourceResult;
 }
 
+function buildFinlifeIntegrityFailure(input: {
+  kind: FinlifeKind;
+  pageNo: number;
+  topFinGrpNo: string;
+  mode: FinlifeSourceResult["mode"];
+  raw: unknown;
+}, error: FinlifeIntegrityError): FinlifeSourceResult {
+  if (error.code !== "FINLIFE_UPSTREAM_FAILED") {
+    return buildFinlifeSchemaMismatch({ ...input, reason: error.message });
+  }
+  return {
+    ok: false,
+    mode: input.mode,
+    meta: {
+      kind: input.kind,
+      pageNo: input.pageNo,
+      topFinGrpNo: input.topFinGrpNo,
+      fallbackUsed: false,
+      errCd: extractPagingMeta(input.raw).errCd,
+    },
+    data: [],
+    error: {
+      code: "LIVE_FETCH_FAILED",
+      message: "FINLIFE에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.",
+    },
+  };
+}
+
 function extractAndNormalize(input: {
   kind: FinlifeKind;
   pageNo: number;
@@ -77,6 +107,20 @@ function extractAndNormalize(input: {
   pagingMeta: ReturnType<typeof extractPagingMeta>;
   mismatch: FinlifeSourceResult | null;
 } {
+  if (input.mode === "live") {
+    try {
+      validateFinlifeResponse(input.kind, input.raw, { pageNo: input.pageNo });
+    } catch (error) {
+      if (!(error instanceof FinlifeIntegrityError)) throw error;
+      return {
+        baseList: [],
+        optionList: [],
+        data: [],
+        pagingMeta: extractPagingMeta(input.raw),
+        mismatch: buildFinlifeIntegrityFailure(input, error),
+      };
+    }
+  }
   const root = isRecord(input.raw) ? input.raw : null;
   const result = root && isRecord(root.result) ? root.result : null;
   if (!result) {
@@ -171,33 +215,33 @@ function extractAndNormalize(input: {
 
   const pagingMeta = extractPagingMeta(input.raw);
 
-  return {
-    baseList,
-    optionList,
-    data: normalizeFinlifeProducts({ baseList, optionList }),
-    pagingMeta,
-    mismatch: null,
-  };
+  try {
+    return {
+      baseList,
+      optionList,
+      data: normalizeFinlifeProducts({ baseList, optionList, kind: input.kind }),
+      pagingMeta,
+      mismatch: null,
+    };
+  } catch (error) {
+    if (!(error instanceof FinlifeIntegrityError)) throw error;
+    return {
+      baseList,
+      optionList,
+      data: [],
+      pagingMeta,
+      mismatch: buildFinlifeIntegrityFailure(input, error),
+    };
+  }
 }
 
-function mergeProducts(rows: FinlifeSourceResult["data"]): FinlifeSourceResult["data"] {
-  const merged = new Map<string, FinlifeSourceResult["data"][number]>();
-  for (const item of rows) {
-    const existing = merged.get(item.fin_prdt_cd);
-    if (!existing) {
-      merged.set(item.fin_prdt_cd, {
-        ...item,
-        options: [...item.options],
-      });
-      continue;
-    }
-    existing.options.push(...item.options);
-    if (!existing.kor_co_nm && item.kor_co_nm) existing.kor_co_nm = item.kor_co_nm;
-    if (!existing.fin_prdt_nm && item.fin_prdt_nm) existing.fin_prdt_nm = item.fin_prdt_nm;
-    if (!existing.fin_co_no && item.fin_co_no) existing.fin_co_no = item.fin_co_no;
-    if (!existing.best && item.best) existing.best = item.best;
+function mergeProducts(rows: FinlifeSourceResult["data"], kind?: FinlifeKind): FinlifeSourceResult["data"] {
+  const merged = mergeFinlifeProducts(rows, { kind });
+  for (const item of merged) {
+    const best = deriveBestFromOptions(item.options);
+    if (best) item.best = best;
   }
-  return [...merged.values()];
+  return merged;
 }
 
 function buildScanAllPayload(params: {
@@ -208,7 +252,7 @@ function buildScanAllPayload(params: {
   truncatedByMaxPages: boolean;
 }): FinlifeSourceResult {
   const flattened = params.pageResults.flatMap((page) => page.data);
-  const mergedData = mergeProducts(flattened);
+  const mergedData = mergeProducts(flattened, params.kind);
   const totalOptions = mergedData.reduce((sum, item) => sum + item.options.length, 0);
   const optionsMissingCount = mergedData.filter((item) => item.options.length === 0).length;
   const first = params.pageResults[0];
@@ -276,15 +320,27 @@ export async function getFinlifeProducts(kind: FinlifeKind, params: FinlifeParam
       if (pageNo === effectiveMaxPages) truncatedByMaxPages = true;
     }
 
-    const payload = buildScanAllPayload({
-      kind,
-      topFinGrpNo: required.topFinGrpNo,
-      mode: mode === "auto" ? "mock" : mode,
-      pageResults,
-      truncatedByMaxPages,
-    });
-    cache.set(scanCacheKey, payload, ttl);
-    return payload;
+    try {
+      const payload = buildScanAllPayload({
+        kind,
+        topFinGrpNo: required.topFinGrpNo,
+        mode: mode === "auto" ? "mock" : mode,
+        pageResults,
+        truncatedByMaxPages,
+      });
+      cache.set(scanCacheKey, payload, ttl);
+      return payload;
+    } catch (error) {
+      if (!(error instanceof FinlifeIntegrityError)) throw error;
+      return buildFinlifeSchemaMismatch({
+        kind,
+        pageNo: 1,
+        topFinGrpNo: required.topFinGrpNo,
+        mode: pageResults[0]?.mode ?? (mode === "auto" ? "mock" : mode),
+        raw: pageResults.map((page) => page.raw),
+        reason: error.message,
+      });
+    }
   }
 
   const cacheKey = `${kind}:${required.topFinGrpNo}:${required.pageNo}:${parseMode()}`;
@@ -429,6 +485,17 @@ export async function getFinlifeProducts(kind: FinlifeKind, params: FinlifeParam
 
   try {
     const raw = await fetchLiveFinlife(kind, required);
+    const normalized = extractAndNormalize({
+      kind,
+      pageNo: required.pageNo,
+      topFinGrpNo: required.topFinGrpNo,
+      mode: "live",
+      raw,
+    });
+    if (normalized.mismatch) {
+      console.error("[finlife] schema mismatch", normalized.mismatch.error?.diagnostics ?? {});
+      return normalized.mismatch;
+    }
     if (process.env.FINLIFE_RECORD_FIXTURES === "1" && (process.env.NODE_ENV ?? "development") !== "production") {
       try {
         writeFinlifeFixture(fixtureKey, {
@@ -442,17 +509,6 @@ export async function getFinlifeProducts(kind: FinlifeKind, params: FinlifeParam
         const message = error instanceof Error ? error.message : String(error);
         console.error("[finlife-fixture] write failed", { kind, pageNo: required.pageNo, topFinGrpNo: required.topFinGrpNo, message });
       }
-    }
-    const normalized = extractAndNormalize({
-      kind,
-      pageNo: required.pageNo,
-      topFinGrpNo: required.topFinGrpNo,
-      mode: "live",
-      raw,
-    });
-    if (normalized.mismatch) {
-      console.error("[finlife] schema mismatch", normalized.mismatch.error?.diagnostics ?? {});
-      return normalized.mismatch;
     }
     const payload: FinlifeSourceResult = {
       ok: true,
@@ -485,7 +541,10 @@ export async function getFinlifeProducts(kind: FinlifeKind, params: FinlifeParam
     };
     cache.set(cacheKey, payload, ttl);
     return payload;
-  } catch {
+  } catch (error) {
+    if (error instanceof FinlifeIntegrityError) {
+      return buildFinlifeIntegrityFailure({ kind, pageNo: required.pageNo, topFinGrpNo: required.topFinGrpNo, mode: "live", raw: null }, error);
+    }
     if (fallbackEnabled()) {
       const raw = fetchMockFinlife(kind);
       const normalized = extractAndNormalize({

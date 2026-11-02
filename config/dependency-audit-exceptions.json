@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "exceptions": [
+    {
+      "advisory": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "scope": "dev",
+      "reason": "2026-11-02 기준 minimatch 11.0.1 이상만 수정판이며, 저장소의 minimatch 3.1.5·10.2.5는 eslint·typescript-eslint·glob 등 lint·테스트 전용 devDependency 경로(67개)로만 들어오고 runtime 의존성에서는 도달하지 않습니다(pnpm why -P minimatch 비어 있음). standalone build와 desktop artifact에 포함되지 않습니다.",
+      "mitigation": "lint·테스트는 저장소 자체 glob 패턴만 펼칩니다. 상위 패키지들이 minimatch 11.0.1 이상으로 옮기면 lockfile을 갱신하고 이 예외를 제거합니다. 만료 시 기한을 연장하지 말고 권고 상태를 다시 확인합니다.",
+      "expiresAt": "2026-11-16T00:00:00+09:00"
+    }
+  ]
+}

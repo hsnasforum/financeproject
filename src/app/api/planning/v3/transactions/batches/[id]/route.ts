@@ -20,6 +20,7 @@ import {
   planningUserMeta,
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningBatchLifecycleErrorResponse } from "@/lib/planning/api/batchLifecycleErrorResponse";
 import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type RouteContext = {
@@ -260,6 +261,8 @@ export async function GET(request: Request, context: RouteContext) {
         data: rawRows,
       });
     } catch (error) {
+      const lifecycleError = planningBatchLifecycleErrorResponse(error, userMeta);
+      if (lifecycleError) return lifecycleError;
       const storageError = planningStorageErrorResponse(error, userMeta);
       if (storageError) return storageError;
       if (isInvalidIdError(error)) {
@@ -315,6 +318,8 @@ export async function DELETE(request: Request, context: RouteContext) {
       await deleteCurrentUserStoredBatch(batchId);
       return NextResponse.json({ ok: true, deleted: true, meta: userMeta });
     } catch (error) {
+      const lifecycleError = planningBatchLifecycleErrorResponse(error, userMeta);
+      if (lifecycleError) return lifecycleError;
       const storageError = planningStorageErrorResponse(error, userMeta);
       if (storageError) return storageError;
       if (isInvalidIdError(error)) {

@@ -22,6 +22,7 @@ export function buildMonthlySurplusEvidence(input: {
     },
     assumptions: [
       "시작 시점(month=start) 기준 월값을 사용합니다.",
+      "월 부채상환은 정기 최소상환액이며, 보유 현금으로 한 추가상환은 제외합니다.",
       "단위는 KRW이며 반올림은 표시 단계에서만 적용합니다.",
     ],
   };

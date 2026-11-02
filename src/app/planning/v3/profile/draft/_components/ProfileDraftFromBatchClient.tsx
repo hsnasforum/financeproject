@@ -237,7 +237,7 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
                 <dd>{formatKrw(summary.expenseKrw)}</dd>
               </div>
               <div>
-                <dt className="font-semibold">월 필수지출 (median)</dt>
+                <dt className="font-semibold">월 고정지출 (부채상환 포함, median)</dt>
                 <dd>{formatKrw(summary.fixedKrw)}</dd>
               </div>
               <div>
@@ -245,6 +245,8 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
                 <dd>{formatKrw(summary.variableKrw)}</dd>
               </div>
             </dl>
+
+            <p className="text-xs text-slate-500">초안의 필수·선택 생활지출에는 부채상환을 포함하지 않습니다. 부채상환은 프로필의 부채 설정으로 계산합니다.</p>
 
             <div className={bodyDenseActionRowClassName}>
               <Button

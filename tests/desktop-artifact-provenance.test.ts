@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { PUBLIC_SNAPSHOT_FILES } from "../scripts/public_snapshot_assets.mjs";
 import { listArtifactFiles } from "../scripts/planning_v2_desktop_provenance.mjs";
 import { STANDALONE_RUNTIME_LINKED_PACKAGES } from "../scripts/standalone_runtime_assets.mjs";
 
@@ -90,6 +91,7 @@ function initializeDesktopProjectFixture(projectRoot: string): void {
   fs.mkdirSync(projectRoot, { recursive: true });
   writeFixtureFile(projectRoot, "package.json", `${JSON.stringify({ version: "1.0.0" })}\n`);
   writeFixtureFile(projectRoot, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+  writeFixtureFile(projectRoot, ".env.local.example", "DATABASE_URL=file:./prisma/dev.db\n");
   writeFixtureFile(projectRoot, "scripts/placeholder.mjs");
   writeFixtureFile(projectRoot, "public/placeholder.txt");
   writeFixtureFile(projectRoot, "prisma/schema.prisma", "generator client {}\n");
@@ -98,6 +100,66 @@ function initializeDesktopProjectFixture(projectRoot: string): void {
   }
   writeFixtureFile(projectRoot, ".next/static/chunks/app.js", "console.log('fixture');\n");
   writeFixtureFile(projectRoot, ".next/standalone/server.js", "module.exports = {};\n");
+  const prismaPackage = path.join(
+    projectRoot,
+    "node_modules",
+    ".pnpm",
+    "prisma@1.0.0",
+    "node_modules",
+    "prisma",
+  );
+  writeFixtureFile(prismaPackage, "package.json", `${JSON.stringify({ name: "prisma", version: "1.0.0" })}\n`);
+  writeFixtureFile(prismaPackage, "build/index.js", "module.exports = {};\n");
+  linkDirectory(prismaPackage, path.join(projectRoot, "node_modules", "prisma"));
+
+  const betterSqlitePackage = path.join(
+    projectRoot,
+    "node_modules",
+    ".pnpm",
+    "better-sqlite3@1.0.0",
+    "node_modules",
+    "better-sqlite3",
+  );
+  writeFixtureFile(betterSqlitePackage, "package.json", `${JSON.stringify({
+    name: "better-sqlite3",
+    version: "1.0.0",
+    main: "index.js",
+    dependencies: { bindings: "1.0.0" },
+  })}\n`);
+  writeFixtureFile(betterSqlitePackage, "index.js", "module.exports = require('bindings');\n");
+  const bindingsPackage = path.join(
+    projectRoot,
+    "node_modules",
+    ".pnpm",
+    "bindings@1.0.0",
+    "node_modules",
+    "bindings",
+  );
+  writeFixtureFile(bindingsPackage, "package.json", `${JSON.stringify({
+    name: "bindings",
+    version: "1.0.0",
+    main: "index.js",
+    dependencies: { "file-uri-to-path": "1.0.0" },
+  })}\n`);
+  writeFixtureFile(bindingsPackage, "index.js", "module.exports = `bindings:${require('file-uri-to-path')}`;\n");
+  const fileUriPackage = path.join(
+    projectRoot,
+    "node_modules",
+    ".pnpm",
+    "file-uri-to-path@1.0.0",
+    "node_modules",
+    "file-uri-to-path",
+  );
+  writeFixtureFile(fileUriPackage, "package.json", `${JSON.stringify({
+    name: "file-uri-to-path",
+    version: "1.0.0",
+    main: "index.js",
+  })}\n`);
+  writeFixtureFile(fileUriPackage, "index.js", "module.exports = 'file-uri-to-path';\n");
+  linkRelativeDirectory(fileUriPackage, path.join(path.dirname(bindingsPackage), "file-uri-to-path"));
+  linkRelativeDirectory(bindingsPackage, path.join(path.dirname(betterSqlitePackage), "bindings"));
+  linkDirectory(betterSqlitePackage, path.join(projectRoot, "node_modules", "better-sqlite3"));
+  for (const name of PUBLIC_SNAPSHOT_FILES) writeFixtureFile(projectRoot, `.data/${name}`, JSON.stringify({ testOnly: true }));
   initializeFixtureGit(projectRoot);
 }
 
@@ -129,6 +191,32 @@ afterEach(() => {
 });
 
 describe("desktop artifact provenance", () => {
+  it("never copies private traced data or operational files into a desktop artifact", () => {
+    const root = makeRoot(), projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
+    const data = path.join(projectRoot, ".next", "standalone", ".data");
+    fs.mkdirSync(path.join(data, "journal"), { recursive: true });
+    fs.writeFileSync(path.join(data, "journal", "test-private.json"), "TEST_ONLY_PRIVATE_CANARY");
+    fs.writeFileSync(path.join(data, "finlife_deposit_sync_attempt.json"), "TEST_ONLY_OPERATIONAL");
+    const artifactDir = path.join(root, "artifact");
+    const result = runNode(path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs"), ["--no-next-build", "--artifact-dir=" + artifactDir], { cwd: projectRoot });
+    expect(result.status).toBe(0);
+    expect(fs.readdirSync(path.join(artifactDir, ".next", "standalone", ".data")).sort()).toEqual([...PUBLIC_SNAPSHOT_FILES].sort());
+    expect(fs.readFileSync(path.join(data, "journal", "test-private.json"), "utf8")).toBe("TEST_ONLY_PRIVATE_CANARY");
+  });
+  it("rejects a missing required snapshot and preserves the previous artifact", () => {
+    const root = makeRoot(), projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
+    fs.unlinkSync(path.join(projectRoot, ".data", PUBLIC_SNAPSHOT_FILES[0]));
+    const artifactDir = path.join(root, "artifact");
+    fs.mkdirSync(artifactDir); fs.writeFileSync(path.join(artifactDir, "previous.txt"), "previous");
+    const result = runNode(path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs"), ["--no-next-build", "--artifact-dir=" + artifactDir], { cwd: projectRoot });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("required public snapshot is missing");
+    expect(fs.readFileSync(path.join(artifactDir, "previous.txt"), "utf8")).toBe("previous");
+  });
+
+
   it("does not keep generated .dist artifacts tracked as source files", () => {
     const result = spawnSync("git", ["ls-files", ".dist"], {
       cwd: process.cwd(),
@@ -137,6 +225,70 @@ describe("desktop artifact provenance", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe("");
+  });
+
+  it("rejects a missing desktop environment template before mutating the artifact", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    fs.rmSync(path.join(projectRoot, ".env.local.example"));
+    writeFixtureFile(artifactDir, "sentinel.txt", "keep\n");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain("required file not found");
+    expect(fs.readFileSync(path.join(artifactDir, "sentinel.txt"), "utf8")).toBe("keep\n");
+  });
+
+  it("rejects private files in the source standalone before creating the artifact", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const standalone = path.join(projectRoot, ".next", "standalone");
+    writeFixtureFile(standalone, ".env.local", "TEST_ONLY_SECRET=1\n");
+    writeFixtureFile(standalone, "dev.db", "TEST_ONLY_DB\n");
+    writeFixtureFile(standalone, "tmp/finance-final/private/runtime.sqlite", "TEST_ONLY_DB\n");
+    writeFixtureFile(artifactDir, "sentinel.txt", "keep\n");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+    const output = `${result.stderr}\n${result.stdout}`;
+
+    expect(result.status).not.toBe(0);
+    expect(output).toContain("desktop standalone input failed the privacy audit");
+    expect(output).toContain("real-env-file .env.local");
+    expect(output).toContain("database-file dev.db");
+    expect(output).toContain("private-directory:tmp tmp");
+    expect(output).not.toContain("TEST_ONLY_SECRET");
+    expect(fs.readFileSync(path.join(artifactDir, "sentinel.txt"), "utf8")).toBe("keep\n");
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+    expect(fs.readFileSync(path.join(standalone, ".env.local"), "utf8")).toBe("TEST_ONLY_SECRET=1\n");
+  });
+
+  it("rejects a staged artifact that would carry a private file before its checksum is written", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    writeFixtureFile(projectRoot, "public/.env.local", "TEST_ONLY_SECRET=1\n");
+    writeFixtureFile(projectRoot, "prisma/migrations/0001/dev.db", "TEST_ONLY_DB\n");
+    writeFixtureFile(artifactDir, "previous.txt", "previous\n");
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+    const output = `${result.stderr}\n${result.stdout}`;
+
+    expect(result.status).not.toBe(0);
+    expect(output).toContain("desktop artifact failed the privacy audit");
+    expect(output).toContain("real-env-file public/.env.local");
+    expect(output).toContain("database-file prisma/migrations/0001/dev.db");
+    expect(fs.readFileSync(path.join(artifactDir, "previous.txt"), "utf8")).toBe("previous\n");
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
+    expect(fs.readdirSync(root).filter((name) => name.startsWith(".finance-desktop-stage-"))).toEqual([]);
   });
 
   it("rejects a symlinked provenance manifest before manifest exclusion", async () => {
@@ -152,25 +304,32 @@ describe("desktop artifact provenance", () => {
     );
   });
 
-  it("writes package, git, lockfile, and checksum provenance into the generated manifest", () => {
+  it.runIf(process.platform !== "win32")("writes package, git, lockfile, and checksum provenance into the generated manifest", () => {
     const root = makeRoot();
     const artifactDir = path.join(root, "planning-v2-desktop");
+    const projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
     const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
 
-    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`]);
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
 
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
     const manifest = JSON.parse(fs.readFileSync(path.join(artifactDir, "desktop-manifest.json"), "utf8")) as {
       version?: string;
       gitSha?: string;
       lockfileSha256?: string;
       artifactChecksum?: { algorithm?: string; value?: string; fileCount?: number };
     };
-    const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as { version: string };
+    const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")) as { version: string };
 
     expect(manifest.version).toBe(packageJson.version);
     expect(manifest.gitSha).toMatch(/^[0-9a-f]{40}$/);
     expect(manifest.lockfileSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(manifest).toMatchObject({
+      platform: process.platform,
+      arch: process.arch,
+      nodeAbi: process.versions.modules,
+    });
     expect(manifest.artifactChecksum).toMatchObject({
       algorithm: "sha256",
     });
@@ -342,6 +501,36 @@ describe("desktop artifact provenance", () => {
       nestedDependencyResolution.status,
       `${nestedDependencyResolution.stderr}\n${nestedDependencyResolution.stdout}`,
     ).toBe(0);
+    const artifactPrisma = path.join(
+      artifactDir,
+      ".next",
+      "standalone",
+      "node_modules",
+      "prisma",
+    );
+    expect(fs.lstatSync(artifactPrisma).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(path.join(artifactPrisma, "build", "index.js"))).toBe(true);
+    const artifactBetterSqlite = path.join(
+      artifactDir,
+      ".next",
+      "standalone",
+      "node_modules",
+      "better-sqlite3",
+    );
+    expect(fs.lstatSync(artifactBetterSqlite).isSymbolicLink()).toBe(false);
+    const betterSqliteResolution = spawnSync(
+      process.execPath,
+      ["-e", `const value = require(${JSON.stringify(artifactBetterSqlite)}); if (value !== "bindings:file-uri-to-path") process.exit(1);`],
+      { encoding: "utf8" },
+    );
+    expect(
+      betterSqliteResolution.status,
+      `${betterSqliteResolution.stderr}\n${betterSqliteResolution.stdout}`,
+    ).toBe(0);
+    const portablePrismaConfig = fs.readFileSync(path.join(artifactDir, "prisma.config.mjs"), "utf8");
+    expect(portablePrismaConfig).toContain("process.env.DATABASE_URL");
+    expect(portablePrismaConfig).not.toContain("prisma/config");
+    expect(portablePrismaConfig).not.toContain("dotenv");
     if (process.platform !== "win32") {
       expect(fs.statSync(path.join(artifactInternalPackage, "bin", "run.js")).mode & 0o111).not.toBe(0);
     }
@@ -453,6 +642,59 @@ describe("desktop artifact provenance", () => {
     await expect(listArtifactFiles(artifactDir)).resolves.toEqual(expect.arrayContaining([
       ".next/standalone/node_modules/package-a/index.js",
     ]));
+  });
+
+  it.runIf(process.platform === "win32")("materializes Windows standalone junctions from the project pnpm store", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    const packageSource = path.join(
+      projectRoot,
+      "node_modules",
+      ".pnpm",
+      "external-package@1.0.0",
+      "node_modules",
+      "external-package",
+    );
+    writeFixtureFile(packageSource, "package.json", `${JSON.stringify({
+      name: "external-package",
+      version: "1.0.0",
+      main: "index.js",
+    })}\n`);
+    writeFixtureFile(packageSource, "index.js", "module.exports = 'materialized';\n");
+    linkDirectory(
+      packageSource,
+      path.join(projectRoot, ".next", "standalone", "node_modules", "external-package"),
+    );
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
+    const artifactPackage = path.join(artifactDir, ".next", "standalone", "node_modules", "external-package");
+    expect(fs.lstatSync(artifactPackage).isSymbolicLink()).toBe(false);
+    expect(fs.readFileSync(path.join(artifactPackage, "index.js"), "utf8")).toContain("materialized");
+  });
+
+  it.runIf(process.platform === "win32")("rejects a Windows standalone junction to a non-package project directory", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    initializeDesktopProjectFixture(projectRoot);
+    linkDirectory(
+      path.join(projectRoot, "src"),
+      path.join(projectRoot, ".next", "standalone", "node_modules", "not-a-package"),
+    );
+
+    const script = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const result = runNode(script, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop standalone contains unsupported directory symlink: node_modules/not-a-package",
+    );
+    expect(fs.existsSync(path.join(artifactDir, "desktop-manifest.json"))).toBe(false);
   });
 
   it("rejects an active package cycle when an intermediate package shadows the ancestor", () => {
@@ -599,19 +841,52 @@ describe("desktop artifact provenance", () => {
     const result = runNode(script, ["--skip-install", `--from=${fromDir}`, `--to=${toDir}`]);
 
     expect(result.status).not.toBe(0);
-    expect(`${result.stderr}\n${result.stdout}`).toContain("desktop provenance manifest");
+    expect(`${result.stderr}\n${result.stdout}`).toContain(
+      "desktop self-verification missing desktop manifest",
+    );
     expect(fs.existsSync(toDir)).toBe(false);
   });
 
-  it("rejects symlinked and stale desktop artifacts", () => {
+  it("rejects an artifact built for another native platform", () => {
+    const root = makeRoot();
+    const projectRoot = path.join(root, "project");
+    const artifactDir = path.join(root, "artifact");
+    const toDir = path.join(root, "installed");
+    initializeDesktopProjectFixture(projectRoot);
+    const buildScript = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
+    const installScript = path.join(process.cwd(), "scripts", "planning_v2_desktop_install.mjs");
+    const built = runNode(buildScript, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+    expect(built.status, `${built.stderr}\n${built.stdout}`).toBe(0);
+    const manifestPath = path.join(artifactDir, "desktop-manifest.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    manifest.platform = process.platform === "win32" ? "linux" : "win32";
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const installed = runNode(installScript, [
+      "--skip-install",
+      "--skip-shortcuts",
+      `--from=${artifactDir}`,
+      `--to=${toDir}`,
+    ], { cwd: projectRoot });
+
+    expect(installed.status).not.toBe(0);
+    expect(`${installed.stderr}\n${installed.stdout}`).toContain(
+      "desktop self-verification mismatch: platform",
+    );
+    expect(fs.existsSync(toDir)).toBe(false);
+  });
+
+  it.runIf(process.platform !== "win32")("rejects symlinked and stale desktop artifacts", () => {
     const root = makeRoot();
     const artifactDir = path.join(root, "planning-v2-desktop");
+    const projectRoot = path.join(root, "project");
+    initializeDesktopProjectFixture(projectRoot);
     const toDir = path.join(root, "installed");
     const buildScript = path.join(process.cwd(), "scripts", "planning_v2_desktop_build.mjs");
     const installScript = path.join(process.cwd(), "scripts", "planning_v2_desktop_install.mjs");
 
-    const built = runNode(buildScript, ["--no-next-build", `--artifact-dir=${artifactDir}`]);
-    expect(built.status).toBe(0);
+    const built = runNode(buildScript, ["--no-next-build", `--artifact-dir=${artifactDir}`], { cwd: projectRoot });
+    expect(built.status, built.stderr).toBe(0);
 
     const linkedPublic = path.join(artifactDir, "linked-public");
     linkDirectory(path.join(artifactDir, "public"), linkedPublic);

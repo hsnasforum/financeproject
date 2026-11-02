@@ -1,3 +1,4 @@
+import { buildDiagnosisAssessment, type DiagnosisAssessment } from "./diagnosisAssessment";
 import { type ActionCode, type ActionItemV2 } from "../actions/types";
 import { type GoalStatusRow } from "../resultGuide";
 import { type CalcEvidence } from "../../calc";
@@ -57,6 +58,7 @@ export type InterpretationInput = {
   };
   };
 export type InterpretationVM = {
+  assessment: DiagnosisAssessment;
   verdict: {
     code: InterpretationVerdict;
     label: string;
@@ -226,9 +228,8 @@ export function buildInterpretationVM(
   const runId = asString(input.outcomes?.runId);
 
   const goalsAchieved = parseGoalsAchievedText(input.summary.goalsAchievedText);
-  const goalsMissed = input.goals.length > 0
-    ? input.goals.some((goal) => !goal.achieved || goal.shortfallKrw > 0)
-    : Boolean(goalsAchieved && goalsAchieved.total > goalsAchieved.achieved);
+  const goalsMissed = input.goals.some((goal) => !goal.achieved || goal.shortfallKrw > 0)
+    || Boolean(goalsAchieved && goalsAchieved.total > goalsAchieved.achieved);
 
   const warningsSorted = [...input.aggregatedWarnings].sort((a, b) => {
     const severityRankA = a.severity === "critical" ? 0 : a.severity === "warn" ? 1 : 2;
@@ -346,10 +347,12 @@ export function buildInterpretationVM(
   }
 
   if (goalsMissed) {
-    const total = input.goals.length || goalsAchieved?.total || 0;
-    const achieved = input.goals.length
-      ? input.goals.filter((goal) => goal.achieved && goal.shortfallKrw <= 0).length
-      : goalsAchieved?.achieved || 0;
+    const total = Math.max(input.goals.length, goalsAchieved?.total ?? 0);
+    const achieved = goalsAchieved && goalsAchieved.total > input.goals.length
+      ? goalsAchieved.achieved
+      : input.goals.length
+        ? input.goals.filter((goal) => goal.achieved && goal.shortfallKrw <= 0).length
+        : goalsAchieved?.achieved || 0;
     diagnostics.push({
       id: "goals",
       severity: "caution",
@@ -552,7 +555,10 @@ export function buildInterpretationVM(
 
   const nextActions = Array.from(nextActionMap.values()).slice(0, 3);
 
+  const basicVerdict = { code: verdict, label: verdictLabel(verdict), headline: verdictHeadline(verdict) };
+
   return {
+    assessment: buildDiagnosisAssessment(input, basicVerdict, diagnostics),
     verdict: {
       code: verdict,
       label: verdictLabel(verdict),

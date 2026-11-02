@@ -1,3 +1,4 @@
+import { EMERGENCY_FUND_TARGET_MONTHS } from "../calc/emergencyFundPolicy";
 import type { EngineInput, FinancialStatus, Stage } from "./types";
 
 export function determineFinancialStatus(input: EngineInput): FinancialStatus {
@@ -5,7 +6,7 @@ export function determineFinancialStatus(input: EngineInput): FinancialStatus {
   const monthlyExpense = input.monthlyExpense;
   const liquidAssets = input.liquidAssets ?? 0;
   const debtBalance = input.debtBalance ?? 0;
-  const emergencyFundMonths = input.emergencyFundMonths ?? 6;
+  const emergencyFundMonths = input.emergencyFundMonths ?? EMERGENCY_FUND_TARGET_MONTHS;
 
   const savingCapacity = monthlyIncome - monthlyExpense;
   const savingRate = monthlyIncome > 0 ? savingCapacity / monthlyIncome : null;

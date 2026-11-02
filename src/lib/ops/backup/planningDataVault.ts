@@ -17,7 +17,7 @@ import { migrateAssumptionsSnapshot } from "../../planning/migrations/snapshotMi
 import { atomicWriteJson } from "../../planning/storage/atomicWrite";
 import { readStorageJournalEvents, type StorageJournalEvent } from "../../planning/storage/journal";
 import { createRun, getRun, getRunBlob, hardDeleteRun, listRunIndexEntries } from "../../planning/server/store/runStore";
-import { hardDeleteProfile, listProfiles, upsertProfileRecord } from "../../planning/store/profileStore";
+import { getDefaultProfileId, hardDeleteProfile, listProfiles, setDefaultProfile, upsertProfileRecord } from "../../planning/store/profileStore";
 import {
   resolveProfilePartitionsDir,
   resolveProfilePartitionDir,
@@ -37,7 +37,12 @@ import { loadCanonicalProfile } from "../../planning/v2/loadCanonicalProfile";
 import { PROFILE_SCHEMA_VERSION, RUN_SCHEMA_VERSION, ASSUMPTIONS_SCHEMA_VERSION } from "../../planning/v2/schemaVersion";
 import { type ProfileNormalizationDisclosure } from "../../planning/v2/normalizationDisclosure";
 import { resolveOpsDataDir, resolvePlanningDataDir } from "../../planning/storage/dataDir";
-import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../../planning/store/namespace";
+import {
+  getPlanningUserDir,
+  isPlanningNamespaceEnabled,
+  resolvePlanningUserId,
+  sanitizePlanningUserId,
+} from "../../planning/store/namespace";
 import {
   callReplaceRestoreFaultInjection as callRestoreFaultInjection,
   cleanupReplaceRestoreSnapshot,
@@ -48,10 +53,21 @@ import {
   type ReplaceRestoreFaultOperation,
   type ReplaceRestoreSnapshot,
 } from "./replaceRestoreTransaction";
+import {
+  buildPlanningUserV3Snapshot,
+  clearPlanningUserV3SnapshotTargets,
+  isPlanningUserV3SnapshotPath,
+  parsePlanningUserV3Snapshot,
+  planningUserV3RestoreTargets,
+  resolvePlanningUserV3RestoreTargets,
+  restorePlanningUserV3SnapshotFiles,
+  type PlanningUserV3Snapshot,
+} from "./planningUserV3Snapshot";
 import { decodeZip, encodeZip, type ZipFileEntry } from "./zipCodec";
 
 const VAULT_KIND = "planning-data-vault";
-const VAULT_FORMAT_VERSION = 1;
+const VAULT_LEGACY_FORMAT_VERSION = 1 as const;
+const VAULT_FORMAT_VERSION = 2 as const;
 const ENCRYPTED_BACKUP_KIND = "planning-data-vault-encrypted";
 const ENCRYPTED_BACKUP_VERSION = 1;
 const MANIFEST_PATH = "manifest.json";
@@ -68,6 +84,8 @@ const BACKUP_SYNC_STATE_VERSION = 1 as const;
 
 type RestoreMode = "merge" | "replace";
 type BackupExportMode = "full" | "delta";
+export type PlanningDataVaultScope = "ops" | "user";
+type VaultFormatVersion = typeof VAULT_LEGACY_FORMAT_VERSION | typeof VAULT_FORMAT_VERSION;
 type BackupConflictPolicy = "skip";
 type BackupJournalBoundaryMarker = {
   offset: number;
@@ -79,7 +97,7 @@ type BackupJournalScanState = {
   fallbackReason?: "previous-offset-out-of-range" | "previous-boundary-missing" | "previous-boundary-mismatch" | "previous-tail-mismatch";
 };
 
-type BackupSyncState = {
+export type PlanningDataVaultExportCheckpointState = {
   version: typeof BACKUP_SYNC_STATE_VERSION;
   updatedAt: string;
   lastExportAt?: string;
@@ -89,10 +107,17 @@ type BackupSyncState = {
   lastJournalScan?: BackupJournalScanState;
 };
 
+export type PlanningDataVaultExportCheckpoint = Readonly<{
+  statePath: string;
+  state: Readonly<PlanningDataVaultExportCheckpointState>;
+}>;
+
 type VaultManifest = {
   kind: typeof VAULT_KIND;
-  formatVersion: typeof VAULT_FORMAT_VERSION;
+  formatVersion: VaultFormatVersion;
   mode: BackupExportMode;
+  scope?: PlanningDataVaultScope;
+  userId?: string;
   createdAt: string;
   appVersion: string;
   conflictPolicy: {
@@ -123,13 +148,20 @@ type VaultManifest = {
     actionProgress: number;
     assumptionsHistory: number;
     policies: number;
+    planningV3Owners: number;
+    planningV3Files: number;
+  };
+  planningV3?: {
+    included: boolean;
+    totalBytes: number;
+    reason?: "delta-stable-only" | "legacy-storage-mode";
   };
   latestSnapshotId?: string;
   files: Record<string, { sizeBytes: number; sha256: string }>;
 };
 
 export type VaultPreviewSummary = {
-  manifest: Pick<VaultManifest, "kind" | "formatVersion" | "mode" | "createdAt" | "appVersion" | "schemaVersions" | "counts" | "latestSnapshotId" | "conflictPolicy" | "syncState">;
+  manifest: Pick<VaultManifest, "kind" | "formatVersion" | "mode" | "scope" | "userId" | "createdAt" | "appVersion" | "schemaVersions" | "counts" | "planningV3" | "latestSnapshotId" | "conflictPolicy" | "syncState">;
   actual: {
     totalFiles: number;
     totalBytes: number;
@@ -140,6 +172,9 @@ export type VaultPreviewSummary = {
     actionProgress: number;
     assumptionsHistory: number;
     policies: number;
+    planningV3Owners: number;
+    planningV3Files: number;
+    planningV3Bytes: number;
   };
   ids: {
     profileIds: string[];
@@ -163,6 +198,8 @@ export type VaultRestoreOptions = {
   maxEntries: number;
   maxBytes: number;
   mode: RestoreMode;
+  scope?: PlanningDataVaultScope;
+  userId?: string;
   faultInjection?: VaultRestoreFaultInjection;
 };
 
@@ -178,6 +215,7 @@ export type VaultRestoreSummary = {
     assumptionsHistory: number;
     latestSnapshot: boolean;
     policies: number;
+    planningV3Files: number;
   };
   issues: VaultRestoreIssue[];
   warnings: string[];
@@ -193,6 +231,13 @@ type ParsedVault = {
   manifest: VaultManifest;
   entries: Map<string, Buffer>;
   warnings: string[];
+  manifestIntegrityIssues: VaultManifestIntegrityIssue[];
+};
+
+type VaultManifestIntegrityIssue = {
+  kind: "file-missing" | "hash-mismatch" | "size-mismatch" | "unexpected-file";
+  path: string;
+  message: string;
 };
 
 type RestoreIssueMessageKind =
@@ -211,6 +256,7 @@ type BackupWarningMessageKind =
   | "manifestFileMissing"
   | "manifestHashMismatch"
   | "manifestSizeMismatch"
+  | "manifestUnexpectedFile"
   | "profileSkipped"
   | "runMissingMeta"
   | "manifestProfilesCountMismatch"
@@ -221,7 +267,11 @@ type BackupWarningMessageKind =
   | "deltaRunConflictSkipped"
   | "deltaSnapshotConflictSkipped"
   | "namespaceSharedAssumptionsSkipped"
-  | "namespaceSharedPoliciesSkipped";
+  | "namespaceSharedPoliciesSkipped"
+  | "legacyPlanningV3NotIncluded"
+  | "deltaPlanningV3NotIncluded"
+  | "legacyStoragePlanningV3NotIncluded"
+  | "planningV3MergeSkipped";
 
 type EncryptedBackupPackage = {
   kind: typeof ENCRYPTED_BACKUP_KIND;
@@ -280,6 +330,9 @@ function backupWarningMessage(kind: BackupWarningMessageKind, target?: string): 
   if (kind === "manifestSizeMismatch") {
     return `백업 파일 크기 정보가 실제와 다릅니다${suffix}`;
   }
+  if (kind === "manifestUnexpectedFile") {
+    return `백업 목록에 없는 파일이 포함되어 있어 건너뛰었습니다${suffix}`;
+  }
   if (kind === "profileSkipped") {
     return `일부 상담 정보를 백업에 포함하지 못했습니다${suffix}`;
   }
@@ -309,6 +362,18 @@ function backupWarningMessage(kind: BackupWarningMessageKind, target?: string): 
   }
   if (kind === "namespaceSharedPoliciesSkipped") {
     return "사용자 저장 범위 복원에서는 공용 운영 정책을 덮어쓰지 않고 현재 운영 값을 유지했습니다.";
+  }
+  if (kind === "legacyPlanningV3NotIncluded") {
+    return "이전 형식의 백업이라 Planning v3 계좌·거래·분류 데이터는 포함되어 있지 않습니다.";
+  }
+  if (kind === "deltaPlanningV3NotIncluded") {
+    return "변경분 백업은 Planning v3 파일 변경 이력을 추적하지 않으므로 Planning v3 데이터는 포함하지 않습니다.";
+  }
+  if (kind === "legacyStoragePlanningV3NotIncluded") {
+    return "이 백업에는 상세 계좌·거래·분류(Planning v3) 데이터가 포함되어 있지 않습니다. 사용자별 저장을 쓰지 않는 실행 방식에서 만든 백업이라 복원해도 상세 데이터는 바뀌지 않습니다.";
+  }
+  if (kind === "planningV3MergeSkipped") {
+    return "Planning v3 데이터는 파일 단위 병합 시 현재 변경을 덮어쓸 수 있어 교체 복원에서만 반영합니다.";
   }
   return `이미 같은 가정 스냅샷이 있어 변경분 복원에서 건너뛰었습니다${suffix}`;
 }
@@ -379,13 +444,23 @@ function normalizeSnapshotId(input: string): string {
   return value;
 }
 
-function resolveBackupSyncStatePath(): string {
+export function resolvePlanningDataVaultExportCheckpointPath(
+  scope: PlanningDataVaultScope,
+  userId: string,
+): string {
+  let basePath: string;
   if (isPlanningNamespaceEnabled()) {
-    return path.join(getPlanningUserDir(resolvePlanningUserId()), "ops", BACKUP_SYNC_STATE_PATH);
+    basePath = path.join(getPlanningUserDir(resolvePlanningUserId(userId)), "ops", BACKUP_SYNC_STATE_PATH);
+  } else {
+    const override = asString(process.env.PLANNING_BACKUP_SYNC_STATE_PATH);
+    basePath = override
+      ? path.resolve(process.cwd(), override)
+      : path.join(resolveOpsDataDir(), BACKUP_SYNC_STATE_PATH);
   }
-  const override = asString(process.env.PLANNING_BACKUP_SYNC_STATE_PATH);
-  if (override) return path.resolve(process.cwd(), override);
-  return path.join(resolveOpsDataDir(), BACKUP_SYNC_STATE_PATH);
+  if (scope === "ops") return basePath;
+  const extension = path.extname(basePath);
+  const stem = extension ? basePath.slice(0, -extension.length) : basePath;
+  return `${stem}-user-${sanitizePlanningUserId(userId)}${extension || ".json"}`;
 }
 
 function asIsoOrUndefined(value: unknown): string | undefined {
@@ -421,7 +496,7 @@ function parseBackupJournalScanState(raw: unknown): BackupJournalScanState | und
   };
 }
 
-function parseBackupSyncState(raw: unknown): BackupSyncState | null {
+function parseBackupSyncState(raw: unknown): PlanningDataVaultExportCheckpointState | null {
   if (!isRecord(raw)) return null;
   const version = Math.trunc(Number(raw.version));
   if (version !== BACKUP_SYNC_STATE_VERSION) return null;
@@ -443,13 +518,16 @@ function parseBackupSyncState(raw: unknown): BackupSyncState | null {
   };
 }
 
-async function loadBackupSyncState(): Promise<BackupSyncState | null> {
-  const loaded = await readJsonFile(resolveBackupSyncStatePath());
+async function loadBackupSyncState(statePath: string): Promise<PlanningDataVaultExportCheckpointState | null> {
+  const loaded = await readJsonFile(statePath);
   return parseBackupSyncState(loaded);
 }
 
-async function saveBackupSyncState(state: BackupSyncState): Promise<void> {
-  await writeJsonAtomic(resolveBackupSyncStatePath(), state);
+async function saveBackupSyncState(
+  statePath: string,
+  state: PlanningDataVaultExportCheckpointState,
+): Promise<void> {
+  await writeJsonAtomic(statePath, state);
 }
 
 function hashJournalEvent(event: StorageJournalEvent): string {
@@ -708,9 +786,23 @@ async function readStoredJsonBuffer(filePath: string): Promise<Buffer | null> {
 function parseVaultManifest(raw: unknown): VaultManifest {
   if (!isRecord(raw)) throw new Error("MANIFEST_INVALID_OBJECT");
   if (asString(raw.kind) !== VAULT_KIND) throw new Error("MANIFEST_KIND_INVALID");
-  if (Math.trunc(Number(raw.formatVersion)) !== VAULT_FORMAT_VERSION) throw new Error("MANIFEST_VERSION_INVALID");
+  const formatVersion = Math.trunc(Number(raw.formatVersion));
+  if (formatVersion !== VAULT_LEGACY_FORMAT_VERSION && formatVersion !== VAULT_FORMAT_VERSION) {
+    throw new Error("MANIFEST_VERSION_INVALID");
+  }
   const modeRaw = asString(raw.mode).toLowerCase();
   const mode: BackupExportMode = modeRaw === "delta" ? "delta" : "full";
+  const scopeRaw = asString(raw.scope).toLowerCase();
+  const scope = scopeRaw === "user" ? "user" : scopeRaw === "ops" ? "ops" : undefined;
+  if (formatVersion === VAULT_FORMAT_VERSION && !scope) throw new Error("MANIFEST_SCOPE_INVALID");
+  let userId: string | undefined;
+  if (formatVersion === VAULT_FORMAT_VERSION) {
+    try {
+      userId = sanitizePlanningUserId(raw.userId);
+    } catch {
+      throw new Error("MANIFEST_USER_ID_INVALID");
+    }
+  }
   const createdAt = toIso(raw.createdAt, "");
   if (!createdAt) throw new Error("MANIFEST_CREATED_AT_INVALID");
   const appVersion = asString(raw.appVersion) || "0.0.0";
@@ -718,6 +810,10 @@ function parseVaultManifest(raw: unknown): VaultManifest {
   const countsRaw = isRecord(raw.counts) ? raw.counts : {};
   const filesRaw = isRecord(raw.files) ? raw.files : {};
   const conflictRaw = isRecord(raw.conflictPolicy) ? raw.conflictPolicy : {};
+  const planningV3Raw = isRecord(raw.planningV3) ? raw.planningV3 : null;
+  if (formatVersion === VAULT_FORMAT_VERSION && !planningV3Raw) {
+    throw new Error("MANIFEST_V3_SUMMARY_MISSING");
+  }
   const syncStateRaw = isRecord(raw.syncState) ? raw.syncState : null;
   const syncJournalScan = syncStateRaw ? parseBackupJournalScanState(syncStateRaw.journalScan) : undefined;
   const previousJournalBoundary = syncStateRaw ? parseBackupJournalBoundaryMarker(syncStateRaw.previousJournalBoundary) : undefined;
@@ -735,8 +831,10 @@ function parseVaultManifest(raw: unknown): VaultManifest {
 
   return {
     kind: VAULT_KIND,
-    formatVersion: VAULT_FORMAT_VERSION,
+    formatVersion,
     mode,
+    ...(scope ? { scope } : {}),
+    ...(userId ? { userId } : {}),
     createdAt,
     appVersion,
     conflictPolicy: {
@@ -777,7 +875,20 @@ function parseVaultManifest(raw: unknown): VaultManifest {
       actionProgress: Math.max(0, Math.trunc(Number(countsRaw.actionProgress) || 0)),
       assumptionsHistory: Math.max(0, Math.trunc(Number(countsRaw.assumptionsHistory) || 0)),
       policies: Math.max(0, Math.trunc(Number(countsRaw.policies) || 0)),
+      planningV3Owners: Math.max(0, Math.trunc(Number(countsRaw.planningV3Owners) || 0)),
+      planningV3Files: Math.max(0, Math.trunc(Number(countsRaw.planningV3Files) || 0)),
     },
+    ...(planningV3Raw
+      ? {
+        planningV3: {
+          included: planningV3Raw.included === true,
+          totalBytes: Math.max(0, Math.trunc(Number(planningV3Raw.totalBytes) || 0)),
+          ...(planningV3Raw.reason === "delta-stable-only" || planningV3Raw.reason === "legacy-storage-mode"
+            ? { reason: planningV3Raw.reason }
+            : {}),
+        },
+      }
+      : {}),
     ...(asString(raw.latestSnapshotId) ? { latestSnapshotId: asString(raw.latestSnapshotId) } : {}),
     files: fileMap,
   };
@@ -889,23 +1000,116 @@ async function parseVault(
   }
   const manifest = parseVaultManifest(manifestRaw);
   const warnings: string[] = [];
+  if (manifest.formatVersion === VAULT_LEGACY_FORMAT_VERSION) {
+    warnings.push(backupWarningMessage("legacyPlanningV3NotIncluded"));
+  } else if (manifest.planningV3?.reason === "delta-stable-only") {
+    warnings.push(backupWarningMessage("deltaPlanningV3NotIncluded"));
+  } else if (manifest.planningV3?.included === false && manifest.planningV3.reason === "legacy-storage-mode") {
+    warnings.push(backupWarningMessage("legacyStoragePlanningV3NotIncluded"));
+  }
+  const manifestIntegrityIssues: VaultManifestIntegrityIssue[] = [];
+  const invalidEntryPaths = new Set<string>();
+
+  function addManifestIntegrityIssue(
+    kind: VaultManifestIntegrityIssue["kind"],
+    entryPath: string,
+    message: string,
+  ): void {
+    warnings.push(message);
+    manifestIntegrityIssues.push({ kind, path: entryPath, message });
+    if (kind !== "file-missing") invalidEntryPaths.add(entryPath);
+  }
 
   for (const [entryPath, meta] of Object.entries(manifest.files)) {
     const loaded = entries.get(entryPath);
     if (!loaded) {
-      warnings.push(backupWarningMessage("manifestFileMissing", entryPath));
+      addManifestIntegrityIssue(
+        "file-missing",
+        entryPath,
+        backupWarningMessage("manifestFileMissing", entryPath),
+      );
       continue;
     }
     const digest = hashSha256(loaded);
     if (digest !== meta.sha256) {
-      warnings.push(backupWarningMessage("manifestHashMismatch", entryPath));
+      addManifestIntegrityIssue(
+        "hash-mismatch",
+        entryPath,
+        backupWarningMessage("manifestHashMismatch", entryPath),
+      );
     }
     if (loaded.length !== meta.sizeBytes) {
-      warnings.push(backupWarningMessage("manifestSizeMismatch", entryPath));
+      addManifestIntegrityIssue(
+        "size-mismatch",
+        entryPath,
+        backupWarningMessage("manifestSizeMismatch", entryPath),
+      );
     }
   }
 
-  return { manifest, entries, warnings };
+  for (const entryPath of entries.keys()) {
+    if (entryPath === MANIFEST_PATH || entryPath === "warnings.txt") continue;
+    if (Object.hasOwn(manifest.files, entryPath)) continue;
+    addManifestIntegrityIssue(
+      "unexpected-file",
+      entryPath,
+      backupWarningMessage("manifestUnexpectedFile", entryPath),
+    );
+  }
+
+  for (const entryPath of invalidEntryPaths) {
+    entries.delete(entryPath);
+  }
+
+  return { manifest, entries, warnings, manifestIntegrityIssues };
+}
+
+function assertVaultAccessContext(
+  manifest: VaultManifest,
+  options: { scope?: PlanningDataVaultScope; userId?: string },
+): void {
+  if (manifest.formatVersion === VAULT_LEGACY_FORMAT_VERSION) return;
+  if (options.scope && manifest.scope !== options.scope) {
+    throw new Error("MANIFEST_SCOPE_MISMATCH");
+  }
+  if (options.userId) {
+    let expectedUserId: string;
+    try {
+      expectedUserId = sanitizePlanningUserId(options.userId);
+    } catch {
+      throw new Error("MANIFEST_USER_ID_INVALID");
+    }
+    if (manifest.userId !== expectedUserId) {
+      throw new Error("MANIFEST_USER_MISMATCH");
+    }
+  }
+}
+
+function parsePlanningV3SnapshotFromVault(
+  parsed: ParsedVault,
+  options: { userId?: string },
+): PlanningUserV3Snapshot | null {
+  if (parsed.manifest.formatVersion === VAULT_LEGACY_FORMAT_VERSION) return null;
+  const v3Paths = [...parsed.entries.keys()].filter(isPlanningUserV3SnapshotPath);
+  if (!parsed.manifest.planningV3?.included) {
+    if (v3Paths.length > 0) throw new Error("MANIFEST_V3_UNEXPECTED");
+    return null;
+  }
+  if (parsed.manifest.mode !== "full") throw new Error("MANIFEST_V3_DELTA_UNSUPPORTED");
+  const userId = options.userId ?? parsed.manifest.userId;
+  if (!userId) throw new Error("MANIFEST_USER_ID_INVALID");
+  const snapshot = parsePlanningUserV3Snapshot({
+    entries: parsed.entries,
+    userId,
+  });
+  if (
+    snapshot.totals.owners !== parsed.manifest.counts.planningV3Owners
+    || snapshot.totals.files !== parsed.manifest.counts.planningV3Files
+    || snapshot.totals.bytes !== parsed.manifest.planningV3.totalBytes
+  ) {
+    throw new Error("MANIFEST_V3_COUNT_MISMATCH");
+  }
+  return snapshot;
 }
 
 function profilePathFromId(id: string): string {
@@ -1133,7 +1337,11 @@ function parseRestoreJson(parsed: ParsedVault, entryPath: string): unknown {
 }
 
 function collectReplacePreflightIssues(parsed: ParsedVault, restoreSharedState: boolean): VaultRestoreIssue[] {
-  const issues: VaultRestoreIssue[] = [];
+  const issues: VaultRestoreIssue[] = parsed.manifestIntegrityIssues.map((issue) => ({
+    entity: "restore",
+    path: issue.path,
+    message: issue.message,
+  }));
   const profilePaths = [...parsed.entries.keys()]
     .filter((entryPath) => parseProfileEntryPath(entryPath))
     .sort((a, b) => a.localeCompare(b));
@@ -1339,8 +1547,15 @@ function resolveProfileMetaPath(): string {
   return path.join(path.dirname(resolveProfilePartitionsDir()), "profiles.meta.json");
 }
 
-function resolveReplaceRestoreJournalPath(): string {
-  return path.join(resolveOpsDataDir(), "backup", "restore-replace-journal.json");
+function resolveReplaceRestoreBackupDir(options: Pick<VaultRestoreOptions, "scope" | "userId">): string {
+  if (options.scope === "user" || isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(options.userId)), "ops", "backup");
+  }
+  return path.join(resolveOpsDataDir(), "backup");
+}
+
+function resolveReplaceRestoreJournalPath(options: Pick<VaultRestoreOptions, "scope" | "userId">): string {
+  return path.join(resolveReplaceRestoreBackupDir(options), "restore-replace-journal.json");
 }
 
 function restoreNotCommittedIssue(pathValue = "restore"): VaultRestoreIssue {
@@ -1373,12 +1588,13 @@ function uniqueRestoreTargets(targets: string[]): string[] {
   return [...new Set(targets.map((targetPath) => path.resolve(targetPath)))];
 }
 
-function replaceRestoreTargets(restoreSharedState: boolean): string[] {
+function replaceRestoreTargets(restoreSharedState: boolean, additionalTargets: string[] = []): string[] {
   const targets = [
     resolveProfilesDir(),
     resolveRunsDir(),
     resolveProfilePartitionsDir(),
     resolveProfileMetaPath(),
+    ...additionalTargets,
   ];
   if (restoreSharedState) {
     targets.push(
@@ -1392,24 +1608,34 @@ function replaceRestoreTargets(restoreSharedState: boolean): string[] {
 }
 
 async function recoverPendingReplaceRestoreSnapshot(options: VaultRestoreOptions): Promise<void> {
+  const planningV3Targets = isPlanningNamespaceEnabled()
+    ? resolvePlanningUserV3RestoreTargets({ userId: resolvePlanningUserId(options.userId) })
+    : [];
+  const restoreSharedState = options.scope !== "user" && !isPlanningNamespaceEnabled();
+  const backupDir = resolveReplaceRestoreBackupDir(options);
   await recoverPendingReplaceRestoreTransaction({
-    journalPath: resolveReplaceRestoreJournalPath(),
+    journalPath: resolveReplaceRestoreJournalPath(options),
+    allowedTargets: replaceRestoreTargets(restoreSharedState, planningV3Targets),
+    allowedSnapshotParent: path.join(backupDir, "restore-snapshots"),
     faultInjection: options.faultInjection,
   });
 }
 
 function toManifestWithoutFiles(
   manifest: VaultManifest,
-): Pick<VaultManifest, "kind" | "formatVersion" | "mode" | "createdAt" | "appVersion" | "schemaVersions" | "counts" | "latestSnapshotId" | "conflictPolicy" | "syncState"> {
+): Pick<VaultManifest, "kind" | "formatVersion" | "mode" | "scope" | "userId" | "createdAt" | "appVersion" | "schemaVersions" | "counts" | "planningV3" | "latestSnapshotId" | "conflictPolicy" | "syncState"> {
   return {
     kind: manifest.kind,
     formatVersion: manifest.formatVersion,
     mode: manifest.mode,
+    ...(manifest.scope ? { scope: manifest.scope } : {}),
+    ...(manifest.userId ? { userId: manifest.userId } : {}),
     createdAt: manifest.createdAt,
     appVersion: manifest.appVersion,
     conflictPolicy: manifest.conflictPolicy,
     schemaVersions: manifest.schemaVersions,
     counts: manifest.counts,
+    ...(manifest.planningV3 ? { planningV3: manifest.planningV3 } : {}),
     ...(manifest.latestSnapshotId ? { latestSnapshotId: manifest.latestSnapshotId } : {}),
     ...(manifest.syncState ? { syncState: manifest.syncState } : {}),
   };
@@ -1417,13 +1643,23 @@ function toManifestWithoutFiles(
 
 export async function buildPlanningDataVaultZip(options?: {
   mode?: BackupExportMode;
+  scope?: PlanningDataVaultScope;
+  userId?: string;
+  maxEntries?: number;
+  maxBytes?: number;
 }): Promise<{
   fileName: string;
   bytes: Buffer;
   manifest: VaultManifest;
+  checkpoint: PlanningDataVaultExportCheckpoint;
 }> {
   const mode: BackupExportMode = options?.mode === "delta" ? "delta" : "full";
-  const previousState = await loadBackupSyncState();
+  const scope: PlanningDataVaultScope = options?.scope === "user" ? "user" : "ops";
+  const userId = resolvePlanningUserId(options?.userId);
+  const maxArchiveEntries = Math.max(1, Math.trunc(options?.maxEntries ?? 10_000));
+  const maxArchiveBytes = Math.max(1, Math.trunc(options?.maxBytes ?? 25 * 1024 * 1024));
+  const syncStatePath = resolvePlanningDataVaultExportCheckpointPath(scope, userId);
+  const previousState = await loadBackupSyncState(syncStatePath);
   const deltaCutoffMs = mode === "delta" && previousState?.lastExportAt
     ? Math.max(0, Date.parse(previousState.lastExportAt))
     : 0;
@@ -1519,55 +1755,85 @@ export async function buildPlanningDataVaultZip(options?: {
     fileEntries.set(`${RUN_DIR}/index.json`, runsIndex);
   }
 
-  const latestSnapshot = await loadLatestAssumptionsSnapshot();
-  const latestSnapshotPath = resolveAssumptionsPath();
-  const latestSnapshotMtimeMs = await readFileMtimeMs(latestSnapshotPath);
-  if (latestSnapshot && (mode === "full" || deltaCutoffMs < 1 || latestSnapshotMtimeMs > deltaCutoffMs)) {
-    fileEntries.set(`${ASSUMPTIONS_DIR}/latest.json`, toBufferJson(latestSnapshot));
-  }
-
   let latestSnapshotId: string | undefined;
-  const historyDir = resolveAssumptionsHistoryDir();
-  let historyEntries: Dirent<string>[];
-  try {
-    historyEntries = await fs.readdir(historyDir, { withFileTypes: true, encoding: "utf-8" });
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code !== "ENOENT") throw error;
-    historyEntries = [];
+  if (scope === "ops") {
+    const latestSnapshot = await loadLatestAssumptionsSnapshot();
+    const latestSnapshotPath = resolveAssumptionsPath();
+    const latestSnapshotMtimeMs = await readFileMtimeMs(latestSnapshotPath);
+    if (latestSnapshot && (mode === "full" || deltaCutoffMs < 1 || latestSnapshotMtimeMs > deltaCutoffMs)) {
+      fileEntries.set(`${ASSUMPTIONS_DIR}/latest.json`, toBufferJson(latestSnapshot));
+    }
+
+    const historyDir = resolveAssumptionsHistoryDir();
+    let historyEntries: Dirent<string>[];
+    try {
+      historyEntries = await fs.readdir(historyDir, { withFileTypes: true, encoding: "utf-8" });
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError?.code !== "ENOENT") throw error;
+      historyEntries = [];
+    }
+
+    for (const entry of historyEntries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const id = normalizeSnapshotId(entry.name.slice(0, -5));
+      if (!id) continue;
+      const historyPath = path.join(historyDir, entry.name);
+      const historyMtimeMs = await readFileMtimeMs(historyPath);
+      if (mode === "delta" && deltaCutoffMs > 0 && historyMtimeMs <= deltaCutoffMs) {
+        continue;
+      }
+      const snapshot = await loadAssumptionsSnapshotById(id);
+      if (!snapshot) continue;
+      fileEntries.set(assumptionsHistoryPath(id), toBufferJson(snapshot));
+      if (latestSnapshot && snapshot.asOf === latestSnapshot.asOf && snapshot.fetchedAt === latestSnapshot.fetchedAt) {
+        latestSnapshotId = id;
+      }
+    }
+
+    const policyPath = path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE);
+    const policyMtimeMs = await readFileMtimeMs(policyPath);
+    const policyBytes = await readFileIfExists(policyPath);
+    if (policyBytes && (mode === "full" || deltaCutoffMs < 1 || policyMtimeMs > deltaCutoffMs)) {
+      fileEntries.set(`${POLICIES_DIR}/ops-auto-merge-policy.json`, policyBytes);
+    }
+    const schedulerPolicyPath = path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE);
+    const schedulerPolicyMtimeMs = await readFileMtimeMs(schedulerPolicyPath);
+    const schedulerPolicyBytes = await readFileIfExists(schedulerPolicyPath);
+    if (
+      schedulerPolicyBytes
+      && (mode === "full" || deltaCutoffMs < 1 || schedulerPolicyMtimeMs > deltaCutoffMs)
+    ) {
+      fileEntries.set(`${POLICIES_DIR}/ops-scheduler-threshold-policy.json`, schedulerPolicyBytes);
+    }
   }
 
-  for (const entry of historyEntries) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-    const id = normalizeSnapshotId(entry.name.slice(0, -5));
-    if (!id) continue;
-    const historyPath = path.join(historyDir, entry.name);
-    const historyMtimeMs = await readFileMtimeMs(historyPath);
-    if (mode === "delta" && deltaCutoffMs > 0 && historyMtimeMs <= deltaCutoffMs) {
-      continue;
+  let planningV3Snapshot: PlanningUserV3Snapshot | null = null;
+  let planningV3Reason: "delta-stable-only" | "legacy-storage-mode" | undefined;
+  if (mode === "delta") {
+    planningV3Reason = "delta-stable-only";
+  } else if (!isPlanningNamespaceEnabled()) {
+    planningV3Reason = "legacy-storage-mode";
+  } else {
+    const currentBytes = [...fileEntries.values()].reduce((sum, bytes) => sum + bytes.length, 0);
+    const remainingEntries = maxArchiveEntries - fileEntries.size - 2;
+    const remainingBytes = maxArchiveBytes - currentBytes;
+    if (remainingEntries < 1 || remainingBytes < 1) {
+      throw new Error("BACKUP_EXPORT_LIMIT_EXCEEDED");
     }
-    const snapshot = await loadAssumptionsSnapshotById(id);
-    if (!snapshot) continue;
-    fileEntries.set(assumptionsHistoryPath(id), toBufferJson(snapshot));
-    if (latestSnapshot && snapshot.asOf === latestSnapshot.asOf && snapshot.fetchedAt === latestSnapshot.fetchedAt) {
-      latestSnapshotId = id;
+    const builtV3 = await buildPlanningUserV3Snapshot({
+      userId,
+      generatedAt: nowIso,
+      appVersion,
+      limits: {
+        maxEntries: remainingEntries,
+        maxBytes: remainingBytes,
+      },
+    });
+    planningV3Snapshot = builtV3.snapshot;
+    for (const [entryPath, bytes] of builtV3.entries) {
+      fileEntries.set(entryPath, bytes);
     }
-  }
-
-  const policyPath = path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE);
-  const policyMtimeMs = await readFileMtimeMs(policyPath);
-  const policyBytes = await readFileIfExists(policyPath);
-  if (policyBytes && (mode === "full" || deltaCutoffMs < 1 || policyMtimeMs > deltaCutoffMs)) {
-    fileEntries.set(`${POLICIES_DIR}/ops-auto-merge-policy.json`, policyBytes);
-  }
-  const schedulerPolicyPath = path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE);
-  const schedulerPolicyMtimeMs = await readFileMtimeMs(schedulerPolicyPath);
-  const schedulerPolicyBytes = await readFileIfExists(schedulerPolicyPath);
-  if (
-    schedulerPolicyBytes
-    && (mode === "full" || deltaCutoffMs < 1 || schedulerPolicyMtimeMs > deltaCutoffMs)
-  ) {
-    fileEntries.set(`${POLICIES_DIR}/ops-scheduler-threshold-policy.json`, schedulerPolicyBytes);
   }
 
   const manifestFiles: VaultManifest["files"] = {};
@@ -1586,12 +1852,16 @@ export async function buildPlanningDataVaultZip(options?: {
     actionProgress: [...fileEntries.keys()].filter((entryPath) => parseRunActionProgressEntryPath(entryPath)).length,
     assumptionsHistory: [...fileEntries.keys()].filter((entryPath) => parseAssumptionsHistoryPath(entryPath)).length,
     policies: [...fileEntries.keys()].filter((entryPath) => entryPath.startsWith(`${POLICIES_DIR}/`)).length,
+    planningV3Owners: planningV3Snapshot?.totals.owners ?? 0,
+    planningV3Files: planningV3Snapshot?.totals.files ?? 0,
   };
 
   const manifest: VaultManifest = {
     kind: VAULT_KIND,
     formatVersion: VAULT_FORMAT_VERSION,
     mode,
+    scope,
+    userId,
     createdAt: nowIso,
     appVersion,
     conflictPolicy: {
@@ -1615,6 +1885,11 @@ export async function buildPlanningDataVaultZip(options?: {
       assumptions: ASSUMPTIONS_SCHEMA_VERSION,
     },
     counts,
+    planningV3: {
+      included: planningV3Snapshot !== null,
+      totalBytes: planningV3Snapshot?.totals.bytes ?? 0,
+      ...(planningV3Reason ? { reason: planningV3Reason } : {}),
+    },
     ...(latestSnapshotId ? { latestSnapshotId } : {}),
     files: manifestFiles,
   };
@@ -1628,34 +1903,85 @@ export async function buildPlanningDataVaultZip(options?: {
     path: entryPath,
     bytes,
   }));
+  const archivePayloadBytes = zipEntries.reduce((sum, entry) => sum + entry.bytes.length, 0);
+  if (zipEntries.length > maxArchiveEntries || archivePayloadBytes > maxArchiveBytes) {
+    throw new Error("BACKUP_EXPORT_LIMIT_EXCEEDED");
+  }
   const zipBuffer = encodeZip(zipEntries);
   const stamp = nowIso.replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
-  await saveBackupSyncState({
-    version: BACKUP_SYNC_STATE_VERSION,
-    updatedAt: nowIso,
-    lastExportAt: nowIso,
-    lastJournalOffset: currentJournalOffset,
-    ...(currentRunsIndexHash ? { runsIndexHash: currentRunsIndexHash } : {}),
-    ...(currentJournalBoundary ? { lastJournalBoundary: currentJournalBoundary } : {}),
-    ...(journalScan ? { lastJournalScan: journalScan } : {}),
-  });
+  const checkpoint: PlanningDataVaultExportCheckpoint = {
+    statePath: syncStatePath,
+    state: {
+      version: BACKUP_SYNC_STATE_VERSION,
+      updatedAt: nowIso,
+      lastExportAt: nowIso,
+      lastJournalOffset: currentJournalOffset,
+      ...(currentRunsIndexHash ? { runsIndexHash: currentRunsIndexHash } : {}),
+      ...(currentJournalBoundary ? { lastJournalBoundary: currentJournalBoundary } : {}),
+      ...(journalScan ? { lastJournalScan: journalScan } : {}),
+    },
+  };
   return {
     fileName: mode === "delta"
       ? `planning-data-vault-delta-${stamp}.zip`
       : `planning-data-vault-${stamp}.zip`,
     bytes: zipBuffer,
     manifest,
+    checkpoint,
   };
+}
+
+export async function commitPlanningDataVaultExportCheckpoint(
+  checkpoint: PlanningDataVaultExportCheckpoint,
+  context: { scope: PlanningDataVaultScope; userId: string },
+): Promise<"committed" | "already-committed" | "superseded"> {
+  const expectedPath = path.resolve(
+    resolvePlanningDataVaultExportCheckpointPath(context.scope, context.userId),
+  );
+  if (path.resolve(checkpoint.statePath) !== expectedPath) {
+    throw new Error("BACKUP_EXPORT_RECEIPT_CONTEXT_MISMATCH");
+  }
+
+  const current = await loadBackupSyncState(expectedPath);
+  const candidateExportAt = Date.parse(checkpoint.state.lastExportAt ?? checkpoint.state.updatedAt);
+  if (!Number.isFinite(candidateExportAt)) {
+    throw new Error("BACKUP_EXPORT_RECEIPT_INVALID");
+  }
+  if (current) {
+    const currentExportAt = Date.parse(current.lastExportAt ?? current.updatedAt);
+    if (Number.isFinite(currentExportAt) && candidateExportAt < currentExportAt) {
+      return "superseded";
+    }
+    if (candidateExportAt === currentExportAt) {
+      if (checkpoint.state.lastJournalOffset < current.lastJournalOffset) {
+        return "superseded";
+      }
+      if (JSON.stringify(current) === JSON.stringify(checkpoint.state)) {
+        return "already-committed";
+      }
+    }
+  }
+
+  await saveBackupSyncState(expectedPath, { ...checkpoint.state });
+  return "committed";
 }
 
 export async function previewPlanningDataVaultZip(
   bytes: Uint8Array | Buffer,
-  options: { maxEntries: number; maxBytes: number; maxPreviewIds: number },
+  options: {
+    maxEntries: number;
+    maxBytes: number;
+    maxPreviewIds: number;
+    scope?: PlanningDataVaultScope;
+    userId?: string;
+  },
 ): Promise<VaultPreviewSummary> {
   const parsed = await parseVault(bytes, {
     maxEntries: options.maxEntries,
     maxBytes: options.maxBytes,
   });
+  assertVaultAccessContext(parsed.manifest, options);
+  const planningV3Snapshot = parsePlanningV3SnapshotFromVault(parsed, options);
   const profileIds = [...parsed.entries.keys()]
     .map((entryPath) => parseProfileEntryPath(entryPath))
     .filter((row): row is { id: string } => row !== null)
@@ -1683,6 +2009,9 @@ export async function previewPlanningDataVaultZip(
     actionProgress: [...parsed.entries.keys()].filter((entryPath) => parseRunActionProgressEntryPath(entryPath)).length,
     assumptionsHistory: snapshotIds.length,
     policies: [...parsed.entries.keys()].filter((entryPath) => entryPath.startsWith(`${POLICIES_DIR}/`)).length,
+    planningV3Owners: planningV3Snapshot?.totals.owners ?? 0,
+    planningV3Files: planningV3Snapshot?.totals.files ?? 0,
+    planningV3Bytes: planningV3Snapshot?.totals.bytes ?? 0,
   };
 
   const warnings = [...parsed.warnings];
@@ -1712,8 +2041,13 @@ export async function restorePlanningDataVaultZip(
     maxEntries: options.maxEntries,
     maxBytes: options.maxBytes,
   });
+  assertVaultAccessContext(parsed.manifest, options);
+  const planningV3Snapshot = parsePlanningV3SnapshotFromVault(parsed, options);
   const issues: VaultRestoreIssue[] = [];
   const warnings = [...parsed.warnings];
+  if (planningV3Snapshot && options.mode !== "replace") {
+    warnings.push(backupWarningMessage("planningV3MergeSkipped"));
+  }
   const normalizationProfiles: Array<{ id: string; disclosure: ProfileNormalizationDisclosure }> = [];
   const imported = {
     profiles: 0,
@@ -1724,8 +2058,9 @@ export async function restorePlanningDataVaultZip(
     assumptionsHistory: 0,
     latestSnapshot: false,
     policies: 0,
+    planningV3Files: 0,
   };
-  const restoreSharedState = !isPlanningNamespaceEnabled();
+  const restoreSharedState = options.scope !== "user" && !isPlanningNamespaceEnabled();
 
   let replaceSnapshot: ReplaceRestoreSnapshot | null = null;
   if (options.mode === "replace") {
@@ -1739,15 +2074,21 @@ export async function restorePlanningDataVaultZip(
         warnings,
       };
     }
+    const planningV3Targets = planningV3Snapshot
+      ? planningUserV3RestoreTargets(planningV3Snapshot)
+      : [];
     replaceSnapshot = await createReplaceRestoreSnapshot({
-      targets: replaceRestoreTargets(restoreSharedState),
-      snapshotRoot: path.join(resolveOpsDataDir(), "backup", "restore-snapshots", crypto.randomUUID()),
-      journalPath: resolveReplaceRestoreJournalPath(),
+      targets: replaceRestoreTargets(restoreSharedState, planningV3Targets),
+      snapshotRoot: path.join(resolveReplaceRestoreBackupDir(options), "restore-snapshots", crypto.randomUUID()),
+      journalPath: resolveReplaceRestoreJournalPath(options),
       faultInjection: options.faultInjection,
     });
   }
 
   try {
+  // Clearing removes the current default, and the first restored profile by path order would replace it.
+  const replacedDefaultProfileId = options.mode === "replace" ? await getDefaultProfileId() : undefined;
+  const restoredProfileIds = new Set<string>();
   if (options.mode === "replace") {
     await callRestoreFaultInjection(options.faultInjection, {
       phase: "commit",
@@ -1774,6 +2115,15 @@ export async function restorePlanningDataVaultZip(
         entity: "policy",
       });
       await clearPolicies();
+    }
+    if (planningV3Snapshot) {
+      await callRestoreFaultInjection(options.faultInjection, {
+        phase: "commit",
+        kind: "clear",
+        entity: "restore",
+        path: "planning-v3",
+      });
+      await clearPlanningUserV3SnapshotTargets(planningV3Snapshot);
     }
   }
   const deltaMergeMode = options.mode !== "replace" && parsed.manifest.mode === "delta";
@@ -1808,6 +2158,7 @@ export async function restorePlanningDataVaultZip(
         createdAt: toIso(row.createdAt),
         updatedAt: toIso(row.updatedAt),
       });
+      restoredProfileIds.add(id);
       if (canonical.normalization.defaultsApplied.length > 0 || canonical.normalization.fixesApplied.length > 0) {
         normalizationProfiles.push({
           id,
@@ -2112,6 +2463,26 @@ export async function restorePlanningDataVaultZip(
         message: restoreIssueMessage("schedulerPolicy"),
       });
     }
+  }
+
+  if (planningV3Snapshot && options.mode === "replace") {
+    imported.planningV3Files = await restorePlanningUserV3SnapshotFiles(planningV3Snapshot, {
+      beforeWrite: async (file) => {
+        await beforeRestoreWrite(options, {
+          entity: "restore",
+          path: file.archivePath,
+        });
+      },
+    });
+  }
+
+  if (replacedDefaultProfileId && restoredProfileIds.has(replacedDefaultProfileId)) {
+    await beforeRestoreWrite(options, {
+      entity: "profile",
+      id: replacedDefaultProfileId,
+      path: "profiles.meta.json",
+    });
+    await setDefaultProfile(replacedDefaultProfileId);
   }
 
   const summary: VaultRestoreSummary = {

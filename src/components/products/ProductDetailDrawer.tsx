@@ -7,6 +7,7 @@ import { calcDeposit, calcSaving } from "@/lib/planning/calc";
 import { FINLIFE_FIELD_CONFIG } from "@/lib/finlife/fieldConfig";
 import { buildConsumerNotes, formatGlossaryValue, getKindSummary } from "@/lib/finlife/glossary";
 import { presentBySpecs } from "@/lib/finlife/present";
+import { ProductDisclosureMeta } from "@/components/products/ProductDisclosureMeta";
 import { formatKrwWithEok } from "@/lib/format/krw";
 import { type FinlifeKind, type NormalizedProduct } from "@/lib/finlife/types";
 import {
@@ -26,9 +27,10 @@ type Props = {
   product: NormalizedProduct;
   amountWonDefault: number;
   initialOption?: ProductDetailOptionSelection | null;
+  collectedAt?: string | null;
 };
 
-export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountWonDefault, initialOption }: Props) {
+export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountWonDefault, initialOption, collectedAt }: Props) {
   const [usePrimeRate, setUsePrimeRate] = useState(true);
   const [taxRate, setTaxRate] = useState(15.4);
   const [amountWon, setAmountWon] = useState(amountWonDefault > 0 ? amountWonDefault : 10_000_000);
@@ -122,6 +124,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
             <span className="text-[10px] font-black text-primary uppercase tracking-widest">{summary} 상세 정보</span>
             <h2 id="product-detail-title" className="text-2xl font-black text-navy tracking-tight leading-tight">{product.fin_prdt_nm ?? "상품 상세"}</h2>
             <p className="text-sm font-bold text-slate-500">{product.kor_co_nm ?? "-"}</p>
+            <ProductDisclosureMeta disclosureMonth={product.raw.dcls_month} collectedAt={collectedAt} />
             <p id="product-detail-description" className="max-w-2xl text-xs font-medium leading-relaxed text-slate-500">
               이 창은 확정 추천이 아니라, 현재 비교 기준으로 금리, 가입 조건, 우대사항을 다시 확인하는 단계입니다.
             </p>

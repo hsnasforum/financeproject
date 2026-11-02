@@ -98,6 +98,7 @@ type RuntimeProfileBundleInput = {
   profileName: string;
   profileForm: ProfileFormModel;
   profileValidationErrors: string[];
+  ensureProfileUpdateTarget: (targetProfileId: string) => boolean;
   loadProfiles: (nextSelectedId?: string) => Promise<void>;
   setPendingProfileSave: (value: { mode: ProfileSaveMode; profile: ProfileV2 } | null) => void;
   setPendingSuggestions: (value: NormalizationSuggestion[]) => void;
@@ -216,6 +217,7 @@ export function useWorkspaceRuntimeActionsBundle({
     profileName,
     profileForm,
     profileValidationErrors,
+    ensureProfileUpdateTarget,
     loadProfiles,
     setPendingProfileSave,
     setPendingSuggestions,
@@ -579,6 +581,7 @@ export function useWorkspaceRuntimeActionsBundle({
     profileName,
     profileForm,
     profileValidationErrors,
+    ensureProfileUpdateTarget,
     loadProfiles,
     pushWorkspaceError,
     setPendingProfileSave,

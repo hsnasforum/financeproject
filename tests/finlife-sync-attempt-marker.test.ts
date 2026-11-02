@@ -21,6 +21,16 @@ afterEach(() => {
 });
 
 describe("FINLIFE sync attempt marker", () => {
+  it.each(["integrity", "fetch"])("exposes a %s failure in both readers", (phase) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-finlife-sync-attempt-"));
+    tempRoots.push(root);
+    vi.spyOn(process, "cwd").mockReturnValue(root);
+    const attempt = {status:"failed",phase,startedAt:"2026-10-10T15:00:00.000Z",updatedAt:"2026-10-10T15:00:01.000Z",errorCode:phase === "integrity" ? "FINLIFE_INTEGRITY_FAILED" : "SYNC_FAILED"};
+    writeSyncAttempt("deposit", attempt);
+    expect(readSyncAttempt("deposit")).toEqual(attempt);
+    expect(loadFinlifeSyncAttempt("deposit")).toEqual(attempt);
+  });
+
   it("keeps CLI and runtime readers on the same atomic marker contract", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-finlife-sync-attempt-"));
     tempRoots.push(root);

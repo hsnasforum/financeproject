@@ -377,7 +377,6 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
   useEffect(() => {
     if (initializedFromQueryRef.current) return;
-    initializedFromQueryRef.current = true;
     let active = true;
 
     const queryPreset = parseBenefitsQueryPreset(searchParams, initialQuery);
@@ -407,7 +406,9 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
     async function applyInitialState() {
       await Promise.resolve();
-      if (!active) return;
+      // Dev Strict Mode runs mount -> cleanup -> mount; mark initialized only when the initial search really starts.
+      if (!active || initializedFromQueryRef.current) return;
+      initializedFromQueryRef.current = true;
       setPlannerContext({
         category: queryPreset.category,
         region: queryPreset.region,

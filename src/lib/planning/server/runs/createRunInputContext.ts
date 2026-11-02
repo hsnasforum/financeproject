@@ -2,6 +2,8 @@ import { PlanningRunAssumptionsResolveError, resolvePlanningRunAssumptions } fro
 import { PlanningV2ValidationError, type ProfileV2 } from "../v2/types";
 import { loadCanonicalProfile, type CanonicalProfileLoadResult } from "../../v2/loadCanonicalProfile";
 import { applyProfilePatch } from "../../v2/profilePatch";
+import { computeAssumptionsHash } from "../../v2/reproducibility";
+import { stableStringify } from "../../cache/key";
 import {
   applyScenario,
   validateScenario,
@@ -9,6 +11,7 @@ import {
 import {
   legacyScenarioToInputScenario,
   parseRiskTolerance,
+  parseCreatePlanningRunCommand,
   validationIssues,
   type CreatePlanningRunCommand,
   type RunInputScenario,
@@ -181,6 +184,34 @@ export async function prepareCreatePlanningRunInputContext(input: {
   let scenarioInput = command.scenarioInput;
   const scenarioMeta = command.scenarioMeta;
 
+  let rerunSource: CurrentUserRunRecord | null = null;
+  const rerunMismatch = () => inputContextError({
+    audit: { result: "ERROR", recordId: profileId, message: "rerun conditions unavailable or changed" },
+    error: { code: "RERUN_CONDITIONS_CHANGED", status: 409, message: "이전 플랜의 계산 조건을 그대로 사용할 수 없습니다. 계산 조건을 검토해 주세요." },
+  });
+  if (command.rerunOfRunId) {
+    try {
+      rerunSource = await dependencies.getRun(command.rerunOfRunId);
+      if (!rerunSource || rerunSource.profileId !== profileId
+        || !["SUCCESS", "PARTIAL_SUCCESS"].includes(rerunSource.overallStatus ?? "")
+        || !rerunSource.reproducibility?.profileHash
+        || !rerunSource.input.snapshotId || rerunSource.input.snapshotId.toLowerCase() === "latest"
+        || !rerunSource.reproducibility.effectiveAssumptionsHash
+        || !rerunSource.reproducibility.assumptionsHash || scenarioMeta
+        || (rerunSource.scenario && !rerunSource.input.scenario)) return rerunMismatch();
+      const parsed = parseCreatePlanningRunCommand({ profileId, input: rerunSource.input });
+      if (!parsed.ok) return rerunMismatch();
+      // Compare supported settings through the existing parser, preserving omitted/default semantics.
+      const settings = ({ runRequestId, title, rerunOfRunId, ...rest }: CreatePlanningRunCommand) => {
+        void runRequestId; void title; void rerunOfRunId;
+        return rest;
+      };
+      if (stableStringify(settings(parsed.command)) !== stableStringify(settings(command))) return rerunMismatch();
+    } catch {
+      return rerunMismatch();
+    }
+  }
+
   const profileRecord = await dependencies.getProfile(profileId);
   if (!profileRecord) {
     return inputContextError({
@@ -333,6 +364,13 @@ export async function prepareCreatePlanningRunInputContext(input: {
         status: 500,
       },
     });
+  }
+
+  // Reuse the request input unchanged; never silently pick up changed stored overrides or snapshot contents.
+  // This check runs before any stage or run persistence, while idempotency replay stays ahead of it in the service.
+  if (rerunSource && (computeAssumptionsHash(assumptionsContext.snapshot) !== rerunSource.reproducibility?.assumptionsHash
+    || computeAssumptionsHash(assumptionsContext.baseAssumptions) !== rerunSource.reproducibility?.effectiveAssumptionsHash)) {
+    return rerunMismatch();
   }
 
   return {

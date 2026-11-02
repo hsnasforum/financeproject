@@ -18,7 +18,6 @@ type FieldDescriptor = {
 const KIND_SUMMARY: Record<FinlifeKind, string> = {
   deposit: "목돈을 일정 기간 예치하고 이자를 받는 예금 상품입니다.",
   saving: "매달 돈을 납입해 만기에 목돈을 만드는 적금 상품입니다.",
-  pension: "노후 준비를 위해 장기간 납입·운용하는 연금저축 상품입니다.",
   "mortgage-loan": "주택을 담보로 자금을 빌리는 대출 상품입니다. 금리방식과 상환방식에 따라 부담이 달라질 수 있습니다.",
   "rent-house-loan": "전세 보증금 마련을 위한 주거 목적 대출 상품입니다.",
   "credit-loan": "담보 없이 신용도를 바탕으로 이용하는 대출 상품입니다.",

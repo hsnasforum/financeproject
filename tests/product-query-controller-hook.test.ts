@@ -137,7 +137,7 @@ describe("product query controller hooks", () => {
 
   it("calls router.replace with the serialized target and scroll disabled", () => {
     useProductExplorerQuerySync({
-      kind: "pension",
+      kind: "mortgage-loan",
       topFinGrpNo: "020000",
       pageNo: 2,
       scanMode: "page",

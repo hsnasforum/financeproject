@@ -1,20 +1,33 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BEGINNER_MAX_DEBT_ROWS,
   buildSelectedProfileHydrationStamp,
   buildSelectedProfileHydration,
   canAddProfileDebtRow,
   canRemoveProfileDebtRow,
+  createPlanningProfileRecord,
   createProfileDeleteDialogState,
   emergencyMonthsFromGoal,
   ensureBeginnerGoals,
+  hasProfileEditsSinceDispatch,
+  hasUnconfirmedProfileContent,
+  hasUnsavedProfileEditsAfterSave,
   isDeleteProfileConfirmMatched,
+  isProfileUpdateTargetForeign,
+  isLatestProfileListResponse,
   resolveInitialProfileRequestId,
+  resolveProfileListSelectionRequest,
+  resolveProfileSaveCompletionNotice,
   resolveProfileSaveFeedback,
+  resolveProfileSaveFollowUp,
   resolveProfileSavePayloadName,
+  shouldApplyProfileDetailResponse,
   selectLoadedProfileId,
   shouldApplyProfileHydrationForEditVersion,
+  shouldHydrateOverForeignContent,
   shouldHydrateSelectedProfile,
+  shouldKeepUnconfirmedDraftOverProfileFallback,
+  shouldReleaseSelectionForForeignDraft,
   shouldSkipSelectedProfileHydrationAfterLocalEdit,
   updateBeginnerGoalList,
 } from "../../../src/components/planning/workspace/useWorkspaceProfileBundle";
@@ -140,6 +153,187 @@ describe("workspaceProfileBundle", () => {
     expect(canRemoveProfileDebtRow(true, 1)).toBe(false);
   });
 
+  it("rejects profile detail responses after a selection, A-B-A round trip or save", () => {
+    const base = {
+      requestedProfileId: "profile-a",
+      currentSelectedProfileId: "profile-a",
+      requestSelectionGeneration: 1,
+      currentSelectionGeneration: 1,
+      requestDataEpoch: 0,
+      currentDataEpoch: 0,
+    };
+
+    expect(shouldApplyProfileDetailResponse(base)).toBe(true);
+    expect(shouldApplyProfileDetailResponse({ ...base, currentSelectedProfileId: "profile-b", currentSelectionGeneration: 2 })).toBe(false);
+    // A -> B -> A ends on the same id, but the selection generation moved on.
+    expect(shouldApplyProfileDetailResponse({ ...base, currentSelectionGeneration: 3 })).toBe(false);
+    expect(shouldApplyProfileDetailResponse({ ...base, currentDataEpoch: 1 })).toBe(false);
+  });
+
+  it("applies only the latest profile list response and keeps a selection made while it was loading", () => {
+    expect(isLatestProfileListResponse({ requestSequence: 2, latestSequence: 2 })).toBe(true);
+    expect(isLatestProfileListResponse({ requestSequence: 1, latestSequence: 2 })).toBe(false);
+
+    const base = {
+      currentSelectedProfileId: "profile-a",
+      requestSelectionGeneration: 4,
+      currentSelectionGeneration: 4,
+      editedSinceRequest: false,
+    };
+    expect(resolveProfileListSelectionRequest({ ...base, nextSelectedId: "profile-c" })).toBe("profile-c");
+    expect(resolveProfileListSelectionRequest(base)).toBe("profile-a");
+    // A user selection while loading wins.
+    expect(resolveProfileListSelectionRequest({
+      ...base,
+      nextSelectedId: "profile-c",
+      currentSelectedProfileId: "profile-b",
+      currentSelectionGeneration: 5,
+    })).toBe("profile-b");
+    // A content edit while the follow-up list of a duplicate loads keeps the edited profile.
+    expect(resolveProfileListSelectionRequest({ ...base, nextSelectedId: "profile-c", editedSinceRequest: true })).toBe("profile-a");
+  });
+
+  it("counts only content versions as edits since dispatch", () => {
+    expect(hasProfileEditsSinceDispatch({ dispatchContentVersion: 3, currentContentVersion: 3 })).toBe(false);
+    expect(hasProfileEditsSinceDispatch({ dispatchContentVersion: 3, currentContentVersion: 4 })).toBe(true);
+  });
+
+  it("reports unsaved edits only for content still in the current selection after a save", () => {
+    // Saved A at 3, moved to B (baseline 3), edited B (4), returned to A (baseline 4): B's edit was dropped.
+    expect(hasUnsavedProfileEditsAfterSave({ dispatchContentVersion: 3, selectionContentVersion: 4, currentContentVersion: 4 })).toBe(false);
+    // Same round trip, then Y typed into A after returning.
+    expect(hasUnsavedProfileEditsAfterSave({ dispatchContentVersion: 3, selectionContentVersion: 4, currentContentVersion: 5 })).toBe(true);
+    // Y (form or JSON draft) typed into A while the PATCH was pending, selection unchanged.
+    expect(hasUnsavedProfileEditsAfterSave({ dispatchContentVersion: 3, selectionContentVersion: 1, currentContentVersion: 4 })).toBe(true);
+    // Edits made before the save are part of the saved payload.
+    expect(hasUnsavedProfileEditsAfterSave({ dispatchContentVersion: 3, selectionContentVersion: 1, currentContentVersion: 3 })).toBe(false);
+    // Moved to B and kept editing it: B's input is still unsaved.
+    expect(hasUnsavedProfileEditsAfterSave({ dispatchContentVersion: 3, selectionContentVersion: 3, currentContentVersion: 4 })).toBe(true);
+    // The previous dispatch-only rule reported the dropped B edit as unsaved.
+    expect(hasProfileEditsSinceDispatch({ dispatchContentVersion: 3, currentContentVersion: 4 })).toBe(true);
+  });
+
+  it("treats only content moved past the last confirmed version as unconfirmed", () => {
+    // Hydrated or saved at 3, nothing typed since (a focus does not change the content version).
+    expect(hasUnconfirmedProfileContent({ confirmedContentVersion: 3, currentContentVersion: 3 })).toBe(false);
+    // Quick start, sample or typing after the last confirmation, including after a failed list.
+    expect(hasUnconfirmedProfileContent({ confirmedContentVersion: 3, currentContentVersion: 4 })).toBe(true);
+  });
+
+  it("keeps an unconfirmed draft instead of falling back to the first saved profile", () => {
+    const base = {
+      requestedId: "missing-profile",
+      loadedProfileIds: ["profile-a", "profile-b"],
+      currentSelectedProfileId: "missing-profile",
+      fallbackProfileId: "profile-a",
+      hasUnconfirmedContent: true,
+    };
+    // Missing requested or stored selection, or an empty selection after a failed list.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback(base)).toBe(true);
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, requestedId: "", currentSelectedProfileId: "" })).toBe(true);
+    // No unconfirmed content (nothing typed, focus only, or saved before the failure): the fallback stays.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, hasUnconfirmedContent: false })).toBe(false);
+    // A requested profile that exists is a real target, not a fallback.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, requestedId: "profile-b", fallbackProfileId: "profile-b" })).toBe(false);
+    // Nothing to move to (empty list) or already on the picked profile.
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, loadedProfileIds: [], fallbackProfileId: "", currentSelectedProfileId: "" })).toBe(false);
+    expect(shouldKeepUnconfirmedDraftOverProfileFallback({ ...base, requestedId: "", currentSelectedProfileId: "profile-a" })).toBe(false);
+  });
+
+  it("releases the selection only when skipped content started from another profile", () => {
+    const base = {
+      profileId: "profile-b",
+      selectedProfileId: "profile-b",
+      editorContentProfileId: "profile-default",
+      hasUnconfirmedContent: true,
+    };
+    // Restored selection B loading while the server-rendered default is on screen and was edited.
+    expect(shouldReleaseSelectionForForeignDraft(base)).toBe(true);
+    // Edits on B's own stored values stay with B.
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, editorContentProfileId: "profile-b" })).toBe(false);
+    // A focus alone (no unconfirmed content) or a response for another profile changes nothing.
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, hasUnconfirmedContent: false })).toBe(false);
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, selectedProfileId: "profile-c" })).toBe(false);
+    expect(shouldReleaseSelectionForForeignDraft({ ...base, profileId: "" })).toBe(false);
+  });
+
+  it("applies a selection's values over foreign content only when nothing unconfirmed would be lost", () => {
+    const base = { profileId: "profile-b", editorContentProfileId: "profile-default", hasUnconfirmedContent: false };
+    // A focus on the server-rendered profile while the restored selection B loads.
+    expect(shouldHydrateOverForeignContent(base)).toBe(true);
+    // Unconfirmed input is kept (and the selection released elsewhere), never replaced.
+    expect(shouldHydrateOverForeignContent({ ...base, hasUnconfirmedContent: true })).toBe(false);
+    // Content of B itself keeps the existing local-edit protection.
+    expect(shouldHydrateOverForeignContent({ ...base, editorContentProfileId: "profile-b" })).toBe(false);
+  });
+
+  it("refuses an update whose editor content did not start from the target profile", () => {
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "profile-b", editorContentProfileId: "profile-default" })).toBe(true);
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "profile-b", editorContentProfileId: "" })).toBe(true);
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "profile-b", editorContentProfileId: " profile-b " })).toBe(false);
+    expect(isProfileUpdateTargetForeign({ targetProfileId: "", editorContentProfileId: "profile-b" })).toBe(false);
+  });
+
+  it("resolves save follow-up selection and local edit state at the save response", () => {
+    expect(resolveProfileSaveFollowUp({
+      mode: "update",
+      savedProfileId: "profile-a",
+      selectionChanged: false,
+      hasEditsSinceDispatch: false,
+    })).toEqual({ nextSelectedId: "profile-a", clearLocalEdits: true });
+    expect(resolveProfileSaveFollowUp({
+      mode: "update",
+      savedProfileId: "profile-a",
+      selectionChanged: false,
+      hasEditsSinceDispatch: true,
+    })).toEqual({ nextSelectedId: "profile-a", clearLocalEdits: false });
+    expect(resolveProfileSaveFollowUp({
+      mode: "update",
+      savedProfileId: "profile-a",
+      selectionChanged: true,
+      hasEditsSinceDispatch: false,
+    })).toEqual({ nextSelectedId: undefined, clearLocalEdits: false });
+    expect(resolveProfileSaveFollowUp({
+      mode: "duplicate",
+      savedProfileId: "profile-c",
+      selectionChanged: false,
+      hasEditsSinceDispatch: false,
+    })).toEqual({ nextSelectedId: "profile-c", clearLocalEdits: true });
+    expect(resolveProfileSaveFollowUp({
+      mode: "create",
+      savedProfileId: "profile-c",
+      selectionChanged: false,
+      hasEditsSinceDispatch: true,
+    })).toEqual({ nextSelectedId: undefined, clearLocalEdits: false });
+  });
+
+  it("builds the completion notice from what the screen shows after the follow-up list", () => {
+    const base = { beginnerMode: false, savedProfileName: "프로필 C" };
+    expect(resolveProfileSaveCompletionNotice({ ...base, mode: "update", savedProfileSelected: true, hasUnsavedEdits: false }))
+      .toBe("프로필을 수정했습니다.");
+    expect(resolveProfileSaveCompletionNotice({ ...base, mode: "create", savedProfileSelected: true, hasUnsavedEdits: false }))
+      .toBe("프로필을 저장했습니다.");
+    expect(resolveProfileSaveCompletionNotice({ ...base, mode: "update", savedProfileSelected: true, hasUnsavedEdits: true }))
+      .toContain("저장 요청 이후 입력한 내용은 아직 저장되지 않았습니다");
+
+    const keptAfterDuplicate = resolveProfileSaveCompletionNotice({
+      ...base,
+      mode: "duplicate",
+      savedProfileSelected: false,
+      hasUnsavedEdits: true,
+    });
+    expect(keptAfterDuplicate).toContain("프로필 C");
+    expect(keptAfterDuplicate).toContain("아직 저장되지 않았습니다");
+    const keptAfterMove = resolveProfileSaveCompletionNotice({
+      ...base,
+      mode: "update",
+      savedProfileSelected: false,
+      hasUnsavedEdits: false,
+    });
+    expect(keptAfterMove).toContain("프로필 C");
+    expect(keptAfterMove).toContain("그대로 유지했습니다");
+  });
+
   it("keeps save/delete helper branches stable", () => {
     const createFeedback = resolveProfileSaveFeedback("create", true);
     const duplicateFeedback = resolveProfileSaveFeedback("duplicate", false);
@@ -153,5 +347,71 @@ describe("workspaceProfileBundle", () => {
     expect(isDeleteProfileConfirmMatched(dialog)).toBe(false);
     expect(isDeleteProfileConfirmMatched(dialog ? { ...dialog, confirmText: "mismatch" } : null)).toBe(false);
     expect(isDeleteProfileConfirmMatched(dialog ? { ...dialog, confirmText: dialog.expectedConfirm } : null)).toBe(true);
+  });
+});
+
+describe("wizard profile adapter", () => {
+  const profile = profileRecordFixture("unused").profile;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("creates one new profile by POST and returns the stored record", async () => {
+    const record = profileRecordFixture("profile-new", "새 프로필");
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({ ok: true, data: record }),
+      { status: 201 },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createPlanningProfileRecord({ locale: "ko-KR", name: "새 프로필", profile }))
+      .resolves.toEqual({ status: "ok", record });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/planning/v2/profiles");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      name: "새 프로필",
+      profile: { monthlyIncomeNet: 4_200_000, debts: [], goals: [] },
+    });
+  });
+
+  it("does not resend when the network drops", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("connection reset"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createPlanningProfileRecord({ locale: "ko-KR", name: "새 프로필", profile }))
+      .resolves.toMatchObject({ status: "unknown" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["a deterministic rejection", 400, { ok: false, error: { code: "INPUT", message: "invalid" } }, "failed"],
+    ["a rate limit", 429, { ok: false, error: { code: "RATE_LIMITED", message: "wait" } }, "unknown"],
+    ["a server error", 500, { ok: false, error: { code: "INTERNAL", message: "boom" } }, "unknown"],
+    ["an unreadable body", 201, null, "unknown"],
+    ["a success with no id", 201, { ok: true, data: {} }, "unknown"],
+  ])("classifies %s", async (_name, status, payload, expected) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(
+      payload === null ? "<html>" : JSON.stringify(payload),
+      { status },
+    )));
+
+    await expect(createPlanningProfileRecord({ locale: "ko-KR", name: "새 프로필", profile }))
+      .resolves.toMatchObject({ status: expected });
+  });
+
+  it("stops before the network when the profile cannot be normalized", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createPlanningProfileRecord({
+      locale: "ko-KR",
+      name: "새 프로필",
+      profile: { ...profile, schemaVersion: 999 },
+    })).resolves.toMatchObject({ status: "failed" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

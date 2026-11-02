@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { type Dirent } from "node:fs";
 import path from "node:path";
+import { getPlanningUserDir, resolvePlanningUserId } from "../../planning/store/namespace";
 import type {
   PlanningFeedback,
   PlanningFeedbackCreateInput,
@@ -163,8 +164,17 @@ function resolveDirPath(): string {
   return path.resolve(override);
 }
 
-function resolveFilePath(id: string): string {
-  return path.join(resolveDirPath(), `${id}.json`);
+function resolveCurrentUserDirPath(): string {
+  return path.join(
+    getPlanningUserDir(resolvePlanningUserId()),
+    "ops",
+    "feedback",
+    "planning",
+  );
+}
+
+function resolveFilePath(id: string, dirPath = resolveDirPath()): string {
+  return path.join(dirPath, `${id}.json`);
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
@@ -202,7 +212,10 @@ function sortByCreatedAtDesc(items: PlanningFeedback[]): PlanningFeedback[] {
   return items.slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
-export async function createFeedback(input: PlanningFeedbackCreateInput): Promise<PlanningFeedback> {
+async function createFeedbackInDir(
+  input: PlanningFeedbackCreateInput,
+  dirPath: string,
+): Promise<PlanningFeedback> {
   const now = new Date().toISOString();
   const next: PlanningFeedback = {
     version: 1,
@@ -249,8 +262,18 @@ export async function createFeedback(input: PlanningFeedbackCreateInput): Promis
     throw new Error("title/message는 필수입니다.");
   }
 
-  await writeJsonAtomic(resolveFilePath(next.id), next);
+  await writeJsonAtomic(resolveFilePath(next.id, dirPath), next);
   return next;
+}
+
+export async function createFeedback(input: PlanningFeedbackCreateInput): Promise<PlanningFeedback> {
+  return createFeedbackInDir(input, resolveDirPath());
+}
+
+export async function createCurrentUserFeedback(
+  input: PlanningFeedbackCreateInput,
+): Promise<PlanningFeedback> {
+  return createFeedbackInDir(input, resolveCurrentUserDirPath());
 }
 
 export async function getFeedback(id: string): Promise<PlanningFeedback | null> {

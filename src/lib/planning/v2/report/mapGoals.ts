@@ -44,6 +44,11 @@ function resolveShortfall(goal: GoalStatusLike): number {
 }
 
 function resolveComment(goal: GoalStatusLike, shortfall: number, achieved: boolean): string {
+  const achievedMonth = asNumber(goal.achievedMonth);
+  const targetMonth = asNumber(goal.targetMonth);
+  if (achieved && achievedMonth !== undefined && targetMonth !== undefined && targetMonth > 0 && achievedMonth > targetMonth) {
+    return "기한 후 달성";
+  }
   if (achieved) return "달성";
   if (goal.onTrack === true) return "진행 중(달성 가능)";
   if (shortfall > 0) return "부족액 존재";
