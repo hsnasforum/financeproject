@@ -31,6 +31,7 @@ describe("mapSnapshotToScenarioExtrasV2", () => {
     const mapped = mapSnapshotToScenarioExtrasV2({
       ...baseSnapshot,
       korea: {
+        cpiYoYPct: 2.1,
         newDepositAvgPct: 2.78,
         cd91Pct: 3.5,
       },
@@ -50,5 +51,15 @@ describe("mapSnapshotToScenarioExtrasV2", () => {
 
     expect(mapped.extra.cashReturnPct).toBe(2.7);
     expect(mapped.warnings.map((warning) => warning.code)).toContain("CASH_RETURN_PROXY_FROM_CD");
+  });
+
+  it("reports when inflation and cash return cannot come from the snapshot", () => {
+    const mapped = mapSnapshotToScenarioExtrasV2(baseSnapshot);
+
+    expect(mapped.extra).toEqual({});
+    expect(mapped.warnings.map((warning) => warning.code)).toEqual([
+      "INFLATION_NOT_FROM_SNAPSHOT",
+      "CASH_RETURN_NOT_FROM_SNAPSHOT",
+    ]);
   });
 });

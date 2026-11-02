@@ -67,8 +67,19 @@ export function buildResultSummaryMetrics(
     ? totalMonthlyDebtPaymentOption
     : timelineDebtPaymentKrw;
 
-  const monthlySurplusKrw = typeof monthlyIncomeKrw === "number" && typeof monthlyExpensesKrw === "number"
-    ? computeMonthlySurplusKrw(monthlyIncomeKrw, monthlyExpensesKrw, timelineDebtPaymentKrw)
+  // Monthly surplus is the engine's recurring operating cashflow (income - expenses - required minimum
+  // debt payment). The start-month debtPayment may include a one-off extra repayment from existing cash,
+  // so it must not be subtracted as a monthly cost. Runs without the field omit the metric (even when
+  // start income is zero or missing) instead of estimating it from totals, zero, the current profile,
+  // or fallbackStart. A finite zero from the engine is kept.
+  const startOperatingCashflowKrw = asNumber(start?.operatingCashflowKrw);
+  const monthlySurplusKrw = startOperatingCashflowKrw;
+  // Required minimum payment implied by the same start row (income - expenses - operating cashflow),
+  // so the evidence inputs reproduce the displayed surplus.
+  const regularDebtPaymentKrw = typeof startOperatingCashflowKrw === "number"
+    && typeof startIncomeKrw === "number"
+    && typeof startExpensesKrw === "number"
+    ? computeMonthlySurplusKrw(startIncomeKrw, startExpensesKrw, startOperatingCashflowKrw)
     : undefined;
 
   const emergencyGoal = dto.goals.find((goal) => goal.type === "emergencyFund");
@@ -91,12 +102,14 @@ export function buildResultSummaryMetrics(
     : undefined;
 
   const evidence: ResultSummaryEvidence = {
-    ...(typeof monthlyIncomeKrw === "number" && typeof monthlyExpensesKrw === "number"
+    ...(typeof regularDebtPaymentKrw === "number"
+      && typeof startIncomeKrw === "number"
+      && typeof startExpensesKrw === "number"
       ? {
         monthlySurplusKrw: buildMonthlySurplusEvidence({
-          monthlyIncomeKrw,
-          monthlyExpensesKrw,
-          monthlyDebtPaymentKrw: timelineDebtPaymentKrw,
+          monthlyIncomeKrw: startIncomeKrw,
+          monthlyExpensesKrw: startExpensesKrw,
+          monthlyDebtPaymentKrw: regularDebtPaymentKrw,
         }),
       }
       : {}),

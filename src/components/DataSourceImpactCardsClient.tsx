@@ -29,9 +29,9 @@ function impactBadgeClass(state: "ready" | "partial" | "missing") {
 }
 
 function impactBadgeLabel(state: "ready" | "partial" | "missing") {
-  if (state === "ready") return "바로 활용";
-  if (state === "partial") return "일부 준비";
-  return "준비 필요";
+  if (state === "ready") return "설정됨";
+  if (state === "partial") return "일부 설정";
+  return "설정 필요";
 }
 
 function formatDateTime(value: string | null): string {
@@ -84,7 +84,7 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
     <Card className="mb-12 rounded-[2rem] p-8 shadow-sm">
       <SubSectionHeader
         title="질문별 데이터 기준 요약"
-        description="먼저 궁금한 질문을 고르고, 그 결과가 어떤 데이터 기준으로 읽히는지와 최근 연결 확인이 비었을 때 어디까지 참고하면 되는지 순서대로 읽습니다."
+        description="먼저 궁금한 질문을 고르고, 설정 범위와 실제 최신 기준을 나눠 읽습니다. 상단 배지는 API 설정 여부만 뜻하며 사용 가능·오래됨·확인 실패 여부는 카드 안의 운영 최신 기준과 최근 연결 확인에서 판단합니다."
       />
       
       <div className="mt-8 grid gap-6 lg:grid-cols-2">

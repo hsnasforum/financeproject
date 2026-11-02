@@ -1,4 +1,5 @@
-import { type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
+import { finlifeIdentity, joinFinlifeRows, mergeFinlifeProducts, normalizeFinlifeCompany } from "./identity.mjs";
+import { type FinlifeKind, type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
 
 function toNullableNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === "") {
@@ -8,55 +9,33 @@ function toNullableNumber(value: unknown): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return value as Record<string, unknown>;
-}
-
 export function normalizeFinlifeProducts(input: {
   baseList: unknown[];
   optionList: unknown[];
+  kind?: FinlifeKind;
+  strict?: boolean;
 }): NormalizedProduct[] {
-  const productsByCode = new Map<string, NormalizedProduct>();
-
-  for (const base of input.baseList) {
-    const raw = asRecord(base);
-    const code = String(raw.fin_prdt_cd ?? "").trim();
-    if (!code) continue;
-
-    productsByCode.set(code, {
-      fin_prdt_cd: code,
-      fin_co_no: (() => {
-        if (raw.fin_co_no === undefined || raw.fin_co_no === null) return undefined;
-        const value = String(raw.fin_co_no).trim();
-        if (!/^\d+$/.test(value)) return value || undefined;
-        return value.padStart(7, "0");
-      })(),
+  const joined = joinFinlifeRows(input.baseList, input.optionList, { kind: input.kind, strict: input.strict });
+  const products = joined.map(({ raw, options }): NormalizedProduct => {
+    const company = normalizeFinlifeCompany(raw.fin_co_no);
+    return {
+      fin_prdt_cd: String(raw.fin_prdt_cd).trim(),
+      fin_co_no: company || undefined,
+      ...(input.kind && /^\d{7}$/.test(company) ? { identityKey: finlifeIdentity(input.kind, raw) } : {}),
       kor_co_nm: raw.kor_co_nm ? String(raw.kor_co_nm) : undefined,
       fin_prdt_nm: raw.fin_prdt_nm ? String(raw.fin_prdt_nm) : undefined,
-      options: [],
-      raw,
-    });
-  }
-
-  for (const option of input.optionList) {
-    const raw = asRecord(option);
-    const code = String(raw.fin_prdt_cd ?? "").trim();
-    if (!code || !productsByCode.has(code)) continue;
-
-    const normalizedOption: NormalizedOption = {
-      save_trm: raw.save_trm ? String(raw.save_trm) : undefined,
-      intr_rate: toNullableNumber(raw.intr_rate),
-      intr_rate2: toNullableNumber(raw.intr_rate2),
+      options: options.map((option): NormalizedOption => ({
+        save_trm: option.save_trm ? String(option.save_trm) : undefined,
+        intr_rate: toNullableNumber(option.intr_rate),
+        intr_rate2: toNullableNumber(option.intr_rate2),
+        raw: option,
+      })),
       raw,
     };
+  });
+  const merged = mergeFinlifeProducts(products, { kind: input.kind });
 
-    productsByCode.get(code)?.options.push(normalizedOption);
-  }
-
-  for (const product of productsByCode.values()) {
+  for (const product of merged) {
     const hasAnyRate = product.options.some((option) => option.intr_rate !== null || option.intr_rate2 !== null);
     if (!hasAnyRate) continue;
 
@@ -77,5 +56,5 @@ export function normalizeFinlifeProducts(input: {
     }
   }
 
-  return [...productsByCode.values()];
+  return merged;
 }

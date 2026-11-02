@@ -14,8 +14,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { SearchPill } from "@/components/ui/SearchPill";
+import { ProductDisclosureMeta } from "@/components/products/ProductDisclosureMeta";
 import { FilterField } from "@/components/ui/FilterField";
-import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
+import { addCompareIdToStorage, compareStoreConfig, loadCompareIdsFromStorage } from "@/lib/products/compareStore";
+import { CompareAddNotice, describeCompareAdd, type CompareAddResult } from "@/components/recommend/CompareAddNotice";
 import { createLatestRequestCoordinator } from "@/lib/browser/latestRequest";
 import {
   buildCatalogQueryKey,
@@ -61,7 +63,7 @@ export default function ProductsCatalogPage() {
   const catalogStateRef = useRef(catalogState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [compareNotice, setCompareNotice] = useState("");
+  const [compareAddResult, setCompareAddResult] = useState<CompareAddResult | null>(null);
   const catalogRequestsRef = useRef<ReturnType<typeof createLatestRequestCoordinator> | null>(null);
   if (catalogRequestsRef.current == null) catalogRequestsRef.current = createLatestRequestCoordinator();
   const effectiveIncludeSamplebank = samplebankVisible && includeSamplebank;
@@ -125,6 +127,13 @@ export default function ProductsCatalogPage() {
   );
   const providers = catalogViewModel.providers;
   const filteredRows = catalogViewModel.filteredRows;
+  const hasCurrentResponse = catalogState.queryKey === catalogQueryKey;
+  // The provider facet ignores search and filters, so an empty complete facet means no stored product of this kind.
+  const catalogUnprepared = hasCurrentResponse
+    && rows.length === 0
+    && providerNames.length === 0
+    && providerStatus.state === "complete"
+    && partialReasons.length === 0;
 
   const run = useCallback(async (input?: { append?: boolean; cursor?: string | null }) => {
     const request = catalogRequestsRef.current!.start();
@@ -207,7 +216,7 @@ export default function ProductsCatalogPage() {
       };
       catalogStateRef.current = nextState;
       setCatalogState(nextState);
-      setCompareNotice("");
+      setCompareAddResult(null);
       if (missingFirstPageProvenance) {
         setError("CURSOR_PROVENANCE_MISSING: 다음 페이지의 데이터 기준을 확인할 수 없어 더 보기를 중단했습니다. 첫 페이지부터 다시 조회해 주세요.");
       }
@@ -278,11 +287,13 @@ export default function ProductsCatalogPage() {
         최고 금리만 보지 말고 기간, 우대조건, 예금자보호, 가입 조건은 상세에서 다시 확인하세요.
       </p>
 
-      <div className="sticky top-0 z-30 mb-10 space-y-4">
+      {/* Pinned only on wide screens: on a phone the filter card is taller than most of the
+          viewport and, once pinned, covered every product card and its buttons. */}
+      <div className="mb-10 space-y-4 lg:sticky lg:top-0 lg:z-30" data-testid="catalog-filter-panel">
         <Card className="rounded-[2.5rem] p-8 shadow-lg backdrop-blur-md bg-white/95 border-slate-100">
           <div className="flex flex-col gap-8">
-            <div className="flex flex-wrap items-center justify-between gap-6">
-              <div className="space-y-2">
+            <div className="flex flex-col items-stretch gap-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="w-full space-y-2 sm:w-auto">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">상품군 선택</p>
                 <SegmentedTabs
                   options={[
@@ -294,9 +305,9 @@ export default function ProductsCatalogPage() {
                 />
               </div>
               
-              <div className="flex-1 min-w-[320px] space-y-2">
+              <div className="w-full min-w-0 space-y-2 sm:min-w-[320px] sm:flex-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">키워드 검색</p>
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                   <SearchPill
                     className="h-12 w-full rounded-2xl"
                     placeholder="은행명 또는 상품명으로 비교 후보를 좁혀 보세요"
@@ -305,7 +316,7 @@ export default function ProductsCatalogPage() {
                     onClear={() => setQ("")}
                     isLoading={loading && rows.length === 0}
                   />
-                  <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-navy/20" onClick={() => applySearch()} disabled={loading}>
+                  <Button variant="primary" className="h-12 w-full rounded-2xl px-5 font-black shadow-md shadow-navy/20 sm:w-auto sm:px-8" onClick={() => applySearch()} disabled={loading}>
                     {loading ? "조회 중" : "조건으로 조회"}
                   </Button>
                 </div>
@@ -324,26 +335,30 @@ export default function ProductsCatalogPage() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-8 border-t border-slate-50 pt-6">
-              <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-col items-stretch gap-6 border-t border-slate-50 pt-6 lg:flex-row lg:items-end">
+              <div className="grid w-full min-w-0 gap-4 sm:grid-cols-2 lg:max-w-xl lg:flex-1">
                 <FilterField
                   label="기간"
+                  labelPosition="vertical"
                   unit="개월"
                   placeholder="전체"
                   value={termMonths}
+                  wrapperClassName="w-full min-w-0"
                   onChange={(e) => setTermMonths(e.target.value)}
                 />
 
                 <FilterField
                   label="최소 금리"
+                  labelPosition="vertical"
                   unit="% 이상"
                   placeholder="0.0"
                   value={minRate}
+                  wrapperClassName="w-full min-w-0"
                   onChange={(e) => setMinRate(e.target.value)}
                 />
               </div>
               
-              <div className="ml-auto flex items-center gap-8">
+              <div className="flex w-full flex-wrap items-center justify-between gap-4 lg:ml-auto lg:w-auto lg:justify-end">
                 {samplebankVisible ? (
                   <label className="flex cursor-pointer items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">
                     <input
@@ -384,7 +399,7 @@ export default function ProductsCatalogPage() {
                   : "설정된 갱신 주기를 지난 데이터가 포함되어 있습니다."}
           </p>
           <p className="mt-1 text-xs font-medium leading-relaxed text-slate-600">
-            화면을 연 시각이 아니라 아래 수집 기준을 확인해 주세요. 가입 전 실제 금리와 조건은 금융회사 공시에서 다시 확인해야 합니다.
+            원문 공시월은 금융회사 공시에 표시된 달이고, 수집 시각은 데이터를 가져온 때입니다. 가입 전 실제 금리와 조건은 금융회사 공시에서 다시 확인해야 합니다.
           </p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {freshness.sources.map((source) => (
@@ -435,14 +450,6 @@ export default function ProductsCatalogPage() {
         </section>
       ) : null}
 
-      {compareNotice && (
-        <div className="mb-8 rounded-2xl border border-primary/10 bg-primary/10 p-4 text-center animate-in fade-in slide-in-from-top-2">
-          <p className="text-sm font-black text-navy">{compareNotice}</p>
-          <p className="mt-2 text-[11px] font-medium leading-relaxed text-navy/80">
-            지금은 후보를 담아 두는 단계이며, 나란히 다시 보는 일은 비교 화면에서 이어집니다.
-          </p>
-        </div>
-      )}
 
       {error ? (
         <ErrorState
@@ -454,7 +461,7 @@ export default function ProductsCatalogPage() {
       ) : null}
 
       <div className="space-y-8">
-        {loading && filteredRows.length === 0 ? (
+        {(loading || (!hasCurrentResponse && !error)) && filteredRows.length === 0 ? (
           <div className="py-20">
             <LoadingState title="현재 조건 기준으로 비교 후보를 불러오고 있습니다" />
           </div>
@@ -479,6 +486,13 @@ export default function ProductsCatalogPage() {
                     <h2 className="mt-2 text-xl font-black text-navy leading-snug group-hover:text-primary transition-colors tracking-tight line-clamp-2">
                       {item.productName}
                     </h2>
+                    {(item.sourceId === "finlife" || item.sourceIds?.includes("finlife")) ? (
+                      <ProductDisclosureMeta
+                        className="mt-3"
+                        disclosureMonth={item.disclosureMonth}
+                        collectedAt={freshness?.sources.find((source) => source.sourceId === "finlife")?.sourceAsOf}
+                      />
+                    ) : null}
                     {item.summary && (
                       <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500 line-clamp-2">
                         {item.summary}
@@ -516,9 +530,15 @@ export default function ProductsCatalogPage() {
                       variant="outline"
                       className="flex-1 rounded-2xl h-12 font-black border-slate-200"
                       onClick={() => {
-                        const next = addCompareIdToStorage(item.stableId, compareStoreConfig.max);
-                        setCompareNotice(`비교함에 담았습니다. 다른 후보와의 나란히 비교는 /products/compare에서 이어집니다. (${next.length}/${compareStoreConfig.max})`);
-                        setTimeout(() => setCompareNotice(""), 3000);
+                        const before = loadCompareIdsFromStorage(compareStoreConfig.max);
+                        const after = addCompareIdToStorage(item.stableId, compareStoreConfig.max);
+                        setCompareAddResult(describeCompareAdd({
+                          before,
+                          after,
+                          id: item.stableId,
+                          max: compareStoreConfig.max,
+                          labelFor: (id) => filteredRows.find((row) => row.stableId === id)?.productName,
+                        }));
                       }}
                     >
                       비교 후보 담기
@@ -527,10 +547,27 @@ export default function ProductsCatalogPage() {
                   <p className="mt-3 text-[10px] font-medium leading-relaxed text-slate-400">
                     비교 후보 담기는 지금 결론을 정하는 버튼이 아니라, 비교 화면에서 다시 볼 후보를 모아 두는 단계입니다.
                   </p>
+                  {/* Shown in the tapped card so the result is visible where the user acted, also on a phone. */}
+                  {compareAddResult?.id === item.stableId ? (
+                    <CompareAddNotice className="mt-4" result={compareAddResult} onClose={() => setCompareAddResult(null)} />
+                  ) : null}
                 </Card>
               ))}
             </div>
           </>
+        ) : !loading && !error && catalogUnprepared ? (
+          <div className="py-20" data-testid="catalog-unprepared">
+            <EmptyState
+              icon="data"
+              title="공식 상품 자료가 아직 준비되지 않았습니다"
+              description="이 앱에 저장된 상품 자료가 없어 비교 후보를 보여 드릴 수 없습니다. 검색어나 필터 때문이 아닙니다."
+            />
+            <p className="mt-6 text-center text-sm font-medium text-slate-600">
+              <Link href="/settings/data-sources" className="font-black text-primary underline-offset-4 hover:underline">
+                데이터 연결 상태와 기준 시각 확인 →
+              </Link>
+            </p>
+          </div>
         ) : !loading && !error ? (
           <div className="py-20">
             <EmptyState

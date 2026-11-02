@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { type ComponentProps } from "react";
 import { ProfileDraftFromBatchClient } from "../src/app/planning/v3/profile/draft/_components/ProfileDraftFromBatchClient";
 import { ProfileDraftDetailClient } from "../src/app/planning/v3/profile/drafts/[id]/_components/ProfileDraftDetailClient";
 import { ProfileDraftPreflightClient } from "../src/app/planning/v3/profile/drafts/[id]/preflight/_components/ProfileDraftPreflightClient";
@@ -11,7 +12,153 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+type DetailProps = ComponentProps<typeof ProfileDraftDetailClient>;
+
+const applyDraftFixture: NonNullable<DetailProps["initialDraft"]> = {
+  id: "d_apply",
+  batchId: "b_apply",
+  createdAt: "2026-09-07T00:00:00.000Z",
+  draftPatch: {
+    monthlyIncomeNet: 5_200_000,
+    monthlyEssentialExpenses: 2_100_000,
+    monthlyDiscretionaryExpenses: 700_000,
+    assumptions: [],
+    monthsConsidered: 3,
+  },
+  evidence: {
+    monthsUsed: ["2026-06", "2026-07", "2026-08"],
+    ymStats: [],
+    byCategoryStats: [],
+    medians: { incomeKrw: 5_200_000, expenseKrw: 2_800_000, fixedExpenseKrw: 2_100_000, variableExpenseKrw: 700_000, debtExpenseKrw: 0 },
+    ruleCoverage: { total: 0, override: 0, rule: 0, default: 0, transfer: 0 },
+  },
+  assumptions: [],
+};
+
+const updatePreflightFixture: NonNullable<DetailProps["initialPreflight"]> = {
+  ok: true,
+  targetProfileId: "profile-a",
+  profileRevision: "profile-a-revision",
+  draftPatchHash: "draft-patch-hash",
+  changes: [{ path: "/monthlyIncomeNet", kind: "set", before: 5_000_000, after: 5_200_000 }],
+  warnings: [],
+  errors: [],
+  summary: { changedCount: 1, errorCount: 0, warningCount: 0 },
+};
+
+function renderApplyControls(initialPreflight: DetailProps["initialPreflight"], initialProfileId = "") {
+  return renderToStaticMarkup(
+    <ProfileDraftDetailClient
+      disableAutoLoad
+      id={applyDraftFixture.id}
+      initialDraft={applyDraftFixture}
+      initialPreflight={initialPreflight}
+      initialProfileId={initialProfileId}
+      initialProfiles={[{ profileId: "profile-a" }, { profileId: "profile-b" }]}
+    />,
+  );
+}
+
+function applyButtonTag(html: string, testId: string) {
+  const tag = html.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`))?.[0];
+  expect(tag).toBeDefined();
+  return tag ?? "";
+}
+
 describe("planning v3 profile drafts UI", () => {
+  it("separates explicit update and create actions and blocks both before preflight", () => {
+    const html = renderApplyControls(null, "profile-a");
+
+    expect(html).toContain("선택한 프로필 갱신");
+    expect(html).toContain("새 프로필로 만들기");
+    expect(applyButtonTag(html, "v3-draft-update-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(applyButtonTag(html, "v3-draft-apply-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+  });
+
+  it("keeps create available after an after-only preflight while update requires a selection", () => {
+    const html = renderApplyControls({
+      ...updatePreflightFixture,
+      targetProfileId: undefined,
+      profileRevision: undefined,
+      draftPatchHash: undefined,
+    });
+
+    expect(applyButtonTag(html, "v3-draft-update-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(applyButtonTag(html, "v3-draft-apply-profile")).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(html).toContain("기존 프로필을 갱신하려면 기준 프로필을 선택해 주세요.");
+  });
+
+  it("enables explicit update with the matching profile generation and keeps the existing warning UX", () => {
+    const html = renderApplyControls({
+      ...updatePreflightFixture,
+      warnings: [{ code: "W_SAMPLE", message: "검토할 경고" }],
+      summary: { changedCount: 1, errorCount: 0, warningCount: 1 },
+    }, "profile-a");
+
+    expect(applyButtonTag(html, "v3-draft-update-profile")).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(applyButtonTag(html, "v3-draft-apply-profile")).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(html).toContain("경고를 확인한 뒤 적용할 수 있습니다.");
+    expect(html).toContain("자산, 부채, 목표와 나머지 설정은 유지됩니다.");
+  });
+
+  it("shows observed-debt warnings even when no monthly value changes", () => {
+    const html = renderApplyControls({ ...updatePreflightFixture, changes: [],
+      warnings: [{ code: "OBSERVED_DEBT_WITHOUT_PROFILE_DEBT", message: "거래에서 부채상환이 관측됐지만 프로필에 부채가 없습니다." }],
+      summary: { changedCount: 0, errorCount: 0, warningCount: 1 },
+    }, "profile-a");
+    expect(html).toContain("거래에서 부채상환이 관측됐지만 프로필에 부채가 없습니다.");
+    expect(html).toContain("경고를 확인한 뒤 적용할 수 있습니다.");
+    expect(html).not.toContain("오류 없음.");
+    expect(applyButtonTag(html, "v3-draft-update-profile")).not.toMatch(/\sdisabled(?:=|\s|>)/);
+  });
+
+  it("blocks both apply modes and explains why an old debt-inclusive draft must be regenerated", () => {
+    const message = "초안의 생활지출이 월별 부채상환 제외 금액과 다릅니다. 원래 거래 자료에서 새 초안을 생성한 뒤 다시 확인해 주세요.";
+    const html = renderApplyControls({ ...updatePreflightFixture, ok: false,
+      errors: [{ path: "/monthlyEssentialExpenses", message }], summary: { changedCount: 1, errorCount: 1, warningCount: 0 },
+    }, "profile-a");
+    expect(html).toContain(message);
+    expect(applyButtonTag(html, "v3-draft-update-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(applyButtonTag(html, "v3-draft-apply-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+  });
+
+  it.each([
+    { name: "missing profile revision", preflight: { ...updatePreflightFixture, profileRevision: undefined } },
+    { name: "missing draft patch hash", preflight: { ...updatePreflightFixture, draftPatchHash: undefined } },
+  ])("blocks update with $name while preserving create-copy", ({ preflight }) => {
+    const html = renderApplyControls(preflight, "profile-a");
+
+    expect(applyButtonTag(html, "v3-draft-update-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(applyButtonTag(html, "v3-draft-apply-profile")).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(html).toContain("프로필 갱신을 위해 프리플라이트를 다시 실행해 주세요.");
+  });
+
+  it("preserves warning guidance for legacy create preflight without enabling update", () => {
+    const html = renderApplyControls({
+      ...updatePreflightFixture,
+      profileRevision: undefined,
+      draftPatchHash: undefined,
+      warnings: [{ code: "W_SAMPLE", message: "변경 내용을 검토한 뒤 적용해 주세요." }],
+      summary: { changedCount: 1, errorCount: 0, warningCount: 1 },
+    }, "profile-a");
+
+    expect(applyButtonTag(html, "v3-draft-update-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(applyButtonTag(html, "v3-draft-apply-profile")).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(html).toContain("경고를 확인한 뒤 적용할 수 있습니다.");
+  });
+
+  it.each([
+    { name: "selection changed", preflight: updatePreflightFixture, selected: "profile-b" },
+    { name: "preflight failed", preflight: { ...updatePreflightFixture, ok: false }, selected: "profile-a" },
+    { name: "preflight errors", preflight: { ...updatePreflightFixture, errors: [{ path: "/monthlyIncomeNet", message: "invalid" }] }, selected: "profile-a" },
+    { name: "preflight error summary", preflight: { ...updatePreflightFixture, summary: { changedCount: 1, errorCount: 1, warningCount: 0 } }, selected: "profile-a" },
+  ])("blocks both apply actions when $name", ({ preflight, selected }) => {
+    const html = renderApplyControls(preflight, selected);
+
+    expect(applyButtonTag(html, "v3-draft-update-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(applyButtonTag(html, "v3-draft-apply-profile")).toMatch(/\sdisabled(?:=|\s|>)/);
+  });
+
   it("renders batch entry links toward saved profile drafts flow", () => {
     const html = renderToStaticMarkup(<ProfileDraftFromBatchClient initialBatchId="batch-1" />);
 

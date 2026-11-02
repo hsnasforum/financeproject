@@ -78,16 +78,16 @@ function extractDateHints(html: string): string[] {
 
   const compactText = html.replace(/\s+/g, " ");
 
-  const ymdDots = compactText.match(/(20\d{2})\.(0?[1-9]|1[0-2])\.(0?[1-9]|[12]\d|3[01])/g) ?? [];
+  const ymdDots = compactText.match(/(20\d{2})\.(1[0-2]|0?[1-9])\.(3[01]|[12]\d|0?[1-9])/g) ?? [];
   ymdDots.forEach((raw) => {
-    const match = raw.match(/(20\d{2})\.(0?[1-9]|1[0-2])\.(0?[1-9]|[12]\d|3[01])/);
+    const match = raw.match(/(20\d{2})\.(1[0-2]|0?[1-9])\.(3[01]|[12]\d|0?[1-9])/);
     if (!match) return;
     hints.add(toIsoDate(Number(match[1]), Number(match[2]), Number(match[3])));
   });
 
-  const ymdDash = compactText.match(/(20\d{2})-(0?[1-9]|1[0-2])-(0?[1-9]|[12]\d|3[01])/g) ?? [];
+  const ymdDash = compactText.match(/(20\d{2})-(1[0-2]|0?[1-9])-(3[01]|[12]\d|0?[1-9])/g) ?? [];
   ymdDash.forEach((raw) => {
-    const match = raw.match(/(20\d{2})-(0?[1-9]|1[0-2])-(0?[1-9]|[12]\d|3[01])/);
+    const match = raw.match(/(20\d{2})-(1[0-2]|0?[1-9])-(3[01]|[12]\d|0?[1-9])/);
     if (!match) return;
     hints.add(toIsoDate(Number(match[1]), Number(match[2]), Number(match[3])));
   });
@@ -142,6 +142,13 @@ function formatSourceName(baseName: string, dateHints: string[]): string {
   if (dateHints.length === 0) return baseName;
   const latest = dateHints[dateHints.length - 1];
   return `${baseName} [asOf=${latest}]`;
+}
+
+function latestAsOfCandidate(...values: Array<string | undefined>): string | undefined {
+  const candidates = values
+    .filter((value): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value))
+    .sort();
+  return candidates[candidates.length - 1];
 }
 
 function pushSource(sources: SourceRef[], name: string, url: string, fetchedAt: string): void {
@@ -255,23 +262,21 @@ export async function fetchKoreaAssumptions(): Promise<KoreaFetchResult> {
         || typeof partial.cd91Pct === "number"
         || typeof partial.koribor3mPct === "number"
         || typeof partial.msb364Pct === "number";
+      const supplement = await fetchKoreaAssumptionsFromHtmlFallback();
       if (!hasAnyRate) {
-        warnings.push("ECOS_PARSE_EMPTY");
-        warnings.push("ECOS_FALLBACK_USED");
-        const fallback = await fetchKoreaAssumptionsFromHtmlFallback();
-        return {
-          partial: fallback.partial,
-          sources: [...sources, ...fallback.sources],
-          warnings: [...warnings, ...fallback.warnings],
-          asOfCandidate: fallback.asOfCandidate ?? parsed.asOf,
-        };
+        warnings.push("ECOS_PARSE_EMPTY", "ECOS_FALLBACK_USED");
+      } else {
+        warnings.push("ECOS_SUPPLEMENT_USED");
       }
 
       return {
-        partial,
-        sources,
-        warnings,
-        asOfCandidate: parsed.asOf,
+        partial: {
+          ...supplement.partial,
+          ...partial,
+        },
+        sources: [...sources, ...supplement.sources],
+        warnings: [...warnings, ...supplement.warnings],
+        asOfCandidate: latestAsOfCandidate(parsed.asOf, supplement.asOfCandidate),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown";

@@ -21,7 +21,7 @@ type DailyWorkflow = {
 
 function expectExactPnpmContract(workflow: DailyWorkflow, packageManager: string | undefined): void {
   const setup = workflow.jobs.refresh.steps.find((step) => step.name === "Setup pnpm");
-  expect(setup?.uses).toBe("pnpm/action-setup@v6");
+  expect(setup?.uses).toBe("pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86");
   expect(setup?.with?.version).toBe("9.15.9");
   expect(packageManager).toBe("pnpm@9.15.9");
   expect(setup?.with?.version).toBe(packageManager?.slice("pnpm@".length));
@@ -64,7 +64,7 @@ function extractStepBlock(source: string, name: string): string {
 }
 
 describe("daily refresh workflow contract", () => {
-  it("pins exact pnpm 9.15.9 before the Node 20 pnpm cache and frozen install", () => {
+  it("pins exact pnpm 9.15.9 before the engines Node pnpm cache and frozen install", () => {
     const workflow = fs.readFileSync(
       path.join(process.cwd(), ".github", "workflows", "daily-refresh.yml"),
       "utf-8",
@@ -86,13 +86,17 @@ describe("daily refresh workflow contract", () => {
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
 
     const setupPnpmBlock = extractStepBlock(workflow, "Setup pnpm");
-    expect(setupPnpmBlock).toContain("uses: pnpm/action-setup@v6");
-    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as { packageManager?: string };
+    expect(setupPnpmBlock).toContain("uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86");
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as {
+      packageManager?: string;
+      engines?: { node?: string };
+    };
     expectExactPnpmContract(loadYaml(workflow) as DailyWorkflow, pkg.packageManager);
 
     const setupNodeBlock = extractStepBlock(workflow, "Setup Node");
     expect(setupNodeBlock).toContain("uses: actions/setup-node@v5");
-    expect(setupNodeBlock).toMatch(/\n\s+node-version: 20\s*$/m);
+    expect(pkg.engines?.node).toBe("22.22.2");
+    expect(setupNodeBlock).toContain(`node-version: "${pkg.engines?.node}"`);
     expect(setupNodeBlock).toContain('cache: "pnpm"');
     expect(setupNodeBlock).toContain("cache-dependency-path: pnpm-lock.yaml");
 
@@ -126,7 +130,7 @@ jobs:
   refresh:
     steps:
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with:
           version: ${version}
 `) as DailyWorkflow;

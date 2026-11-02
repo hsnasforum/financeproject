@@ -1,404 +1,100 @@
-# 2026-07-11 Finance Project CLI 멀티 에이전트 지침서
+# Finance 멀티 에이전트 운영 계약
 
-## 목적
+제품·데이터·안전 불변식은 `AGENTS.md`를 따릅니다. 이 문서는 native/CLI의 위임·소유권·검증·인계 계약을 한 곳에 둡니다. 문서와 예시는 실행 권한을 새로 부여하지 않습니다.
 
-- 이 문서는 `Finance Project`를 CLI 멀티 에이전트 방식으로 운영할 때 필요한 역할 기준과 작업 절차를 정의한다.
-- 이 프로젝트는 `개인 재무설계`, `금융상품 추천`, `공공데이터 연동`, `DART 공시 모니터링`을 함께 다루므로, 에이전트는 단일 기능만 보지 말고 사용자 흐름과 데이터 정합성을 함께 봐야 한다.
-- 모든 에이전트는 `정확성`, `안정성`, `설명 가능성`, `운영 보안`, `공식 경로 일관성`을 공통 기준으로 삼는다.
+## 현재 모델과 실행 경로
 
-## GPT-5.6 모델·프롬프트 기준
+2026-10-07 기본 정책입니다. 사본의 config·역할·CLI 설정과 검증 결과는 `work/10/7/2026-10-07-codex-harness-simplification.md`에 기록합니다. 실제 실행 설정은 `.codex/config.toml`, 역할 TOML과 CLI runner에서 확인합니다.
 
-- 기준일은 2026-08-20이다. 공식 모델 가이드에서 `gpt-5.6` 계열의 플래그십은 `gpt-5.6-sol`이며, 현재 Codex 계정에서 별칭 선택이 거부되므로 복합 계획·구현·검증·최종 합성 역할에는 명시적 `gpt-5.6-sol`을 사용한다.
-- `gpt-5.6-terra`는 읽기 중심 탐색, 대형 파일 검토, 테스트 로그 분석, 외부 자료 조사, 문서화처럼 결과를 압축해 메인에 넘기는 역할의 기본값으로 사용한다.
-- native 역할은 `manager / analyzer / planner / developer / reviewer`에 `gpt-5.6-sol`, `researcher / tester / documenter`에 `gpt-5.6-terra`를 사용한다.
-- CLI 역할은 `lead / planner / implementer / reviewer`에 `gpt-5.6-sol`, `researcher / validator / documenter`에 `gpt-5.6-terra`를 사용한다. `CODEX_DEMANDING_MODEL`, `CODEX_READ_HEAVY_MODEL` 환경변수로 재현 가능한 예외를 둘 수 있다.
-- 5.4/5.5에서 옮길 때는 현재 reasoning effort를 기준값으로 보존한다. 대표 작업 평가 없이 effort를 일괄 낮추거나 `max`로 일괄 올리지 않는다.
-- GPT-5.6은 기본 응답이 더 짧을 수 있으므로 전역 `간결하게`, `최소한으로` 지시를 추가하지 않는다. 필수 사실·결정·예외·다음 행동·요청 산출물을 먼저 보존하고, 서론·반복·일반론·상투적 안심 문구부터 줄인다.
-- 공통 규칙은 `AGENTS.md`와 CLI `common.md`에 한 번만 두고 역할 파일에는 역할별 차이만 둔다. 도구와 하위 에이전트도 현재 작업에 필요한 최소 집합만 사용한다.
-- 하위 에이전트에는 분할 기준, 독립 범위, 쓰기 허용 여부, 완료 조건, 반환 형식, 전체 결과 대기 여부를 명시한다. 읽기 중심 작업을 우선 병렬화하고 같은 파일·DB·공유 런타임을 쓰는 작업은 소유권이 분리될 때만 병렬화한다.
-- 공식 근거: [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model), [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md), [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [Build skills](https://learn.chatgpt.com/docs/build-skills). 참고 해설은 [nokryong GPT-5.6 가이드](https://nokryong.github.io/#tab=prompting)를 사용하되 충돌 시 공식 문서를 우선한다.
+| native 역할 | CLI 대응 | 모델 | effort | sandbox/쓰기 범위 |
+| --- | --- | --- | --- | --- |
+| 메인 | lead | gpt-6-astra | ultra | 실제 세션 권한; 조정·통합·최종 판단 |
+| 기본 subagent | - | gpt-6.1-sol | max | 필요한 독립 작업에만 생성 |
+| manager | 없음 | gpt-6.1-sol | max | read-only; 필요할 때만 분업안 반환 |
+| analyzer | 없음 | gpt-6.1-sol | max | read-only; 실행 경로·원인 조사 |
+| researcher | researcher | gpt-6.1-sol | max | read-only; 공식 근거 조사 |
+| tester | validator | gpt-6.1-sol | max | workspace-write; 할당된 격리 검사만 |
+| documenter | documenter | gpt-6.1-sol | max | workspace-write; 할당 문서만 |
+| planner | planner | gpt-6.1-sol | max | read-only; 최소 설계·완료 조건 |
+| developer | implementer | gpt-6.1-sol | max | workspace-write; 소유 구현 파일 |
+| reviewer | reviewer | gpt-6.1-sol | max | read-only; 버그·회귀·검증 공백 |
 
-## 반복 실행 기본 루프
+표의 sandbox와 `approval_policy=on-request`는 native TOML 기준입니다. CLI는 역할 prompt를 사용하며 native sandbox를 자동 적용하지 않으므로 실제 세션 권한도 확인합니다. native는 동시 하위 최대 6, depth=1, runtime=1800초이며 상한을 채우지 않습니다. manager도 하위 역할이므로 재위임하지 않습니다. CLI tmux core=3/full=7은 독립 세션으로 각 세션은 `agents.enabled=false`로 추가 위임을 막습니다. 이 세션 수는 native 상한과 별개입니다.
 
-- 시작 신호: 사용자가 실행형 작업을 요청하거나, 같은 이슈를 한 라운드 더 진행하라고 요청하면 `manager` 에이전트부터 호출한다.
-- 1단계 분해: `manager` 는 현재 범위를 3~5단계로 자르고 각 단계의 목적과 추천 에이전트 타입을 적는다.
-- 2단계 배치: 메인 에이전트는 즉시 막는 핵심 경로를 로컬에서 처리하고, 병렬 가능한 조사/검증/문서화만 다른 에이전트에 배정한다.
-- 2-1단계 소유권: `pnpm build`, `pnpm e2e:rc`, production smoke, release gate처럼 공유 상태를 쓰는 최종 검증은 메인 에이전트만 실행한다.
-- 2-2단계 런타임 위생: 최종 build/e2e/prod smoke 전에는 `.next/lock`, `.next-e2e*`, `.next-host*`, standalone shadow처럼 공유 Next 산출물 상태를 먼저 확인하고, 필요하면 `pnpm cleanup:next-artifacts` 같은 저장소 helper를 우선 사용한다.
-- 3단계 구현: 가장 작은 안전한 수정만 적용하고, 관련 없는 리팩터링은 하지 않는다.
-- 4단계 검증: 가까운 검증부터 시작해 필요 시 `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm e2e:rc`, 반복 분류 러너 순으로 넓히되, 최종 build/e2e는 보조 에이전트를 정리한 뒤 메인이 단독 실행한다.
-- 5단계 기록: 각 라운드가 끝날 때 `work/<현재월>/<현재일>/YYYY-MM-DD-<slug>.md` 에 `무엇을 바꿨는지 / 사용 skill / 실행한 검증 / 미실행 검증 / 남은 리스크 / 다음 라운드 우선순위`를 남긴다. 해당 폴더가 없으면 먼저 생성한다.
-  - `사용 skill` 섹션은 항상 남기고, 실제 사용한 skill이 없으면 `- 없음`으로 적는다.
-- 반복 조건: 후속 라운드에서는 먼저 `work/<현재월>/<현재일>/`의 최신 문서와 최신 검증 결과를 읽고, 오늘 문서가 없으면 전날 날짜 폴더의 최신 `/work` 문서를 읽는다. 그다음 남은 리스크 중 가장 높은 우선순위 하나를 다시 `manager` 에이전트로 분해해서 같은 루프를 반복한다.
+Finance의 기본 프로필은 **품질 우선**입니다. 메인 Astra Ultra가 목표 해석·분해·충돌 해결·통합·최종 완료 판정을 맡고, 독립적으로 나눌 가치가 있는 하위 작업은 Sol 6.1 Max에 맡깁니다. Max 에이전트 수를 채우지 않으며 인계 비용보다 시간·품질 이득이 있을 때만 생성합니다. 이 조합은 프로젝트 선택이며 모든 작업에 대한 OpenAI의 단일 의무 설정으로 표현하지 않습니다.
 
-## 내부 라운드와 GitHub 게시 배치
+설정 저장은 실행 중 세션을 바꾸지 않습니다. 실제 model/effort는 실행기 기록으로 확인하고 요청값과 구분합니다. 지원 거부를 조용한 모델 대체나 인증/provider/권한/CLI 변경으로 우회하지 않습니다. CLI의 `CODEX_LEAD_MODEL`, `CODEX_DEMANDING_MODEL`, `CODEX_READ_HEAVY_MODEL`, 대응 `*_EFFORT`는 명시적 override이며 역할 기본값보다 우선합니다.
 
-### 단위 정의
+## 위임과 소유권
 
-- `로컬 완료 항목`은 하나의 응집된 변경을 구현하고 필요한 로컬 검증과 `/work` 종료 기록까지 마친 상태다.
-- `GitHub 게시 배치`는 같은 목적, 의존성, 검증, 롤백 경계를 공유하는 여러 로컬 완료 항목을 원격에 게시하기 위한 묶음이다.
-- `원격 검증 대기`는 로컬 검증은 끝났지만 GitHub Actions billing, quota, runner, 권한 또는 원격 CI 문제로 외부 검증만 남은 상태다.
+기본은 메인 한 명입니다. 인계 비용보다 시간·품질 이득이 있는 독립 조사·구현·검토만 분할하며 manager-first·고정 단계/역할 수를 강제하지 않습니다. CLI full은 일곱 역할이 실제 필요한 경우에만 선택합니다.
 
-### 기본 게시 주기
+위임에는 필요한 사실과 아래 항목만 짧게 전달합니다.
 
-- 로컬 라운드는 기존처럼 작은 단위로 계속 닫고 각 라운드의 근거를 `/work`에 남긴다.
-- GitHub push와 PR은 로컬 완료 항목 10~15개를 한 게시 배치로 묶는 것을 기본 목표로 한다.
-- 10~15개는 강제 최소·최대가 아니다. 숫자를 채우려고 기능 축, 목적, 검증 또는 롤백 경계가 다른 작업을 합치거나 미완료 항목을 포함하지 않는다.
-- 기본 형태는 `게시 배치 1개 = PR 1개 + 하나 또는 소수의 논리적 commit + merge 완료`다. 큰 단일 commit을 강제하지 않고, 원격 push 횟수는 필요한 수준으로 줄인다.
-- 현재 `.github/workflows/ci.yml`은 push와 pull request에서, `.github/workflows/e2e-smoke.yml`은 pull request에서 실행되므로 내부 항목마다 원격 게시를 반복하지 않는다.
+```text
+GOAL: 답해야 할 결과
+BASELINE: 실제 workspace·revision·기존 delta와 재사용 근거
+SCOPE: 읽기/쓰기 경로, 제외 경로, 허용 명령·자원 소유자
+DEPENDENCIES: 선행 결과와 대기 조건
+DONE WHEN: 관찰 가능한 완료 조건·필요한 검사
+RETURN: 역할별 결론과 아래 Handoff 계약
+```
 
-### billing·원격 장애 처리
+- 한 파일·schema·생성물·lockfile·Git index는 한 시점에 한 쓰기 소유자만 맡습니다. 메인도 하위 소유 파일을 동시에 수정하지 않습니다.
+- 최종 build/E2E/production smoke/release와 DB·data root·port·`.next` 계열·standalone shadow·browser profile·산출물은 메인 단일 소유입니다. tester는 충돌 없는 작은 재현·타깃 검사만 맡고 제품/테스트/expected result를 임의 수정하지 않습니다.
+- read-only 역할은 파일·폴더·`/work`를 만들지 않고 근거를 쓰기 소유자에게 넘깁니다. documenter는 할당 문서만 수정합니다. CLI lead는 구현 파일을 선점하지 않으며 최종 공유 검증은 실제 세션 권한 안에서 실행합니다.
+- 관련 source/schema/baseline/package가 바뀌면 이전 결과의 유효성을 확인하거나 필요한 범위만 재검증합니다. 메인이 실제 diff·출력·반영 범위를 대조해 통합하며 필수 선행 검토가 남아 있으면 완료를 선언하지 않습니다.
+- timeout/도구/권한/환경 실패는 제품 회귀와 구분합니다. mutation timeout 뒤에는 현재 상태·중복 위험부터 확인합니다. 조건·가설이 같은 재시도는 하지 않습니다.
 
-- GitHub Actions billing, quota, runner, 권한 또는 원격 CI 문제는 로컬 구현, 로컬 검증, 문서화, 다음 안전한 라운드를 멈추는 사유가 아니다.
-- 원격 상태가 바뀌지 않은 동안 push, PR 생성, workflow rerun을 자동으로 반복하지 않는다. 영향받은 외부 단계만 `[GitHub 게시 대기]` 또는 `[원격 검증 대기]`로 남긴다.
-- 사용자 요청의 완료 조건에 실제 push, PR, merge 또는 원격 CI 통과가 포함되면 그 외부 산출물만 `[blocked]`로 보고하고, 완료한 로컬 산출물과 검증은 별도로 인계한다.
-- 이 정책은 명시적인 GitHub 게시 요청이 없을 때 외부 작업 권한을 새로 만들지 않는다. 게시가 명시적으로 요청되면 아래 merge 완료 계약을 따른다.
+### 조건부 독립 감사
 
-### merge 완료 계약
-
-- 사용자가 GitHub 게시 배치의 진행을 명시적으로 요청·승인한 경우 commit, push, PR 생성, 필수 checks 확인, 허용된 merge까지 하나의 승인 범위로 보고 단계마다 추가 대화 승인을 요청하지 않는다. 다만 같은 요청에서 `push only`, `draft PR only`, `merge 금지`처럼 범위를 명시적으로 제한하면 그 직접 지시가 우선한다.
-- PR 생성은 완료가 아니다. 메인 또는 lead가 대상 branch, required checks, 요청된 review, 충돌 여부를 확인하고, 현재 변경으로 생긴 실패는 범위 안에서 수정·재검증한 뒤 merge까지 진행해야 게시 배치가 완료된다.
-- 저장소가 허용하는 기본 merge 방식을 사용한다. force push, admin bypass, branch protection 우회, 실패한 required check를 무시한 merge는 별도 명시 요청이 있어도 수행하지 않는다.
-- checks 실패, 충돌, branch protection, 권한, billing, runner 또는 보안 문제로 안전한 merge가 불가능하면 해당 외부 단계를 `[blocked: merge 대기]`로 남기고 로컬 작업은 계속한다.
-- 조건이 해소되면 PR head·base·diff, 요청된 review, required checks가 승인 당시 범위와 같은지 다시 확인한다. 범위가 같거나 승인된 범위 안의 실패 수정만 포함하면 추가 사용자 확인 없이 merge를 재개하고, 대상 branch나 변경 범위가 달라졌으면 새 승인을 받는다.
-- merge 후에는 PR 번호 또는 URL, merge 결과, merge commit, 확인한 checks를 관련 `/work` 기록에 남긴다.
-
-### 예외와 게시·merge 게이트
-
-- 보안 긴급 수정, production 장애, release 또는 rollback 경계, 장기 분기로 인한 충돌 위험, 사용자의 명시적 요청은 10개보다 작은 게시 배치를 허용한다.
-- 하나의 배치가 리뷰하기 어렵거나 통합 검증과 롤백 경계가 불명확해지면 목표 개수에 도달하기 전이라도 나눈다.
-- 게시 후보에는 `배치 목적 / 포함된 /work 경로 / 변경 파일 / 항목별 검증 / 배치 수준 통합 검증 / 남은 원격 검증`을 정리한다.
-- 게시가 승인되면 최종 diff와 통합 검증을 한 번 더 확인한 뒤 배치 단위로 commit, push, PR, 필수 checks 확인, merge까지 진행한다.
-
-## 프로젝트 기준 요약
-
-- 메인 진입 경로는 `/dashboard`다.
-- 핵심 기능 경로는 `/planning`, `/recommend`, `/public/dart`, `/settings/data-sources`, `/products/catalog`이다.
-- 프로젝트는 비전문가 사용자도 이해할 수 있는 재무 결과와 안내를 제공해야 한다.
-- 외부 데이터와 내부 계산 결과는 서로 충돌하지 않아야 하며, 데이터가 비어 있거나 불완전할 때도 화면은 최대한 안전하게 유지되어야 한다.
-- 운영 보안상 `production`에서는 `/api/dev/*`, `/dashboard/artifacts`, `/dev/*`, `/debug/unified`가 기본 비노출 대상이다.
-- API 키는 서버 환경변수로만 관리하며 `NEXT_PUBLIC_*`로 민감정보를 노출하지 않는다.
-
-## planning v2 관련 기준
-
-- `planning v2`는 여전히 핵심 검증 축이다.
-- 완료 판정 기준은 `pnpm planning:v2:complete` 통과다.
-- 관련 작업 시 참고할 대표 문서는 아래와 같다:
-  - `CONTRIBUTING_PLANNING.md`
-  - `docs/planning-v2-onepage.md`
-  - `docs/planning-v2-quickstart.md`
-  - `docs/planning-v2-user.md`
-  - `docs/planning-v2-ops.md`
-  - `docs/planning-v2-scheduler.md`
-  - `docs/planning-v2-maintenance.md`
-  - `docs/planning-v2-bug-report-template.md`
-  - `docs/planning-v2-release-checklist.md`
-  - `docs/releases/planning-v2-final-report-{version}.md`
-- `planning` 관련 변경이 사용자 결과, 계산, 리포트, 호환성에 영향을 주면 `planning:v2:complete`를 우선 검토 대상으로 둔다.
-
-## 역할 체계 매핑
-
-- Codex native 멀티 에이전트 설정은 `.codex/config.toml`, `.codex/agents/*.toml` 기준이며 역할 이름은 `manager / analyzer / planner / developer / reviewer / tester / documenter / researcher`다.
-- CLI tmux 러너는 `scripts/run_codex_multi_agent.sh`, `scripts/prompts/multi-agent/*.md` 기준이며 역할 이름은 `lead / planner / researcher / implementer / reviewer / validator / documenter`다.
-- 역할 대응은 기본적으로 `manager ↔ lead`, `developer ↔ implementer`, `tester ↔ validator`, `planner ↔ planner`, `researcher ↔ researcher`, `reviewer ↔ reviewer`, `documenter ↔ documenter`로 본다.
-- `analyzer`는 현재 Codex native 쪽 전용 역할이다. CLI 러너에서는 `lead`가 분해를 맡고, 필요 시 `planner / researcher / reviewer`가 분석 책임을 나눠 가진다.
-- 새 규칙을 추가할 때는 어느 체계에 적용하는지 먼저 밝히고, 공통 규칙이면 native TOML과 CLI 프롬프트 양쪽에 같이 반영한다.
+서로 다른 접근이 반복 실패하거나 인증·금융·데이터 무결성 근거가 모호하거나 리뷰 결론이 충돌할 때만 필요한 read-only 관점을 독립 위임합니다. 같은 기준 사실과 각자의 질문만 전달하고 서로의 결론을 미리 공유하지 않습니다. 메인이 원문·로그·테스트로 충돌과 다음 최소 실험을 판단하며 다수결로 결정하지 않습니다. 감사는 쓰기 권한이나 Astra 자동 선택을 만들지 않습니다.
 
 ## 검증 게이트 단일 기준
 
-- 이 섹션은 `multi_agent.md` 기준의 검증 게이트 SSOT다. `tester.toml`, `validator.md`, `planning-gate-selector`, 메인 handoff가 충돌하면 이 섹션을 우선 기준으로 삼는다.
-- 순수 로직/계산 변경:
-  - `pnpm test`
-- 타입, 훅, 정적 규칙 영향:
-  - `pnpm lint`
-  - 범위가 넓으면 `pnpm verify`
-- App Router 경로, 페이지, API route 영향:
-  - `pnpm build`
-  - 범위가 넓으면 `pnpm verify`
-- planning v2 핵심 영향:
-  - `pnpm planning:v2:complete`
-  - 호환성, 마이그레이션, 구버전 경계 영향이 있으면 `pnpm planning:v2:compat`
-  - 정적 가드나 회귀 추적이면 `pnpm planning:v2:guard`, `pnpm planning:v2:regress`
-- 사용자 흐름, 셀렉터, 페이지 연결 영향:
-  - `pnpm e2e:rc`
-  - 범위가 넓거나 회귀 위험이 크면 `pnpm e2e`
-- build/dev/prod launcher 또는 cleanup helper 영향:
-  - `node --check`
-  - 관련 CLI 또는 entrypoint 직접 검증
-- 운영, 릴리즈, production runtime 영향:
-  - `pnpm verify`
-  - `pnpm build`
-  - 필요 시 production smoke
-- 멀티 에이전트 역할/프롬프트/handoff 드리프트 점검:
-  - `pnpm multi-agent:guard`
-  - 최신 `/work` closeout 경로/섹션과 legacy flat note 부재도 함께 확인한다.
-- 최종 `pnpm build`, `pnpm e2e:rc`, production smoke, release gate는 메인 에이전트 단일 소유다. 보조 역할은 실행 세트 제안, 로그 수집, 작은 단위 재현까지만 맡는다.
-- shared Next 런타임이 얽힌 최종 검증은 `.next/lock`, `.next-e2e*`, `.next-host*`, standalone shadow를 먼저 확인하고, raw `next build/start`보다 `pnpm build`, `pnpm start`, `pnpm cleanup:next-artifacts` 같은 저장소 진입점을 우선한다.
+이번 delta의 실제 위험과 개발 중/마일스톤/출시 단계로 검사합니다. 역할·스킬에 전체 검사 목록을 다시 만들지 않습니다. CI required checks, 약속한 검사와 금융·인증·저장·복원 위험 검증은 유지합니다.
 
-## 1. 역할 지침서
+| 단계·영향 | 필요한 범위 |
+| --- | --- |
+| 개발 중 | 직접 소비 경로까지 `corepack pnpm exec vitest run <관련 테스트>`, 변경 파일 eslint·script 문법; 타입 영향이면 `corepack pnpm typecheck` |
+| UI 마일스톤 | 렌더/행동 테스트·실제 화면·키보드/focus/모바일/overflow·정상/빈/실패/stale 동선; 번들 영향이면 build 1회 |
+| 금융 계산·추천 | 0/경계/큰 값/누락/날짜·단위·반올림·소비 경로; 공유 엔진이면 통합/회귀 |
+| 인증·owner·저장·복원 | 실패/사용자 격리/데이터 보존·왕복; 적용되는 `planning:user-scope:check`, `sec:check`, 저장/복원 통합 |
+| route·navigation | 실제 링크 도착·catalog/`planning:ssot:check`; route/import/production bundle 영향이면 build |
+| 호환성·migration | 관련 fixture·저장 왕복·`planning:v2:compat`; complete에 포함된 검사 중복 금지 |
+| Planning v2 엔진·통합 | 엔진/consumer 검사; 광범위 영향 또는 v2 전체 완료 주장에 `planning:v2:complete` |
+| 외부 데이터 | 설정 누락/오류/부분 응답/freshness; 데이터 계약 영향이면 `data:doctor` |
+| launcher·runtime | 해당 entrypoint·격리 smoke, 영향에 맞는 build/verify; 실제 사용자 DB/설치본에 자동 실행하지 않음 |
+| Codex 하네스 | 변경 형식·TOML/skill·shell/Node 검사, strict config, `multi-agent:guard`, diff 검사; 앱 build/E2E 추가 없음 |
+| 출시 | 현재 CI·release 문서의 전체 test/lint/typecheck/build·RC/E2E·보안/호환성/production smoke |
 
-### 공통 원칙
+사용자 흐름 E2E는 저장소 wrapper `corepack pnpm e2e:pw <관련 spec> --workers=1 --retries=0`를 사용합니다. 작은 변경마다 전체 test/verify/build/E2E/complete를 실행하지 않고 타깃만으로 영향 경계를 알 수 없을 때 이유를 정해 확대합니다. `verify`가 모든 검사를 대신한다고 가정하지 않습니다.
 
-- 모든 에이전트는 "사용자가 지금 보는 화면과 결과가 안전하고 이해 가능한가"를 최우선으로 판단한다.
-- 한 영역만 맞고 다른 영역이 깨지는 수정은 허용하지 않는다.
-- `planning`, `recommend`, `report`, `data-sources`, `dart`는 연결된 흐름으로 보고 판단한다.
-- 사용자에게 보이는 문구는 숫자만 나열하지 말고 의미와 상태를 설명할 수 있어야 한다.
-- 공식 경로는 문서 기준을 따르며 임의의 우회 경로나 실험 경로를 기본 진입으로 만들지 않는다.
-- 외부 데이터 의존 작업은 실패 시 fallback과 상태 노출 방식을 함께 설계한다.
-- 민감정보, API 키, 개인 자산 데이터는 로그, 클라이언트, 문서 예시에 노출하지 않는다.
+성공 검사는 source·의존성·lockfile·설정·입력·환경·산출물이 유효하면 재사용합니다. 실패는 새 회귀/기존 실패/환경 실패/미실행으로 나누고 조건이 바뀐 검사만 다시 실행합니다. guard 삭제·assertion 완화·임의 fixture/snapshot 갱신으로 통과시키지 않습니다. 저장소 wrapper를 사용하고 다른 작업자의 process·산출물·데이터를 정리하지 않습니다. live API·실제 desktop install·운영 DB backup/restore·release는 해당 승인과 별도 증거가 필요합니다.
 
-### 1) 총괄 에이전트
+## GitHub 게시 배치
 
-- 사용자 요청을 기능 단위로 분류한다:
-  - planning
-  - recommend
-  - dart
-  - data-sources
-  - products
-  - ops/docs
-- 어떤 사용자 경로와 어떤 데이터 흐름이 영향을 받는지 먼저 정리한다.
-- 에이전트별 작업 범위를 나누고 파일 충돌을 방지한다.
-- 최종 결과가 `README.md`의 핵심 경로, 검증 기준, 운영 보안 정책과 충돌하지 않는지 확인한다.
-- 사용자 보고 시 변경 내용, 영향 경로, 검증 결과, 남은 리스크를 단일 메시지로 정리한다.
+로컬 완료는 응집된 변경·로컬 검증·종료 기록, 게시 배치는 같은 목적·의존성·검증·rollback 경계의 원격 묶음입니다. 기존 10~15개 로컬 항목당 게시 목표는 강제 개수가 아니며 무관한 작업을 채우지 않습니다. 긴급 장애·보안·release/rollback·분기 충돌 위험·사용자 요청이면 더 작게 나눕니다.
 
-### 2) 분석 에이전트
+- 일반 수정 요청은 commit/push/PR/merge 승인이 아닙니다. 해당 배치를 명시적으로 승인했다면 승인 범위의 commit·push·PR·required checks·허용된 merge까지 반복 승인 없이 수행합니다. push only/draft only/merge 금지가 우선합니다.
+- 실제 CI trigger·대상 branch·head/base·diff·review·checks·충돌과 현재 검증 유효성을 확인합니다. force push·admin bypass·branch protection 우회·실패 required check 무시 merge는 하지 않습니다. PR 생성만으로 배치 완료를 선언하지 않고 허용된 merge 결과·commit·checks·URL을 기록합니다.
+- billing/quota/runner/권한/원격 CI 장애는 같은 상태에서 push/rerun을 반복하지 않습니다. 게시 대기/원격 검증 대기/merge 차단을 구분하며 독립적인 승인 범위의 로컬 작업만 진행합니다. 조건 해소 시 최신 head/base/checks를 확인하고 같은 승인 범위에서 재개합니다. 대상·범위가 바뀌면 새 승인이 필요합니다.
 
-- 현재 동작, 관련 문서, 영향 경로, 테스트 범위를 먼저 조사한다.
-- 아래 항목을 우선 확인한다:
-  - 메인 진입 또는 핵심 경로에 영향이 있는가
-  - `planning v2` 검증 축에 영향이 있는가
-  - 외부 데이터 의존성 또는 공공데이터/DART 흐름과 연결되는가
-  - 데이터 누락 시 화면이 깨질 가능성이 있는가
-  - 설명 문구가 계산 또는 실제 상태와 어긋날 가능성이 있는가
-- 조사 결과는 `현상 / 원인 후보 / 영향 범위 / 권장 수정 방향 / 필요한 검증` 형식으로 전달한다.
-- 확인되지 않은 내용은 사실처럼 단정하지 않고 가정 또는 미확인 항목으로 표시한다.
+`.codex/rules/default.rules`의 prompt prefix는 승인 검토를 돕습니다. trusted 프로젝트에서 로드되며 sandbox 밖 실행 정책과 연결됩니다. sandbox 내부 모든 명령, 옵션 앞삽입·복잡한 shell wrapper·다른 Git API 경로를 절대 차단하는 보안 경계로 보장하지 않습니다. 실제 sandbox/approval와 사용자 승인 계약을 함께 지킵니다.
 
-### 3) 구현 에이전트
+## Handoff와 기록
 
-- 승인된 범위 안에서만 수정하며, 무관한 리팩터링은 하지 않는다.
-- 기존 사용자 흐름을 깨지 않으면서 문제를 고치는 방식을 우선한다.
-- 데이터 누락, 레거시 상태, 외부 응답 실패가 있어도 전체 화면이 무너지지 않게 처리한다.
-- UI는 기존 계산 결과와 상태를 잘 전달하는 쪽으로 유지하고, 중복 계산이나 임의 해석을 최소화한다.
-- 공개 경로와 dev/debug 경로를 혼동하지 않는다.
-- 환경변수, 데이터 소스 설정, DART/API 연동은 보안과 실패 처리까지 포함해 수정한다.
+각 역할은 고유 결과와 함께 다음을 간결하게 반환합니다.
 
-### 4) 검증 에이전트
-
-- 변경 유형을 먼저 분류한다:
-  - 순수 로직/계산
-  - App Router 경로/페이지
-  - 추천/리포트/플래닝 연동
-  - 외부 데이터/DART/데이터 소스
-  - 운영 문서/설정
-- 분류에 맞는 검증을 선택한다:
-  - 관련 테스트: `pnpm test`
-  - 규칙/훅 영향: `pnpm lint`
-  - 앱 경로/빌드 영향: `pnpm build`
-  - 전체 기본 검증: `pnpm verify`
-  - planning 핵심 영향: `pnpm planning:v2:complete`
-  - 호환성 영향: `pnpm planning:v2:compat`
-  - 사용자 흐름 영향: `pnpm e2e` 또는 `pnpm e2e:rc`
-- Next build/dev/prod wrapper 또는 cleanup helper 영향: `node --check` 와 관련 entrypoint 직접 검증
-- 단, `pnpm build`, `pnpm e2e:rc`, production smoke 같은 공유 상태 최종 게이트는 검증 에이전트가 병렬로 확정하지 않고 메인 에이전트에게 넘긴다.
-- 정상 케이스뿐 아니라 다음을 꼭 본다:
-  - 데이터 없음
-  - 외부 응답 실패
-  - 권한 또는 설정 누락
-  - 공식 경로 접근
-  - 문구와 실제 결과 불일치
-- 미실행 검증은 숨기지 말고 남은 리스크로 기록한다.
-
-### 5) 문서화 에이전트
-
-- 변경 내용을 기술자 중심이 아니라 사용자와 운영자 기준으로 요약한다.
-- 핵심 경로, 검증 명령, 운영 보안 규칙이 바뀌면 문서를 같이 갱신한다.
-- 재무설계 결과나 추천 흐름 관련 문구는 비전문가도 이해할 수 있게 다듬는다.
-- `/work` 문서는 `work/<현재월>/<현재일>/YYYY-MM-DD-<slug>.md` 경로에 남기고, 폴더가 없으면 생성한 뒤 다음 작업자가 바로 이어받을 수 있게 작성한다.
-- 실제로 사용한 skill이 있으면 `/work`에 이름과 용도를 남겨 다음 작업자가 어떤 지침을 참조했는지 알 수 있게 한다.
-- 문서에는 "무엇을 고쳤는가"뿐 아니라 "왜 이 수정이 안전한가"를 포함한다.
-
-## 2. 작업 지침서
-
-### 공통사항
-
-- 시스템 안전 최우선:
-  - 파괴적 git 명령, 대량 파일 삭제, 권한 변경, 외부 서버 대량 호출은 기본적으로 금지하고 필요 시 사용자 판단을 받는다.
-- 컨텍스트 최적화:
-  - 에이전트 간 전달은 전체 로그 대신 `현재 상태`, `핵심 변경`, `실패 원인`, `다음 조치`만 남긴다.
-- 실패 임계점 준수:
-  - 같은 오류가 3회 이상 반복되면 반복 시도를 멈추고 총괄 에이전트 또는 사용자에게 개입을 요청한다.
-- 제품 기준 우선:
-  - `README.md`, `docs/current-screens.md`, 운영 보안 정책, planning 관련 검증 게이트를 우선 기준으로 삼는다.
-- 반복형 멀티 에이전트 작업은 항상 `manager` 분해 결과를 기준으로 다음 라운드를 잇는다.
-
-### 작업 시작 전
-
-- 요청을 한 줄로 다시 정의한다.
-- 이번 작업이 어느 기능 축에 속하는지 먼저 정한다:
-  - planning
-  - recommend
-  - dart
-  - data-sources
-  - products
-  - ops/docs
-- 완료 조건은 3개 이내로 정한다.
-- 영향 받을 파일, 사용자 경로, 데이터 흐름, 검증 명령을 먼저 적는다.
-- 변경이 메인 진입 `/dashboard` 또는 핵심 경로에 영향을 주는지 먼저 확인한다.
-
-### 작업 분배 규칙
-
-- 하나의 파일은 한 시점에 한 구현 에이전트만 수정한다.
-- 조사, 구현, 검증은 분리할 수 있지만 인수인계는 반드시 남긴다.
-- 최종 build/e2e 직전에는 보조 검증 에이전트를 정리하고, 메인 에이전트만 단일 소유자로 결과를 확정한다.
-- `planning`과 `recommend/report`가 동시에 얽히는 작업은 분석 에이전트가 먼저 경계를 나눈다.
-- 외부 데이터 연동과 UI 수정이 함께 일어나면 검증 에이전트를 초반부터 붙인다.
-- 우선순위는 아래 순서를 따른다:
-  - 사용자 화면 장애 방지
-  - 결과 정합성 확보
-  - 운영 보안 유지
-  - 공식 경로 일관성 유지
-  - 신규 확장 또는 편의 개선
-
-### 작업 수행 규칙
-
-- 조사 없이 바로 구현하지 않는다.
-- 핵심 경로를 바꾸는 수정은 항상 문서 기준과 함께 확인한다.
-- 데이터가 없거나 오래되었거나 외부 응답이 실패해도 조용히 깨지지 않게 한다.
-- 설명 문구는 실제 계산 결과, 상태, 제한사항과 맞아야 한다.
-- 외부 의존성 추가, 데이터 스키마 변경, 공개 API 변경, 경로 정책 변경은 별도 위험 항목으로 표시한다.
-- `production` 비노출 대상 경로를 실수로 노출하지 않게 주의한다.
-- 수정 후에는 가능한 가장 가까운 범위에서 먼저 검증하고, 필요 시 전체 검증으로 넓힌다.
-- shared Next 런타임 이슈가 섞이면 raw `next build/start`보다 `pnpm build`, `pnpm start`, `pnpm cleanup:next-artifacts` 같은 저장소 진입점을 우선한다. raw 명령은 wrapper 문제를 분리 진단할 때만 예외로 사용한다.
-
-### 커뮤니케이션 규칙
-
-- 보고는 짧지만 의사결정에 필요한 정보는 빠지지 않아야 한다.
-- 기본 형식은 `현재 상태 / 수행 내용 / 사용 skill / 실행한 검증 / 미실행 검증 / 다음 작업 / 리스크`를 따른다.
-- 불확실한 내용은 확정 문장처럼 쓰지 않는다.
-- 실패 보고 시에는 `어디서`, `왜`, `사용자 영향이 무엇인지`를 함께 적는다.
-- 외부 데이터나 스케줄 기반 결과를 다룰 때는 가능하면 날짜 기준도 함께 적는다.
-
-### 완료 기준
-
-- 요구사항에 해당하는 변경이 실제 코드 또는 문서에 반영되었다.
-- 메인 진입과 관련 핵심 경로가 의도치 않게 깨지지 않았다.
-- 계산 결과, 설명 문구, 데이터 상태 표시가 서로 모순되지 않는다.
-- 최소 1개 이상의 검증이 수행되었거나, 미수행 사유가 분명히 기록되었다.
-- `/work` 또는 관련 문서에 다음 작업자가 이해할 수 있는 기록이 남아 있다.
-
-## 3. Finance Project용 운영 템플릿
-
-### 역할 지침서 템플릿
-
-```md
-# 역할 지침서
-
-## 역할명
-- 총괄 에이전트 / 분석 에이전트 / 구현 에이전트 / 검증 에이전트 / 문서화 에이전트
-
-## 담당 기능 축
-- planning / recommend / dart / data-sources / products / ops-docs
-
-## 책임
-- 반드시 담당해야 하는 일
-
-## 확인할 프로젝트 기준
-- README.md의 핵심 경로와 명령어
-- docs/current-screens.md 경로 기준
-- 운영 보안 비노출 경로
-- planning 관련 검증 게이트 영향 여부
-
-## 하지 말아야 할 일
-- 승인 없는 파괴적 수정
-- 민감정보 노출
-- 공식 경로 우회 기본화
-- 무관한 대규모 리팩터링
-
-## 입력
-- 관련 파일
-- 현재 동작 요약
-- 선행 조사 결과
-
-## 출력
-- 다음 에이전트가 바로 사용할 수 있는 결과 요약
-
-## 완료 기준
-- 역할 산출물과 남은 리스크가 명확히 정리됨
+```text
+현재 상태·목표 / 기준 workspace·revision
+수행 내용·변경 파일 또는 조사 경로 / 핵심 근거·실패 조건
+사용 skill (없으면 없음)
+실행한 검증·결과 / 미실행 검증·이유
+파일·공유 자원 소유권과 해제 / 외부·DB·filesystem 상태 변경
+남은 리스크·미확인 / 다음 라운드 또는 필요한 결정
 ```
 
-### 작업 지침서 템플릿
+사용자에게 전달하는 마일스톤마다 KST 기준 `work/<현재월>/<현재일>/YYYY-MM-DD-<slug>.md` 한 문서에 기록합니다. 형식은 `work/README.md`와 `work-log-closeout`을 참조하며 작은 편집·재시도·내부 인계에는 새 기록을 만들지 않습니다. 최신 관련 기록만 재개 근거로 사용하고 과거 PASS는 당시 사실로 보존합니다. 기록 때문에 임의 stage/commit하지 않습니다.
 
-```md
-# 작업 지침서
-
-## 작업명
-- 한 줄 목표
-
-## 기능 축
-- planning / recommend / dart / data-sources / products / ops-docs
-
-## 영향 범위
-- 수정 허용 파일
-- 영향 받는 사용자 경로
-- 영향 받는 데이터 흐름
-
-## 절차
-1. 현재 상태와 문서 기준 조사
-2. 핵심 경로 및 데이터 흐름 영향 확인
-3. 구현 또는 수정
-4. 가까운 범위부터 검증
-5. 사용자 영향과 리스크 정리
-
-## 필수 확인
-- `/dashboard` 또는 핵심 경로를 깨지 않는가
-- 설명 문구가 실제 결과와 맞는가
-- 운영 보안 정책과 충돌하지 않는가
-- planning 영향 시 필요한 게이트를 검토했는가
-
-## 검증 항목
-- pnpm test
-- pnpm lint
-- pnpm build
-- pnpm verify
-- pnpm planning:v2:complete
-- pnpm planning:v2:compat
-- pnpm e2e / pnpm e2e:rc
-
-## 보고 항목
-- 무엇을 변경했는가
-- 왜 필요한가
-- 무엇을 검증했는가
-- 남은 리스크는 무엇인가
-```
-
-## 4. 바로 사용 가능한 짧은 문안
-
-### 역할 지침서 짧은 문안
-
-```md
-당신은 Finance Project의 CLI 멀티 에이전트 환경에서 할당된 역할만 수행한다.
-이 프로젝트는 개인 재무설계, 추천, 공공데이터, DART 연동을 함께 다루므로 정확성, 안정성, 설명 가능성을 우선한다.
-항상 현재 목표, 담당 기능 축, 영향 경로, 완료 기준을 먼저 확인한다.
-메인 진입 `/dashboard`와 핵심 경로를 임의로 깨지 말고, production 비노출 경로와 보안 정책을 지킨다.
-데이터 누락이나 외부 응답 실패 시에도 화면은 최대한 안전하게 유지한다.
-결과 보고에는 변경 내용, 영향 경로, 검증 결과, 남은 리스크를 포함한다.
-```
-
-### 작업 지침서 짧은 문안
-
-```md
-작업 시작 전 요청을 한 줄로 요약하고 planning, recommend, dart, data-sources, products, ops-docs 중 어느 축인지 먼저 분류한다.
-현재 코드, README.md, docs/current-screens.md, 관련 문서를 조사한 뒤 영향 범위와 검증 범위를 정리한다.
-조사 없이 바로 구현하지 않고, 승인된 범위 안에서만 수정한다.
-데이터가 비어 있거나 외부 응답이 실패해도 화면은 깨지지 않고 상태를 설명할 수 있어야 한다.
-수정 후에는 test, lint, build, verify, planning:v2 게이트, e2e 중 필요한 검증을 수행한다.
-최종 보고에는 변경 사항, 사용자 영향, 검증 결과, 미해결 리스크를 반드시 포함한다.
-```
-
-## 5. 권장 운용 방식
-
-- 소규모 작업은 `총괄 + 구현 + 검증` 3역할이면 충분하다.
-- 여러 기능 축이 동시에 얽히면 `분석` 역할을 먼저 두는 편이 안전하다.
-- planning 계산 결과가 recommend 또는 report와 연결되면 정합성 검토를 먼저 한다.
-- 외부 데이터 소스나 DART 연동을 건드리는 작업은 실패 fallback과 운영 검증을 함께 설계한다.
-- 최종 사용자 응답은 반드시 총괄 에이전트가 취합해 단일 메시지로 정리한다.
+하네스 변경 시 config·역할·prompt·runner·skill·guard를 같은 정책으로 맞춥니다. guard는 모델/effort, 공통 계약 참조, tracking·skill 경로·worklog 검사를 유지합니다. 설정/정적 검사와 실제 model 실행·제품 검증은 따로 보고합니다.

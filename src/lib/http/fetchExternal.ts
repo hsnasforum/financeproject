@@ -13,6 +13,8 @@ export type FetchExternalOptions = Omit<RequestInit, "signal"> & {
   timeoutMs?: number;
   retries?: number;
   sourceKey?: string;
+  /** Additional query parameter names whose values must not appear in logs. */
+  sensitiveQueryParams?: readonly string[];
   retryOn?: number[] | ((context: FetchRetryContext) => boolean);
   throwOnHttpError?: boolean;
   signal?: AbortSignal | null;
@@ -302,6 +304,7 @@ export async function fetchExternal(
     timeoutMs,
     retries,
     sourceKey,
+    sensitiveQueryParams,
     retryOn,
     throwOnHttpError,
     signal,
@@ -392,7 +395,7 @@ export async function fetchExternal(
           console.error("[external] upstream status", {
             sourceKey,
             status: response.status,
-            url: maskUrl(url),
+            url: maskUrl(url, sensitiveQueryParams),
           });
           throw new ExternalApiError(
             { code: "UPSTREAM", message: "외부 API 호출에 실패했습니다." },
@@ -450,8 +453,8 @@ export async function fetchExternal(
       if (timeout) {
         console.error("[external] fetch failed", {
           sourceKey,
-          url: maskUrl(url),
-          reason: error instanceof Error ? error.message : "unknown",
+          url: maskUrl(url, sensitiveQueryParams),
+          reason: maskErrorReason(error, url, sensitiveQueryParams),
           timeout: true,
         });
         throw toExternalFailure("timeout", {
@@ -489,8 +492,8 @@ export async function fetchExternal(
 
       console.error("[external] fetch failed", {
         sourceKey,
-        url: maskUrl(url),
-        reason: error instanceof Error ? error.message : "unknown",
+        url: maskUrl(url, sensitiveQueryParams),
+        reason: maskErrorReason(error, url, sensitiveQueryParams),
         timeout: false,
       });
       throw new ExternalApiError(
@@ -513,17 +516,46 @@ export async function fetchExternal(
   }, { timeout: deadlineExpired(deadlineAt) });
 }
 
-function maskUrl(input: string): string {
+function isSensitiveQueryParam(key: string, sensitiveQueryParams: readonly string[]): boolean {
+  const lowered = key.toLowerCase();
+  return lowered.includes("key")
+    || lowered.includes("service")
+    || lowered.includes("auth")
+    || lowered.includes("token")
+    || sensitiveQueryParams.some((name) => name.toLowerCase() === lowered);
+}
+
+function maskErrorReason(error: unknown, input: string, sensitiveQueryParams: readonly string[] = []): string {
+  let reason = error instanceof Error ? error.message : "unknown";
+  try {
+    // Transport errors may echo the URL or its raw/encoded query values.
+    const variants = new Set<string>();
+    for (const entry of new URL(input).search.slice(1).split("&")) {
+      for (const [key, value] of new URLSearchParams(entry)) {
+        if (!value || !isSensitiveQueryParam(key, sensitiveQueryParams)) continue;
+        // Retain the actual encoding too (for example %53 instead of S).
+        variants.add(entry.slice(entry.indexOf("=") + 1));
+        variants.add(value);
+        variants.add(encodeURIComponent(value));
+        variants.add(new URLSearchParams({ v: value }).toString().slice(2));
+      }
+    }
+    for (const value of [...variants].sort((a, b) => b.length - a.length)) {
+      const escaped = value.replace(/[.*+?^{}$()|[\]\\]/g, "\\$&");
+      reason = reason.replace(new RegExp(escaped, "gi"), "****");
+    }
+    return reason;
+  } catch {
+    return "(invalid-url)";
+  }
+}
+
+function maskUrl(input: string, sensitiveQueryParams: readonly string[] = []): string {
   try {
     const url = new URL(input);
-    for (const key of url.searchParams.keys()) {
-      const lowered = key.toLowerCase();
-      if (
-        lowered.includes("key")
-        || lowered.includes("service")
-        || lowered.includes("auth")
-        || lowered.includes("token")
-      ) {
+    // Snapshot names before set() removes duplicates and mutates the iterator.
+    for (const key of new Set(url.searchParams.keys())) {
+      if (isSensitiveQueryParam(key, sensitiveQueryParams)) {
         url.searchParams.set(key, "****");
       }
     }

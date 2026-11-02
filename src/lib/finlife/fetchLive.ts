@@ -4,7 +4,6 @@ import { ExternalApiError, fetchExternal, type FetchExternalResult } from "@/lib
 const ENDPOINTS: Record<FinlifeKind, string> = {
   deposit: "depositProductsSearch.json",
   saving: "savingProductsSearch.json",
-  pension: "annuitySavingProductsSearch.json",
   "mortgage-loan": "mortgageLoanProductsSearch.json",
   "rent-house-loan": "rentHouseLoanProductsSearch.json",
   "credit-loan": "creditLoanProductsSearch.json",

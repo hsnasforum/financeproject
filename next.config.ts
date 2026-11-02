@@ -31,6 +31,27 @@ function detectWorkspaceRoot(startDir: string, maxDepth = 8): string {
 }
 
 const workspaceRoot = detectWorkspaceRoot(__dirname);
+// Route traces: Next joins each pattern with the project directory and removes matching files after tracing
+// (substring match, so `./.env` also covers every root `.env*` file, including the dev-only template copy).
+const PRIVATE_ROUTE_TRACE_EXCLUDES = [
+  "./.data/**/*",
+  "./tmp/**/*",
+  "./work/**/*",
+  "./__meta/**/*",
+  "./.claude/**/*",
+  "./.dist/**/*",
+  "./.git/**/*",
+  "./.env",
+  "./env.local",
+  "./**/*.db",
+  "./**/*.db-*",
+  "./**/*.sqlite",
+  "./**/*.sqlite-*",
+  "./**/*.sqlite3",
+];
+// The next-server trace applies its patterns as substrings of root-relative paths, so only `.data` is listed
+// there: e.g. `./work/**/*` would also drop next/dist/lib/framework/*. The privacy gate still audits that trace.
+const PRIVATE_SERVER_TRACE_EXCLUDES = ["./.data/**/*"];
 const playwrightDistDir = process.env.PLAYWRIGHT_DIST_DIR?.trim();
 const playwrightTsconfigPath = process.env.PLAYWRIGHT_TSCONFIG_PATH?.trim();
 const useIsolatedDistDir = Boolean(playwrightDistDir && playwrightDistDir !== ".next");
@@ -43,6 +64,12 @@ const nextConfig: NextConfig = {
     "@prisma/client",
     "better-sqlite3",
   ],
+  // Public snapshots are copied explicitly; local data, work trees, real env files and databases never belong in a
+  // trace. Examples (*.example) stay traceable. scripts/standalone_privacy_gate.mjs re-checks the result after build.
+  outputFileTracingExcludes: {
+    "/*": PRIVATE_ROUTE_TRACE_EXCLUDES,
+    "next-server": PRIVATE_SERVER_TRACE_EXCLUDES,
+  },
   outputFileTracingIncludes: {
     "/*": [
       "./node_modules/@prisma/adapter-better-sqlite3/**/*",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStableUnifiedId,
+  isUnifiedCatalogItemEligible,
   mergeUnifiedCatalogRows,
   type UnifiedMergeItem,
 } from "../src/lib/sources/unifiedEnrichPolicy";
@@ -61,5 +62,56 @@ describe("unified catalog contract", () => {
     expect(Array.isArray(first.options)).toBe(true);
     expect(first.options?.map((option) => option.termMonths)).toEqual([6, 12, 24]);
     expect(first.options?.find((option) => option.termMonths === 12)?.intrRate2).toBe(3.9);
+  });
+
+  it("filters obvious non-deposit KDB rows without affecting canonical FINLIFE rows", () => {
+    const kdbBase: UnifiedMergeItem = {
+      stableId: "datago_kdb:KDB-1",
+      sourceId: "datago_kdb",
+      externalKey: "KDB-1",
+      providerName: "한국산업은행",
+      productName: "KDB 국민연금 안심통장",
+    };
+
+    expect(isUnifiedCatalogItemEligible({ item: kdbBase, kind: "deposit" })).toBe(false);
+    expect(isUnifiedCatalogItemEligible({
+      item: { ...kdbBase, productName: "기업정기적금" },
+      kind: "deposit",
+    })).toBe(false);
+    expect(isUnifiedCatalogItemEligible({
+      item: { ...kdbBase, productName: "KDB 정기예금" },
+      kind: "deposit",
+    })).toBe(true);
+    expect(isUnifiedCatalogItemEligible({
+      item: { ...kdbBase, sourceId: "finlife" },
+      kind: "deposit",
+    })).toBe(true);
+  });
+
+  it("deduplicates exact provider and product identities while preserving the winner stableId", () => {
+    const merged = mergeUnifiedCatalogRows({
+      sort: "recent",
+      items: [
+        {
+          stableId: "datago_kdb:OLDER",
+          sourceId: "datago_kdb",
+          externalKey: "OLDER",
+          providerName: "한국산업은행",
+          productName: "KDB 정기예금",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          stableId: "datago_kdb:NEWER",
+          sourceId: "datago_kdb",
+          externalKey: "NEWER",
+          providerName: "한국산업은행",
+          productName: "KDB 정기예금",
+          updatedAt: "2026-02-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.stableId).toBe("datago_kdb:NEWER");
   });
 });

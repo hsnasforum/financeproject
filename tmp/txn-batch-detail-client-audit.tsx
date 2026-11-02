@@ -1,1 +1,0 @@
-../src/app/planning/v3/transactions/[id]/_components/TransactionBatchDetailClient.tsx

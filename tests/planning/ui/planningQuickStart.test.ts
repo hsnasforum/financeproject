@@ -1,4 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { simulateMonthly } from "../../../src/lib/planning/core/v2/simulateMonthly";
+import { buildResultDtoV1 } from "../../../src/lib/planning/v2/resultDto";
+import {
+  hydrateProfileJsonEditorState,
+  normalizeDraftWithDisclosure,
+  toProfileJson,
+} from "../../../src/lib/planning/ui/profileFormModel";
 import {
   buildPlanningQuickStartPreview,
   buildPlanningQuickStartOutput,
@@ -7,6 +14,50 @@ import {
 } from "../../../src/lib/planning/ui/planningQuickStart";
 
 describe("planningQuickStart", () => {
+  it("keeps a custom emergency goal through apply and save without changing its calculation", () => {
+    const draft = {
+      monthlyIncomeNet: 4_800_000,
+      fixedExpense: 2_300_000,
+      goalName: "검토용 비상금",
+      goalTargetAmount: 10_000_000,
+      goalTargetMonth: 12,
+    };
+    const preview = buildPlanningQuickStartPreview(draft);
+    const output = buildPlanningQuickStartOutput(draft);
+    const editor = hydrateProfileJsonEditorState(output.profile, "변경한 프로필 이름");
+    const savedProfile = normalizeDraftWithDisclosure(toProfileJson(editor.form)).profile;
+
+    expect(preview.goalName).toBe("검토용 비상금");
+    expect(output.profile.goals[0]?.name).toBe("검토용 비상금");
+    expect(editor.form.goals[0]?.name).toBe("검토용 비상금");
+    expect(savedProfile.goals[0]).toMatchObject({
+      id: "goal-1",
+      name: "검토용 비상금",
+      targetAmount: 10_000_000,
+      targetMonth: 12,
+    });
+
+    const assumptions = { inflation: 0, expectedReturn: 0 };
+    const simulation = simulateMonthly(savedProfile, assumptions, 12);
+    const legacySimulation = simulateMonthly({
+      ...savedProfile,
+      goals: [{ ...savedProfile.goals[0], name: "비상금" }],
+    }, assumptions, 12);
+    expect(simulation.timeline).toEqual(legacySimulation.timeline);
+    expect(simulation.assumptionsUsed).toEqual(legacySimulation.assumptionsUsed);
+
+    const result = buildResultDtoV1({ simulate: simulation });
+    const legacyResult = buildResultDtoV1({ simulate: legacySimulation });
+    expect(result.summary).toEqual(legacyResult.summary);
+    expect(result.goals).toMatchObject([{
+      id: "goal-1",
+      title: "검토용 비상금",
+      type: "emergencyFund",
+      targetKrw: 10_000_000,
+      targetMonth: 12,
+    }]);
+  });
+
   it("requires income, fixed expense, and one goal before apply", () => {
     expect(isPlanningQuickStartReady({
       monthlyIncomeNet: 3_200_000,

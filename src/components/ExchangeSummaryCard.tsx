@@ -100,7 +100,7 @@ export function ExchangeSummaryCard() {
 
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Market Rates</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">시장 환율</p>
         </div>
 
         {state.loading ? (

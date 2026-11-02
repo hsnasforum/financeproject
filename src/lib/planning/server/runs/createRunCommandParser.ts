@@ -17,6 +17,7 @@ import { type CurrentUserRunRecord } from "./routeService";
 
 export type RunsCreateBody = {
   profileId?: unknown;
+  rerunOfRunId?: unknown;
   title?: unknown;
   scenario?: unknown;
   input?: {
@@ -39,6 +40,7 @@ export type RunInputScenario = NonNullable<CurrentUserRunRecord["input"]["scenar
 
 export type CreatePlanningRunCommand = {
   profileId: string;
+  rerunOfRunId?: string;
   runRequestId: string;
   title: string;
   horizonMonths: number;
@@ -550,10 +552,14 @@ export function parseCreatePlanningRunCommand(
   }
 
   try {
+    if (body.rerunOfRunId !== undefined && (typeof body.rerunOfRunId !== "string" || !body.rerunOfRunId.trim())) {
+      throw new PlanningV2ValidationError("Invalid rerun source", [{ path: "rerunOfRunId", message: "must be a non-empty string" }]);
+    }
     return {
       ok: true,
       command: {
         profileId,
+        ...(body.rerunOfRunId ? { rerunOfRunId: asString(body.rerunOfRunId) } : {}),
         runRequestId,
         title,
         horizonMonths: validateHorizonMonths(inputRow.horizonMonths),

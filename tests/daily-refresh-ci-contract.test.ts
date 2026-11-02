@@ -53,7 +53,8 @@ function freshnessReport(input: {
   const stale = input.stale ?? 0;
   const missing = input.missing ?? 0;
   const invalid = input.invalid ?? 0;
-  const fresh = 8 - stale - missing - invalid;
+  const total = DAILY_REFRESH_CANONICAL_SNAPSHOT_FILES.length;
+  const fresh = total - stale - missing - invalid;
   const generatedAt = input.generatedAt ?? "2026-07-12T00:01:00.000Z";
   const snapshotRows = DAILY_REFRESH_CANONICAL_SNAPSHOT_FILES.map((file, index) => {
     const status = index === 0 && stale > 0
@@ -70,9 +71,11 @@ function freshnessReport(input: {
         : "2026-07-12T00:00:00.000Z";
     const source = file.startsWith("finlife_")
       ? "finlife"
-      : file.startsWith("benefits_")
-        ? "benefits"
-        : "exchange";
+      : file.startsWith("fss_pension_")
+        ? "fss_pension"
+        : file.startsWith("benefits_")
+          ? "benefits"
+          : "exchange";
     return `| ${file} | ${source} | ${snapshotGeneratedAt} | 0.00 | 7 | ${status} |`;
   });
   return [
@@ -89,7 +92,7 @@ function freshnessReport(input: {
     "",
     "## Summary",
     "",
-    "- total: 8",
+    `- total: ${total}`,
     `- fresh: ${fresh}`,
     `- stale: ${stale}`,
     `- missingTimestamp: ${missing}`,
@@ -164,11 +167,12 @@ afterEach(() => {
 describe("daily refresh CI evidence contract", () => {
   it("requires the exact CI env groups without exposing their values", () => {
     expect(() => validateDailyRefreshEnvironment({})).toThrowError(
-      /FINLIFE_API_KEY.*FINLIFE_TOPFIN_GRP_LIST.*DATAGO.*ECOS.*EXIM_EXCHANGE_API_KEY.*EXIM_EXCHANGE_API_URL.*MOIS_BENEFITS_API_KEY.*MOIS_BENEFITS_API_URL.*OPENDART_API_KEY/,
+      /FINLIFE_API_KEY.*FINLIFE_TOPFIN_GRP_LIST.*FSS_PENSION_API_KEY.*DATAGO.*ECOS.*EXIM_EXCHANGE_API_KEY.*EXIM_EXCHANGE_API_URL.*MOIS_BENEFITS_API_KEY.*MOIS_BENEFITS_API_URL.*OPENDART_API_KEY/,
     );
     expect(validateDailyRefreshEnvironment({
       FINLIFE_API_KEY: "finlife",
       FINLIFE_TOPFIN_GRP_LIST: "020000",
+      FSS_PENSION_API_KEY: "pension",
       DATAGO_SERVICE_KEY: "datago",
       ECOS_API_KEY: "ecos",
       EXIM_EXCHANGE_API_KEY: "exchange",
@@ -183,6 +187,7 @@ describe("daily refresh CI evidence contract", () => {
     expect(() => validateDailyRefreshEnvironment({
       FINLIFE_API_KEY: "finlife",
       FINLIFE_TOPFIN_GRP_LIST: "020000",
+      FSS_PENSION_API_KEY: "pension",
       DATAGO_SERVICE_KEY: "datago",
       ECOS_API_KEY: "ecos",
       EXIM_EXCHANGE_API_KEY: "exchange",
@@ -210,7 +215,7 @@ describe("daily refresh CI evidence contract", () => {
       },
       freshness: {
         mode: "strict",
-        fresh: 8,
+        fresh: DAILY_REFRESH_CANONICAL_SNAPSHOT_FILES.length,
         stale: 0,
       },
       approvedPaths: DAILY_REFRESH_APPROVED_PR_PATHS,
@@ -268,7 +273,7 @@ describe("daily refresh CI evidence contract", () => {
     const report = freshnessReport({ stale: 1 });
 
     expect(parseDailyRefreshFreshnessReport(report, { requireStrict: true })).toMatchObject({
-      fresh: 7,
+      fresh: DAILY_REFRESH_CANONICAL_SNAPSHOT_FILES.length - 1,
       stale: 1,
     });
     expect(() => parseDailyRefreshFreshnessReport(report, {

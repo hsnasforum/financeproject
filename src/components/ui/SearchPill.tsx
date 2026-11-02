@@ -53,7 +53,7 @@ const SearchPill = React.forwardRef<HTMLInputElement, SearchPillProps>(
               type="button"
               onClick={onClear}
               className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-300 hover:bg-surface-muted hover:text-slate-500 transition-colors"
-              aria-label="Clear search"
+              aria-label="검색어 지우기"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

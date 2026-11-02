@@ -1,8 +1,8 @@
+import { finlifeIdentity, normalizeFinlifeCompany, validateFinlifeProducts } from "../src/lib/finlife/identity.mjs";
 import path from "node:path";
 
 export const PRIORITY_KIND_ORDER = [
   "saving",
-  "pension",
   "mortgage-loan",
   "rent-house-loan",
   "credit-loan",
@@ -142,121 +142,85 @@ export async function writeFinlifeCompletionEvidence(input, dependencies = {}) {
 }
 
 export async function syncFinlifeProductsToDb(kind, items, options = {}) {
+  // Validation precedes even acquiring a DB client. Nothing from a rejected kind is written.
+  const normalizedItems = validateFinlifeProducts(kind, items);
   const getPrismaClient = requireDependency(options, "getPrismaClient");
   const prisma = await getPrismaClient();
-  const priorityByKind = options.priorityByKind instanceof Map ? options.priorityByKind : KIND_PRIORITY;
-  const currentPriority = priorityByKind.get(kind) ?? Number.MAX_SAFE_INTEGER;
-  const normalizedItems = [];
-  const seenCodes = new Set();
-  for (const item of items) {
-    const code = String(item?.fin_prdt_cd || "").trim();
-    if (!code || seenCodes.has(code)) continue;
-    seenCodes.add(code);
-    normalizedItems.push(item);
-  }
-  const existingRows = normalizedItems.length > 0
-    ? await prisma.product.findMany({
-        where: { finPrdtCd: { in: normalizedItems.map((row) => row.fin_prdt_cd) } },
-        select: { finPrdtCd: true, kind: true },
-      })
-    : [];
-  const existingByCode = new Map(existingRows.map((row) => [row.finPrdtCd, row.kind]));
-  const candidateItems = normalizedItems.length;
-  let providersUpserted = 0;
-  let productsUpserted = 0;
-  let optionsWritten = 0;
-  let skippedCrossKindDuplicates = 0;
-  let replacedCrossKindDuplicates = 0;
-
-  for (const item of normalizedItems) {
-    const finPrdtCd = String(item.fin_prdt_cd || "").trim();
-    const existingKind = existingByCode.get(finPrdtCd);
-    if (existingKind && existingKind !== kind) {
-      const existingPriority = priorityByKind.get(existingKind) ?? Number.MAX_SAFE_INTEGER;
-      if (existingPriority <= currentPriority) {
-        skippedCrossKindDuplicates += 1;
-        continue;
+  return prisma.$transaction(async (tx) => {
+    const existingRows = normalizedItems.length > 0
+      ? await tx.product.findMany({
+          where: { finPrdtCd: { in: normalizedItems.map(row => row.fin_prdt_cd) } },
+          select: { id: true, finPrdtCd: true, kind: true, identityKey: true, raw: true, provider: { select: { code: true } } },
+        })
+      : [];
+    const legacyByIdentity = new Map();
+    for (const row of existingRows) {
+      if (row.identityKey || row.kind !== kind) continue;
+      const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
+      const company = normalizeFinlifeCompany(raw.fin_co_no ?? row.provider?.code);
+      if (raw.fin_co_no && row.provider?.code && normalizeFinlifeCompany(raw.fin_co_no) !== normalizeFinlifeCompany(row.provider.code)) {
+        throw new Error("FINLIFE legacy provider identity mismatch; reconciliation required");
       }
-      replacedCrossKindDuplicates += 1;
+      const identity = finlifeIdentity(kind, { ...raw, fin_prdt_cd: row.finPrdtCd, fin_co_no: company });
+      if (legacyByIdentity.has(identity)) throw new Error("FINLIFE ambiguous legacy identity; reconciliation required");
+      legacyByIdentity.set(identity, row.id);
     }
-
-    const providerName = String(item.kor_co_nm || "").trim();
-    const productName = String(item.fin_prdt_nm || "").trim();
-    const providerNameNorm = normalizeSearchText(providerName);
-    const productNameNorm = normalizeSearchText(productName);
-    const searchTextNorm = normalizeSearchText(`${providerName} ${productName}`);
-    const providerCodeRaw = String(item.fin_co_no || "").trim();
-    const providerCode = providerCodeRaw || `finlife:${providerNameNorm || "unknown"}`;
-    const safeProviderName = providerName || providerCode;
-
-    const provider = await prisma.provider.upsert({
-      where: { code: providerCode },
-      update: { name: safeProviderName },
-      create: { code: providerCode, name: safeProviderName },
-    });
-    providersUpserted += 1;
-
-    const product = await prisma.product.upsert({
-      where: { finPrdtCd },
-      update: {
-        kind,
-        name: productName || null,
-        providerId: provider.id,
-        providerNameNorm: providerNameNorm || null,
-        productNameNorm: productNameNorm || null,
-        searchTextNorm: searchTextNorm || null,
-        raw: item.raw ?? null,
-      },
-      create: {
-        finPrdtCd,
-        kind,
-        name: productName || null,
-        providerId: provider.id,
-        providerNameNorm: providerNameNorm || null,
-        productNameNorm: productNameNorm || null,
-        searchTextNorm: searchTextNorm || null,
-        raw: item.raw ?? null,
-      },
-    });
-    productsUpserted += 1;
-
-    await prisma.productOption.deleteMany({ where: { productId: product.id } });
-    if (Array.isArray(item.options) && item.options.length > 0) {
-      await prisma.productOption.createMany({
-        data: item.options.map((option) => ({
-          productId: product.id,
-          saveTrm: option.save_trm == null ? null : String(option.save_trm),
-          intrRate: typeof option.intr_rate === "number" ? option.intr_rate : null,
-          intrRate2: typeof option.intr_rate2 === "number" ? option.intr_rate2 : null,
-          raw: option.raw ?? null,
-        })),
+    let providersUpserted = 0, productsUpserted = 0, optionsWritten = 0;
+    for (const item of normalizedItems) {
+      const identityKey = finlifeIdentity(kind, item.raw);
+      const providerCode = normalizeFinlifeCompany(item.raw.fin_co_no);
+      const providerName = String(item.kor_co_nm || "").trim();
+      const productName = String(item.fin_prdt_nm || "").trim();
+      const provider = await tx.provider.upsert({
+        where: { code: providerCode },
+        update: { name: providerName || providerCode },
+        create: { code: providerCode, name: providerName || providerCode },
       });
-      optionsWritten += item.options.length;
+      providersUpserted += 1;
+      const data = {
+        identityKey,
+        kind,
+        name: productName || null,
+        providerId: provider.id,
+        providerNameNorm: normalizeSearchText(providerName) || null,
+        productNameNorm: normalizeSearchText(productName) || null,
+        searchTextNorm: normalizeSearchText(providerName + " " + productName) || null,
+        raw: item.raw,
+      };
+      const legacyId = legacyByIdentity.get(identityKey);
+      const product = legacyId !== undefined
+        ? await tx.product.update({ where: { id: legacyId }, data })
+        : await tx.product.upsert({
+            where: { identityKey },
+            update: data,
+            create: { ...data, finPrdtCd: item.fin_prdt_cd },
+          });
+      productsUpserted += 1;
+      await tx.productOption.deleteMany({ where: { productId: product.id } });
+      if (item.options.length > 0) {
+        await tx.productOption.createMany({
+          data: item.options.map(option => ({
+            productId: product.id,
+            saveTrm: option.save_trm == null ? null : String(option.save_trm),
+            intrRate: typeof option.intr_rate === "number" ? option.intr_rate : null,
+            intrRate2: typeof option.intr_rate2 === "number" ? option.intr_rate2 : null,
+            raw: option.raw,
+          })),
+        });
+        optionsWritten += item.options.length;
+      }
     }
-  }
-
-  let inventoryItems = null;
-  let inventoryDeltaItems = null;
-  let staleCandidateItems = null;
-  try {
-    inventoryItems = nonNegativeCount(await prisma.product.count({ where: { kind } }));
-    inventoryDeltaItems = inventoryItems - candidateItems;
-    staleCandidateItems = Math.max(0, inventoryItems - productsUpserted);
-  } catch {
-    // Inventory diagnostics must not turn successful product writes into a failed sync.
-  }
-
-  return {
-    providersUpserted,
-    productsUpserted,
-    optionsWritten,
-    skippedCrossKindDuplicates,
-    replacedCrossKindDuplicates,
-    candidateItems,
-    inventoryItems,
-    inventoryDeltaItems,
-    staleCandidateItems,
-  };
+    let inventoryItems = null;
+    try { inventoryItems = nonNegativeCount(await tx.product.count({ where: { kind } })); }
+    catch { /* Optional inventory observation does not replace the transaction result. */ }
+    return {
+      providersUpserted, productsUpserted, optionsWritten,
+      skippedCrossKindDuplicates: 0, replacedCrossKindDuplicates: 0,
+      candidateItems: normalizedItems.length, inventoryItems,
+      inventoryDeltaItems: inventoryItems === null ? null : inventoryItems - normalizedItems.length,
+      staleCandidateItems: inventoryItems === null ? null : Math.max(0, inventoryItems - productsUpserted),
+    };
+  }, { timeout: 60_000 });
 }
 
 export async function persistFinlifeSyncKind(input, dependencies = {}) {
@@ -286,6 +250,21 @@ export async function persistFinlifeSyncKind(input, dependencies = {}) {
       return;
     }
   };
+
+  try {
+    const items = validateFinlifeProducts(input.kind, input.snapshot.items);
+    input = {
+      ...input,
+      snapshot: {
+        ...input.snapshot,
+        items,
+        meta: { ...input.snapshot.meta, totalProducts: items.length, totalOptions: items.reduce((sum, item) => sum + item.options.length, 0) },
+      },
+    };
+  } catch (error) {
+    recordFailure("integrity", "FINLIFE_INTEGRITY_FAILED");
+    throw new FinlifeSyncPersistenceError(input.kind, "integrity", error);
+  }
 
   try {
     recordAttempt("running", "db");

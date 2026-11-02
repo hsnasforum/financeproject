@@ -95,9 +95,10 @@ export function assessAssumptionsHealth(input: AssumptionsHealthInput): Assumpti
   const warnings: WarningV2[] = [];
   const snapshotMeta = input.snapshotMeta;
 
+  const snapshotAsOf = toIso(snapshotMeta?.asOf);
   const snapshotMissing = snapshotMeta?.missing === true
-    || toIso(snapshotMeta?.asOf).length === 0
-    || toIso(snapshotMeta?.fetchedAt).length === 0;
+    || snapshotAsOf.length === 0
+    || !Number.isFinite(Date.parse(snapshotAsOf));
 
   let snapshotStaleDays: number | undefined;
   if (snapshotMissing) {
@@ -106,7 +107,7 @@ export function assessAssumptionsHealth(input: AssumptionsHealthInput): Assumpti
       "warn",
     ));
   } else {
-    snapshotStaleDays = daysSince(toIso(snapshotMeta?.fetchedAt), input.nowIso);
+    snapshotStaleDays = daysSince(snapshotAsOf, input.nowIso);
     if (typeof snapshotStaleDays === "number" && snapshotStaleDays > SNAPSHOT_VERY_STALE_DAYS) {
       warnings.push(buildWarning(
         "SNAPSHOT_VERY_STALE",
@@ -120,6 +121,15 @@ export function assessAssumptionsHealth(input: AssumptionsHealthInput): Assumpti
         { days: snapshotStaleDays },
       ));
     }
+  }
+
+  const snapshotWarningsCount = Math.max(0, Math.trunc(snapshotMeta?.warningsCount ?? 0));
+  if (!snapshotMissing && snapshotWarningsCount > 0) {
+    warnings.push(buildWarning(
+      "SNAPSHOT_SOURCE_WARNINGS",
+      "warn",
+      { warningsCount: snapshotWarningsCount },
+    ));
   }
 
   const investReturnPct = input.assumptions.investReturnPct;

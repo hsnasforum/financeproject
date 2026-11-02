@@ -1,4 +1,4 @@
-import { roundKrw } from "../../calc";
+import { EMERGENCY_FUND_TARGET_MONTHS, roundKrw } from "../../calc";
 import { type MonthlyCashflow, type ProfileV2DraftPatch } from "../domain/types";
 
 export type ProfileDraftEvidence = {
@@ -122,13 +122,13 @@ export function buildProfileDraftEstimateFromCashflow(
   const incomeMedianKrw = medianRounded(months.map((row) => row.incomeKrw));
   const fixedMedianKrw = medianRounded(months.map((row) => row.fixedOutflowKrw));
   const variableMedianKrw = medianRounded(months.map((row) => row.variableOutflowKrw));
-  const emergencyFundTargetKrw = Math.max(0, roundKrw(fixedMedianKrw * 3));
+  const emergencyFundTargetKrw = Math.max(0, roundKrw(fixedMedianKrw * EMERGENCY_FUND_TARGET_MONTHS));
 
   const assumptions = [
     `income estimate uses median of recent ${months.length} months`,
     `essential expense estimate uses fixed median of recent ${months.length} months`,
     `variable expense estimate uses variable median of recent ${months.length} months`,
-    "emergency fund target = essential expense x 3 months (assumption)",
+    `emergency fund target = essential expense x ${EMERGENCY_FUND_TARGET_MONTHS} months (assumption)`,
     "transfers are excluded from draft estimation",
   ];
 

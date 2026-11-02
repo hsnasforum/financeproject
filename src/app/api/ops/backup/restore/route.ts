@@ -10,6 +10,7 @@ import {
   validateOpsBackupRestoreFile,
   type OpsBackupRestoreMode,
 } from "../../../../../lib/ops/backup/backupRestoreRouteService";
+import { parseBackupUploadFormData } from "../../../../../lib/ops/backup/backupUploadRequest";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
 import {
   planningUserMeta,
@@ -25,23 +26,9 @@ export async function POST(request: Request) {
   if (blocked) return blocked;
 
   const startedAt = Date.now();
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    const response = opsErrorResponse({
-      code: "VALIDATION",
-      message: "multipart/form-data 형식이 필요합니다.",
-      status: 400,
-    });
-    ensureOpsBackupRestoreVaultCsrfCookie(request, response);
-    return response;
-  }
-
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
-    assertOpsBackupRestoreVaultCsrf(request, asString(formData.get("csrf")));
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
@@ -62,6 +49,26 @@ export async function POST(request: Request) {
     return response;
   }
   return await withPlanningRouteUser(request, async (currentUser) => {
+    const formResult = await parseBackupUploadFormData(request);
+    if (!formResult.ok) {
+      const response = opsErrorResponse(formResult.error);
+      ensureOpsBackupRestoreVaultCsrfCookie(request, response);
+      return response;
+    }
+    const { formData } = formResult;
+    try {
+      assertOpsBackupRestoreVaultCsrf(request, asString(formData.get("csrf")));
+    } catch (error) {
+      const guard = toGuardErrorResponse(error);
+      const response = opsErrorResponse({
+        code: guard?.code ?? "INTERNAL",
+        message: guard?.message ?? "요청 검증 중 오류가 발생했습니다.",
+        status: guard?.status ?? 500,
+      });
+      ensureOpsBackupRestoreVaultCsrfCookie(request, response);
+      return response;
+    }
+
     const fileResult = validateOpsBackupRestoreFile(formData.get("file"));
     if (!fileResult.ok) {
       const response = opsErrorResponse({
@@ -86,6 +93,7 @@ export async function POST(request: Request) {
         passphrase,
         previewToken,
         startedAt,
+        scope: "ops",
       });
       if (!result.ok) {
         const response = opsErrorResponse({

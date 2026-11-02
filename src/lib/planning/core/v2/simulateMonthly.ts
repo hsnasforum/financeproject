@@ -131,11 +131,14 @@ function allocateGoalContributions(
   const totalMinimumNeed = minimumNeeds.reduce((sum, item) => sum + item.amount, 0);
 
   if (totalMinimumNeed > 0 && budget > 0) {
+    // Every minimum uses the same available budget, regardless of input order.
+    const minimumBudget = budget;
+    const canFundMinimums = totalMinimumNeed <= minimumBudget;
     minimumNeeds.forEach((item) => {
       if (item.amount <= 0 || budget <= 0) return;
-      const planned = totalMinimumNeed <= budget
+      const planned = canFundMinimums
         ? item.amount
-        : (budget * item.amount) / totalMinimumNeed;
+        : (minimumBudget * item.amount) / totalMinimumNeed;
       const remaining = Math.max(0, item.goal.targetAmount - item.goal.currentAmount);
       const contribution = Math.min(remaining, planned, budget);
       if (contribution <= 0) return;
@@ -156,6 +159,8 @@ function allocateGoalContributions(
       return { goal, weight };
     });
     const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
+    // Cap leftovers remain cash; do not redistribute them within this month.
+    const weightedBudget = budget;
 
     weighted.forEach((item) => {
       if (budget <= 0) return;
@@ -163,8 +168,8 @@ function allocateGoalContributions(
       if (remaining <= 0) return;
 
       const planned = totalWeight > 0
-        ? (budget * item.weight) / totalWeight
-        : budget / weighted.length;
+        ? (weightedBudget * item.weight) / totalWeight
+        : weightedBudget / weighted.length;
       const contribution = Math.min(remaining, planned, budget);
       if (contribution <= 0) return;
 
@@ -208,7 +213,9 @@ function buildGoalStatuses(goals: GoalState[], horizonMonths: number): GoalStatu
       achieved,
       achievedMonth: goal.achievedMonth,
       targetMonth: goal.targetMonth,
-      onTrack: achievedByTarget || progressRatio + 1e-9 >= expectedProgress * 0.9,
+      onTrack: horizonMonths >= goal.targetMonth
+        ? achievedByTarget
+        : achievedByTarget || progressRatio + 1e-9 >= expectedProgress * 0.9,
       shortfall: round2(Math.max(0, goal.targetAmount - goal.currentAmount)),
     };
   });
@@ -355,6 +362,10 @@ export function simulateMonthly(
   });
 
   const timeline: TimelineRowV2[] = [];
+  // Keep month-zero evidence too: the existing normalizer truncates submonth targets to zero.
+  const shortfallsAtTarget = new Map(goals.map((goal) => [
+    goal.id, round2(Math.max(0, goal.targetAmount - goal.currentAmount)),
+  ]));
   const warnings = [] as ReturnType<typeof buildWarning>[];
   const explainability = [] as ReturnType<typeof explainFromTimelineRow>[];
   const traces: DecisionTrace[] = [];
@@ -372,7 +383,8 @@ export function simulateMonthly(
   let insolvencyMonths = 0;
   const phaseOverlap = hasPhaseOverlap(profile, horizonMonths);
   const emergencyMonthlyExpenseTarget = Math.max(0, profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses);
-  const emergencyFundTargetKrw = emergencyMonthlyExpenseTarget * getAllocationPolicy(policyId).rules.minEmergencyMonths;
+  const emergencyFundTargetMonths = getAllocationPolicy(policyId).rules.minEmergencyMonths;
+  const emergencyFundTargetKrw = emergencyMonthlyExpenseTarget * emergencyFundTargetMonths;
   let hadEmergencyCoverage = liquidAssets + 1e-9 >= emergencyFundTargetKrw;
 
   for (let month = 1; month <= horizonMonths; month += 1) {
@@ -532,6 +544,12 @@ export function simulateMonthly(
       policyId === "balanced" ? liquidAssets : Math.min(liquidAssets, policyBudgets.goalBudget),
     );
     liquidAssets = goalAllocation.liquidAssets;
+    goals.forEach((goal) => {
+      if (month === goal.targetMonth) {
+        // Capture exact funds before timeline percentages are rounded or later funding occurs.
+        shortfallsAtTarget.set(goal.id, round2(Math.max(0, goal.targetAmount - goal.currentAmount)));
+      }
+    });
 
     if (liquidAssets < 0 && investmentAssets > 0) {
       const coverAfterDebt = coverNegativeLiquidWithInvestments(liquidAssets, investmentAssets);
@@ -584,7 +602,7 @@ export function simulateMonthly(
         pushTrace({
           monthIndex,
           code: "EMERGENCY_TARGET_REACHED",
-          message: "비상금 목표 수준(3개월 지출)을 충족했습니다.",
+          message: `비상금 목표 수준(${emergencyFundTargetMonths}개월 지출)을 충족했습니다.`,
           data: {
             liquidAssets: round2(liquidAssets),
             emergencyFundTargetKrw: round2(emergencyFundTargetKrw),
@@ -668,6 +686,7 @@ export function simulateMonthly(
       goal.achievedMonth = achieved ? goal.targetMonth : null;
       goal.onTrack = achieved;
       goal.shortfall = round2(Math.max(0, requiredNestEgg - availableAssets));
+      shortfallsAtTarget.set(goal.goalId, goal.shortfall);
 
       explainability.push(buildExplainabilityEntry(
         "CASHFLOW_SCHEDULE",
@@ -751,13 +770,16 @@ export function simulateMonthly(
   }
 
   goalStatus.forEach((goal) => {
-    if (!goal.achieved && goal.targetMonth <= horizonMonths) {
+    const achievedByTarget = goal.achievedMonth !== null && goal.achievedMonth <= goal.targetMonth;
+    if (!achievedByTarget && goal.targetMonth <= horizonMonths) {
+      // Every elapsed target month was captured above, including lifecycle retirement goals.
+      const shortfall = shortfallsAtTarget.get(goal.goalId)!;
       warnings.push(buildWarning("GOAL_MISSED", {
         month: goal.targetMonth,
         meta: {
           goalId: goal.goalId,
           goalName: goal.name,
-          shortfall: goal.shortfall,
+          shortfall,
         },
       }));
       pushTrace({
@@ -767,7 +789,7 @@ export function simulateMonthly(
         data: {
           goalId: goal.goalId,
           goalName: goal.name,
-          shortfall: round2(goal.shortfall),
+          shortfall,
           targetMonth: goal.targetMonth,
         },
         related: [{ kind: "goal", id: goal.goalId }],
@@ -779,14 +801,14 @@ export function simulateMonthly(
         [
           {
             driver: "goalFundingTransfer",
-            amount: -goal.shortfall,
-            note: `Goal ${goal.name} remains short by ${goal.shortfall}.`,
+            amount: -shortfall,
+            note: `Goal ${goal.name} was short by ${shortfall} at month ${goal.targetMonth}.`,
           },
         ],
         {
           goalId: goal.goalId,
           goalName: goal.name,
-          shortfall: goal.shortfall,
+          shortfall,
         },
       ));
     }

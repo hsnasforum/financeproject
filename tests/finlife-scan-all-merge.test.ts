@@ -42,4 +42,20 @@ describe("finlife scan-all merge", () => {
     expect(payload.meta.optionsMissingCount).toBe(1);
     expect(payload.data.find((row) => row.fin_prdt_cd === "B")?.options.length).toBe(0);
   });
+
+  it("preserves company boundaries while selecting each latest disclosure", () => {
+    const raw = { fin_co_no: "0001234", fin_prdt_cd: "SAME", dcls_month: "202609" };
+    const pages = [
+      page([{ fin_prdt_cd: "SAME", fin_co_no: "0001234", options: [], raw }], 1, true),
+      page([
+        { fin_prdt_cd: "SAME", fin_co_no: "0007654", options: [], raw: { ...raw, fin_co_no: "0007654" } },
+        { fin_prdt_cd: "SAME", fin_co_no: "0001234", options: [{ intr_rate: 9.1, raw: { ...raw, dcls_month: "202608" } }], raw: { ...raw, dcls_month: "202608" } },
+      ], 2, false),
+    ];
+    const payload = sourceTest.buildScanAllPayload({ kind: "deposit", topFinGrpNo: "020000", mode: "mock", pageResults: pages, truncatedByMaxPages: false });
+
+    expect(payload.meta.totalProducts).toBe(2);
+    expect(payload.meta.totalOptions).toBe(0);
+    expect(payload.data.find((row) => row.fin_co_no === "0001234")?.raw.dcls_month).toBe("202609");
+  });
 });

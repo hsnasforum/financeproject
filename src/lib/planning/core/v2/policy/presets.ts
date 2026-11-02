@@ -1,3 +1,4 @@
+import { EMERGENCY_FUND_TARGET_MONTHS } from "../../../calc/emergencyFundPolicy";
 import { type AllocationPolicy, type AllocationPolicyId } from "./types";
 
 export const POLICY_PRESETS: Record<AllocationPolicyId, AllocationPolicy> = {
@@ -7,7 +8,7 @@ export const POLICY_PRESETS: Record<AllocationPolicyId, AllocationPolicy> = {
     rules: {
       // Keep legacy v2 allocation behavior as default.
       emergencyFirst: false,
-      minEmergencyMonths: 3,
+      minEmergencyMonths: EMERGENCY_FUND_TARGET_MONTHS,
       debtExtraPaymentPctOfSurplus: 1,
       investMinPctOfSurplus: 0,
       lumpSumReservePctOfSurplus: 0,
@@ -22,7 +23,7 @@ export const POLICY_PRESETS: Record<AllocationPolicyId, AllocationPolicy> = {
     title: "Safety-first",
     rules: {
       emergencyFirst: true,
-      minEmergencyMonths: 6,
+      minEmergencyMonths: EMERGENCY_FUND_TARGET_MONTHS,
       debtExtraPaymentPctOfSurplus: 0.8,
       investMinPctOfSurplus: 0,
       lumpSumReservePctOfSurplus: 0.2,
@@ -37,7 +38,7 @@ export const POLICY_PRESETS: Record<AllocationPolicyId, AllocationPolicy> = {
     title: "Growth-first",
     rules: {
       emergencyFirst: false,
-      minEmergencyMonths: 3,
+      minEmergencyMonths: EMERGENCY_FUND_TARGET_MONTHS,
       debtExtraPaymentPctOfSurplus: 0.2,
       investMinPctOfSurplus: 0.6,
       lumpSumReservePctOfSurplus: 0.2,

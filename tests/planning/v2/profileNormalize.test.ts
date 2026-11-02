@@ -2,6 +2,63 @@ import { describe, expect, it } from "vitest";
 import { normalizeProfileInput } from "../../../src/lib/planning/v2/profileNormalize";
 
 describe("normalizeProfileInput", () => {
+  it.each([
+    "검토용 비상금",
+    "Family Emergency Fund",
+    "비상금 1,000만 원",
+  ])("preserves the custom emergency goal name %s", (name) => {
+    const result = normalizeProfileInput({
+      monthlyIncomeNet: 4_800_000,
+      monthlyEssentialExpenses: 2_300_000,
+      monthlyDiscretionaryExpenses: 0,
+      liquidAssets: 0,
+      investmentAssets: 0,
+      debts: [],
+      goals: [{
+        id: "goal-1",
+        name,
+        targetAmount: 10_000_000,
+        currentAmount: 1_000_000,
+        targetMonth: 12,
+        priority: 3,
+        minimumMonthlyContribution: 0,
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.profile.goals).toEqual([{
+      id: "goal-1",
+      name,
+      targetAmount: 10_000_000,
+      currentAmount: 1_000_000,
+      targetMonth: 12,
+      priority: 3,
+      minimumMonthlyContribution: 0,
+    }]);
+  });
+
+  it.each(["비상", "비상금", "Emergency", "Emergency Fund"])(
+    "keeps the legacy emergency label %s canonical",
+    (name) => {
+      const result = normalizeProfileInput({
+        monthlyIncomeNet: 4_800_000,
+        monthlyEssentialExpenses: 2_300_000,
+        monthlyDiscretionaryExpenses: 0,
+        liquidAssets: 0,
+        investmentAssets: 0,
+        debts: [],
+        goals: [{ id: "goal-1", name, targetAmount: 10_000_000, targetMonth: 12 }],
+      });
+
+      expect(result.profile.goals[0]).toMatchObject({
+        id: "goal-1",
+        name: "Emergency Fund",
+        targetAmount: 10_000_000,
+        targetMonth: 12,
+      });
+    },
+  );
+
   it("builds canonical profile from legacy-only input", () => {
     const result = normalizeProfileInput({
       monthlyIncomeNet: 4_000_000,

@@ -49,6 +49,9 @@ function pnpmVersionIssues(workflows: ReturnType<typeof readWorkflows>): string[
         if (!step.uses?.startsWith("pnpm/action-setup@")) continue;
         setupCount += 1;
         const location = `${file}/${jobId}/steps[${index}] (${step.name})`;
+        if (step.uses !== "pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86") {
+          issues.push(`${location}: uses=${step.uses} must equal the reviewed pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86`);
+        }
         const manifestInput = step.with?.package_json_file ?? "package.json";
         if (typeof manifestInput !== "string" || manifestInput.includes("${{")) {
           issues.push(`${location}: cannot statically resolve package_json_file=${manifestInput}`);
@@ -109,8 +112,14 @@ describe("quality gate registry", () => {
       "planning:v2:e2e:fast",
     ]);
     expect(QUALITY_GATE_SUITES["release:verify"].preflightRequired).toContain("e2e:inventory:check");
+    expect(QUALITY_GATE_SUITES["release:verify"].preflightRequired).toContain("freshness:release");
+    expect(renderQualityGateCommand("freshness:release")).toBe("pnpm freshness:release");
     expect(renderQualityGateCommand("e2e:inventory:check")).toBe("pnpm e2e:inventory:check");
     expect(QUALITY_GATE_SUITES["release:verify"].lateRequired).toContain("e2e:release:contracts");
+    expect(QUALITY_GATE_SUITES["release:verify"].lateRequired).toEqual(expect.arrayContaining([
+      "planning:v2:prod:smoke",
+      "planning:v2:desktop:smoke",
+    ]));
     expect(renderQualityGateCommand("e2e:release:contracts")).toBe("pnpm e2e:release:contracts");
     expect(releaseContractsScript).toContain("node scripts/next_build_safe.mjs --webpack");
     expect(releaseContractsScript).toContain("--runtime=production");
@@ -191,12 +200,16 @@ describe("quality gate registry", () => {
   });
 
   it.each([
-    { file: "ci.yml", timeouts: { verify: 40 } },
+    { file: "ci.yml", timeouts: { verify: 40 }, nativeTimeouts: { windows_native: 45 } },
     { file: "e2e-smoke.yml", timeouts: { core_flows: 35, dart_index_present: 30, dart_index_missing: 30 } },
-  ])("keeps one bounded Chromium install per required job in $file", ({ file, timeouts }) => {
+  ])("keeps bounded Chromium installation and native job timeouts in $file", ({ file, timeouts, nativeTimeouts }) => {
     const workflow = loadYaml(read(`.github/workflows/${file}`)) as Workflow;
 
-    expect(Object.keys(workflow.jobs).sort()).toEqual(Object.keys(timeouts).sort());
+    expect(Object.keys(workflow.jobs).sort()).toEqual([...Object.keys(timeouts), ...Object.keys(nativeTimeouts ?? {})].sort());
+    for (const [jobId, timeout] of Object.entries(nativeTimeouts ?? {})) {
+      expect(workflow.jobs[jobId]["timeout-minutes"]).toBe(timeout);
+      expect(workflow.jobs[jobId].steps.filter((step) => step.run === "pnpm e2e:install:chromium")).toHaveLength(0);
+    }
     expect(workflow.env).toMatchObject({
       PLAYWRIGHT_INSTALL_ATTEMPTS: "1",
       PLAYWRIGHT_INSTALL_TIMEOUT_MS: "900000",
@@ -219,12 +232,14 @@ describe("quality gate registry", () => {
     }
   });
 
-  it.each(["ci.yml", "e2e-smoke.yml"])("pins the existing toolchain without changing Node 20 in %s", (file) => {
+  it.each(["ci.yml", "e2e-smoke.yml"])("pins the declared toolchain in %s", (file) => {
     const workflow = loadYaml(read(`.github/workflows/${file}`)) as Workflow;
-    const pkg = JSON.parse(read("package.json")) as { packageManager?: string };
+    const pkg = JSON.parse(read("package.json")) as { packageManager?: string; engines?: { node?: string } };
+    const nodeVersion = pkg.engines?.node;
+    expect(nodeVersion).toBe("22.22.2");
     const pins = {
       "actions/checkout": "df4cb1c069e1874edd31b4311f1884172cec0e10",
-      "pnpm/action-setup": "0ebf47130e4866e96fce0953f49152a61190b271",
+      "pnpm/action-setup": "0977fd99725f1db4007ccb2928dbb4e90d06cc86",
       "actions/setup-node": "a0853c24544627f65ddf259abe73b1d18a591444",
     };
 
@@ -239,16 +254,47 @@ describe("quality gate registry", () => {
         version: "9.15.9",
       });
       expect(job.steps.find((step) => step.name === "Setup Node.js")?.with).toEqual({
-        "node-version": "20",
+        "node-version": nodeVersion,
         cache: "pnpm",
         "cache-dependency-path": "pnpm-lock.yaml",
       });
     }
   });
 
+  it("aligns every workflow setup-node version with package.json engines.node", () => {
+    const pkg = JSON.parse(read("package.json")) as { engines?: { node?: string } };
+    const setupNodeSteps = readWorkflows().flatMap(({ file, workflow }) =>
+      Object.entries(workflow.jobs).flatMap(([jobId, job]) =>
+        (job.steps ?? [])
+          .filter((step) => step.uses?.startsWith("actions/setup-node@"))
+          .map((step) => ({ location: `${file}/${jobId}`, nodeVersion: step.with?.["node-version"] })),
+      ),
+    );
 
-  it("aligns every discovered pnpm setup input with its packageManager", () => {
+    expect(setupNodeSteps.length).toBeGreaterThan(0);
+    expect(setupNodeSteps.filter((step) => step.nodeVersion !== pkg.engines?.node)).toEqual([]);
+  });
+
+
+  it("pins every discovered pnpm setup and aligns its input with packageManager", () => {
     expect(pnpmVersionIssues(readWorkflows())).toEqual([]);
+  });
+
+  it.each(readWorkflows().flatMap(({ file, workflow }) =>
+    Object.entries(workflow.jobs).flatMap(([jobId, job]) =>
+      (job.steps ?? []).flatMap((step, index) => step.uses?.startsWith("pnpm/action-setup@")
+        ? ["0ebf47130e4866e96fce0953f49152a61190b271", "v6", "0000000000000000000000000000000000000000"]
+          .map((ref) => ({ file, jobId, index, ref }))
+        : []),
+    ),
+  ))("rejects $ref at $file/$jobId/steps[$index]", ({ file, jobId, index, ref }) => {
+    const workflows = readWorkflows();
+    const workflow = workflows.find((entry) => entry.file === file)!.workflow;
+    workflow.jobs[jobId].steps[index].uses = `pnpm/action-setup@${ref}`;
+    expect(pnpmVersionIssues(workflows)).toEqual([
+      expect.stringContaining(`${file}/${jobId}/steps[${index}]`),
+    ]);
+    expect(pnpmVersionIssues(workflows)[0]).toContain("must equal the reviewed pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86");
   });
 
   it.each(["release.yml", "daily-refresh.yml", "rules-tune-pr.yml"])(
@@ -292,6 +338,47 @@ describe("quality gate registry", () => {
 
   it("does not pass pnpm alignment when no setup steps are discovered", () => {
     expect(pnpmVersionIssues([])).toEqual(["No pnpm/action-setup steps discovered"]);
+  });
+
+  it("pins the runtime toolchain, workflow actions, and native Windows smoke", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      packageManager?: string;
+      engines?: { node?: string; pnpm?: string };
+    };
+    const workflows = [read(".github/workflows/ci.yml"), read(".github/workflows/release.yml")];
+    const usesLines = workflows.flatMap((source) => source.split(/\r?\n/u).filter((line) => line.trim().startsWith("uses:")));
+
+    expect(pkg.packageManager).toBe("pnpm@9.15.9");
+    expect(pkg.engines).toEqual({ node: "22.22.2", pnpm: "9.15.9" });
+    expect(usesLines.length).toBeGreaterThan(0);
+    expect(usesLines.every((line) => /@[0-9a-f]{40}(?:\s+#.*)?$/u.test(line.trim()))).toBe(true);
+    for (const workflow of workflows) {
+      expect(workflow).toContain('node-version: "22.22.2"');
+    }
+    const ci = workflows[0] ?? "";
+    expect(ci).toContain("windows_native:");
+    expect(ci).toContain("runs-on: windows-latest");
+    expect(ci).toContain('DATABASE_URL: "file:./windows-ci.db"');
+    expect(ci).not.toContain('DATABASE_URL: "file:./prisma/windows-ci.db"');
+    expect(ci).toContain("planning:v2:prod:smoke");
+    expect(ci).toContain("planning:v2:desktop:smoke");
+    expect(ci).toContain("--use-installed-database");
+    expect(ci).toContain("TEMP: ${{ runner.temp }}");
+    expect(ci).toContain("TMP: ${{ runner.temp }}");
+    const windowsStart = ci.indexOf("\n  windows_native:\n");
+    const nextJob = ci.slice(windowsStart + 1).search(/\n  [a-z_]+:\n/u);
+    const windowsJob = nextJob < 0 ? ci.slice(windowsStart) : ci.slice(windowsStart, windowsStart + 1 + nextJob);
+    const windowsLines = windowsJob.split("\n").map((line) => line.trim());
+    const windowsCommands = windowsLines.flatMap((line, index) => (line.startsWith("pnpm ") ? [index] : []));
+    expect(windowsCommands.length).toBeGreaterThanOrEqual(9);
+    for (const index of windowsCommands) {
+      expect(windowsLines[index + 1], windowsLines[index]).toBe("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }");
+    }
+    expect(ci).toContain("desktop-artifact-provenance.test.ts");
+    expect(ci).toContain("planningRuntimeRoot.test.ts");
+    expect(ci).toContain("planningWriterLease.test.ts");
+    expect(ci).toContain("planningDesktopSessionServer.test.ts");
+    expect(ci).not.toContain("planningDesktopLauncher.test.ts");
   });
 
   it("keeps planning route coverage discovery-based instead of fixed counts or proxy lists", () => {

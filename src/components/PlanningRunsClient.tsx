@@ -6,7 +6,7 @@ import {
   bodyCompactFieldClassName,
   bodyFieldClassName,
 } from "@/components/ui/BodyTone";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -713,9 +713,7 @@ export function PlanningRunsClient({
             >
               PDF 인쇄
             </Button>
-            <Link href={appendProfileIdQuery("/planning", filterProfileId)}>
-              <Button variant="primary" className="rounded-full font-bold h-9">플래닝으로 돌아가기</Button>
-            </Link>
+            <ButtonLink href={appendProfileIdQuery("/planning", filterProfileId)} variant="primary" className="rounded-full font-bold h-9">플래닝으로 돌아가기</ButtonLink>
           </div>
         )}
       />
@@ -1029,6 +1027,7 @@ export function PlanningRunsClient({
                   두 실행의 차이를 여기서 먼저 읽고, 필요하면 상세 비교 리포트에서 변화 근거와 비교 자료를 더 확인합니다.
                 </p>
                 <a
+                  aria-label={`${compareResult.base.title || compareResult.base.id} 실행을 기준으로 ${compareResult.other.title || compareResult.other.id} 실행 상세 비교 리포트 열기`}
                   className="block w-full text-center py-3 rounded-xl bg-primary text-white text-xs font-black hover:bg-navy shadow-lg shadow-navy/10 transition-all active:scale-[0.98]"
                   href={`/api/planning/v2/runs/${encodeURIComponent(compareResult.other.id)}/report?compareTo=${encodeURIComponent(compareResult.base.id)}`}
                   target="_blank"

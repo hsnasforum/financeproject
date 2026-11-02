@@ -3,7 +3,6 @@ import type { FallbackMeta } from "@/lib/http/fallbackMeta";
 export type FinlifeKind =
   | "deposit"
   | "saving"
-  | "pension"
   | "mortgage-loan"
   | "rent-house-loan"
   | "credit-loan";
@@ -19,7 +18,7 @@ export type FinlifeParams = {
 
 export type FinlifeCardFreshnessMeta = {
   sourceId: string;
-  kind: "deposit" | "saving";
+  kind: FinlifeKind;
   lastSyncedAt?: string | null;
   freshnessStatus?: "ok" | "stale" | "error" | "empty";
   fallbackMode?: string | null;
@@ -35,6 +34,7 @@ export type NormalizedOption = {
 
 export type NormalizedProduct = {
   fin_prdt_cd: string;
+  identityKey?: string;
   fin_co_no?: string;
   kor_co_nm?: string;
   fin_prdt_nm?: string;

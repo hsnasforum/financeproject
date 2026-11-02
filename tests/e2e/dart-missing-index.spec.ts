@@ -27,10 +27,10 @@ test("invest companies hides missing-index ops commands", async ({ page }) => {
   }
 
   await page.goto("/invest/companies");
-  await page.waitForLoadState("networkidle");
+  // Retrying the clear button below already waits for hydration; networkidle stalled for 60s in CI.
   const searchInput = page.getByPlaceholder("예: 삼성전자, 현대자동차");
   await expect(async () => {
-    await page.getByRole("button", { name: "Clear search" }).click();
+    await page.getByRole("button", { name: "검색어 지우기" }).click();
     await expect(searchInput).toHaveValue("");
   }).toPass({ timeout: 30_000 });
   await searchInput.fill("삼성");

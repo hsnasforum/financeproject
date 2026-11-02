@@ -27,7 +27,9 @@ function asString(value: unknown): string {
 
 function isEmergencyLabel(value: string): boolean {
   const lowered = value.toLowerCase();
-  return lowered.includes("emergency") || lowered.includes("비상");
+  // Only legacy labels are canonicalized; custom names keep their full text.
+  return lowered === "emergency" || lowered === "emergency fund"
+    || lowered === "비상" || lowered === "비상금";
 }
 
 function safeNumber(value: number | undefined, fallback = 0): number {
@@ -124,7 +126,7 @@ function normalizeDebtList(
     ));
     const repaymentType = debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing";
 
-    const minimumPaymentRaw = asNumber(debt.minimumPayment) ?? asNumber(debt.minimumPaymentKrw) ?? asNumber(debt.monthlyPaymentKrw);
+    const minimumPaymentRaw = asNumber(debt.minimumPayment) ?? asNumber(debt.minimumPaymentKrw) ?? asNumber(debt.monthlyPaymentKrw) ?? asNumber(debt.monthlyPayment);
     const minimumPayment = typeof minimumPaymentRaw === "number" && minimumPaymentRaw >= 0
       ? minimumPaymentRaw
       : estimateMinimumPayment(balance, aprPct, remainingMonths, repaymentType);

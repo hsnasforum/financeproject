@@ -40,6 +40,7 @@ type WorkspaceProfileSyncActionInput = {
   profileName: string;
   profileForm: ProfileFormModel;
   profileValidationErrors: string[];
+  ensureProfileUpdateTarget: (targetProfileId: string) => boolean;
   loadProfiles: (nextSelectedId?: string) => Promise<void>;
   pushWorkspaceError: (message: string) => void;
   setPendingProfileSave: (value: { mode: ProfileSaveMode; profile: ProfileV2 } | null) => void;
@@ -96,6 +97,7 @@ export function useWorkspaceProfileSyncAction({
   profileName,
   profileForm,
   profileValidationErrors,
+  ensureProfileUpdateTarget,
   loadProfiles,
   pushWorkspaceError,
   setPendingProfileSave,
@@ -108,6 +110,7 @@ export function useWorkspaceProfileSyncAction({
       pushWorkspaceError("저장할 프로필을 먼저 선택하세요.");
       return false;
     }
+    if (!ensureProfileUpdateTarget(selectedProfileId)) return false;
 
     if (profileValidationErrors.length > 0) {
       pushWorkspaceError(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidationErrors.join("\n- ")}`);
@@ -150,6 +153,7 @@ export function useWorkspaceProfileSyncAction({
     await loadProfiles(selectedProfileId);
     return true;
   }, [
+    ensureProfileUpdateTarget,
     loadProfiles,
     locale,
     profileForm,

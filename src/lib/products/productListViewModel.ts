@@ -8,6 +8,7 @@ import {
 } from "@/lib/finlife/optionView";
 import type { FinlifeKind, FinlifeSourceResult } from "@/lib/finlife/types";
 import type { RatePreference } from "@/lib/finlife/uiSort";
+import { productIdentity } from "@/lib/products/productIdentity";
 import {
   ensureProductReasons,
   filterProductsForList,
@@ -58,6 +59,8 @@ export function buildProductListViewModel(input: ProductListViewModelInput) {
     query: input.searchQuery,
     onlyFavorites: input.onlyFavorites,
     favoriteIds: input.favoriteIds,
+    kind: input.kind,
+    identityProducts: sourceProducts,
   });
   const sortedProducts = sortProductsForList(
     searchedProducts,
@@ -66,14 +69,14 @@ export function buildProductListViewModel(input: ProductListViewModelInput) {
   );
   const enrichedProducts = ensureProductReasons(sortedProducts);
   const optionRows = sortOptionRows(
-    flattenOptionRows(enrichedProducts, input.selectedTerms),
+    flattenOptionRows(enrichedProducts, input.selectedTerms, input.kind),
     input.optionSortKey,
   );
   const optionGroups = input.optionGroup
-    ? groupOptionRowsByProduct(optionRows, "best_desc")
+    ? groupOptionRowsByProduct(optionRows, "best_desc", input.kind)
     : [];
   const validOptionGroupKeys = optionGroups.map(
-    (group) => group.product.fin_prdt_cd ?? group.key,
+    (group) => group.key,
   );
 
   const totals = input.viewMode === "product"
@@ -84,7 +87,7 @@ export function buildProductListViewModel(input: ProductListViewModelInput) {
     )
     : deriveTotals(
       input.payload,
-      new Set(optionRows.map((row) => row.product.fin_prdt_cd)).size,
+      new Set(optionRows.map((row) => productIdentity(row.product, input.kind))).size,
       optionRows.length,
     );
 

@@ -9,6 +9,7 @@ import {
 import { scoreBenefits, type BenefitRecommendProfile, type ScoredBenefit } from "@/lib/recommend/scoreBenefits";
 import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
 import { BENEFIT_TOPICS, type BenefitTopicKey } from "@/lib/publicApis/benefitsTopics";
+import { DEFAULT_PLANNING_POLICY } from "@/lib/planning/catalog/planningPolicy";
 import { type ReportVM } from "./reportViewModel";
 
 export type CandidateRecommendationsPayload = {
@@ -249,6 +250,8 @@ export function buildPlanningRecommendationSignals(
 ): PlanningRecommendationSignals {
   const monthlySurplusKrw = typeof vm.summaryCards.monthlySurplusKrw === "number" ? vm.summaryCards.monthlySurplusKrw : undefined;
   const emergencyFundMonths = typeof vm.summaryCards.emergencyFundMonths === "number" ? vm.summaryCards.emergencyFundMonths : undefined;
+  // Use the run's stored interpretation policy so the signal matches the report's emergency fund diagnosis.
+  const emergencyCautionMonths = (vm.reproducibility?.policy ?? DEFAULT_PLANNING_POLICY).emergencyFundMonths.caution;
   const dsrPct = typeof vm.summaryCards.dsrPct === "number" ? vm.summaryCards.dsrPct : undefined;
   const goal = primaryGoal(vm);
   const goalMonth = typeof goal?.targetMonth === "number" && goal.targetMonth > 0 ? goal.targetMonth : undefined;
@@ -278,7 +281,7 @@ export function buildPlanningRecommendationSignals(
     };
   }
 
-  if (typeof emergencyFundMonths === "number" && emergencyFundMonths < 3) {
+  if (typeof emergencyFundMonths === "number" && emergencyFundMonths < emergencyCautionMonths) {
     return {
       priority: "emergency",
       headline: "비상금 보강용 후보를 먼저 비교했습니다.",
@@ -292,7 +295,7 @@ export function buildPlanningRecommendationSignals(
         "현재 상황에서는 단기 적금/예금 후보를 우선 점수화했습니다.",
       ],
       cautions: [
-        "비상금이 3개월 미만이면 장기 고정 가입은 보수적으로 판단하세요.",
+        `비상금이 ${emergencyCautionMonths}개월 미만이면 장기 고정 가입은 보수적으로 판단하세요.`,
       ],
     };
   }

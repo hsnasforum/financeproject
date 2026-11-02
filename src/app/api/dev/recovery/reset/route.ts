@@ -29,10 +29,16 @@ const DART_FILES = [
   "daily_brief.json",
 ] as const;
 
+// Resolved through a call on purpose: the build tracer evaluates a direct `process.cwd()` path statically and would
+// package the whole runtime tmp directory (and anything linked from it) into the standalone output.
+function runtimeWorkingDirectory(): string {
+  return process.cwd();
+}
+
 function resolveTmpRoot(): string {
   const envPath = (process.env.RECOVERY_TMP_DIR ?? "").trim();
   if (envPath) return path.resolve(envPath);
-  return path.join(process.cwd(), "tmp");
+  return path.join(runtimeWorkingDirectory(), "tmp");
 }
 
 function normalizeTargets(value: unknown): ResetTarget[] | null {

@@ -20,17 +20,13 @@ type CsrfBody = {
 
 function readHostHeader(request: Request): string {
   return (
-    request.headers.get("x-forwarded-host")
-    ?? request.headers.get("host")
+    request.headers.get("host")
     ?? new URL(request.url).host
   ).trim();
 }
 
 function readProtocol(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-proto")
-    ?? new URL(request.url).protocol.replace(":", "")
-  ).trim().toLowerCase() || "http";
+  return new URL(request.url).protocol.replace(":", "").trim().toLowerCase() || "http";
 }
 
 function parseCookies(cookieHeader: string): Record<string, string> {
@@ -75,8 +71,7 @@ function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase();
   return normalized === "localhost"
     || normalized === "127.0.0.1"
-    || normalized === "::1"
-    || normalized === "0.0.0.0";
+    || normalized === "::1";
 }
 
 function sameOriginLoose(current: URL, incoming: URL): boolean {
@@ -96,8 +91,8 @@ export function assertNotProduction(env: NodeJS.ProcessEnv = process.env): void 
   }
 }
 
-export function assertLocalHost(request: Request): void {
-  if (!isLocalRequest(request)) {
+export function assertLocalHost(request: Request, env: NodeJS.ProcessEnv = process.env): void {
+  if (!isLocalRequest(request, env)) {
     fail(403, "LOCAL_ONLY", "로컬 호스트에서만 실행할 수 있습니다.");
   }
 }
@@ -196,6 +191,8 @@ function toGuardNextResponse(error: unknown): Response {
 }
 
 type GuardDevReadOptions = {
+  requireUnlock?: boolean;
+  strictLocal?: boolean;
   onBlocked?: () => Response;
   onError?: (guard: { status: number; code: string; message: string }) => Response;
 };
@@ -205,7 +202,13 @@ export function guardDevReadRequest(request: Request, options: GuardDevReadOptio
   if (blocked) return options.onBlocked?.() ?? blocked;
 
   try {
-    assertLocalHost(request);
+    const localEnv = options.strictLocal
+      ? { ...process.env, ALLOW_REMOTE: "" }
+      : process.env;
+    assertLocalHost(request, localEnv);
+    if (options.requireUnlock) {
+      assertDevUnlocked(request);
+    }
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);

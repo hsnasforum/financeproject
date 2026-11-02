@@ -68,4 +68,113 @@ describe("exim exchange normalize", () => {
       { cur_unit: "USD", deal_bas_r: "1,330.50" },
     ])).toBeNull();
   });
+
+  it("attributes undated official AP01 rows only to the explicit request date", () => {
+    const parsed = normalizeEximExchange([
+      { result: 1, cur_unit: "USD", deal_bas_r: "1,330.50", cur_nm: "미국 달러" },
+      { result: 1, cur_unit: "JPY(100)", deal_bas_r: "912.00", cur_nm: "일본 엔" },
+      { result: 1, cur_unit: "KRW", deal_bas_r: "1", cur_nm: "한국 원" },
+    ], "https://example.test/exchangeJSON", { requestedDate: "20261008" });
+
+    expect(parsed).toEqual({
+      asOf: "2026-10-08",
+      base: "KRW",
+      rates: { USD: 1330.5, JPY: 9.12, KRW: 1 },
+      rawMeta: { source: "EXIM", baseUrl: "https://example.test/exchangeJSON" },
+    });
+  });
+
+  it("keeps dated legacy aliases compatible without request context", () => {
+    expect(normalizeEximExchange({ response: { list: [
+      { currency: "USD", baseRate: "1,330.50", asOf: "20261008" },
+      { curUnit: "JPY(100)", dealBasR: 912, dealBasDt: "2026-10-08" },
+    ] } })?.rates).toEqual({ USD: 1330.5, JPY: 9.12 });
+  });
+
+  it("accepts an explicit response date only when it matches the requested date", () => {
+    const rows = [{ result: "1", cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" }];
+    expect(normalizeEximExchange(rows, "", { requestedDate: "20261008" })?.asOf).toBe("2026-10-08");
+    expect(normalizeEximExchange(rows, "", { requestedDate: "20261007" })).toBeNull();
+  });
+
+  it.each(["", "20260229", "2026-04-31", "20261301", "20261008junk"])(
+    "rejects invalid request context rather than trusting row dates: %s",
+    (requestedDate) => {
+      expect(normalizeEximExchange([
+        { result: 1, cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+      ], "", { requestedDate })).toBeNull();
+    },
+  );
+
+  it.each([undefined, 2, 3, 4, "2", "0", null])("requires result 1 for requested-date rows: %s", (result) => {
+    expect(normalizeEximExchange([
+      { result, cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+    ], "", { requestedDate: "20261008" })).toBeNull();
+  });
+
+  it("rejects a non-success result even for dated legacy rows", () => {
+    expect(normalizeEximExchange([
+      { result: 3, cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+    ])).toBeNull();
+  });
+
+  it.each([0, -1, NaN, Infinity, "", "1,23.50", "1abc", "1,330.50 KRW", "-1"])(
+    "rejects the entire batch when one rate is invalid: %s",
+    (deal_bas_r) => {
+      expect(normalizeEximExchange([
+        { cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+        { cur_unit: "EUR", deal_bas_r, deal_bas_dt: "2026-10-08" },
+      ])).toBeNull();
+    },
+  );
+
+  it("rejects a duplicate currency after unit normalization", () => {
+    expect(normalizeEximExchange([
+      { cur_unit: "JPY(100)", deal_bas_r: "912", deal_bas_dt: "2026-10-08" },
+      { cur_unit: "JPY", deal_bas_r: "9.12", deal_bas_dt: "2026-10-08" },
+    ])).toBeNull();
+  });
+
+  it("rejects conflicting source dates instead of using the first row date", () => {
+    expect(normalizeEximExchange([
+      { cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+      { cur_unit: "JPY(100)", deal_bas_r: "912", deal_bas_dt: "2026-10-07" },
+    ])).toBeNull();
+  });
+
+  it("rejects partially missing dates rather than dropping rows", () => {
+    expect(normalizeEximExchange([
+      { cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+      { cur_unit: "JPY(100)", deal_bas_r: "912" },
+    ])).toBeNull();
+  });
+
+  it("rejects mixed dated and undated response rows even with request context", () => {
+    expect(normalizeEximExchange([
+      { result: 1, cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+      { result: 1, cur_unit: "JPY(100)", deal_bas_r: "912" },
+    ], "", { requestedDate: "20261008" })).toBeNull();
+  });
+
+  it("rejects malformed rows instead of producing a partial batch", () => {
+    expect(normalizeEximExchange([
+      { cur_unit: "USD", deal_bas_r: "1,330.50", deal_bas_dt: "2026-10-08" },
+      { cur_unit: "JPY(0)", deal_bas_r: "912", deal_bas_dt: "2026-10-08" },
+    ])).toBeNull();
+  });
+
+  it.each(["tts", "ttb", "rate", "baseRate", "dealBasR", "kftcDealBasR"])(
+    "does not substitute %s for the official AP01 deal_bas_r field",
+    (alias) => {
+      expect(normalizeEximExchange([
+        { result: 1, cur_unit: "USD", [alias]: "1,330.50" },
+      ], "", { requestedDate: "20261008" })).toBeNull();
+    },
+  );
+
+  it.each(["currency", "curUnit"])("requires official cur_unit instead of %s in request context", (alias) => {
+    expect(normalizeEximExchange([
+      { result: 1, [alias]: "USD", deal_bas_r: "1,330.50" },
+    ], "", { requestedDate: "20261008" })).toBeNull();
+  });
 });

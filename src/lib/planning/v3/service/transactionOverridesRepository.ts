@@ -7,6 +7,7 @@ import {
   upsertBatchTxnOverride as upsertStoredBatchTxnOverride,
   upsertLegacyUnscopedTxnOverride as upsertStoredLegacyUnscopedTxnOverride,
 } from "../store/txnOverridesStore";
+import { withExistingCurrentUserBatchLifecycleMutation } from "./batchLifecycleMutation";
 
 export { TxnOverridesStoreInputError };
 
@@ -52,15 +53,15 @@ export async function upsertCurrentUserTransactionOverride(input: {
   const hasCategoryId = asString(input.categoryId).length > 0;
 
   if (batchId && hasCategoryId) {
-    return {
+    return withExistingCurrentUserBatchLifecycleMutation(batchId, async (safeBatchId) => ({
       override: await upsertStoredBatchTxnOverride({
-        batchId,
+        batchId: safeBatchId,
         txnId: input.txnId,
         categoryId: input.categoryId,
         ...(input.note !== undefined ? { note: input.note } : {}),
       }),
-      scope: "batch-scoped",
-    };
+      scope: "batch-scoped" as const,
+    }));
   }
 
   return {
@@ -85,8 +86,10 @@ export async function deleteCurrentUserTransactionOverride(input: {
   const txnId = asString(input.txnId);
 
   if (batchId && txnId) {
-    await deleteStoredBatchTxnOverride({ batchId, txnId });
-    return { deleted: true, scope: "batch-scoped" };
+    return withExistingCurrentUserBatchLifecycleMutation(batchId, async (safeBatchId) => {
+      await deleteStoredBatchTxnOverride({ batchId: safeBatchId, txnId });
+      return { deleted: true as const, scope: "batch-scoped" as const };
+    });
   }
 
   await deleteStoredLegacyUnscopedTxnOverride(txnId);

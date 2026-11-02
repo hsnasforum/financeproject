@@ -709,12 +709,15 @@ export function TransactionBatchDetailDraftReviewSection({
     <Card className="space-y-3">
       <BodySectionHeading title="Draft 리뷰" />
       <p className="text-sm text-slate-700">
-        현재 집계 결과로 profile draft를 생성한 뒤 초안 목록/상세에서 검토하고, preflight/apply 후 stable report로 넘어가는 representative funnel을 닫습니다.
+        현재 배치로 profile draft를 생성한 뒤 초안 목록/상세에서 검토하고, preflight/apply 후 stable report로 넘어가는 representative funnel을 닫습니다.
+      </p>
+      <p className="text-xs font-semibold text-slate-600" data-testid="v3-draft-review-basis">
+        profile draft는 저장된 분류 규칙과 거래별 보정으로 최근 6개월을 다시 집계하고, 부채상환은 생활지출에서 제외합니다. 위 이체·비율·분할 옵션과 초안 패치 요약은 이 초안에 적용되지 않습니다.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button
           data-testid="v3-go-draft-review"
-          disabled={!draftReview.ratioValid || draftReview.draftSaving || !draftReview.hasBatchAccount}
+          disabled={draftReview.draftSaving || !draftReview.hasBatchAccount}
           onClick={() => {
             void draftReview.onCreateDraftAndGoToReview();
           }}

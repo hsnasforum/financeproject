@@ -1,6 +1,5 @@
 import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { pushTiming, timingsToDebugMap, type TimingEntry, withTiming } from "../../../lib/http/timing";
-import { applyDepositProtectionPolicy } from "@/lib/recommend/depositProtection";
 import { recommendCandidates, type RecommendCandidate } from "@/lib/recommend/score";
 import { determineFinancialStatus } from "@/lib/planning/engine/financialStatus";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
@@ -21,6 +20,8 @@ import { getUnifiedProducts } from "@/lib/sources/unified";
 import { pushError } from "../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../lib/observability/trace";
 import { buildPublicDiagnosticMeta, logPublicApiDiagnostic, publicErrorMessage } from "@/lib/http/publicApiDiagnostics";
+import { applyProductSourceIssues, getProductFreshnessSummary } from "@/lib/sources/productFreshness";
+import type { ProductFreshnessSummary } from "@/lib/sources/types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -85,7 +86,7 @@ function withRecommendGuard(request: Request) {
 async function loadUnifiedCandidates(input: {
   kind: "deposit" | "saving";
   profile: UserRecommendProfile;
-}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
+}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string>; freshness: ProductFreshnessSummary }> {
   const sourceSet = new Set(input.profile.candidateSources ?? ["finlife", "datago_kdb"]);
   if (sourceSet.size === 0) sourceSet.add("finlife");
 
@@ -118,6 +119,11 @@ async function loadUnifiedCandidates(input: {
       rateMode: input.profile.rateMode,
     },
   });
+  const freshness = applyProductSourceIssues(await getProductFreshnessSummary({
+    kind: input.kind,
+    sourceIds: includeSources,
+  }), unified.sourceIssues);
+
   return {
     candidates: adapted.map((candidate) => ({
       sourceId: candidate.sourceId,
@@ -130,13 +136,14 @@ async function loadUnifiedCandidates(input: {
         .filter((candidate) => candidate.matchedDepositProtection)
         .map((candidate) => candidate.product.fin_prdt_cd),
     ),
+    freshness,
   };
 }
 
 async function getCandidates(input: {
   kind: "deposit" | "saving";
   profile: UserRecommendProfile;
-}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
+}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string>; freshness: ProductFreshnessSummary }> {
   return loadUnifiedCandidates({
     kind: input.kind,
     profile: input.profile,
@@ -239,6 +246,7 @@ export async function POST(request: Request) {
               planning: profile.planning ?? null,
               planningContext: profile.planningContext ?? null,
               planningLinkage,
+              freshness: candidateBundle.freshness,
               weights: profile.weights,
               weightNormalization,
               assumptions: {
@@ -274,22 +282,19 @@ export async function POST(request: Request) {
 
       if (candidateBundle.candidates.length === 0) return noCandidatesResponse();
 
+      const protectionMode = (profile.depositProtection ?? "any") as DepositProtectionMode;
       const recommendResult = await withTiming("recommend.score", async () => recommendCandidates({
         kind: profile.kind,
         profile,
         candidates: candidateBundle.candidates,
+        depositProtection: {
+          mode: protectionMode,
+          matchedFinPrdtCdSet: candidateBundle.matchedFinPrdtCdSet,
+        },
       }));
       pushTiming(timings, recommendResult.timing);
       const recommendedBase = recommendResult.value;
-
-      const protectionMode = (profile.depositProtection ?? "any") as DepositProtectionMode;
-      const itemsWithProtection = applyDepositProtectionPolicy({
-        items: recommendedBase.items,
-        mode: protectionMode,
-        matchedFinPrdtCdSet: candidateBundle.matchedFinPrdtCdSet,
-      })
-        .sort((a, b) => b.finalScore - a.finalScore)
-        .slice(0, Math.max(1, Math.min(50, profile.topN)));
+      const itemsWithProtection = recommendedBase.items;
 
       if (itemsWithProtection.length === 0) return noCandidatesResponse();
 
@@ -306,6 +311,7 @@ export async function POST(request: Request) {
             planning: profile.planning ?? null,
             planningContext: profile.planningContext ?? null,
             planningLinkage,
+            freshness: candidateBundle.freshness,
             weights: recommendedBase.weights,
             weightNormalization,
             assumptions: {

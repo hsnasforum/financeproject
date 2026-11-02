@@ -1,6 +1,7 @@
 import type { Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
+import { PlanningNavigationRecovery } from "@/components/PlanningNavigationRecovery";
 import { SiteHeader } from "@/components/SiteHeader";
 import { MobileBottomNav } from "@/components/ui/MobileBottomNav";
 import { ROOT_PUBLIC_METADATA } from "@/lib/navigation/publicMetadata";
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         </a>
         <SiteHeader />
         <main id="main-content" tabIndex={-1} className="min-h-[calc(100vh-64px)]">{children}</main>
+        <PlanningNavigationRecovery />
         <MobileBottomNav />
       </body>
     </html>

@@ -9,7 +9,6 @@ const baseUrlDefault = "https://finlife.fss.or.kr/finlifeapi";
 const PRODUCT_ENDPOINTS = {
   deposit: "depositProductsSearch.json",
   saving: "savingProductsSearch.json",
-  pension: "annuitySavingProductsSearch.json",
   "mortgage-loan": "mortgageLoanProductsSearch.json",
   "rent-house-loan": "rentHouseLoanProductsSearch.json",
   "credit-loan": "creditLoanProductsSearch.json",

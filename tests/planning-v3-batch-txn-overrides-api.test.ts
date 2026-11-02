@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertLegacyUnscopedTxnOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 import {
   GET as getBatchOverrides,
@@ -49,13 +50,30 @@ function requestPost(batchId: string, body: unknown): Request {
   });
 }
 
+async function saveBatchFixture(batchId = "batch-a"): Promise<void> {
+  await saveBatch({
+    id: batchId,
+    createdAt: "2026-08-25T00:00:00.000Z",
+    source: "csv",
+    rowCount: 1,
+  }, [{
+    batchId,
+    txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+    date: "2026-08-25",
+    amountKrw: -1000,
+    description: "fixture",
+    source: "csv",
+  }]);
+}
+
 describe("planning v3 batch txn-overrides API", () => {
   let root = "";
 
-  beforeEach(() => {
+  beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-batch-txn-overrides-api-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = root;
+    await saveBatchFixture();
   });
 
   afterEach(() => {
@@ -79,6 +97,20 @@ describe("planning v3 batch txn-overrides API", () => {
     };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INPUT");
+  });
+
+  it("returns 404 instead of creating an override for a missing batch", async () => {
+    const response = await postBatchOverride(requestPost("missing-batch", {
+      csrf: "test",
+      txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+      categoryId: "food",
+    }), context("missing-batch"));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: { code: "NO_DATA" },
+    });
   });
 
   it("stores and reads back batch-scoped override", async () => {

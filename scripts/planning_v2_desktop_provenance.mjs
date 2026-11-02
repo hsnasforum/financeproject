@@ -5,7 +5,8 @@ import path from "node:path";
 
 export const DESKTOP_MANIFEST_FILENAME = "desktop-manifest.json";
 export const DESKTOP_MANIFEST_KIND = "planning-v2-desktop";
-export const DESKTOP_PROVENANCE_VERSION = 1;
+export const DESKTOP_PROVENANCE_VERSION = 2;
+const ARTIFACT_HASH_BATCH_SIZE = 32;
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -94,16 +95,22 @@ export async function computeArtifactChecksum(artifactDir) {
   const aggregate = crypto.createHash("sha256");
   let totalBytes = 0;
 
-  for (const relativePath of files) {
-    const absolutePath = path.join(artifactDir, ...relativePath.split("/"));
-    const [stats, digest] = await Promise.all([fs.stat(absolutePath), fileSha256(absolutePath)]);
-    totalBytes += stats.size;
-    aggregate.update(relativePath);
-    aggregate.update("\0");
-    aggregate.update(String(stats.size));
-    aggregate.update("\0");
-    aggregate.update(digest);
-    aggregate.update("\n");
+  for (let offset = 0; offset < files.length; offset += ARTIFACT_HASH_BATCH_SIZE) {
+    const batch = files.slice(offset, offset + ARTIFACT_HASH_BATCH_SIZE);
+    const rows = await Promise.all(batch.map(async (relativePath) => {
+      const absolutePath = path.join(artifactDir, ...relativePath.split("/"));
+      const [stats, digest] = await Promise.all([fs.stat(absolutePath), fileSha256(absolutePath)]);
+      return { relativePath, size: stats.size, digest };
+    }));
+    for (const row of rows) {
+      totalBytes += row.size;
+      aggregate.update(row.relativePath);
+      aggregate.update("\0");
+      aggregate.update(String(row.size));
+      aggregate.update("\0");
+      aggregate.update(row.digest);
+      aggregate.update("\n");
+    }
   }
 
   return {

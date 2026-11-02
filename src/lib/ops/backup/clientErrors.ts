@@ -84,6 +84,38 @@ export function toBackupExportClientError(error: unknown): BackupClientError {
   if (message.startsWith("VAULT_LOCKED")) {
     return { status: 423, code: "LOCKED", message: "운영 보안 잠금을 해제한 뒤 다시 시도해 주세요." };
   }
+  if (message.startsWith("BACKUP_EXPORT_LIMIT_EXCEEDED")) {
+    return {
+      status: 413,
+      code: "BACKUP_TOO_LARGE",
+      message: "현재 데이터가 백업 파일 크기 제한을 초과했습니다. 오래된 실행 기록을 정리하거나 운영자가 백업 제한을 확인한 뒤 다시 시도해 주세요.",
+    };
+  }
+  if (message.startsWith("BACKUP_EXPORT_RECEIPT_STORE_UNAVAILABLE")) {
+    return {
+      status: 503,
+      code: "BACKUP_RECEIPT_STORE_UNAVAILABLE",
+      message: "백업 저장 확인 정보를 보관할 수 없습니다. 잠시 후 다시 시도하고, 반복되면 데이터 디렉터리 권한을 확인해 주세요.",
+    };
+  }
+  if (message.startsWith("BACKUP_EXPORT_RECEIPT_EXPIRED")) {
+    return {
+      status: 410,
+      code: "VALIDATION",
+      message: "백업 저장 확인 시간이 지났습니다. 백업 파일을 다시 내려받아 주세요.",
+    };
+  }
+  if (
+    message.startsWith("BACKUP_EXPORT_RECEIPT_INVALID")
+    || message.startsWith("BACKUP_EXPORT_RECEIPT_MISSING")
+    || message.startsWith("BACKUP_EXPORT_RECEIPT_CONTEXT_MISMATCH")
+  ) {
+    return {
+      status: 400,
+      code: "VALIDATION",
+      message: "이 백업의 저장 확인 요청을 확인할 수 없습니다. 백업 파일을 다시 내려받아 주세요.",
+    };
+  }
   return {
     status: 500,
     code: "EXPORT_FAILED",

@@ -189,6 +189,7 @@ describe("planning v3 storage error API contract", () => {
 
   it("maps corrupt direct override mutations and reads instead of overwriting their files", async () => {
     const batchId = "storage-errors";
+    await saveFixtureBatch(batchId);
     const planningV3Dir = path.join(root, "planning-v3");
     const txnPath = path.join(planningV3Dir, "txn-overrides", `${batchId}.json`);
     const accountPath = path.join(planningV3Dir, "txn-account-overrides", `${batchId}.json`);

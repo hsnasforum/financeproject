@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PATCH as patchAccountOverride } from "../src/app/api/planning/v3/transactions/account-overrides/route";
+import { runWithPlanningUserScope } from "../src/lib/planning/store/userScope";
+import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -31,10 +33,26 @@ function requestPatch(body: unknown, userId = "alice"): Request {
   });
 }
 
+async function saveBatchFixture(userId: string): Promise<void> {
+  await runWithPlanningUserScope({ userId, authSource: "test" }, () => saveBatch({
+    id: "batch-a",
+    createdAt: "2026-08-25T00:00:00.000Z",
+    source: "csv",
+    rowCount: 1,
+  }, [{
+    batchId: "batch-a",
+    txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+    date: "2026-08-25",
+    amountKrw: -1000,
+    description: "fixture",
+    source: "csv",
+  }]));
+}
+
 describe("planning v3 account-overrides API", () => {
   let root = "";
 
-  beforeEach(() => {
+  beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-account-overrides-api-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = root;
@@ -44,6 +62,8 @@ describe("planning v3 account-overrides API", () => {
     env.PLANNING_USER_ID = "default";
     delete env.AUTH_SECRET;
     delete env.NEXTAUTH_SECRET;
+    await saveBatchFixture("alice");
+    await saveBatchFixture("bob");
   });
 
   afterEach(() => {
@@ -80,6 +100,22 @@ describe("planning v3 account-overrides API", () => {
     };
     expect(payload.ok).toBe(true);
     expect(payload.override?.accountId).toBe("acc-main");
+  });
+
+  it("returns 404 instead of creating an account override for a missing batch", async () => {
+    const response = await patchAccountOverride(requestPatch({
+      csrf: "test",
+      batchId: "missing-batch",
+      txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+      accountId: "acc-main",
+    }));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: { code: "NO_DATA" },
+      meta: { userId: "alice", authSource: "trusted-header" },
+    });
   });
 
   it("stores account mapping overrides in the authenticated user's namespace", async () => {

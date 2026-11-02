@@ -29,5 +29,5 @@ export function parseSnapshotPickerSelectValue(raw: string): SnapshotSelection |
 }
 
 export function getSnapshotDetailsToggleLabel(detailsOpen: boolean): string {
-  return detailsOpen ? "Details 닫기" : "Details";
+  return detailsOpen ? "세부 정보 닫기" : "세부 정보";
 }

@@ -2,6 +2,7 @@ import {
   AccountMappingOverridesStoreInputError,
   upsertAccountMappingOverride as upsertStoredAccountMappingOverride,
 } from "../store/accountMappingOverridesStore";
+import { withExistingCurrentUserBatchLifecycleMutation } from "./batchLifecycleMutation";
 
 export { AccountMappingOverridesStoreInputError };
 
@@ -10,9 +11,11 @@ export async function upsertCurrentUserAccountMappingOverride(input: {
   txnId?: unknown;
   accountId?: unknown;
 }): Promise<Awaited<ReturnType<typeof upsertStoredAccountMappingOverride>>> {
-  return upsertStoredAccountMappingOverride({
-    batchId: input.batchId,
-    txnId: input.txnId,
-    accountId: input.accountId,
-  });
+  return withExistingCurrentUserBatchLifecycleMutation(input.batchId, (batchId) => (
+    upsertStoredAccountMappingOverride({
+      batchId,
+      txnId: input.txnId,
+      accountId: input.accountId,
+    })
+  ));
 }

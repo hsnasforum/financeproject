@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { loadOpsPolicy } from "@/lib/ops/opsPolicy";
 
 export type CorpCodeIndexItem = {
   corpCode: string;
@@ -17,10 +18,18 @@ export type CorpCodeIndexV1 = {
 };
 
 export type CorpCodeSort = "name" | "name_desc" | "stock_first";
+export type CorpIndexFreshness = {
+  state: "fresh" | "stale" | "unknown";
+  ageDays: number | null;
+  thresholdDays: number;
+};
 export type CorpIndexStatus = {
   exists: boolean;
+  usable?: boolean;
+  issue?: "INVALID_INDEX";
   primaryPath: string;
   triedPaths: string[];
+  freshness?: CorpIndexFreshness;
   meta?: {
     loadedPath: string;
     mtimeMs: number;
@@ -76,25 +85,75 @@ export function getCorpIndexTriedPaths(): string[] {
 
 export function getCorpIndexStatus(): CorpIndexStatus {
   const { primary, tried } = resolveCorpCodesIndexPath();
+  let invalidStatus: CorpIndexStatus | null = null;
 
   for (const candidatePath of tried) {
+    let stat: fs.Stats;
     try {
-      const stat = fs.statSync(candidatePath);
-      return {
-        exists: true,
-        primaryPath: primary,
-        triedPaths: tried,
-        meta: readCorpIndexMeta(candidatePath, stat.mtimeMs),
-      };
+      stat = fs.statSync(candidatePath);
     } catch {
       continue;
     }
+
+    try {
+      const meta = readCorpIndexMeta(candidatePath, stat.mtimeMs);
+      return {
+        exists: true,
+        usable: true,
+        primaryPath: primary,
+        triedPaths: tried,
+        freshness: getCorpIndexFreshness(meta?.generatedAt),
+        meta,
+      };
+    } catch {
+      invalidStatus ??= {
+        exists: true,
+        usable: false,
+        issue: "INVALID_INDEX",
+        primaryPath: primary,
+        triedPaths: tried,
+        freshness: getCorpIndexFreshness(),
+        meta: {
+          loadedPath: candidatePath,
+          mtimeMs: stat.mtimeMs,
+        },
+      };
+    }
   }
+
+  if (invalidStatus) return invalidStatus;
 
   return {
     exists: false,
+    usable: false,
     primaryPath: primary,
     triedPaths: tried,
+    freshness: getCorpIndexFreshness(),
+  };
+}
+
+export function getCorpIndexFreshness(
+  generatedAt?: string,
+  nowMs = Date.now(),
+): CorpIndexFreshness {
+  const thresholdDays = loadOpsPolicy().dataQuality.dartCorpIndexStaleWarnDays;
+  const generatedAtMs = typeof generatedAt === "string" && generatedAt.trim()
+    ? Date.parse(generatedAt)
+    : Number.NaN;
+
+  if (!Number.isFinite(generatedAtMs) || !Number.isFinite(nowMs)) {
+    return {
+      state: "unknown",
+      ageDays: null,
+      thresholdDays,
+    };
+  }
+
+  const ageDays = Math.max(0, Math.floor((nowMs - generatedAtMs) / (24 * 60 * 60 * 1000)));
+  return {
+    state: ageDays > thresholdDays ? "stale" : "fresh",
+    ageDays,
+    thresholdDays,
   };
 }
 
@@ -232,27 +291,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readCorpIndexMeta(candidatePath: string, mtimeMs: number): CorpIndexStatus["meta"] {
-  let generatedAt: string | undefined;
-  let count: number | undefined;
-
-  try {
-    const parsed = JSON.parse(fs.readFileSync(candidatePath, "utf-8")) as unknown;
-    if (isRecord(parsed)) {
-      if (typeof parsed.generatedAt === "string") generatedAt = parsed.generatedAt;
-      if (typeof parsed.count === "number" && Number.isFinite(parsed.count)) {
-        count = parsed.count;
-      } else if (Array.isArray(parsed.items)) {
-        count = parsed.items.length;
-      }
-    }
-  } catch {
-    // status API should still report path/mtime even if json parse fails.
-  }
+  const raw = JSON.parse(fs.readFileSync(candidatePath, "utf-8")) as unknown;
+  const parsed = parseCorpIndex(raw);
 
   return {
     loadedPath: candidatePath,
     mtimeMs,
-    generatedAt,
-    count,
+    generatedAt: parsed.generatedAt,
+    count: parsed.count,
   };
 }

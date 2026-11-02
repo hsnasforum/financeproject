@@ -1,152 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { BackupExportCard } from "@/components/ops/backup/BackupExportCard";
+import { BackupPreviewCard } from "@/components/ops/backup/BackupPreviewCard";
+import { BackupRestoreConfirmDialog } from "@/components/ops/backup/BackupRestoreConfirmDialog";
+import { BackupRestoreControlsCard } from "@/components/ops/backup/BackupRestoreControlsCard";
+import { BackupRestoreResultCard } from "@/components/ops/backup/BackupRestoreResultCard";
+import {
+  formatBytes,
+  getOpsApiErrorCode,
+  toBackupActionError,
+  type BackupExportFinalizePayload,
+  type BackupPreviewPayload,
+  type BackupRestorePayload,
+  type OpsApiErrorPayload,
+  type PendingExportConfirmation,
+  type VaultStatusPayload,
+} from "@/components/ops/backup/contracts";
+import { ButtonLink } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 
-type BackupPreviewPayload = {
-  ok?: boolean;
-  data?: {
-    manifest?: {
-      kind?: string;
-      formatVersion?: number;
-      mode?: "full" | "delta";
-      createdAt?: string;
-      appVersion?: string;
-      conflictPolicy?: {
-        runId?: string;
-        snapshotId?: string;
-      };
-      counts?: Record<string, number>;
-    };
-    actual?: {
-      totalFiles?: number;
-      totalBytes?: number;
-      profiles?: number;
-      runs?: number;
-      runBlobs?: number;
-      actionPlans?: number;
-      actionProgress?: number;
-      assumptionsHistory?: number;
-      policies?: number;
-    };
-    ids?: {
-      profileIds?: string[];
-      runIds?: string[];
-      snapshotIds?: string[];
-    };
-    warnings?: string[];
-  };
-  error?: {
-    code?: string;
-    message?: string;
-    fixHref?: string;
-  };
-  message?: string;
+const SAVED_FILE_CONFIRMATION_LABEL = "파일 저장을 확인했습니다";
+
+type OpsBackupClientProps = {
+  surface?: "ops" | "settings";
+  afterContent?: ReactNode;
 };
 
-type VaultStatusPayload = {
-  ok?: boolean;
-  csrfToken?: string;
-  error?: {
-    code?: string;
-    message?: string;
-    fixHref?: string;
-  };
-};
-
-type BackupRestorePayload = {
-  ok?: boolean;
-  data?: {
-    mode?: "merge" | "replace";
-    imported?: {
-      profiles?: number;
-      runs?: number;
-      runBlobs?: number;
-      actionPlans?: number;
-      actionProgress?: number;
-      assumptionsHistory?: number;
-      latestSnapshot?: boolean;
-      policies?: number;
-    };
-    issues?: Array<{
-      entity?: string;
-      id?: string;
-      path?: string;
-      message?: string;
-    }>;
-    warnings?: string[];
-    normalization?: {
-      profiles?: Array<{
-        id?: string;
-        disclosure?: {
-          defaultsApplied?: string[];
-          fixesApplied?: Array<{
-            path?: string;
-            from?: unknown;
-            to?: unknown;
-            message?: string;
-          }>;
-        };
-      }>;
-    };
-  };
-  error?: {
-    code?: string;
-    message?: string;
-    fixHref?: string;
-  };
-  message?: string;
-};
-
-type OpsApiError = {
-  code?: string;
-  message?: string;
-  fixHref?: string;
-};
-
-type OpsApiErrorPayload = {
-  error?: OpsApiError;
-};
-
-function formatDateTime(value: string | undefined): string {
-  if (!value) return "-";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return "-";
-  return new Date(parsed).toLocaleString("ko-KR", { hour12: false });
-}
-
-function formatBytes(value: number | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-function toBackupActionError(payload: OpsApiErrorPayload | null, fallbackMessage: string): string {
-  const code = (payload?.error?.code ?? "").trim().toUpperCase();
-  const rawMessage = (payload?.error?.message ?? "").trim();
-  if (rawMessage) return rawMessage;
-  if (code === "LOCAL_ONLY") {
-    return "로컬 주소(127.0.0.1 또는 localhost)에서만 실행할 수 있습니다.";
-  }
-  if (code === "CSRF") {
-    return "보안 토큰(CSRF)이 만료되었습니다. 페이지를 새로고침 후 다시 시도해 주세요.";
-  }
-  return fallbackMessage;
-}
-
-function getOpsApiErrorCode(payload: OpsApiErrorPayload | null): string {
-  return (payload?.error?.code ?? "").trim().toUpperCase();
-}
-
-export function OpsBackupClient() {
+export function OpsBackupClient({ surface = "ops", afterContent }: OpsBackupClientProps = {}) {
+  const isSettingsSurface = surface === "settings";
+  const backupApiBase = isSettingsSurface ? "/api/settings/backup" : "/api/ops/backup";
+  const securityStatusPath = isSettingsSurface ? "/api/settings/backup/status" : "/api/ops/security/status";
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"merge" | "replace">("merge");
   const [exportMode, setExportMode] = useState<"full" | "delta">("full");
@@ -154,9 +42,12 @@ export function OpsBackupClient() {
   const [passphrase, setPassphrase] = useState("");
   const [csrf, setCsrf] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [finalizingExport, setFinalizingExport] = useState(false);
+  const [pendingExportConfirmation, setPendingExportConfirmation] = useState<PendingExportConfirmation | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [preview, setPreview] = useState<BackupPreviewPayload["data"] | null>(null);
+  const [previewToken, setPreviewToken] = useState("");
   const [restoreResult, setRestoreResult] = useState<BackupRestorePayload["data"] | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -167,31 +58,31 @@ export function OpsBackupClient() {
     let mounted = true;
     (async () => {
       try {
-        const response = await fetch("/api/ops/security/status", { cache: "no-store" });
+        const response = await fetch(securityStatusPath, { cache: "no-store" });
         const payload = (await response.json().catch(() => null)) as VaultStatusPayload | null;
         if (!mounted) return;
         if (!response.ok || !payload?.ok) {
           const apiError = payload?.error;
           setErrorFixHref(typeof apiError?.fixHref === "string" ? apiError.fixHref : "");
-          throw new Error(apiError?.message ?? "CSRF 토큰을 불러오지 못했습니다.");
+          throw new Error(apiError?.message ?? "보안 확인 정보를 불러오지 못했습니다.");
         }
         setCsrf(typeof payload.csrfToken === "string" ? payload.csrfToken : "");
         setErrorFixHref("");
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "CSRF 토큰을 불러오지 못했습니다.");
+        setError(loadError instanceof Error ? loadError.message : "보안 확인 정보를 불러오지 못했습니다.");
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [securityStatusPath]);
 
   async function refreshCsrfToken(): Promise<string> {
-    const response = await fetch("/api/ops/security/status", { cache: "no-store" });
+    const response = await fetch(securityStatusPath, { cache: "no-store" });
     const payload = (await response.json().catch(() => null)) as VaultStatusPayload | null;
     if (!response.ok || !payload?.ok) {
       const apiError = payload?.error;
       setErrorFixHref(typeof apiError?.fixHref === "string" ? apiError.fixHref : "");
-      throw new Error(apiError?.message ?? "CSRF 토큰을 다시 불러오지 못했습니다.");
+      throw new Error(apiError?.message ?? "보안 확인 정보를 다시 불러오지 못했습니다.");
     }
     const nextToken = typeof payload.csrfToken === "string" ? payload.csrfToken : "";
     setCsrf(nextToken);
@@ -207,10 +98,24 @@ export function OpsBackupClient() {
   const restoreWarnings = restoreResult?.warnings ?? [];
   const restoreIssues = restoreResult?.issues ?? [];
   const restoreNormalizationProfiles = restoreResult?.normalization?.profiles ?? [];
+  const previewIncludesPlanningV3 = preview?.manifest?.planningV3?.included === true;
+  const restoreConfirmUsesDetailCopy = isSettingsSurface && previewIncludesPlanningV3;
 
   const summaryRows = useMemo(() => {
     const actual = preview?.actual;
     if (!actual) return [];
+    if (isSettingsSurface) {
+      return [
+        `재무 프로필: ${actual.profiles ?? 0}개`,
+        `실행 기록: ${actual.runs ?? 0}개`,
+        `후속 행동 계획: ${actual.actionPlans ?? 0}개`,
+        `후속 행동 상태: ${actual.actionProgress ?? 0}개`,
+        `Planning v3 영역: ${actual.planningV3Owners ?? 0}개`,
+        `Planning v3 파일: ${actual.planningV3Files ?? 0}개 (${formatBytes(actual.planningV3Bytes)})`,
+        `전체 파일: ${actual.totalFiles ?? 0}개`,
+        `전체 크기: ${formatBytes(actual.totalBytes)}`,
+      ];
+    }
     return [
       `profiles: ${actual.profiles ?? 0}`,
       `runs: ${actual.runs ?? 0}`,
@@ -219,14 +124,16 @@ export function OpsBackupClient() {
       `actionProgress: ${actual.actionProgress ?? 0}`,
       `assumptionsHistory: ${actual.assumptionsHistory ?? 0}`,
       `policies: ${actual.policies ?? 0}`,
+      `planningV3Owners: ${actual.planningV3Owners ?? 0}`,
+      `planningV3Files: ${actual.planningV3Files ?? 0}`,
       `totalFiles: ${actual.totalFiles ?? 0}`,
       `totalBytes: ${formatBytes(actual.totalBytes)}`,
     ];
-  }, [preview]);
+  }, [isSettingsSurface, preview]);
 
   async function handleExport(): Promise<void> {
     if (!hasCsrf) {
-      setError("CSRF 토큰이 없어 export를 실행할 수 없습니다.");
+      setError("보안 확인 토큰이 없어 백업 파일을 만들 수 없습니다.");
       return;
     }
     setExporting(true);
@@ -235,7 +142,7 @@ export function OpsBackupClient() {
     setNotice("");
     try {
       let activeCsrf = csrf;
-      let response = await fetch("/api/ops/backup/export", {
+      let response = await fetch(`${backupApiBase}/export`, {
         method: "POST",
         cache: "no-store",
         headers: { "content-type": "application/json" },
@@ -246,7 +153,7 @@ export function OpsBackupClient() {
         const firstCode = (firstPayload?.error?.code ?? "").trim().toUpperCase();
         if (firstCode === "CSRF") {
           activeCsrf = await refreshCsrfToken();
-          response = await fetch("/api/ops/backup/export", {
+          response = await fetch(`${backupApiBase}/export`, {
             method: "POST",
             cache: "no-store",
             headers: { "content-type": "application/json" },
@@ -254,13 +161,17 @@ export function OpsBackupClient() {
           });
         } else {
           setErrorFixHref(typeof firstPayload?.error?.fixHref === "string" ? firstPayload.error.fixHref : "");
-          throw new Error(toBackupActionError(firstPayload, "export에 실패했습니다."));
+          throw new Error(toBackupActionError(firstPayload, "백업 파일을 만들지 못했습니다."));
         }
       }
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as OpsApiErrorPayload | null;
         setErrorFixHref(typeof payload?.error?.fixHref === "string" ? payload.error.fixHref : "");
-        throw new Error(toBackupActionError(payload, "export에 실패했습니다."));
+        throw new Error(toBackupActionError(payload, "백업 파일을 만들지 못했습니다."));
+      }
+      const receipt = response.headers.get("x-planning-backup-export-receipt")?.trim() ?? "";
+      if (!receipt) {
+        throw new Error("백업 저장 확인 정보를 받지 못했습니다. 파일을 다시 내려받아 주세요.");
       }
       const blob = await response.blob();
       const fallbackName = `planning-data-vault-${Date.now()}.enc.json`;
@@ -276,11 +187,58 @@ export function OpsBackupClient() {
       anchor.click();
       anchor.remove();
       window.URL.revokeObjectURL(url);
-      setNotice(`암호화 ${exportMode === "delta" ? "Delta" : "Full"} 백업 파일을 다운로드했습니다. (${fileName})`);
+      setPendingExportConfirmation({ fileName, receipt });
+      setNotice(`암호화 백업 파일의 다운로드를 시작했습니다. 파일이 실제로 저장되었는지 확인해 주세요. (${fileName})`);
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : "export에 실패했습니다.");
+      setError(exportError instanceof Error ? exportError.message : "백업 파일을 만들지 못했습니다.");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleFinalizeExport(): Promise<void> {
+    if (!pendingExportConfirmation) return;
+    if (!hasCsrf) {
+      setError("보안 확인 토큰이 없어 저장 완료를 확인할 수 없습니다.");
+      return;
+    }
+    setFinalizingExport(true);
+    setError("");
+    setErrorFixHref("");
+    try {
+      let activeCsrf = csrf;
+      const finalizeRequest = (csrfToken: string) => fetch(`${backupApiBase}/export/finalize`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ csrf: csrfToken, receipt: pendingExportConfirmation.receipt }),
+      });
+      let response = await finalizeRequest(activeCsrf);
+      if (!response.ok && response.status === 403) {
+        const firstPayload = (await response.json().catch(() => null)) as BackupExportFinalizePayload | null;
+        if (getOpsApiErrorCode(firstPayload) === "CSRF") {
+          activeCsrf = await refreshCsrfToken();
+          response = await finalizeRequest(activeCsrf);
+        } else {
+          setErrorFixHref(typeof firstPayload?.error?.fixHref === "string" ? firstPayload.error.fixHref : "");
+          throw new Error(toBackupActionError(firstPayload, "백업 저장 완료를 확인하지 못했습니다."));
+        }
+      }
+      const payload = (await response.json().catch(() => null)) as BackupExportFinalizePayload | null;
+      if (!response.ok || !payload?.ok) {
+        setErrorFixHref(typeof payload?.error?.fixHref === "string" ? payload.error.fixHref : "");
+        throw new Error(toBackupActionError(payload, "백업 저장 완료를 확인하지 못했습니다."));
+      }
+      const fileName = pendingExportConfirmation.fileName;
+      const status = payload.data?.status;
+      setPendingExportConfirmation(null);
+      setNotice(status === "superseded"
+        ? `더 최근에 저장 확인한 백업이 있어 현재 확인은 추가 반영하지 않았습니다. (${fileName})`
+        : `파일 저장 확인을 완료했습니다. 다음 변경분 백업은 이 시점 이후의 변경부터 만듭니다. (${fileName})`);
+    } catch (finalizeError) {
+      setError(finalizeError instanceof Error ? finalizeError.message : "백업 저장 완료를 확인하지 못했습니다.");
+    } finally {
+      setFinalizingExport(false);
     }
   }
 
@@ -290,7 +248,7 @@ export function OpsBackupClient() {
       return;
     }
     if (!hasCsrf) {
-      setError("CSRF 토큰이 없어 preview를 실행할 수 없습니다.");
+      setError("보안 확인 정보가 없어 백업 내용을 확인할 수 없습니다.");
       return;
     }
     setPreviewing(true);
@@ -308,7 +266,7 @@ export function OpsBackupClient() {
         return formData;
       };
 
-      let response = await fetch("/api/ops/backup/preview", {
+      let response = await fetch(`${backupApiBase}/preview`, {
         method: "POST",
         body: buildPreviewFormData(activeCsrf),
       });
@@ -318,25 +276,27 @@ export function OpsBackupClient() {
         const firstCode = getOpsApiErrorCode(firstPayload);
         if (firstCode === "CSRF") {
           activeCsrf = await refreshCsrfToken();
-          response = await fetch("/api/ops/backup/preview", {
+          response = await fetch(`${backupApiBase}/preview`, {
             method: "POST",
             body: buildPreviewFormData(activeCsrf),
           });
         } else {
           setErrorFixHref(typeof firstPayload?.error?.fixHref === "string" ? firstPayload.error.fixHref : "");
-          throw new Error(toBackupActionError(firstPayload, "preview에 실패했습니다."));
+          throw new Error(toBackupActionError(firstPayload, "백업 내용을 확인하지 못했습니다."));
         }
       }
 
       const payload = (await response.json().catch(() => null)) as BackupPreviewPayload | null;
       if (!response.ok || !payload?.ok || !payload.data) {
         setErrorFixHref(typeof payload?.error?.fixHref === "string" ? payload.error.fixHref : "");
-        throw new Error(toBackupActionError(payload, "preview에 실패했습니다."));
+        throw new Error(toBackupActionError(payload, "백업 내용을 확인하지 못했습니다."));
       }
       setPreview(payload.data);
+      setPreviewToken(typeof payload.previewToken === "string" ? payload.previewToken : "");
       setNotice("preview 완료: 구조와 개수를 확인했습니다.");
     } catch (previewError) {
       setPreview(null);
+      setPreviewToken("");
       setError(previewError instanceof Error ? previewError.message : "preview에 실패했습니다.");
     } finally {
       setPreviewing(false);
@@ -349,7 +309,11 @@ export function OpsBackupClient() {
       return;
     }
     if (!hasCsrf) {
-      setError("CSRF 토큰이 없어 restore를 실행할 수 없습니다.");
+      setError("보안 확인 정보가 없어 복원을 실행할 수 없습니다.");
+      return;
+    }
+    if (!preview || !previewToken) {
+      setError("복원 전에 같은 파일과 암호로 미리보기를 완료해 주세요.");
       return;
     }
 
@@ -365,11 +329,12 @@ export function OpsBackupClient() {
         formData.set("csrf", csrfToken);
         formData.set("mode", mode);
         formData.set("passphrase", passphrase);
+        formData.set("previewToken", previewToken);
         formData.set("file", file);
         return formData;
       };
 
-      let response = await fetch("/api/ops/backup/restore", {
+      let response = await fetch(`${backupApiBase}/restore`, {
         method: "POST",
         body: buildRestoreFormData(activeCsrf),
       });
@@ -379,22 +344,26 @@ export function OpsBackupClient() {
         const firstCode = getOpsApiErrorCode(firstPayload);
         if (firstCode === "CSRF") {
           activeCsrf = await refreshCsrfToken();
-          response = await fetch("/api/ops/backup/restore", {
+          response = await fetch(`${backupApiBase}/restore`, {
             method: "POST",
             body: buildRestoreFormData(activeCsrf),
           });
         } else {
           setErrorFixHref(typeof firstPayload?.error?.fixHref === "string" ? firstPayload.error.fixHref : "");
-          throw new Error(toBackupActionError(firstPayload, "restore에 실패했습니다."));
+          throw new Error(toBackupActionError(firstPayload, "복원하지 못했습니다."));
         }
       }
 
       const payload = (await response.json().catch(() => null)) as BackupRestorePayload | null;
       if (!response.ok || !payload?.ok || !payload.data) {
+        if ((payload?.error?.code ?? "").trim().toUpperCase() === "PREVIEW_REQUIRED") {
+          setPreviewToken("");
+        }
         setErrorFixHref(typeof payload?.error?.fixHref === "string" ? payload.error.fixHref : "");
-        throw new Error(toBackupActionError(payload, "restore에 실패했습니다."));
+        throw new Error(toBackupActionError(payload, "복원하지 못했습니다."));
       }
       setRestoreResult(payload.data);
+      setPreviewToken("");
       setNotice(payload.message ?? "restore를 완료했습니다.");
     } catch (restoreError) {
       setError(restoreError instanceof Error ? restoreError.message : "restore에 실패했습니다.");
@@ -409,164 +378,108 @@ export function OpsBackupClient() {
       return;
     }
     if (!hasCsrf) {
-      setError("CSRF 토큰이 없어 restore를 실행할 수 없습니다.");
+      setError("보안 확인 정보가 없어 복원을 실행할 수 없습니다.");
+      return;
+    }
+    if (!preview || !previewToken) {
+      setError("복원 전에 같은 파일과 암호로 미리보기를 완료해 주세요.");
       return;
     }
     setConfirmRestoreOpen(true);
   }
 
+  function handlePassphraseChange(value: string): void {
+    setPassphrase(value);
+    setPreview(null);
+    setPreviewToken("");
+    setRestoreResult(null);
+  }
+
+  function handleFileChange(nextFile: File | null): void {
+    setFile(nextFile);
+    setPreview(null);
+    setPreviewToken("");
+    setRestoreResult(null);
+    setNotice("");
+    setError("");
+  }
+
   return (
     <PageShell>
       <PageHeader
-        title="Ops Backup Vault"
-        description="로컬 planning 데이터를 암호화 백업(export/import) 합니다."
+        title={isSettingsSurface ? "백업 및 복원" : "운영 백업 및 복원"}
+        description={isSettingsSurface
+          ? "현재 사용자의 재무설계 기록을 암호화 파일로 내보내고, 미리보기 확인 후 안전하게 복원합니다."
+          : "로컬 재무설계 데이터를 암호화 파일로 백업하고, 내용을 확인한 뒤 복원합니다."}
         action={(
           <div className="flex items-center gap-2">
-            <Link href="/ops">
-              <Button size="sm" variant="outline" type="button">Ops 허브</Button>
-            </Link>
+            <ButtonLink href={isSettingsSurface ? "/settings" : "/ops"} size="sm" variant="outline">
+              {isSettingsSurface ? "설정 홈" : "운영 허브"}
+            </ButtonLink>
           </div>
         )}
       />
 
+      {isSettingsSurface ? (
+        <p className="mb-6 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm font-medium leading-relaxed text-slate-700">
+          백업에는 로그인한 사용자의 프로필·실행 기록이 포함됩니다. 상세 계좌·거래·분류 데이터는 사용자별 저장을 쓰는 실행 방식에서만 함께 포함되니, 미리보기에서 포함 여부를 확인해 주세요. 공용 가정과 운영 정책, 이 브라우저의 화면 설정은 포함되지 않습니다. 암호와 백업 파일은 서로 다른 안전한 곳에 보관해 주세요.
+        </p>
+      ) : null}
+
       {!hasCsrf ? (
         <ErrorState
           className="mb-4"
-          message="Vault CSRF 토큰이 없어 실행할 수 없습니다."
+          message="보안 확인 정보가 없어 실행할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요."
         />
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <h2 className="text-base font-black text-navy">1) Export</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            profile/run(meta+blobs+index)/assumptions/action-progress를 암호화 아카이브로 내보냅니다.
-          </p>
-          <label className="mt-4 block text-xs font-semibold text-slate-700" htmlFor="ops-backup-passphrase-export">백업 암호</label>
-          <input
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            id="ops-backup-passphrase-export"
-            onChange={(event) => setPassphrase(event.target.value)}
-            placeholder="백업 암호 입력"
-            type="password"
-            value={passphrase}
-          />
-          <label className="mt-3 block text-xs font-semibold text-slate-700" htmlFor="ops-backup-export-mode">Export 모드</label>
-          <select
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            id="ops-backup-export-mode"
-            onChange={(event) => setExportMode(event.target.value === "delta" ? "delta" : "full")}
-            value={exportMode}
-          >
-            <option value="full">full (전체 백업)</option>
-            <option value="delta">delta (마지막 export 이후 변경분)</option>
-          </select>
-          <div className="mt-4">
-            <label className="mb-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
-              <input
-                checked={exportGzip}
-                onChange={(event) => setExportGzip(event.target.checked)}
-                type="checkbox"
-              />
-              gzip 전송 사용(대용량 백업 권장)
-            </label>
-            <Button
-              data-testid="ops-backup-export-button"
-              disabled={!hasCsrf || exporting || previewing || restoring || passphrase.trim().length < 1}
-              onClick={() => void handleExport()}
-              size="sm"
-              type="button"
-              variant="primary"
-            >
-              {exporting ? "Export 중..." : "암호화 백업 다운로드"}
-            </Button>
-          </div>
-        </Card>
-
-        <Card>
-          <h2 className="text-base font-black text-navy">2) Import Preview / Restore</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            암호화 백업 파일 업로드 후 preview를 확인하고 merge/replace 모드로 복원하세요.
-          </p>
-          <div className="mt-4 space-y-3">
-            <label className="block text-xs font-semibold text-slate-700" htmlFor="ops-backup-passphrase-import">복구 암호</label>
-            <input
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              id="ops-backup-passphrase-import"
-              onChange={(event) => setPassphrase(event.target.value)}
-              placeholder="복구 암호 입력"
-              type="password"
-              value={passphrase}
-            />
-            <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-muted">
-              백업 파일 선택
-              <input
-                accept=".json,.enc,application/json,application/octet-stream"
-                className="hidden"
-                data-testid="ops-backup-file-input"
-                disabled={!canUpload}
-                onChange={(event) => {
-                  const nextFile = event.target.files?.[0] ?? null;
-                  setFile(nextFile);
-                  setPreview(null);
-                  setRestoreResult(null);
-                  setNotice("");
-                  setError("");
-                  event.currentTarget.value = "";
-                }}
-                type="file"
-              />
-            </label>
-            <p className="text-xs text-slate-600">선택 파일: {selectedName || "-"} {selectedName ? `(${formatBytes(selectedSize)})` : ""}</p>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                data-testid="ops-backup-preview-button"
-                disabled={!file || !canUpload || passphrase.trim().length < 1}
-                onClick={() => void handlePreview()}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {previewing ? "Preview 중..." : "Preview"}
-              </Button>
-              <label className="text-xs text-slate-700">
-                Restore mode
-                <select
-                  className="ml-2 rounded-md border border-slate-300 px-2 py-1"
-                  data-testid="ops-backup-restore-mode"
-                  disabled={restoring || previewing || !file}
-                  onChange={(event) => {
-                    setMode(event.target.value === "replace" ? "replace" : "merge");
-                  }}
-                  value={mode}
-                >
-                  <option value="merge">merge (default)</option>
-                  <option value="replace">replace (위험)</option>
-                </select>
-              </label>
-              <Button
-                data-testid="ops-backup-restore-button"
-                disabled={!file || restoring || previewing || !hasCsrf || passphrase.trim().length < 1}
-                onClick={() => void handleRestore()}
-                size="sm"
-                type="button"
-                variant="primary"
-              >
-                {restoring ? "Restore 중..." : "Restore 실행"}
-              </Button>
-            </div>
-          </div>
-        </Card>
+        <BackupExportCard
+          exportGzip={exportGzip}
+          exportMode={exportMode}
+          exporting={exporting}
+          finalizingExport={finalizingExport}
+          hasCsrf={hasCsrf}
+          isSettingsSurface={isSettingsSurface}
+          passphrase={passphrase}
+          pendingExportConfirmation={pendingExportConfirmation}
+          previewing={previewing}
+          restoring={restoring}
+          savedFileConfirmationLabel={SAVED_FILE_CONFIRMATION_LABEL}
+          onExport={() => void handleExport()}
+          onExportGzipChange={setExportGzip}
+          onExportModeChange={setExportMode}
+          onFinalizeExport={() => void handleFinalizeExport()}
+          onPassphraseChange={handlePassphraseChange}
+        />
+        <BackupRestoreControlsCard
+          canUpload={canUpload}
+          file={file}
+          hasCsrf={hasCsrf}
+          isSettingsSurface={isSettingsSurface}
+          mode={mode}
+          passphrase={passphrase}
+          previewIncludesPlanningV3={previewIncludesPlanningV3}
+          previewToken={previewToken}
+          previewing={previewing}
+          restoring={restoring}
+          selectedName={selectedName}
+          selectedSize={selectedSize}
+          onFileChange={handleFileChange}
+          onModeChange={setMode}
+          onPassphraseChange={handlePassphraseChange}
+          onPreview={() => void handlePreview()}
+          onRestore={handleRestore}
+        />
       </div>
 
       {previewing || restoring ? (
-        <LoadingState className="mt-6" title={previewing ? "preview를 생성하는 중입니다" : "restore를 적용하는 중입니다"} />
+        <LoadingState className="mt-6" title={previewing ? "백업 내용을 확인하는 중입니다" : "백업을 복원하는 중입니다"} />
       ) : null}
 
-      {notice ? <p className="mt-6 text-sm font-semibold text-navy">{notice}</p> : null}
+      {notice ? <p className="mt-6 text-sm font-semibold text-navy" role="status" aria-live="polite">{notice}</p> : null}
       {error ? (
-        <p className="mt-2 text-sm font-semibold text-rose-700">
+        <p className="mt-2 text-sm font-semibold text-rose-700" role="alert">
           {error}
           {errorFixHref ? (
             <>
@@ -578,151 +491,32 @@ export function OpsBackupClient() {
       ) : null}
 
       {preview ? (
-        <Card className="mt-6" data-testid="ops-backup-preview-card">
-          <h3 className="text-base font-black text-navy">Preview 결과</h3>
-          <p className="mt-2 text-xs text-slate-600">
-            kind={preview.manifest?.kind ?? "-"} · mode={preview.manifest?.mode ?? "full"} · formatVersion={preview.manifest?.formatVersion ?? "-"} · appVersion={preview.manifest?.appVersion ?? "-"} · createdAt={formatDateTime(preview.manifest?.createdAt)}
-          </p>
-          {preview.manifest?.mode === "delta" ? (
-            <p className="mt-1 text-xs text-slate-600">
-              충돌 정책: runId={preview.manifest?.conflictPolicy?.runId ?? "skip"}, snapshotId={preview.manifest?.conflictPolicy?.snapshotId ?? "skip"}
-            </p>
-          ) : null}
-          <ul className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
-            {summaryRows.map((row) => (
-              <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1" key={row}>{row}</li>
-            ))}
-          </ul>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div>
-              <p className="text-xs font-semibold text-slate-800">profileIds</p>
-              <div className="mt-1 max-h-36 overflow-auto rounded-md border border-slate-200 p-2 text-[11px] text-slate-700">
-                {(preview.ids?.profileIds ?? []).length < 1 ? "-" : (preview.ids?.profileIds ?? []).join("\n")}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-800">runIds</p>
-              <div className="mt-1 max-h-36 overflow-auto rounded-md border border-slate-200 p-2 text-[11px] text-slate-700">
-                {(preview.ids?.runIds ?? []).length < 1 ? "-" : (preview.ids?.runIds ?? []).join("\n")}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-800">snapshotIds</p>
-              <div className="mt-1 max-h-36 overflow-auto rounded-md border border-slate-200 p-2 text-[11px] text-slate-700">
-                {(preview.ids?.snapshotIds ?? []).length < 1 ? "-" : (preview.ids?.snapshotIds ?? []).join("\n")}
-              </div>
-            </div>
-          </div>
-          {previewWarnings.length > 0 ? (
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-amber-800">Warnings</p>
-              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-amber-800">
-                {previewWarnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </Card>
+        <BackupPreviewCard preview={preview} summaryRows={summaryRows} warnings={previewWarnings} />
       ) : null}
 
       {restoreResult ? (
-        <Card className="mt-6" data-testid="ops-backup-restore-card">
-          <h3 className="text-base font-black text-navy">Restore 결과</h3>
-          <p className="mt-2 text-xs text-slate-600">mode: {restoreResult.mode ?? "-"}</p>
-          <ul className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">profiles: {restoreResult.imported?.profiles ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">runs: {restoreResult.imported?.runs ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">runBlobs: {restoreResult.imported?.runBlobs ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">actionPlans: {restoreResult.imported?.actionPlans ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">actionProgress: {restoreResult.imported?.actionProgress ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">assumptionsHistory: {restoreResult.imported?.assumptionsHistory ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">latestSnapshot: {restoreResult.imported?.latestSnapshot ? "yes" : "no"}</li>
-            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">policies: {restoreResult.imported?.policies ?? 0}</li>
-          </ul>
-          {restoreWarnings.length > 0 ? (
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-amber-800">Warnings</p>
-              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-amber-800">
-                {restoreWarnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {restoreIssues.length > 0 ? (
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-rose-700">Issues ({restoreIssues.length})</p>
-              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-rose-700">
-                {restoreIssues.slice(0, 50).map((issue, index) => (
-                  <li key={`${issue.path ?? "-"}:${index}`}>
-                    [{issue.entity ?? "-"}] {issue.id ? `${issue.id} / ` : ""}{issue.path ?? "-"} - {issue.message ?? "-"}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {restoreNormalizationProfiles.length > 0 ? (
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-slate-800">Normalization disclosures ({restoreNormalizationProfiles.length})</p>
-              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-slate-700">
-                {restoreNormalizationProfiles.map((entry, index) => {
-                  const defaultsCount = entry.disclosure?.defaultsApplied?.length ?? 0;
-                  const fixesCount = entry.disclosure?.fixesApplied?.length ?? 0;
-                  return (
-                    <li key={`${entry.id ?? "profile"}:${index}`}>
-                      {entry.id ?? "-"}: defaultsApplied {defaultsCount}, fixesApplied {fixesCount}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
-        </Card>
+        <BackupRestoreResultCard
+          issues={restoreIssues}
+          normalizationProfiles={restoreNormalizationProfiles}
+          restoreResult={restoreResult}
+          warnings={restoreWarnings}
+        />
       ) : null}
+      {afterContent}
       {confirmRestoreOpen ? (
-        <AccessibleDialog
-          labelledBy="ops-backup-restore-confirm-title"
+        <BackupRestoreConfirmDialog
+          isSettingsSurface={restoreConfirmUsesDetailCopy}
+          mode={mode}
+          restoring={restoring}
+          selectedName={selectedName}
           onClose={() => {
             if (!restoring) setConfirmRestoreOpen(false);
           }}
-          closeOnOverlay={false}
-          overlayClassName="bg-slate-900/45 px-4 py-8"
-          panelClassName="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
-        >
-          <h3 id="ops-backup-restore-confirm-title" className="text-base font-black text-navy">Restore 실행 확인</h3>
-            <p className="mt-2 text-sm text-slate-700">
-              {mode === "replace"
-                ? "replace 모드는 기존 데이터를 삭제 후 복원합니다. 계속 진행할까요?"
-                : "merge 모드로 복원합니다. 계속 진행할까요?"}
-            </p>
-            <div className="mt-2 rounded-md border border-slate-200 bg-surface-muted px-2 py-1 text-xs text-slate-700">
-              mode: <span className="font-semibold">{mode}</span> / file: <span className="font-semibold">{selectedName || "-"}</span>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setConfirmRestoreOpen(false)}
-                disabled={restoring}
-              >
-                취소
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="primary"
-                disabled={restoring}
-                onClick={() => {
-                  setConfirmRestoreOpen(false);
-                  void executeRestore();
-                }}
-              >
-                Restore 진행
-              </Button>
-            </div>
-        </AccessibleDialog>
+          onConfirm={() => {
+            setConfirmRestoreOpen(false);
+            void executeRestore();
+          }}
+        />
       ) : null}
     </PageShell>
   );

@@ -1,0 +1,49 @@
+{
+  "code": "000",
+  "message": "정상 처리 되었습니다.",
+  "count": 2,
+  "list": [
+    {
+      "area": "생명보험",
+      "company": "삼성생명보험주식회사",
+      "product": "연금저축삼성골드연금보험1.1",
+      "launchDate": "2006/04/03",
+      "productType": "금리연동형",
+      "rcvMethod": "연금 수령시 선택형",
+      "feeType": "감소형",
+      "sells": "N",
+      "guarantees": "Y",
+      "reserve": 778500,
+      "reserve1": 820800,
+      "reserve2": 883190,
+      "reserve3": 941680,
+      "earnRate3": 0.07,
+      "earnRate5": 0.9,
+      "earnRate7": 1.28,
+      "earnRate10": 1.31,
+      "avgTotalEarRate": 1.17,
+      "avgFeeRate": 5.56
+    },
+    {
+      "area": "생명보험",
+      "company": "삼성생명보험주식회사",
+      "product": "연금저축골드연금보험1.0(일반용)",
+      "launchDate": "2010/06/01",
+      "productType": "금리연동형",
+      "rcvMethod": "연금 수령시 선택형",
+      "feeType": "감소형",
+      "sells": "N",
+      "guarantees": "Y",
+      "reserve": 771999,
+      "reserve1": 812850,
+      "reserve2": 865551,
+      "reserve3": 905884,
+      "earnRate3": -0.2,
+      "earnRate5": 0.51,
+      "earnRate7": 0.62,
+      "earnRate10": 0.75,
+      "avgTotalEarRate": 0.94,
+      "avgFeeRate": 5.906
+    }
+  ]
+}

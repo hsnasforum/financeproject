@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
+import { normalizeFinlifeDisclosureMonth } from "@/lib/finlife/disclosure";
+import { storedFinlifeIdentity } from "@/lib/sources/unifiedFinlifeIdentity";
 import type { Prisma } from "@prisma/client";
 import { readFinlifeCompletionEvidence } from "@/lib/finlife/completionEvidence";
 import { FINLIFE_FIELD_CONFIG, type FinlifeFieldSpec } from "@/lib/finlife/fieldConfig";
@@ -486,6 +488,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
     select: {
       id: true,
       finPrdtCd: true,
+      identityKey: true,
       name: true,
       createdAt: true,
       updatedAt: true,
@@ -505,6 +508,7 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
       provider: {
         select: {
           name: true,
+          code: true,
         },
       },
     },
@@ -527,12 +531,14 @@ async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
       stableId: buildStableUnifiedId({
         sourceId,
         externalKey: row.finPrdtCd,
+        identityKey: storedFinlifeIdentity({ ...row, kind: input.kind }),
       }),
       sourceId,
       kind: input.kind,
       externalKey: row.finPrdtCd,
       providerName: providerNameRaw || row.provider?.name || "",
       productName: productNameRaw || row.name || "",
+      disclosureMonth: normalizeFinlifeDisclosureMonth(raw?.dcls_month),
       firstSeenAt: input.includeTimestamps ? row.createdAt.toISOString() : undefined,
       lastSeenAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
       updatedAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
@@ -617,6 +623,10 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
           internalProduct: {
             select: {
               finPrdtCd: true,
+              identityKey: true,
+              kind: true,
+              raw: true,
+              provider: { select: { code: true } },
             },
           },
         },
@@ -639,6 +649,9 @@ async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
       sourceId,
       externalKey: row.externalKey,
       canonicalFinPrdtCd: row.matches[0]?.internalProduct?.finPrdtCd ?? null,
+      canonicalFinlifeIdentity: row.matches[0]?.internalProduct
+        ? storedFinlifeIdentity(row.matches[0].internalProduct)
+        : null,
     }),
     sourceId,
     kind: row.kind,

@@ -76,7 +76,7 @@ function main() {
         printStatus("OK", "DB file", sqlitePath);
       } else {
         warn += 1;
-        printStatus("WARN", "DB file", `not found: ${sqlitePath} (pnpm prisma db push 필요)`);
+        printStatus("WARN", "DB file", `not found: ${sqlitePath} (pnpm prisma:db:push 필요)`);
       }
 
       let db;
@@ -93,7 +93,7 @@ function main() {
       } catch (error) {
         const message = error instanceof Error ? error.message : "unknown";
         fail += 1;
-        printStatus("FAIL", "DB query", `${message} (pnpm prisma db push 후 재시도)`);
+        printStatus("FAIL", "DB query", `${message} (pnpm prisma:db:push 후 재시도)`);
       } finally {
         if (db) db.close();
       }

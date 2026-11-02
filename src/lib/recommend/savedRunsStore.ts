@@ -122,6 +122,7 @@ function ensureUnifiedId(item: RecommendLikeItem, fallbackRank: number): string 
   if (given) return given;
   const sourceId = typeof item.sourceId === "string" ? item.sourceId.trim() : "";
   const finPrdtCd = typeof item.finPrdtCd === "string" ? item.finPrdtCd.trim() : "";
+  if (finPrdtCd.startsWith("finlife:") || (sourceId && finPrdtCd.startsWith(`${sourceId}:`))) return finPrdtCd;
   if (sourceId && finPrdtCd) return `${sourceId}:${finPrdtCd}`;
   if (finPrdtCd) return `unknown:${finPrdtCd}`;
   return `unknown:item_${fallbackRank}`;

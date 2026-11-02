@@ -19,6 +19,8 @@ import {
   loadCompareIdsFromStorage,
   removeCompareIdFromStorage,
 } from "@/lib/products/compareStore";
+import { formatCatalogSourceAsOf, formatCatalogSourceName } from "@/lib/products/catalogExplorer";
+import type { ProductFreshnessSummary } from "@/lib/sources/types";
 
 type UnifiedOption = {
   sourceId?: string;
@@ -48,9 +50,13 @@ type UnifiedItemResponse = {
   data?: {
     item?: UnifiedItem;
   };
+  meta?: {
+    freshness?: ProductFreshnessSummary;
+  };
   error?: {
     code?: string;
     message?: string;
+    replacementHref?: string;
   };
 };
 
@@ -58,6 +64,9 @@ type CompareCell = {
   id: string;
   item: UnifiedItem | null;
   error?: string;
+  /** Set when the stored id belongs to a retired source (e.g. FINLIFE 연금저축); points to its replacement screen. */
+  retiredHref?: string;
+  freshness?: ProductFreshnessSummary | null;
 };
 
 function formatRate(value: number | null): string {
@@ -125,9 +134,12 @@ export default function ProductsComparePage() {
             if (!res.ok || !json.ok || !json.data?.item) {
               const code = json.error?.code ?? "UPSTREAM";
               const message = json.error?.message ?? "상품 조회 실패";
+              if (code === "PRODUCT_RETIRED") {
+                return { id, item: null, error: message, retiredHref: json.error?.replacementHref ?? "/products" };
+              }
               return { id, item: null, error: `${code}: ${message}` };
             }
-            return { id, item: json.data.item };
+            return { id, item: json.data.item, freshness: json.meta?.freshness ?? null };
           } catch {
             return { id, item: null, error: "UPSTREAM: 상품 조회 실패" };
           }
@@ -159,13 +171,17 @@ export default function ProductsComparePage() {
   const hasRows = cells.length > 0;
   const validCount = useMemo(() => cells.filter((cell) => cell.item).length, [cells]);
   const hasEnoughItems = ids.length >= 2;
+  const hasFreshnessWarning = useMemo(
+    () => cells.some((cell) => cell.freshness && cell.freshness.overall !== "fresh"),
+    [cells],
+  );
 
   return (
     <div className="min-h-screen bg-surface-muted py-8 md:py-12">
       <Container>
         <PageHeader
           title="상품 비교"
-          description={`비교함에 담은 상품을 나란히 놓고 현재 조건 기준 차이를 다시 읽는 화면입니다. 최대 ${compareStoreConfig.max}개까지 비교할 수 있습니다.`}
+          description={`비교함에 담은 상품을 나란히 놓고 저장된 조건의 차이를 다시 읽는 화면입니다. 최대 ${compareStoreConfig.max}개까지 비교할 수 있습니다.`}
         />
         <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
           이 화면은 확정 추천이 아니라, 여러 후보를 같은 기준으로 다시 확인하는 단계입니다.
@@ -212,6 +228,13 @@ export default function ProductsComparePage() {
           </p>
         </Card>
 
+        {hasFreshnessWarning ? (
+          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4" role="alert" data-testid="compare-freshness-warning">
+            <p className="text-sm font-black text-amber-900">오래됐거나 기준 시각을 확인하지 못한 상품 데이터가 포함되어 있습니다.</p>
+            <p className="mt-1 text-xs font-medium leading-relaxed text-slate-600">아래 수집 기준을 비교하고, 실제 가입 전 최신 금리와 조건을 다시 확인해 주세요.</p>
+          </div>
+        ) : null}
+
         {!hasRows && !loading ? (
           <EmptyState
             title="비교함이 비어 있습니다"
@@ -252,7 +275,8 @@ export default function ProductsComparePage() {
                               removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
                               void refresh();
                             }}
-                            className="absolute top-4 right-4 h-6 w-6 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"
+                            aria-label={`${cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")} 비교함에서 빼기`}
+                            className="absolute top-4 right-4 h-6 w-6 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                           </button>
@@ -261,7 +285,7 @@ export default function ProductsComparePage() {
                             <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-10 w-10" />
                             <div>
                               <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
-                              <h3 className="mt-1 font-black text-navy leading-snug line-clamp-2">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
+                              <h3 className="mt-1 font-black text-navy leading-snug line-clamp-2">{cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")}</h3>
                             </div>
                             <Link
                               href={`/products/catalog/${encodeURIComponent(cell.id)}`}
@@ -275,6 +299,21 @@ export default function ProductsComparePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
+                    <tr className="hover:bg-surface-muted/30 transition-colors">
+                      <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
+                        수집 기준 / 상태
+                      </td>
+                      {cells.map((cell) => (
+                        <td key={`freshness-${cell.id}`} className="p-5 px-6 align-top text-xs leading-relaxed text-slate-600 border-r border-slate-100 last:border-0">
+                          {cell.freshness?.sources?.length ? cell.freshness.sources.map((source) => (
+                            <p key={`${cell.id}-${source.sourceId}-${source.kind}`}>
+                              {formatCatalogSourceName(source.sourceId)} · {formatCatalogSourceAsOf(source.sourceAsOf)}
+                              {source.freshness === "fresh" && !source.fallbackUsed ? " · 갱신 주기 안" : " · 재확인 필요"}
+                            </p>
+                          )) : "기준 시각 확인 안 됨"}
+                        </td>
+                      ))}
+                    </tr>
                     <tr className="hover:bg-surface-muted/30 transition-colors">
                       <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
                         상품 유형
@@ -336,7 +375,12 @@ export default function ProductsComparePage() {
                       </td>
                       {cells.map((cell) => (
                         <td key={`summary-${cell.id}`} className="p-5 px-6 text-xs leading-relaxed text-slate-600 border-r border-slate-100 last:border-0">
-                          {cell.error ? (
+                          {cell.retiredHref ? (
+                            <span className="font-bold text-amber-700">
+                              {cell.error}{" "}
+                              <Link href={cell.retiredHref} className="underline underline-offset-2">새 화면에서 보기</Link>
+                            </span>
+                          ) : cell.error ? (
                             <span className="font-bold text-rose-600">{cell.error}</span>
                           ) : (
                             (cell.item?.summary ?? (cell.item?.badges ?? []).join(", ")) || "-"
@@ -362,7 +406,8 @@ export default function ProductsComparePage() {
                         removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
                         void refresh();
                       }}
-                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 active:bg-rose-100 active:text-rose-600 transition-all"
+                      aria-label={`${cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")} 비교함에서 빼기`}
+                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 active:bg-rose-100 active:text-rose-600 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                     </button>
@@ -371,7 +416,7 @@ export default function ProductsComparePage() {
                       <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-12 w-12" />
                       <div>
                         <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
-                        <h3 className="mt-1 font-black text-navy leading-tight">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
+                        <h3 className="mt-1 font-black text-navy leading-tight">{cell.item?.productName ?? (cell.retiredHref ? "제공이 끝난 상품" : "불러오지 못한 상품")}</h3>
                       </div>
                     </div>
 
@@ -401,10 +446,24 @@ export default function ProductsComparePage() {
                           <span className="text-[10px] font-bold text-slate-300">확인 안 됨</span>
                         )}
                       </div>
+                      <div className="border-t border-slate-50 px-2 pt-4">
+                        <p className="mb-2 text-[11px] font-bold text-slate-400">수집 기준 / 상태</p>
+                        {cell.freshness?.sources?.length ? cell.freshness.sources.map((source) => (
+                          <p key={`${cell.id}-mobile-${source.sourceId}-${source.kind}`} className="text-xs font-medium leading-relaxed text-slate-600">
+                            {formatCatalogSourceName(source.sourceId)} · {formatCatalogSourceAsOf(source.sourceAsOf)}
+                            {source.freshness === "fresh" && !source.fallbackUsed ? " · 갱신 주기 안" : " · 재확인 필요"}
+                          </p>
+                        )) : <p className="text-xs font-medium text-slate-500">기준 시각 확인 안 됨</p>}
+                      </div>
                       <div className="pt-4 border-t border-slate-50 px-2">
                         <p className="text-[11px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{readThroughCopy.summaryLabel}</p>
                         <p className="text-xs leading-relaxed text-slate-600 italic">
-                          {cell.error ? (
+                          {cell.retiredHref ? (
+                            <span className="font-bold text-amber-700">
+                              {cell.error}{" "}
+                              <Link href={cell.retiredHref} className="underline underline-offset-2">새 화면에서 보기</Link>
+                            </span>
+                          ) : cell.error ? (
                             <span className="font-bold text-rose-600">{cell.error}</span>
                           ) : (
                             (cell.item?.summary ?? (cell.item?.badges ?? []).join(", ")) || "-"

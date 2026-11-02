@@ -1,3 +1,7 @@
+import { safeBuildReportVMFromRun } from "@/lib/planning/reports/reportViewModel";
+import { toInterpretationInputFromReportVM } from "@/lib/planning/reports/reportInterpretationAdapter";
+import type { PlanningRunRecord } from "@/lib/planning/store/types";
+import type { InterpretationInput } from "@/lib/planning/v2/insights/interpretationVm";
 import { buildPlanningChartPoints, type PlanningChartPoint } from "@/lib/planning/v2/chartPoints";
 import { aggregateWarnings as aggregateGuideWarnings } from "@/lib/planning/v2/resultGuide";
 import { buildResultSummaryMetrics, type ResultSummaryEvidence } from "@/lib/planning/v2/resultSummary";
@@ -60,7 +64,7 @@ export function buildWorkspaceGuideBadge(input: {
 }
 
 export function buildWorkspaceKeyFindings(input: {
-  summaryWorstCashKrw: number;
+  summaryWorstCashKrw: number | undefined;
   summaryDsr: number;
   totalGoals: number;
   achievedGoalCount: number;
@@ -77,7 +81,9 @@ export function buildWorkspaceKeyFindings(input: {
     summaryCriticalWarnings,
   } = input;
 
-  if (summaryWorstCashKrw <= 0) {
+  if (typeof summaryWorstCashKrw !== "number" || !Number.isFinite(summaryWorstCashKrw)) {
+    findings.push("현금흐름: 기간 중 최저 현금을 확인할 수 없습니다.");
+  } else if (summaryWorstCashKrw <= 0) {
     findings.push("현금흐름 위험: 기간 중 최저 현금이 0 이하로 내려갑니다.");
   } else {
     findings.push("현금흐름: 현재 가정에서는 현금이 0 이하로 내려가지 않습니다.");
@@ -244,7 +250,7 @@ export type WorkspaceResultSummaryVm = {
   timelineSummaryRows: WorkspaceTimelineSummaryRow[];
   achievedGoalCount: number;
   summaryEndNetWorthKrw: number;
-  summaryWorstCashKrw: number;
+  summaryWorstCashKrw: number | undefined;
   summaryWorstCashMonth: number;
   summaryGoalsText: string;
   summaryDsr: number;
@@ -616,9 +622,9 @@ export function buildWorkspaceResultSummaryVm(input: {
   const summaryEndNetWorthKrw = typeof simulateSummary.endNetWorthKrw === "number"
     ? simulateSummary.endNetWorthKrw
     : Number(asRecord(timelineLastRow).netWorth ?? 0);
-  const summaryWorstCashKrw = typeof simulateSummary.worstCashKrw === "number"
+  const summaryWorstCashKrw = typeof simulateSummary.worstCashKrw === "number" && Number.isFinite(simulateSummary.worstCashKrw)
     ? simulateSummary.worstCashKrw
-    : Number(simulateSummary.minCashKrw ?? 0);
+    : undefined;
   const summaryWorstCashMonth = typeof simulateSummary.worstCashMonthIndex === "number"
     ? Math.max(0, Math.trunc(simulateSummary.worstCashMonthIndex))
     : 0;
@@ -673,4 +679,16 @@ export function buildWorkspaceResultSummaryVm(input: {
     guideBadge,
     keyFindings,
   };
+}
+
+
+// A completed workspace run and its reopened report share the stored evidence,
+// including the existing legacy engine-trace fallback. No financial result changes.
+export function resolveWorkspaceInterpretationInput(
+  savedRun: PlanningRunRecord | null,
+  fallback: InterpretationInput,
+): InterpretationInput {
+  if (!savedRun) return fallback;
+  const result = safeBuildReportVMFromRun(savedRun);
+  return result.vm ? toInterpretationInputFromReportVM(result.vm) : fallback;
 }

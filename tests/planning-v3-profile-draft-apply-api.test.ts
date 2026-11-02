@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as applyPOST } from "../src/app/api/planning/v3/profile/drafts/[id]/apply/route";
-import { createProfile, getProfile } from "../src/lib/planning/store/profileStore";
+import { POST as preflightPOST } from "../src/app/api/planning/v3/profile/drafts/[id]/preflight/route";
+import { createProfile, getProfile, listProfiles } from "../src/lib/planning/store/profileStore";
 
 import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
@@ -178,6 +179,14 @@ describe("POST /api/planning/v3/profile/drafts/[id]/apply", () => {
       monthsConsidered: 4,
     });
 
+    const countBefore = (await listProfiles()).length;
+    const preflight = await preflightPOST(
+      requestPost(`/api/planning/v3/profile/drafts/${draftId}/preflight`, { profileId: base.id }),
+      { params: Promise.resolve({ id: draftId }) },
+    );
+    expect(preflight.status).toBe(200);
+    expect((await preflight.json()).data.ok).toBe(true);
+
     const response = await applyPOST(
       requestPost(`/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}/apply`, {
         csrf: "test",
@@ -191,6 +200,7 @@ describe("POST /api/planning/v3/profile/drafts/[id]/apply", () => {
     expect(payload.ok).toBe(true);
     expect(payload.data?.profileId).toBeTruthy();
     expect(payload.data?.profileId).not.toBe(base.id);
+    expect((await listProfiles()).length).toBe(countBefore + 1);
 
     const created = await getProfile(payload.data?.profileId ?? "");
     expect(created).not.toBeNull();

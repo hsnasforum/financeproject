@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
+import { normalizeFinlifeDisclosureMonth } from "@/lib/finlife/disclosure";
+import type { Prisma } from "@prisma/client";
+import { FinlifeIntegrityError, finlifeIdentity } from "@/lib/finlife/identity.mjs";
+import { storedFinlifeIdentity } from "@/lib/sources/unifiedFinlifeIdentity";
 import { applyProductSourceIssues, getProductFreshnessSummary } from "@/lib/sources/productFreshness";
 import { buildNormFilter, normalizeSearchQuery, type QueryMode } from "@/lib/sources/search";
 import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedCursor";
@@ -25,6 +29,7 @@ import {
   applyDepositProtectionOnViews,
   buildStableUnifiedId,
   integrateCanonicalWithMatches,
+  isUnifiedCatalogItemEligible,
   mergeUnifiedCatalogRows,
   stripUnifiedRecentSortAt,
   type DepositProtectionMode,
@@ -32,6 +37,7 @@ import {
 } from "@/lib/sources/unifiedEnrichPolicy";
 import {
   UnifiedInputError,
+  UnifiedRetiredProductError,
   type UnifiedDataPartialReason,
   type EnrichSourceId,
   type UnifiedProductView,
@@ -42,7 +48,15 @@ import {
   type UnifiedSnapshotProvenance,
 } from "@/lib/sources/unifiedTypes";
 
-export { UnifiedInputError } from "@/lib/sources/unifiedTypes";
+export { UnifiedInputError, UnifiedRetiredProductError } from "@/lib/sources/unifiedTypes";
+
+// FINLIFE 연금저축 moved to the 통합연금포털 disclosure, which has no product codes to match stored ids against.
+function retiredPensionProductError(): UnifiedRetiredProductError {
+  return new UnifiedRetiredProductError(
+    "연금저축 상품 정보는 통합연금포털(금융감독원) 공시로 바뀌어 이전 데이터 제공을 종료했습니다. 연금저축 화면에서 최신 공시를 확인하세요.",
+    "/products/pension",
+  );
+}
 export type {
   EnrichSourceId,
   UnifiedMode,
@@ -267,6 +281,7 @@ async function enrichFinlifeDepositItems(input: {
   }
 
   const finPrdtCdList = [...new Set(input.items.map((item) => item.externalKey).filter(Boolean))];
+  const finlifeIdentityList = [...new Set(input.items.map((item) => item.stableId || item.externalKey).filter(Boolean))];
   if (finPrdtCdList.length === 0) {
     return {
       items: applyDepositProtectionOnViews({
@@ -284,9 +299,12 @@ async function enrichFinlifeDepositItems(input: {
     select: {
       id: true,
       finPrdtCd: true,
+      identityKey: true,
+      kind: true,
       providerNameNorm: true,
       productNameNorm: true,
       raw: true,
+      provider: { select: { code: true } },
     },
   });
   if (products.length === 0) {
@@ -302,11 +320,12 @@ async function enrichFinlifeDepositItems(input: {
   const productIds: number[] = [];
   const finlifeMetaByCode = new Map<string, { providerNorm: string; productNorm: string; providerRaw: string }>();
   for (const row of products) {
-    codeByProductId.set(row.id, row.finPrdtCd);
+    const identity = storedFinlifeIdentity(row);
+    codeByProductId.set(row.id, identity);
     productIds.push(row.id);
     const raw = (row.raw as Record<string, unknown> | null) ?? null;
     const providerRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
-    finlifeMetaByCode.set(row.finPrdtCd, {
+    finlifeMetaByCode.set(identity, {
       providerNorm: normalizeProviderName(row.providerNameNorm ?? providerRaw),
       productNorm: (row.productNameNorm ?? "").trim().toLowerCase(),
       providerRaw: providerRaw || (row.providerNameNorm ?? ""),
@@ -376,7 +395,7 @@ async function enrichFinlifeDepositItems(input: {
     kdbRowsByProviderNorm.set(normalizedProvider, bucket);
   }
 
-  for (const code of finPrdtCdList) {
+  for (const code of finlifeIdentityList) {
     const meta = finlifeMetaByCode.get(code);
     if (!meta) continue;
 
@@ -402,7 +421,7 @@ async function enrichFinlifeDepositItems(input: {
 
   const integrated = integrateCanonicalWithMatches({
     canonicalItems: input.items,
-    isKdbMatched: (item) => kdbMatchedCodes.has(item.externalKey),
+    isKdbMatched: (item) => kdbMatchedCodes.has(item.stableId || item.externalKey),
     depositProtectionMode: input.depositProtection,
   });
   const filtered = integrated.items;
@@ -423,7 +442,7 @@ async function enrichFinlifeDepositItems(input: {
     const matchSummary = {
       kdb: { byExact: 0, byNormalized: 0, byFuzzy: 0, none: 0 },
     };
-    for (const code of finPrdtCdList) {
+    for (const code of finlifeIdentityList) {
       matchSummary.kdb[kdbMethodByCode.get(code) ?? "none"] += 1;
     }
     const notes: string[] = [];
@@ -514,7 +533,7 @@ async function enrichFinlifeDepositItems(input: {
     const matchSummary = {
       kdb: { byExact: 0, byNormalized: 0, byFuzzy: 0, none: 0 },
     };
-    for (const code of finPrdtCdList) {
+    for (const code of finlifeIdentityList) {
       matchSummary.kdb[kdbMethodByCode.get(code) ?? "none"] += 1;
     }
     const notes: string[] = [];
@@ -1225,8 +1244,11 @@ async function getUnifiedProductsWithLoadersInternal(
     throw new Error("모든 상품 데이터 소스를 불러오지 못했습니다.");
   }
 
+  const eligibleItems = (merged as UnifiedMergeItem[]).filter((item) => (
+    isUnifiedCatalogItemEligible({ item, kind })
+  ));
   const deduped = mergeUnifiedCatalogRows({
-    items: merged,
+    items: eligibleItems,
     sort,
   }) as UnifiedProductView[];
   const protectedItems = kind === "deposit"
@@ -1392,12 +1414,13 @@ function buildDatagoSummary(summary: string | null | undefined, rawJson: unknown
 function buildFinlifeItemFromProductRow(
   row: {
     finPrdtCd: string;
+    identityKey?: string | null;
     kind: string;
     name: string | null;
     raw: unknown;
     createdAt: Date;
     updatedAt: Date;
-    provider: { name: string } | null;
+    provider: { name: string; code?: string } | null;
     options: Array<{ saveTrm: string | null; intrRate: number | null; intrRate2: number | null }>;
   },
   includeTimestamps: boolean,
@@ -1413,12 +1436,14 @@ function buildFinlifeItemFromProductRow(
     stableId: buildStableUnifiedId({
       sourceId: "finlife",
       externalKey: row.finPrdtCd,
+      identityKey: storedFinlifeIdentity(row),
     }),
     sourceId: "finlife",
     kind: row.kind,
     externalKey: row.finPrdtCd,
     providerName: providerNameRaw || row.provider?.name || "",
     productName: productNameRaw || row.name || row.finPrdtCd,
+    disclosureMonth: normalizeFinlifeDisclosureMonth(raw?.dcls_month),
     summary,
     badges: ["FINLIFE"],
     options: buildFinlifeOptions(row.options),
@@ -1446,12 +1471,14 @@ function buildDatagoItemFromExternalRow(
   },
   includeTimestamps: boolean,
   canonicalFinPrdtCd?: string | null,
+  canonicalFinlifeIdentity?: string | null,
 ): UnifiedProductView {
   return {
     stableId: buildStableUnifiedId({
       sourceId: row.sourceId,
       externalKey: row.externalKey,
       canonicalFinPrdtCd,
+      canonicalFinlifeIdentity,
     }),
     sourceId: "datago_kdb",
     kind: row.kind,
@@ -1478,28 +1505,65 @@ export async function getUnifiedProductById(input: {
   const target = parseUnifiedLookupId(input.id);
 
   if (target.sourceId === "finlife") {
-    const finlife = await prisma.product.findUnique({
-      where: { finPrdtCd: target.externalKey },
-      select: {
-        id: true,
-        finPrdtCd: true,
-        kind: true,
-        name: true,
-        raw: true,
-        createdAt: true,
-        updatedAt: true,
-        provider: { select: { name: true } },
-        options: {
-          select: {
-            saveTrm: true,
-            intrRate: true,
-            intrRate2: true,
-          },
-          orderBy: [{ saveTrm: "asc" }, { id: "asc" }],
+    const select = {
+      id: true,
+      finPrdtCd: true,
+      identityKey: true,
+      kind: true,
+      name: true,
+      raw: true,
+      createdAt: true,
+      updatedAt: true,
+      provider: { select: { name: true, code: true } },
+      options: {
+        select: {
+          saveTrm: true,
+          intrRate: true,
+          intrRate2: true,
         },
+        orderBy: [{ saveTrm: "asc" }, { id: "asc" }],
       },
-    });
+    } satisfies Prisma.ProductSelect;
+    const parts = target.externalKey.split(":");
+    const scopedKinds = ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"];
+    const isScoped = scopedKinds.includes(parts[0]) && parts.length > 1;
+    let finlife: Prisma.ProductGetPayload<{ select: typeof select }> | null;
+    if (isScoped) {
+      const kind = parts[0];
+      if (kind === "pension") throw retiredPensionProductError();
+      let code: string;
+      let identityKey: string;
+      try {
+        if (parts.length !== (kind === "credit-loan" ? 4 : 3)) throw new UnifiedInputError("상품 식별자 형식이 올바르지 않습니다.");
+        code = decodeURIComponent(parts[2]);
+        identityKey = finlifeIdentity(kind, {
+          fin_co_no: parts[1],
+          fin_prdt_cd: code,
+          ...(kind === "credit-loan" ? { crdt_prdt_type: decodeURIComponent(parts[3]) } : {}),
+        });
+        if (identityKey !== `finlife:${target.externalKey}`) throw new UnifiedInputError("상품 식별자 형식이 올바르지 않습니다.");
+      } catch (error) {
+        if (error instanceof FinlifeIntegrityError || error instanceof URIError) throw new UnifiedInputError("상품 식별자 형식이 올바르지 않습니다.");
+        throw error;
+      }
+      finlife = await prisma.product.findUnique({ where: { identityKey }, select });
+      if (!finlife) {
+        const legacy = await prisma.product.findMany({
+          where: { finPrdtCd: code, kind, identityKey: null },
+          select,
+        });
+        const scopedLegacy = legacy.filter((row) => storedFinlifeIdentity(row) === identityKey);
+        if (scopedLegacy.length > 1) throw new UnifiedInputError("같은 식별자의 상품이 여러 개여서 상세 조회할 수 없습니다.");
+        finlife = scopedLegacy[0] ?? null;
+      }
+    } else {
+      const legacy = await prisma.product.findMany({ where: { finPrdtCd: target.externalKey }, select, take: 2 });
+      if (legacy.length > 1) throw new UnifiedInputError("같은 상품 코드가 여러 회사 또는 상품 종류에 있어 전체 상품 식별자가 필요합니다.");
+      finlife = legacy[0] ?? null;
+    }
     if (!finlife) return null;
+    // A legacy unscoped id can still resolve to a stored FINLIFE pension row.
+    if (finlife.kind === "pension") throw retiredPensionProductError();
 
     const canonical = buildFinlifeItemFromProductRow(finlife, includeTimestamps);
     if (finlife.kind !== "deposit") return canonical;
@@ -1546,6 +1610,7 @@ export async function getUnifiedProductById(input: {
         row.externalProduct,
         includeTimestamps,
         finlife.finPrdtCd,
+        storedFinlifeIdentity(finlife),
       ));
 
     if (matchedViews.length === 0) return canonical;
@@ -1594,6 +1659,10 @@ export async function getUnifiedProductById(input: {
           internalProduct: {
             select: {
               finPrdtCd: true,
+              identityKey: true,
+              kind: true,
+              raw: true,
+              provider: { select: { code: true } },
             },
           },
         },
@@ -1603,7 +1672,10 @@ export async function getUnifiedProductById(input: {
   if (!external) return null;
 
   const canonicalFinPrdtCd = external.matches[0]?.internalProduct?.finPrdtCd ?? null;
-  const kdbItem = buildDatagoItemFromExternalRow(external, includeTimestamps, canonicalFinPrdtCd);
+  const canonicalFinlifeIdentity = external.matches[0]?.internalProduct
+    ? storedFinlifeIdentity(external.matches[0].internalProduct)
+    : null;
+  const kdbItem = buildDatagoItemFromExternalRow(external, includeTimestamps, canonicalFinPrdtCd, canonicalFinlifeIdentity);
 
   const internalProductId = external.matches[0]?.internalProductId;
   if (typeof internalProductId !== "number") {
@@ -1614,12 +1686,13 @@ export async function getUnifiedProductById(input: {
     where: { id: internalProductId },
     select: {
       finPrdtCd: true,
+      identityKey: true,
       kind: true,
       name: true,
       raw: true,
       createdAt: true,
       updatedAt: true,
-      provider: { select: { name: true } },
+      provider: { select: { name: true, code: true } },
       options: {
         select: {
           saveTrm: true,

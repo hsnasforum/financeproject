@@ -5,8 +5,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROMPT_DIR="$ROOT_DIR/scripts/prompts/multi-agent"
 TMP_BASE="$ROOT_DIR/tmp/codex-multi-agent"
-DEMANDING_MODEL="${CODEX_DEMANDING_MODEL:-gpt-5.6-sol}"
-READ_HEAVY_MODEL="${CODEX_READ_HEAVY_MODEL:-gpt-5.6-terra}"
+LEAD_MODEL="${CODEX_LEAD_MODEL:-gpt-6-astra}"
+DEMANDING_MODEL="${CODEX_DEMANDING_MODEL:-gpt-6.1-sol}"
+READ_HEAVY_MODEL="${CODEX_READ_HEAVY_MODEL:-gpt-6.1-sol}"
 
 usage() {
   cat <<'EOF'
@@ -16,10 +17,16 @@ Usage:
   scripts/run_codex_multi_agent.sh --role-set core "task summary"
 
 Behavior:
-  - role-set `full` (default): creates 7 prompt files for lead, planner, researcher, implementer, reviewer, validator, documenter
-  - role-set `core`: creates 3 prompt files for lead, implementer, validator
-  - demanding roles default to gpt-5.6-sol; read-heavy roles default to gpt-5.6-terra
-  - override defaults with CODEX_DEMANDING_MODEL and CODEX_READ_HEAVY_MODEL
+  - role-set `full` (explicit only): creates 7 prompt files for lead, planner, researcher, implementer, reviewer, validator, documenter
+  - role-set `core` (default): creates 3 prompt files for lead, implementer, validator
+  - native mapping: lead=manager, implementer=developer, validator=tester; other names match
+  - lead: Astra Ultra
+  - implementer/planner/researcher/reviewer/validator/documenter: Sol 6.1 Max
+  - subagents are spawned only when independent work justifies the handoff cost
+  - planner/researcher/reviewer/documenter keep their native names; analyzer has no CLI role
+  - tmux runs independent sessions, not a native subagent tree; nested agents are disabled
+  - override model groups with CODEX_LEAD_MODEL, CODEX_DEMANDING_MODEL, CODEX_READ_HEAVY_MODEL
+  - optional CODEX_LEAD_EFFORT, CODEX_DEMANDING_EFFORT, CODEX_READ_HEAVY_EFFORT override role efforts
   - If tmux is available, opens a multi-window tmux session with interactive codex runs
   - If tmux is unavailable, prints the codex commands to run manually
 EOF
@@ -27,7 +34,7 @@ EOF
 
 TASK=""
 SESSION_NAME="finance-multi"
-ROLE_SET="full"
+ROLE_SET="core"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -119,6 +126,7 @@ done
 
 role_model() {
   case "$1" in
+    lead) printf '%s' "$LEAD_MODEL" ;;
     researcher|validator|documenter) printf '%s' "$READ_HEAVY_MODEL" ;;
     *) printf '%s' "$DEMANDING_MODEL" ;;
   esac
@@ -126,9 +134,9 @@ role_model() {
 
 role_effort() {
   case "$1" in
-    planner|implementer) printf 'xhigh' ;;
-    documenter) printf 'medium' ;;
-    *) printf 'high' ;;
+    lead) printf '%s' "${CODEX_LEAD_EFFORT:-ultra}" ;;
+    researcher|validator|documenter) printf '%s' "${CODEX_READ_HEAVY_EFFORT:-max}" ;;
+    *) printf '%s' "${CODEX_DEMANDING_EFFORT:-max}" ;;
   esac
 }
 
@@ -139,7 +147,7 @@ make_cmd() {
   local effort
   model="$(role_model "$role")"
   effort="$(role_effort "$role")"
-  printf "cd '%s' && codex -C '%s' --model '%s' -c 'model_reasoning_effort=\"%s\"' --no-alt-screen \"\$(cat '%s')\"" "$ROOT_DIR" "$ROOT_DIR" "$model" "$effort" "$prompt_file"
+  printf "cd '%s' && codex -C '%s' --model '%s' -c 'model_reasoning_effort=\"%s\"' -c 'agents.enabled=false' --no-alt-screen \"\$(cat '%s')\"" "$ROOT_DIR" "$ROOT_DIR" "$model" "$effort" "$prompt_file"
 }
 
 lead_cmd="$(make_cmd lead "$RUN_DIR/lead.md")"

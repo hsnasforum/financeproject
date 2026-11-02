@@ -86,6 +86,8 @@ export const QUALITY_GATES = [
     script: "planning:v2:guide:test",
   }),
   gate({ id: "planning:v2:smoke", tier: "required", scope: ["planning-v2"], script: "planning:v2:smoke" }),
+  gate({ id: "planning:v2:prod:smoke", tier: "required", scope: ["planning-v2", "release"], script: "planning:v2:prod:smoke" }),
+  gate({ id: "planning:v2:desktop:smoke", tier: "required", scope: ["planning-v2", "release"], script: "planning:v2:desktop:smoke" }),
   gate({
     id: "planning:v2:e2e:fast",
     tier: "required",
@@ -146,6 +148,8 @@ export const QUALITY_GATE_SUITES = {
     lateRequired: [
       "test",
       "e2e:release:contracts",
+      "planning:v2:prod:smoke",
+      "planning:v2:desktop:smoke",
     ],
     advisory: [
       "planning:ssot:check",

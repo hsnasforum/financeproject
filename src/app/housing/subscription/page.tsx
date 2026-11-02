@@ -1,5 +1,8 @@
 import { SubscriptionClient } from "@/components/SubscriptionClient";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
 import { parseSubscriptionInit } from "@/lib/publicApis/subscriptionQuery";
+
+export const metadata = PUBLIC_PAGE_METADATA["/housing/subscription"];
 
 type SubscriptionPageSearchParams = {
   region?: string | string[];

@@ -7,6 +7,7 @@ declare module "better-sqlite3" {
   };
 
   interface Statement<Row = Record<string, unknown>> {
+    safeIntegers(toggle?: boolean): this;
     run(...params: unknown[]): StatementRunResult;
     run(params: BindParams): StatementRunResult;
     get(...params: unknown[]): Row | undefined;
@@ -28,6 +29,7 @@ declare module "better-sqlite3" {
     transaction<Args extends unknown[], Return>(fn: (...args: Args) => Return): (...args: Args) => Return;
     exec(source: string): this;
     pragma(source: string, options?: Record<string, unknown>): unknown;
+    backup(filename: string): Promise<{ totalPages: number; remainingPages: number }>;
     close(): this;
   }
 

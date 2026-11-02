@@ -239,8 +239,11 @@ export default function PlanningQuickStartGate({
           : (nextStepDescription ?? "새로고침 뒤에는 간단 시작 적용 여부를 완전히 복원할 수 없어도, 실제 저장 상태를 기준으로 첫 실행·기록 저장과 리포트 확인 안내를 이어서 보여줍니다.");
 
   return (
-    <Card className="mb-6 border border-sky-200 bg-gradient-to-br from-sky-50 to-white" data-testid="planning-quickstart-gate">
+    <Card className="border border-slate-200 bg-white p-5 sm:p-6" data-testid="planning-quickstart-gate">
       <div className="space-y-4">
+        <details open={!appliedPreview && !runDone || previewOpen} data-testid="planning-quickstart-inputs" className="group">
+          <summary className="cursor-pointer py-2 text-base font-semibold text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">수입·지출·목표로 초안 만들기</summary>
+          <div className="mt-4 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">간단 시작</p>
@@ -263,10 +266,10 @@ export default function PlanningQuickStartGate({
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <label className="text-xs font-semibold text-slate-700">
+          <label className="text-sm font-medium text-slate-700">
             월 실수령액(원)
             <input
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+              className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
               disabled={interactionDisabled}
@@ -274,10 +277,10 @@ export default function PlanningQuickStartGate({
               onChange={(event) => updateField("monthlyIncomeNet", toNumber(event.target.value))}
             />
           </label>
-          <label className="text-xs font-semibold text-slate-700">
+          <label className="text-sm font-medium text-slate-700">
             월 고정지출(원)
             <input
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+              className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
               disabled={interactionDisabled}
@@ -285,20 +288,20 @@ export default function PlanningQuickStartGate({
               onChange={(event) => updateField("fixedExpense", toNumber(event.target.value))}
             />
           </label>
-          <label className="text-xs font-semibold text-slate-700">
+          <label className="text-sm font-medium text-slate-700">
             목표 이름
             <input
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+              className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               placeholder="예: 비상금 1,000만 원"
               disabled={interactionDisabled}
               value={draft.goalName ?? ""}
               onChange={(event) => updateField("goalName", event.target.value)}
             />
           </label>
-          <label className="text-xs font-semibold text-slate-700">
+          <label className="text-sm font-medium text-slate-700">
             목표 금액(원)
             <input
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+              className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
               disabled={interactionDisabled}
@@ -306,10 +309,10 @@ export default function PlanningQuickStartGate({
               onChange={(event) => updateField("goalTargetAmount", toNumber(event.target.value))}
             />
           </label>
-          <label className="text-xs font-semibold text-slate-700">
+          <label className="text-sm font-medium text-slate-700">
             목표까지 남은 개월
             <input
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+              className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="number"
               min={1}
@@ -320,81 +323,7 @@ export default function PlanningQuickStartGate({
           </label>
         </div>
 
-        <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1">선택지출 0원으로 시작</span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1">현금성·투자자산 기본값 적용</span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1">부채가 없으면 빈 상태로 시작</span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1">적용 후 아래에서 바로 수정 가능</span>
-        </div>
-
-        {appliedPreview && !previewOpen ? (
-          <div
-            className="rounded-2xl border border-primary/20 bg-primary/10 p-5"
-            data-testid="planning-quickstart-applied-state"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="max-w-2xl space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">간단 시작 후속 안내</p>
-                <h3 className="text-base font-black text-navy">{appliedTitle}</h3>
-                <p className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${quickRuleToneClassName(appliedPreview.quickRuleStatus)}`}>
-                  quick rules · {appliedPreview.quickRuleStatus.label}
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">완료 상태</p>
-                    <p
-                      className="mt-1 text-sm font-black text-navy"
-                      data-testid="planning-quickstart-followthrough-summary"
-                    >
-                      {appliedCompletedSummary}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">다음 단계</p>
-                    <p className="mt-1 text-sm font-black text-navy">{appliedNextStepSummary}</p>
-                  </div>
-                </div>
-                <p className="text-sm leading-6 text-slate-700">{appliedPreview.quickRuleStatus.detail}</p>
-                <p className="text-sm leading-6 text-slate-700">{appliedDescription}</p>
-              </div>
-              {nextStepLabel && nextStepTargetId ? (
-                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
-                  {nextStepLabel}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {restoredFollowthroughVisible ? (
-          <div
-            className="rounded-2xl border border-sky-200 bg-sky-50/70 p-5"
-            data-testid="planning-quickstart-restored-state"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="max-w-2xl space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">현재 상태 기준 후속 안내</p>
-                <h3 className="text-base font-black text-navy">{restoredTitle}</h3>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">완료 상태</p>
-                    <p className="mt-1 text-sm font-black text-navy">{restoredCompletedSummary}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">다음 단계</p>
-                    <p className="mt-1 text-sm font-black text-navy">{restoredNextStepSummary}</p>
-                  </div>
-                </div>
-                <p className="text-sm leading-6 text-slate-700">{restoredDescription}</p>
-              </div>
-              {nextStepLabel && nextStepTargetId ? (
-                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
-                  {nextStepLabel}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        <p className="text-sm leading-6 text-slate-500">선택지출·자산·부채는 기본값으로 시작합니다. 적용 후 아래 입력란에서 실제 금액을 확인해 주세요.</p>
 
         {previewOpen && preview ? (
           <div
@@ -454,7 +383,82 @@ export default function PlanningQuickStartGate({
               ))}
             </div>
           </div>
+        ) : null}          </div>
+        </details>
+        {appliedPreview && !previewOpen ? (
+          <div
+            className="border-t border-slate-200 pt-5"
+            data-testid="planning-quickstart-applied-state"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl space-y-2">
+                <h3 className="text-base font-black text-navy">{appliedTitle}</h3>
+                <details className="text-sm leading-6 text-slate-600" data-testid="planning-quickstart-applied-details">
+                  <summary className="cursor-pointer py-2">초안·저장 상태 자세히 보기</summary>
+                <p className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${quickRuleToneClassName(appliedPreview.quickRuleStatus)}`}>
+                  quick rules · {appliedPreview.quickRuleStatus.label}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="py-1">
+                    <p className="text-sm font-medium text-slate-500">완료 상태</p>
+                    <p
+                      className="mt-1 text-sm font-black text-navy"
+                      data-testid="planning-quickstart-followthrough-summary"
+                    >
+                      {appliedCompletedSummary}
+                    </p>
+                  </div>
+                  <div className="py-1">
+                    <p className="text-sm font-medium text-slate-500">다음 단계</p>
+                    <p className="mt-1 text-sm font-black text-navy">{appliedNextStepSummary}</p>
+                  </div>
+                </div>
+                <details className="text-sm leading-6 text-slate-600"><summary className="cursor-pointer py-2">초안 계산 기준</summary><p>{appliedPreview.quickRuleStatus.detail}</p></details>
+                <p className="text-sm leading-6 text-slate-700">{appliedDescription}</p>
+                </details>
+              </div>
+              {nextStepLabel && nextStepTargetId ? (
+                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
+                  {nextStepLabel}
+                </Button>
+              ) : null}
+            </div>
+          </div>
         ) : null}
+
+        {restoredFollowthroughVisible ? (
+          <div
+            className="border-t border-slate-200 pt-5"
+            data-testid="planning-quickstart-restored-state"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl space-y-2">
+                <h3 className="text-base font-black text-navy">{restoredTitle}</h3>
+                <details className="text-sm leading-6 text-slate-600" data-testid="planning-quickstart-restored-details">
+                  <summary className="cursor-pointer py-2">초안·저장 상태 자세히 보기</summary>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="py-1">
+                    <p className="text-sm font-medium text-slate-500">완료 상태</p>
+                    <p className="mt-1 text-sm font-black text-navy">{restoredCompletedSummary}</p>
+                  </div>
+                  <div className="py-1">
+                    <p className="text-sm font-medium text-slate-500">다음 단계</p>
+                    <p className="mt-1 text-sm font-black text-navy">{restoredNextStepSummary}</p>
+                  </div>
+                </div>
+                <p className="text-sm leading-6 text-slate-700">{restoredDescription}</p>
+                </details>
+              </div>
+              {nextStepLabel && nextStepTargetId ? (
+                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
+                  {nextStepLabel}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+
       </div>
     </Card>
   );

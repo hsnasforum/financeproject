@@ -9,6 +9,8 @@ import { type CandidateRecommendationsPayload } from "@/lib/planning/reports/rec
 import {
   safeBuildReportVMFromRun,
 } from "@/lib/planning/reports/reportViewModel";
+import SavedReportBrief, { SAVED_REPORT_DETAILS_ID, isSavedReportInterpretable } from "@/components/planning/reports/SavedReportBrief";
+import { resolveWarningCatalog } from "@/lib/planning/catalog/warningCatalog";
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
 import DisclosuresPanel from "@/components/planning/DisclosuresPanel";
 import {
@@ -18,7 +20,7 @@ import {
 import {
   bodyCompactFieldClassName,
 } from "@/components/ui/BodyTone";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -74,6 +76,7 @@ type SavedReportLookup = {
 type GoalRow = {
   name: string;
   achieved: boolean;
+  interpretation: string;
   shortfall?: number;
 };
 
@@ -322,6 +325,10 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     [selectedRun],
   );
   const selectedRunVmData = selectedRunVm.vm;
+  const scenarioRows = useMemo(
+    () => selectedRunVmData?.scenarioRows ?? [],
+    [selectedRunVmData],
+  );
   const baselineOptions = useMemo(() => {
     return runs
       .filter((run) => run.id !== resolvedSelectedRunId)
@@ -360,12 +367,10 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     if (!selectedRunVmData) return null;
     return toInterpretationInputFromReportVM(selectedRunVmData);
   }, [selectedRunVmData]);
-  const canRenderInterpretability = useMemo(() => {
-    if (!selectedRun) return false;
-    if (!Array.isArray(selectedRun.stages) || selectedRun.stages.length < 1) return true;
-    const simulateStage = selectedRun.stages.find((stage) => stage.id === "simulate");
-    return !simulateStage || simulateStage.status === "SUCCESS";
-  }, [selectedRun]);
+  const canRenderInterpretability = useMemo(
+    () => isSavedReportInterpretable(selectedRun, selectedRunVmData),
+    [selectedRun, selectedRunVmData],
+  );
   const summaryCards = useMemo(() => {
     if (!selectedRunVmData) {
       return {
@@ -394,6 +399,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     () => (selectedRunVmData?.guide.goals ?? []).map((goal) => ({
       name: goal.name,
       achieved: goal.achieved,
+      interpretation: goal.interpretation,
       ...(typeof goal.shortfallKrw === "number" ? { shortfall: goal.shortfallKrw } : {}),
     })),
     [selectedRunVmData],
@@ -501,11 +507,10 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       setValidatedSavedReportId(createdReportId);
       setInvalidSavedReportId("");
       router.replace(nextHref, { scroll: false });
-      setShowAdvancedRaw(true);
       setSaveReportNotice(
         queryRecommendRunId
           ? "저장된 리포트를 만들고 연결된 추천 실행 참조도 함께 보관했습니다."
-          : "저장된 리포트를 만들고 아래 관리 패널을 열었습니다.",
+          : "리포트를 별도로 보관했습니다. 아래 링크에서 보관한 상세 내용을 열 수 있습니다.",
       );
     } catch (saveError) {
       setSaveReportNotice("");
@@ -751,15 +756,13 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     <PageShell className="bg-surface-muted">
       <PageHeader
         title="플래닝 리포트"
-        description="저장된 실행 결과를 다시 읽고, 필요하면 실행 기록 화면의 다른 실행과 비교하는 화면입니다."
+        description="저장된 진단에서 핵심 상태와 다음 행동을 확인하세요."
         action={(
-          <div className="no-print flex items-center gap-3">
+          <div className="no-print flex max-w-full flex-wrap items-center gap-2">
             {reverseRecommendHistoryHref ? (
-              <Link href={reverseRecommendHistoryHref}>
-                <Button variant="outline" className="rounded-full font-bold h-9 bg-white">
-                  추천 비교 기록 보기
-                </Button>
-              </Link>
+              <ButtonLink href={reverseRecommendHistoryHref} variant="outline" className="rounded-full font-bold h-9 bg-white">
+                추천 비교 기록 보기
+              </ButtonLink>
             ) : null}
             <Button
               data-testid="report-print-button"
@@ -781,18 +784,11 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             >
               HTML 저장
             </Button>
-            <Link href={planningHref}>
-              <Button variant="primary" className="rounded-full font-bold h-9">플래닝으로 돌아가기</Button>
-            </Link>
-            <Link href={runsHref}>
-              <Button variant="outline" className="rounded-full font-bold h-9 bg-white">실행 기록 보기</Button>
-            </Link>
+            <ButtonLink href={planningHref} variant="primary" className="rounded-full font-bold h-9">플래닝으로 돌아가기</ButtonLink>
+            <ButtonLink href={runsHref} variant="outline" className="rounded-full font-bold h-9 bg-white">실행 기록 보기</ButtonLink>
           </div>
         )}
       />
-      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
-        여기는 새 실행을 시작하는 곳이 아니라, 저장된 결과를 다시 확인하고 다음 비교나 후속 확인으로 이어지는 도착점입니다.
-      </p>
 
       {showInitialLoadNotice && (
         <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-sm font-bold text-amber-800">
@@ -808,20 +804,12 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         <div className="space-y-6">
           <EmptyState
             title="아직 저장된 실행이 없습니다"
-            description="먼저 /planning에서 실행을 저장해 두면, 여기서 저장된 결과를 다시 보고 실행 기록 화면과 비교할 수 있습니다."
+            description="재무 진단에서 첫 결과를 저장하면 이곳에서 다시 열어볼 수 있습니다."
           />
-          <Card className="p-8 text-center bg-surface-muted/50 border-dashed rounded-[2.5rem]">
-            <p className="text-sm font-bold text-navy">먼저 /planning에서 실행 저장을 마치면 됩니다.</p>
-            <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">실행을 저장한 뒤 이 화면으로 돌아오면 저장된 결과를 다시 읽고, 실행 기록 화면에서는 다른 실행과 비교할 수 있습니다.</p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Link href={planningHref}>
-                <Button variant="primary" className="rounded-xl px-6">플래닝으로 가서 실행 저장하기</Button>
-              </Link>
-              <Link href={runsHref}>
-                <Button variant="outline" className="rounded-xl px-6 bg-white">실행 기록 열기</Button>
-              </Link>
-            </div>
-          </Card>
+          <div className="flex flex-wrap gap-3">
+            <ButtonLink href={planningHref} variant="primary">재무 진단 시작</ButtonLink>
+            <ButtonLink href={runsHref} variant="outline">실행 기록 열기</ButtonLink>
+          </div>
         </div>
       ) : !selectedRun ? (
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 text-sm font-bold text-amber-800 italic">
@@ -831,12 +819,13 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         <div className="space-y-6" data-testid="report-dashboard">
           <Card className="p-6">
             <SubSectionHeader
-              title="보고 있는 실행 선택"
-              description="저장된 실행 하나를 다시 읽고, 필요하면 기준 실행과 비교하거나 리포트로 따로 보관할 수 있습니다."
+              title="보고 있는 기록"
+              description="다른 기록을 선택하거나, 비교·별도 보관을 할 수 있습니다."
               action={
                 <div className="no-print flex flex-wrap items-center gap-3">
                   <select
-                    className={cn(bodyCompactFieldClassName, "min-w-[240px] h-9 text-xs font-bold rounded-lg")}
+                    className={cn(bodyCompactFieldClassName, "min-w-0 max-w-full h-11 text-sm font-semibold rounded-lg")}
+                    aria-label="보고 있는 실행"
                     id="report-run-selector"
                     value={resolvedSelectedRunId}
                     onChange={(event) => setSelectedRunId(event.target.value)}
@@ -934,7 +923,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             ) : null}
 
             {saveReportError ? (
-              <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+              <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
                 {saveReportError}
               </div>
             ) : null}
@@ -957,73 +946,17 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
               </div>
             ) : null}
 
-            {compareMode && (
-              <div className="mt-6 p-6 rounded-2xl bg-surface-muted border border-slate-100 space-y-6">
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400" htmlFor="report-baseline-selector">
-                    기준 실행
-                  </label>
-                  <select
-                    className={cn(bodyCompactFieldClassName, "min-w-[240px] h-8 text-[11px] font-bold rounded-lg bg-white")}
-                    data-testid="baseline-selector"
-                    id="report-baseline-selector"
-                    value={resolvedBaselineRunId}
-                    onChange={(event) => setBaselineRunId(event.target.value)}
-                  >
-                    <option value="">기준 실행 선택</option>
-                    {baselineOptions.map((run) => (
-                      <option key={run.id} value={run.id}>
-                        {`${run.title?.trim() || `실행 ${run.id}`} · ${formatDateTime(run.createdAt)}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {!baselineRun ? (
-                  <p className="text-sm font-bold text-slate-400 italic">비교할 다른 실행을 저장하면, 지금 보는 리포트와 무엇이 달라졌는지 같은 자리에서 읽을 수 있습니다.</p>
-                ) : reportDeltaRows.length < 1 ? (
-                  <p className="text-sm font-bold text-slate-400 italic">핵심 지표 차이는 크지 않지만, 상세 리포트에서 가정과 경고 차이는 다시 확인할 수 있습니다.</p>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="delta-cards">
-                    {reportDeltaRows.map((item) => (
-                      <div className="p-4 rounded-xl bg-white border border-slate-100 shadow-sm" key={item.key}>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{item.label}</p>
-                        <div className="flex items-baseline justify-between">
-                          <p className={cn("text-lg font-black tabular-nums", item.delta > 0 ? "text-success" : item.delta < 0 ? "text-danger" : "text-navy")}>
-                            {formatMetricDelta(item.unitKind, item.delta)}
-                          </p>
-                          <span className="text-[10px] font-bold text-slate-400">{directionLabel(item.direction)}</span>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-slate-500">
-                          <span>기준 {formatMetricValue(item.unitKind, item.baseValue)}</span>
-                          <span>→ {formatMetricValue(item.unitKind, item.currentValue)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </Card>
 
-          {interpretationInput && (
-            canRenderInterpretability ? (
-              <InterpretabilityGuideCard
-                aggregatedWarnings={interpretationInput.aggregatedWarnings}
-                goals={interpretationInput.goals}
-                monthlyOperatingGuide={selectedRunVmData?.monthlyOperatingGuide}
-                summaryMetrics={interpretationInput.summary}
-                outcomes={interpretationInput.outcomes}
-                summaryEvidence={interpretationInput.summaryEvidence}
-              />
-            ) : (
-              <div className="p-6 rounded-[2rem] bg-surface-muted text-sm font-bold text-slate-500 text-center">
-                해석 가이드는 simulate 단계 성공 시에만 표시됩니다.
-              </div>
-            )
-          )}
+          <SavedReportBrief run={selectedRun} vm={selectedRunVmData} />
+          <nav aria-label="저장된 리포트 이동" className="no-print flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-primary">
+            <a href="#report-summary" className="inline-flex min-h-11 items-center hover:underline">핵심 지표</a>
+            <a href={`#${REPORT_SECTION_IDS.warnings}`} className="inline-flex min-h-11 items-center hover:underline">주의 신호</a>
+            <a href="#report-goals" className="inline-flex min-h-11 items-center hover:underline">목표</a>
+            <a href="#report-actions" className="inline-flex min-h-11 items-center hover:underline">실행 단계</a>
+          </nav>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-testid="report-summary-cards">
+          <div className="grid scroll-mt-28 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="report-summary-cards" id="report-summary">
             <StatCard
               label="말기 순자산"
               value={typeof summaryCards.endNetWorthKrw === "number" ? formatKrw("ko-KR", summaryCards.endNetWorthKrw) : "-"}
@@ -1045,6 +978,228 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
               className="rounded-3xl"
             />
           </div>
+
+
+
+          <Card className="scroll-mt-28 p-5 sm:p-6" id={REPORT_SECTION_IDS.warnings}>
+            <SubSectionHeader title="발생 경고·주의 신호" />
+            <div className="overflow-x-auto rounded-xl border border-slate-200 mt-4">
+              <table className="min-w-full text-sm" data-testid="report-warnings-table">
+                <thead className="bg-surface-muted border-b border-slate-100">
+                  <tr className="text-xs font-semibold text-slate-600">
+                    <th className="px-4 py-3 text-left">항목</th>
+                    <th className="px-4 py-3 text-left">내용</th>
+                    <th className="px-4 py-3 text-right">횟수</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 bg-white">
+                  {warningRows.length < 1 ? (
+                    <tr>
+                      <td className="px-4 py-8 text-center text-slate-400 font-bold" colSpan={3}>경고가 없습니다.</td>
+                    </tr>
+                  ) : warningRows.map((row) => (
+                    <tr key={`${row.code}:${row.message}`}>
+                      <td className="px-4 py-4 font-semibold text-navy">
+                        {resolveWarningCatalog(row.code).title === row.code ? resolveWarningCatalog(row.code).plainDescription : resolveWarningCatalog(row.code).title}
+                        <details className="mt-1 text-xs font-normal text-slate-500"><summary className="cursor-pointer py-1">기술 코드</summary>{row.code}</details>
+                      </td>
+                      <td className="px-4 py-4 font-medium text-slate-600 leading-relaxed">{row.message}</td>
+                      <td className="px-4 py-4 text-right tabular-nums font-bold text-slate-400">{row.count.toLocaleString("ko-KR")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <Card className="scroll-mt-28 p-5 sm:p-6" id="report-goals">
+            <SubSectionHeader title="목표 달성 여부" />
+            <div className="overflow-x-auto rounded-xl border border-slate-200 mt-4">
+              <table className="min-w-full text-sm">
+                <thead className="bg-surface-muted border-b border-slate-100">
+                  <tr className="text-xs font-semibold text-slate-600">
+                    <th className="px-4 py-3 text-left">목표</th>
+                    <th className="px-4 py-3 text-left">상태</th>
+                    <th className="px-4 py-3 text-right">부족액</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 bg-white">
+                  {goalRows.length < 1 ? (
+                    <tr>
+                      <td className="px-4 py-8 text-center text-slate-400 font-bold" colSpan={3}>목표 정보가 없습니다.</td>
+                    </tr>
+                  ) : goalRows.map((row, index) => (
+                    <tr key={`${row.name}:${index}`}>
+                      <td className="px-4 py-4 font-black text-navy">{row.name}</td>
+                      <td className="px-4 py-4 font-bold">
+                        <Badge variant={row.achieved ? "secondary" : "destructive"} className="px-2 py-0.5 text-[10px] h-5">
+                          {row.achieved ? row.interpretation || "달성" : "미달"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-4 text-right tabular-nums font-black text-rose-600">
+                        {typeof row.shortfall === "number" && row.shortfall > 0 ? formatKrw("ko-KR", row.shortfall) : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {scenarioRows.length > 0 && (
+            <Card className="p-6" data-testid="report-scenario-comparison">
+              <SubSectionHeader
+                title="현재 실행의 시나리오 비교"
+                description="한 실행 안의 가정 변화에 따른 결과입니다. 기준 대비 변화는 기준 시나리오(Base)와의 말기 순자산 차이입니다."
+              />
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="min-w-full text-sm">
+                  <caption className="sr-only">현재 실행의 가정별 결과와 기준 시나리오 대비 변화</caption>
+                  <thead className="border-b border-slate-100 bg-surface-muted">
+                    <tr className="text-xs font-bold text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left">시나리오</th>
+                      <th scope="col" className="px-4 py-3 text-right">말기 순자산</th>
+                      <th scope="col" className="px-4 py-3 text-right">기준 대비 변화</th>
+                      <th scope="col" className="px-4 py-3 text-right">최저 현금</th>
+                      <th scope="col" className="px-4 py-3 text-right">목표 달성 수</th>
+                      <th scope="col" className="px-4 py-3 text-right">경고 수</th>
+                      <th scope="col" className="px-4 py-3 text-left">해석</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 bg-white">
+                    {scenarioRows.map((row) => (
+                      <tr key={row.id} data-testid={`report-scenario-${row.id}`}>
+                        <th scope="row" className="px-4 py-4 text-left font-bold text-navy">{row.title}</th>
+                        <td className="whitespace-nowrap px-4 py-4 text-right tabular-nums">{formatKrw("ko-KR", row.endNetWorthKrw)}</td>
+                        <td className="whitespace-nowrap px-4 py-4 text-right tabular-nums">{formatMetricDelta("krw", row.endNetWorthDeltaKrw)}</td>
+                        <td className="whitespace-nowrap px-4 py-4 text-right tabular-nums">{formatKrw("ko-KR", row.worstCashKrw)}</td>
+                        <td className="px-4 py-4 text-right tabular-nums">{row.goalsAchievedCount.toLocaleString("ko-KR")}</td>
+                        <td className="px-4 py-4 text-right tabular-nums">{row.warningsCount.toLocaleString("ko-KR")}</td>
+                        <td className="min-w-[220px] px-4 py-4 text-slate-600">{row.interpretation}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          <Card className="scroll-mt-28 p-5 sm:p-6" data-testid="report-top-actions" id="report-actions">
+            <SubSectionHeader
+              title="다음 행동의 실행 단계"
+              description="기준 실행에서 우선 확인할 행동입니다. 위 시나리오별로 새로 생성한 행동은 아닙니다."
+            />
+            {topActions.length < 1 ? (
+              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-surface-muted/50 rounded-2xl border border-dashed border-slate-200 mt-4">
+                권고 액션 정보가 없습니다.
+              </p>
+            ) : (
+              <div className="grid gap-4 mt-4">
+                {topActions.map((action, index) => (
+                  <div className="p-5 rounded-2xl bg-surface-muted border border-slate-100 relative overflow-hidden" key={`${action.title}:${index}`}>
+                    <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <p className="text-base font-black text-navy tracking-tight">
+                        {index + 1}. {action.title}
+                      </p>
+                      <Badge variant="secondary" className={cn("text-[9px] uppercase font-black",
+                        action.severity === 'critical' ? "bg-rose-100 text-rose-700" :
+                        action.severity === 'warn' ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-navy"
+                      )}>
+                        {severityLabel(action.severity)}
+                      </Badge>
+                    </div>
+                    {action.steps.length > 0 ? (
+                      <ul className="space-y-2">
+                        {action.steps.map((step, stepIndex) => (
+                          <li key={`${action.title}:${stepIndex}`} className="flex gap-3 text-xs font-medium text-slate-600 leading-relaxed">
+                            <span className="text-primary font-black">•</span>
+                            {step}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs font-bold text-slate-400 italic">세부 단계 정보가 없습니다.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {compareMode && (
+            <div className="p-6 rounded-2xl bg-surface-muted border border-slate-100 space-y-6" data-testid="report-run-comparison">
+              <SubSectionHeader title="저장 실행 간 비교" description="서로 다른 저장 실행 A와 B의 결과를 비교합니다. 한 실행 안의 시나리오 비교와는 별도입니다." />
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-xs font-semibold text-slate-600" htmlFor="report-baseline-selector">
+                  기준 실행
+                </label>
+                <select
+                  className={cn(bodyCompactFieldClassName, "min-w-0 max-w-full h-11 text-sm font-semibold rounded-lg bg-white")}
+                  data-testid="baseline-selector"
+                  id="report-baseline-selector"
+                  value={resolvedBaselineRunId}
+                  onChange={(event) => setBaselineRunId(event.target.value)}
+                >
+                  <option value="">기준 실행 선택</option>
+                  {baselineOptions.map((run) => (
+                    <option key={run.id} value={run.id}>
+                      {`${run.title?.trim() || `실행 ${run.id}`} · ${formatDateTime(run.createdAt)}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!baselineRun ? (
+                <p className="text-sm font-bold text-slate-400 italic">비교할 다른 실행을 저장하면, 지금 보는 리포트와 무엇이 달라졌는지 같은 자리에서 읽을 수 있습니다.</p>
+              ) : reportDeltaRows.length < 1 ? (
+                <p className="text-sm font-bold text-slate-400 italic">핵심 지표 차이는 크지 않지만, 상세 리포트에서 가정과 경고 차이는 다시 확인할 수 있습니다.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="delta-cards">
+                  {reportDeltaRows.map((item) => (
+                    <div className="p-4 rounded-xl bg-white border border-slate-100 shadow-sm" key={item.key}>
+                      <p className="text-xs font-semibold text-slate-600 mb-2">{item.label}</p>
+                      <div className="flex items-baseline justify-between">
+                        <p className={cn("text-lg font-black tabular-nums", item.delta > 0 ? "text-success" : item.delta < 0 ? "text-danger" : "text-navy")}>
+                          {formatMetricDelta(item.unitKind, item.delta)}
+                        </p>
+                        <span className="text-[10px] font-bold text-slate-400">{directionLabel(item.direction)}</span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-slate-500">
+                        <span>기준 {formatMetricValue(item.unitKind, item.baseValue)}</span>
+                        <span>→ {formatMetricValue(item.unitKind, item.currentValue)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <details id={SAVED_REPORT_DETAILS_ID} className="group scroll-mt-28 rounded-xl border border-slate-200 bg-white p-5" data-testid="report-interpretation-details">
+            <summary className="cursor-pointer py-1 text-base font-semibold text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">상세 해석·월급 운영안·계산 근거</summary>
+            <div className="mt-6 space-y-6">
+          {interpretationInput && (
+            canRenderInterpretability ? (
+              <InterpretabilityGuideCard
+                policy={selectedRunVmData?.reproducibility?.policy}
+                aggregatedWarnings={interpretationInput.aggregatedWarnings}
+                goals={interpretationInput.goals}
+                monthlyOperatingGuide={selectedRunVmData?.monthlyOperatingGuide}
+                summaryMetrics={interpretationInput.summary}
+                outcomes={interpretationInput.outcomes}
+                summaryEvidence={interpretationInput.summaryEvidence}
+              />
+            ) : (
+              <div className="p-6 rounded-[2rem] bg-surface-muted text-sm font-bold text-slate-500 text-center">
+                해석 가이드는 simulate 단계 성공 시에만 표시됩니다.
+              </div>
+            )
+          )}
+
+              <DisclosuresPanel report={runNormalizationReport} />
+            </div>
+          </details>
 
           <Card className="p-6">
             <SubSectionHeader
@@ -1116,112 +1271,6 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
               <DeferredProductCandidatesPanel />
             </Card>
           )}
-
-          <Card className="p-0 overflow-hidden">
-            <DisclosuresPanel report={runNormalizationReport} />
-          </Card>
-
-          <Card className="p-6" id={REPORT_SECTION_IDS.warnings}>
-            <SubSectionHeader title="발생 경고 (Warnings)" />
-            <div className="overflow-hidden rounded-2xl border border-slate-100 mt-4">
-              <table className="min-w-full text-sm" data-testid="report-warnings-table">
-                <thead className="bg-surface-muted border-b border-slate-100">
-                  <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    <th className="px-4 py-3 text-left">Code</th>
-                    <th className="px-4 py-3 text-left">Message</th>
-                    <th className="px-4 py-3 text-right">Count</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 bg-white">
-                  {warningRows.length < 1 ? (
-                    <tr>
-                      <td className="px-4 py-8 text-center text-slate-400 font-bold" colSpan={3}>경고가 없습니다.</td>
-                    </tr>
-                  ) : warningRows.map((row) => (
-                    <tr key={`${row.code}:${row.message}`}>
-                      <td className="px-4 py-4 font-black text-navy">{row.code}</td>
-                      <td className="px-4 py-4 font-medium text-slate-600 leading-relaxed">{row.message}</td>
-                      <td className="px-4 py-4 text-right tabular-nums font-bold text-slate-400">{row.count.toLocaleString("ko-KR")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <SubSectionHeader title="목표 달성 여부 (Goals)" />
-            <div className="overflow-hidden rounded-2xl border border-slate-100 mt-4">
-              <table className="min-w-full text-sm">
-                <thead className="bg-surface-muted border-b border-slate-100">
-                  <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    <th className="px-4 py-3 text-left">Goal Name</th>
-                    <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-right">Shortfall</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 bg-white">
-                  {goalRows.length < 1 ? (
-                    <tr>
-                      <td className="px-4 py-8 text-center text-slate-400 font-bold" colSpan={3}>목표 정보가 없습니다.</td>
-                    </tr>
-                  ) : goalRows.map((row, index) => (
-                    <tr key={`${row.name}:${index}`}>
-                      <td className="px-4 py-4 font-black text-navy">{row.name}</td>
-                      <td className="px-4 py-4 font-bold">
-                        <Badge variant={row.achieved ? "secondary" : "destructive"} className="px-2 py-0.5 text-[10px] h-5">
-                          {row.achieved ? "달성" : "미달"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-4 text-right tabular-nums font-black text-rose-600">
-                        {typeof row.shortfall === "number" && row.shortfall > 0 ? formatKrw("ko-KR", row.shortfall) : "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          <Card className="p-6" data-testid="report-top-actions">
-            <SubSectionHeader title="최우선 권고 액션 (Top Actions)" />
-            {topActions.length < 1 ? (
-              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-surface-muted/50 rounded-2xl border border-dashed border-slate-200 mt-4">
-                권고 액션 정보가 없습니다.
-              </p>
-            ) : (
-              <div className="grid gap-4 mt-4">
-                {topActions.map((action, index) => (
-                  <div className="p-5 rounded-2xl bg-surface-muted border border-slate-100 relative overflow-hidden" key={`${action.title}:${index}`}>
-                    <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-                    <div className="flex items-start justify-between gap-4 mb-3">
-                      <p className="text-base font-black text-navy tracking-tight">
-                        {index + 1}. {action.title}
-                      </p>
-                      <Badge variant="secondary" className={cn("text-[9px] uppercase font-black",
-                        action.severity === 'critical' ? "bg-rose-100 text-rose-700" :
-                        action.severity === 'warn' ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-navy"
-                      )}>
-                        {severityLabel(action.severity)}
-                      </Badge>
-                    </div>
-                    {action.steps.length > 0 ? (
-                      <ul className="space-y-2">
-                        {action.steps.map((step, stepIndex) => (
-                          <li key={`${action.title}:${stepIndex}`} className="flex gap-3 text-xs font-medium text-slate-600 leading-relaxed">
-                            <span className="text-primary font-black">•</span>
-                            {step}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs font-bold text-slate-400 italic">세부 단계 정보가 없습니다.</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
 
           <div className="no-print p-4 rounded-2xl border border-slate-200 bg-surface-muted/50">
             <Button

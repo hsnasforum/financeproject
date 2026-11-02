@@ -4,10 +4,30 @@
 - 통합 운영 페이지: `/ops/planning`
 - 목적: assumptions / regression / cache / store 상태를 한 화면에서 확인하고 필요한 운영 액션을 실행
 
+## 프로필 조회 실패와 원본 보존
+
+- 실제 프로필 파일이 없을 때만 신규 저장소의 기본 프로필 생성과 정상 legacy 이전을 허용합니다.
+- JSON·저장 형식·본문 오류는 `STORAGE_CORRUPT`(500), 파일 접근 오류는 `STORAGE_UNAVAILABLE`(503)로 응답합니다. Vault 잠금과 복호화 오류도 빈 목록으로 처리하지 않습니다.
+- 목록에 손상된 프로필이 섞이면 전체 목록 요청을 실패시킵니다. 화면의 오류 안내와 `다시 불러오기`를 사용하며, 손상 항목을 뺀 정상 목록으로 표시하지 않습니다.
+- 손상된 본문이나 동일 ID의 legacy 파일을 자동 초기화·삭제·이동하지 않습니다. 프로필 변경과 휴지통 복원도 기존 본문을 먼저 확인합니다. 정상 본문으로 재생성할 수 있는 metadata/index는 기존 복구 동작을 유지합니다.
+- 기존 파일을 보관한 뒤 접근 권한·저장 공간·Vault 잠금 상태를 확인합니다. 일반 production에서는 `/ops/doctor`가 차단되므로 프로필 오류 응답에 해당 링크를 제공하지 않습니다.
+- 기본 legacy 경로를 사용하는 경우 startup migration이 본문을 바꾸기 전에 검사합니다. 현재 사용자 저장 경로와 무관한 migration 실패를 모두 차단하는 정책으로 확대하지 않습니다.
+- 저장된 legacy의 금액과 기간·기한(`remainingMonths`/`termMonths`, `targetMonth`/`dueMonth`)은 명시된 원본값으로 검증합니다. 잘못된 값은 기본값이나 기한 생략으로 감추지 않으며, 원본 필드가 있으면 별칭보다 우선합니다. 두 필드가 모두 생략된 경우의 기존 기본값·선택값 계약은 유지합니다.
+- 정상 v1의 월 상환액은 `minimumPayment` → `minimumPaymentKrw` → `monthlyPaymentKrw` → `monthlyPayment` 우선순위로 보존합니다. 모두 생략된 경우에만 기존 추정 상환액을 사용합니다. 저장된 우선 필드의 문자열·null·음수는 오류로 처리하며, 추정값이나 후순위 별칭으로 감춘 뒤 migration·Vault rewrite하지 않습니다.
+- `debts`가 미지정이고 `liabilities`가 배열이면 해당 부채를 이전합니다. 기존 `debts` 배열은 빈 배열이어도 우선합니다. 지원 v1 fixture의 원금·APR·기간·월 상환액·목표 데이터를 함께 검증하며, 확인하지 않은 다른 legacy 형식까지 무손실 호환성을 보장하지는 않습니다.
+- 프로필 store의 사전 검사와 개별 atomic write를 여러 파일 전체의 트랜잭션으로 확대하지 않습니다. 지원 Desktop Local과 공식 writer script의 cross-process lease 경계를 유지합니다. 사용자 백업의 replace 복원은 기존 검증·rollback 계약을 따르며, 이 프로필 저장 설명을 백업 전체의 부분 실패 계약으로 해석하지 않습니다.
+
 ## Planning 백업 포함 정책
-- A. 필수(재현성/사용자 데이터, export/import/restore point에서 항상 포함 대상)
-  - `.data/planning/assumptions.latest.json`
-  - `.data/planning/assumptions/history/*.json`
+- 사용자 백업(`/settings/backup`, vault format v2)
+  - 현재 사용자 profile/run/blob/action 데이터
+  - 현재 사용자 Planning v3의 13개 owner: accounts, opening-balances, batches, drafts, category-rules, transaction-overrides, news, alerts, journal, exposure, csv-drafts, routines, scenario-overrides
+  - runtime-shared assumptions, ops policy, indicators, legacy-transactions는 포함하지 않음
+  - `merge`에서는 raw Planning v3 파일을 덮어쓰지 않고 건너뜀. `replace`에서만 미리보기로 검증한 13개 owner를 같은 사용자 namespace에 교체 복원
+  - delta는 profile/run 계열 변경분만 포함하며 Planning v3를 포함하지 않음
+- Ops 백업(`/ops/backup`)
+  - profile/run/blob/action 데이터와 runtime-shared assumptions·ops policy
+  - namespace 모드의 full 백업은 현재 사용자 Planning v3 13개 owner도 포함
+- A. 필수(재현성/사용자 데이터)
   - `.data/planning/profiles/*.json`
   - `.data/planning/runs/*.json`
 - B. 선택(성능/진단, 누락되어도 복구 가능)
@@ -17,7 +37,7 @@
 - 제외(공유용 산출물, 백업/export/import/restore 비포함 원칙)
   - `.data/planning/share/*.md`
   - `.data/planning/share/*.meta.json`
-- Import/Restore는 A 경로를 우선 복원 대상으로 보고, B 경로는 있으면 함께 복원합니다.
+- 이전 vault format v1은 읽을 수 있지만 Planning v3가 포함되지 않았다는 경고를 표시합니다.
 
 ## 화면 섹션
 1. Assumptions Snapshot Status
@@ -234,13 +254,16 @@
 - `PLANNING_DOCTOR_RUN`
 
 ## 가족용 모드(옵션)
-- 기본 모드는 기존 개인용/로컬이며, 설정하지 않으면 동작 변경이 없습니다.
+- 이 절은 legacy migration·개발 검증용 namespace 골격입니다. 현재 production
+  deployment는 `desktop-local` 한 사용자 모드만 지원하며 가족/팀 web 배포로
+  사용하지 않습니다.
 - 사용자 네임스페이스 분리:
   - `PLANNING_NAMESPACE_ENABLED=true`
   - `PLANNING_USER_ID=family-a` (예시)
   - 저장 경로: `.data/planning/users/{userId}/profiles|runs`
-- production에서는 `PLANNING_NAMESPACE_ENABLED=true` 또는 `PLANNING_SINGLE_USER_MODE=true` 중 하나를 명시해야 합니다.
-- `PLANNING_SINGLE_USER_MODE=true`는 개인용/desktop topology 전용이며 저장 경로는 `.data/planning/users/default/...`입니다.
+- 지원 production launcher는 `PLANNING_NAMESPACE_ENABLED=false`와
+  `PLANNING_SINGLE_USER_MODE=true`를 강제하며 저장 경로는
+  `users/default/...`로 수렴합니다.
 - namespace 이동 마이그레이션:
   - dry-run: `pnpm planning:v2:migrate:dry -- --namespace-user=family-a`
   - apply: `pnpm planning:v2:migrate:apply -- --namespace-user=family-a`
@@ -252,3 +275,4 @@
 - 주의:
   - PIN/패스프레이즈 분실 시 복구가 어려울 수 있습니다.
   - 적용 전 backup/restore point 생성 권장.
+  - migration/ops writer는 Desktop 앱을 종료한 뒤 공식 `pnpm` script로 실행합니다.

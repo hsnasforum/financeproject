@@ -1,21 +1,28 @@
-import { createProfile, getProfile } from "../../store/profileStore";
+import { createProfile, getProfile, getProfileUpdateSnapshot, updateProfile, ProfileUpdateConflictError } from "../../store/profileStore";
 import { sanitizeRecordId } from "../../store/paths";
 import { roundKrw } from "../../calc";
 import { loadCanonicalProfile } from "../../v2/loadCanonicalProfile";
 import { type ProfileV2, PlanningV2ValidationError, type ValidationIssueV2 } from "../../v2/types";
 import { validateProfileV2 } from "../../v2/validate";
 import { getProfileDraft } from "../store/draftStore";
+import { preflightDraftPatch } from "./preflightDraftPatch";
+import { sha256Hex, stableStringify } from "../../cache/key";
+import { profileDraftExpenseError } from "./profileDraftExpenseSemantics";
 
 export type ApplyDraftPatchToProfileArgs = {
   draftId: string;
   baseProfileId?: string;
+  applyMode?: "create" | "update";
+  expectedProfileRevision?: string;
+  expectedDraftPatchHash?: string;
 };
 
 export type ApplyDraftPatchToProfileResult = {
-  createdProfileId: string;
+  createdProfileId?: string;
+  updatedProfileId?: string;
 };
 
-export type ApplyDraftPatchToProfileErrorCode = "NO_DATA" | "INPUT" | "INTERNAL";
+export type ApplyDraftPatchToProfileErrorCode = "NO_DATA" | "INPUT" | "INTERNAL" | "CONFLICT";
 
 export class ApplyDraftPatchToProfileError extends Error {
   readonly code: ApplyDraftPatchToProfileErrorCode;
@@ -30,7 +37,7 @@ export class ApplyDraftPatchToProfileError extends Error {
     super(message, { cause: options?.cause });
     this.name = "ApplyDraftPatchToProfileError";
     this.code = code;
-    this.status = code === "INPUT" ? 400 : code === "NO_DATA" ? 404 : 500;
+    this.status = code === "INPUT" ? 400 : code === "NO_DATA" ? 404 : code === "CONFLICT" ? 409 : 500;
     this.details = options?.details;
   }
 }
@@ -66,7 +73,7 @@ function toRoundedNumber(value: unknown, field: MonthlyField): number | undefine
   return roundKrw(parsed);
 }
 
-function normalizeMonthlyPatch(draftPatch: unknown): MonthlyPatch {
+export function normalizeMonthlyPatch(draftPatch: unknown): MonthlyPatch {
   if (!isRecord(draftPatch)) return {};
   const monthlyIncomeNet = toRoundedNumber(draftPatch.monthlyIncomeNet, "monthlyIncomeNet");
   const monthlyEssentialExpenses = toRoundedNumber(
@@ -82,6 +89,10 @@ function normalizeMonthlyPatch(draftPatch: unknown): MonthlyPatch {
     ...(monthlyEssentialExpenses !== undefined ? { monthlyEssentialExpenses } : {}),
     ...(monthlyDiscretionaryExpenses !== undefined ? { monthlyDiscretionaryExpenses } : {}),
   };
+}
+
+export function monthlyPatchHash(patch: MonthlyPatch): string {
+  return sha256Hex(stableStringify(patch));
 }
 
 function createTemplateProfile(monthlyPatch: MonthlyPatch): ProfileV2 {
@@ -135,13 +146,48 @@ export async function applyDraftPatchToProfile(
   args: ApplyDraftPatchToProfileArgs,
 ): Promise<ApplyDraftPatchToProfileResult> {
   const draftId = toRecordId(args.draftId, "draftId");
+  if (args.applyMode === "update" && !asString(args.baseProfileId)) {
+    throw new ApplyDraftPatchToProfileError("INPUT", "갱신할 프로필을 선택해 주세요.");
+  }
   const draft = await getProfileDraft(draftId);
   if (!draft) {
     throw new ApplyDraftPatchToProfileError("NO_DATA", "초안을 찾을 수 없습니다.");
   }
 
   const monthlyPatch = normalizeMonthlyPatch(draft.draftPatch);
+  const expenseError = profileDraftExpenseError(monthlyPatch, draft.evidence);
+  if (expenseError) {
+    throw new ApplyDraftPatchToProfileError("INPUT", expenseError.message, {
+      details: [{ path: expenseError.path, message: expenseError.message }],
+    });
+  }
   const baseProfileId = asString(args.baseProfileId);
+  if (args.applyMode === "update") {
+    if (!args.expectedProfileRevision || !args.expectedDraftPatchHash) {
+      throw new ApplyDraftPatchToProfileError("INPUT", "preflight를 먼저 확인해 주세요.");
+    }
+    if (Object.keys(monthlyPatch).length < 1) {
+      throw new ApplyDraftPatchToProfileError("INPUT", "초안에 반영할 월 현금흐름 값이 없습니다.");
+    }
+    const snapshot = await getProfileUpdateSnapshot(toRecordId(baseProfileId, "profileId"));
+    if (!snapshot) throw new ApplyDraftPatchToProfileError("NO_DATA", "기준 프로필을 찾을 수 없습니다.");
+    if (snapshot.revision !== args.expectedProfileRevision || monthlyPatchHash(monthlyPatch) !== args.expectedDraftPatchHash) {
+      throw new ApplyDraftPatchToProfileError("CONFLICT", "프로필이 변경되어 preflight를 다시 확인해야 합니다.");
+    }
+    const preflight = preflightDraftPatch({ draftPatch: monthlyPatch, evidence: draft.evidence, baseProfile: snapshot.record.profile, targetProfileId: baseProfileId });
+    if (!preflight.ok || preflight.errors.length > 0) {
+      throw new ApplyDraftPatchToProfileError("INPUT", "프로필 유효성 검증에 실패했습니다.");
+    }
+    ensureValidProfile(applyMonthlyPatch(loadCanonicalProfile(snapshot.record.profile).profile, monthlyPatch));
+    try {
+      const updated = await updateProfile(baseProfileId, { monthlyCashflow: monthlyPatch }, { expectedRevision: snapshot.revision });
+      if (!updated) throw new ApplyDraftPatchToProfileError("NO_DATA", "기준 프로필을 찾을 수 없습니다.");
+      return { updatedProfileId: updated.id };
+    } catch (error) {
+      if (error instanceof ProfileUpdateConflictError) throw new ApplyDraftPatchToProfileError("CONFLICT", error.message);
+      throw error;
+    }
+  }
   let baseProfile: ProfileV2;
   if (baseProfileId) {
     const safeBaseProfileId = toRecordId(baseProfileId, "profileId");

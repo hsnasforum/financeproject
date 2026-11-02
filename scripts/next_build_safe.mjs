@@ -10,7 +10,17 @@ import {
   pruneStandaloneDataArtifactsForBuildPreflight,
   pruneStandaloneShadowNextArtifacts,
 } from "./next_artifact_prune.mjs";
+import { normalizeNextStandaloneOutput } from "./standalone_next_output.mjs";
+import { prepareSourceSnapshotAssets } from "./public_snapshot_assets.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
+import {
+  createTraceCopyFailureDetector,
+  auditStandaloneBuild,
+  formatPrivacyViolations,
+  invalidateStandalonePrivacyReceipt,
+  removeGeneratedStandaloneEnv,
+  writeStandalonePrivacyReceipt,
+} from "./standalone_privacy_gate.mjs";
 
 const fallbackDistDir = (process.env.BUILD_FALLBACK_DIST_DIR ?? ".next-build").trim() || ".next-build";
 const buildHeartbeatMs = Number.parseInt(process.env.NEXT_BUILD_HEARTBEAT_MS ?? "", 10) || 20_000;
@@ -329,6 +339,16 @@ function readBuildStage() {
   }
 }
 
+// A receipt from an earlier build must never vouch for this one.
+try {
+  if (invalidateStandalonePrivacyReceipt({ projectRoot, distDir: effectiveDistDir })) {
+    console.log(`[next_build_safe] previous standalone privacy receipt invalidated distDir=${effectiveDistDir}`);
+  }
+} catch (error) {
+  console.error("[next_build_safe] standalone privacy receipt invalidation failed", error.message);
+  process.exit(1);
+}
+
 const child = spawn(process.execPath, [nextBin, "build", ...process.argv.slice(2)], {
   stdio: ["inherit", "pipe", "pipe"],
   env,
@@ -338,18 +358,42 @@ let forwardedParentSignal = "";
 
 let lastOutputAt = Date.now();
 const buildStartedAt = lastOutputAt;
+// Next.js only warns when traced files cannot be copied (the standalone output is then incomplete).
+const traceCopyFailure = createTraceCopyFailureDetector();
 
-function forwardOutput(target, chunk) {
+function forwardOutput(target, stream, chunk) {
   lastOutputAt = Date.now();
+  traceCopyFailure.push(stream, chunk);
   target.write(chunk);
 }
 
+// Generated-output privacy: exact generated .env removal, trace + standalone audit, then the receipt that
+// next_prod_safe requires. Any failure leaves no receipt and fails the build.
+function finalizeStandalonePrivacy() {
+  if (traceCopyFailure.seen) {
+    throw new Error("next build reported 'Failed to copy traced files'; the standalone output is incomplete");
+  }
+  const removal = removeGeneratedStandaloneEnv({ projectRoot, distDir: effectiveDistDir });
+  const audit = auditStandaloneBuild({ projectRoot, distDir: effectiveDistDir });
+  if (!audit.ok) {
+    throw new Error(`standalone privacy gate failed (${audit.violationCount}): ${formatPrivacyViolations(audit)}`);
+  }
+  writeStandalonePrivacyReceipt({
+    projectRoot,
+    distDir: effectiveDistDir,
+    summary: { ...audit.counts, removedGeneratedEnv: removal.removed },
+  });
+  console.log(
+    `[next_build_safe] standalone privacy gate passed traceFiles=${audit.counts.traceFiles} files=${audit.counts.files} links=${audit.counts.links} publicSnapshots=${audit.counts.publicSnapshots} removedGeneratedEnv=${removal.removed}`,
+  );
+}
+
 child.stdout?.on("data", (chunk) => {
-  forwardOutput(process.stdout, chunk);
+  forwardOutput(process.stdout, "stdout", chunk);
 });
 
 child.stderr?.on("data", (chunk) => {
-  forwardOutput(process.stderr, chunk);
+  forwardOutput(process.stderr, "stderr", chunk);
 });
 
 const scaffoldTimer = isolatedServerDir || keepSharedDevBuildPackage
@@ -439,8 +483,13 @@ process.on("exit", () => {
   terminateChild("SIGTERM");
 });
 
-child.on("exit", (code, signal) => {
+// The process may exit while inherited stdout/stderr pipes are still open.
+// Record its lifetime here; only close admits the completed output and receipt.
+child.on("exit", () => {
   childExited = true;
+});
+
+child.on("close", (code, signal) => {
   clearScaffoldTimer();
   clearHeartbeatTimer();
   restoreRootTsconfig();
@@ -471,6 +520,24 @@ child.on("exit", (code, signal) => {
         ignorePids: [process.ppid],
       }),
     );
+    const standaloneServer = path.join(projectRoot, effectiveDistDir, "standalone", "server.js");
+    if (fs.existsSync(standaloneServer)) {
+      try {
+        const normalized = normalizeNextStandaloneOutput({ projectRoot, distDir: effectiveDistDir });
+        console.log(`[next_build_safe] traced data removed=${normalized.dataTraceEntriesRemoved} dependency links relocated=${normalized.dependencyLinksRelocated}`);
+        const assets = prepareSourceSnapshotAssets({ cwd: projectRoot, standaloneServer });
+        console.log(`[next_build_safe] public snapshots copied=${assets.copied} removed=${assets.removed}`);
+      } catch (error) {
+        console.error("[next_build_safe] public snapshot preparation failed", error.message);
+        process.exit(1);
+      }
+      try {
+        finalizeStandalonePrivacy();
+      } catch (error) {
+        console.error("[next_build_safe] standalone privacy check failed", error.message);
+        process.exit(1);
+      }
+    }
     writeIsolatedBuildInfo(effectiveDistDir);
   } else {
     clearIsolatedBuildInfo();
@@ -482,7 +549,7 @@ child.on("exit", (code, signal) => {
     process.exit(code);
     return;
   }
-  process.kill(process.pid, signal ?? "SIGTERM");
+  relayParentSignal(signal ?? "SIGTERM");
 });
 
 child.on("error", (error) => {

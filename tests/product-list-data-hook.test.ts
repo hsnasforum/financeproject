@@ -11,7 +11,7 @@ function payload(productCode: string): FinlifeSourceResult {
     ok: true,
     mode: "live",
     meta: {
-      kind: "pension",
+      kind: "mortgage-loan",
       pageNo: 1,
       topFinGrpNo: "020000",
       fallbackUsed: false,

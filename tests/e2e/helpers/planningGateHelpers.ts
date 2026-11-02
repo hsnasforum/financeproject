@@ -233,7 +233,7 @@ export async function seedGoldenRuns(request: APIRequestContext): Promise<Seeded
 
 export async function ensurePlanningPageReady(page: Page): Promise<void> {
   await ensureMigrationsReady(page.request);
-  await page.goto("/planning");
+  await page.goto("/planning?view=full");
   await expect(page.getByTestId("planning-profile-form")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("run-button")).toBeVisible({ timeout: 30_000 });
 }

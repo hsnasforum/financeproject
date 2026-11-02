@@ -1,127 +1,117 @@
-# USER GUIDE (5-minute start)
+# 사용자 가이드 — 처음 시작
 
-## 1) What this app does
-This app is a local-first finance workspace.
+## 1. 이 앱에서 할 수 있는 일
 
-Main use in `planning/v3`:
-- News digest/trends/scenarios from RSS-based pipeline
-- Indicator refresh/storage and scenario linkage
-- Exposure profile input (manual, explicit save)
-- Journal entries for decision notes
-- Local backup/restore/doctor/trim/migrate tools for `.data/**`
+Finance Project는 개인용 로컬 재무설계 워크스페이스입니다.
 
-Notes:
-- Data is stored locally under `.data/**`.
-- Some write APIs are local-only and CSRF-protected.
+- 현재 소득·지출·자산·부채를 입력해 참고 지표와 시나리오를 비교합니다.
+- 예금·적금 후보를 기간과 금리 조건으로 좁혀 봅니다.
+- 공공데이터와 DART 공시를 확인하고 데이터 기준일을 함께 점검합니다.
+- 결과는 확정 추천이나 투자·세무 자문이 아니라 현재 입력과 가정에 따른 참고 자료입니다.
 
-## 2) 5-minute start
-1. Install and run:
+공식 사용자 진입점은 `/planning`입니다. `/planning/v3/*`, `/ops/*`, `/dev/*`, `/debug/*`는 개발·운영·실험용 경로이며 일반 사용 시작 경로가 아닙니다. 거래내역으로 상담 초안을 만드는 기능은 선택 사항인 베타이며, `/planning` 상단의 `거래 기반 상담 초안(베타)` 링크로 들어갑니다.
+
+## 2. 처음 시작
+
+일반 사용은 같은 PC의 브라우저에서 혼자 쓰는 Desktop Local 실행(`pnpm build` → `pnpm start`)입니다.
+
+1. 새 환경에서 한 번 준비합니다. 이미 쓰던 `.env.local`과 DB가 있으면 그대로 두고, 설정 복사와 `prisma:db:push`는 건너뜁니다.
+
 ```bash
+cp .env.local.example .env.local   # .env.local이 없을 때만
 pnpm install
-pnpm dev
+pnpm prisma:generate
+pnpm prisma:db:push                # 새 DB를 만들 때만
+pnpm build
+pnpm start
 ```
-2. Open local app:
-- `http://localhost:3100/planning/v3/start`
-3. Initialize core data:
-```bash
-pnpm news:refresh
-pnpm indicators:refresh
-```
-4. Open key pages:
-- News today: `http://localhost:3100/planning/v3/news`
-- News trends: `http://localhost:3100/planning/v3/news/trends`
-- Exposure profile: `http://localhost:3100/planning/v3/exposure`
-- Journal: `http://localhost:3100/planning/v3/journal`
 
-## 3) Pages overview (planning v3)
-- `/planning/v3/start`
-  - First-run checklist (read-only status)
-  - Verifies cache/profile/journal presence
-- `/planning/v3/news`
-  - Today digest + scenarios
-  - Manual refresh entry point
-- `/planning/v3/news/trends`
-  - Topic trends table view
-- `/planning/v3/news/explore`
-  - Search/filter view for recent items
-- `/planning/v3/news/alerts`
-  - Local alert inbox
-- `/planning/v3/news/settings`
-  - News source/topic override settings (explicit save)
-- `/planning/v3/exposure`
-  - Personal exposure profile (explicit save)
-- `/planning/v3/journal`
-  - Journal CRUD for observations/assumptions/options
+- 설정 복사는 `pnpm install`보다 먼저 합니다. install 중에 실행되는 `prisma generate`가 `.env.local`의 `DATABASE_URL`을 읽기 때문에, 순서가 바뀌면 새 환경에서 install이 실패합니다.
 
-## 4) Backup and restore
-### Backup export
-Create a zip archive of v3 local data:
+- `.env.local`의 외부 데이터 API 키(환율·금융상품 등)를 비워 두어도 재무 진단은 사용할 수 있습니다. 해당 데이터는 `/settings/data-sources`에서 연결 상태를 확인하세요.
+- `pnpm start`는 `127.0.0.1` 전용 실행기로 앱을 띄우며, 기본 브라우저가 자동으로 열려 `/planning`을 보여 줍니다. 브라우저가 열리지 않았거나 창을 닫았다면 주소를 직접 입력하지 말고, 앱이 실행 중인 상태에서 `pnpm start`를 한 번 더 실행합니다.
+
+2. `/planning`에서 단계별 새 진단을 진행합니다. `기본 정보 → 수입·지출 → 자산·부채 → 목표 → 확인·실행` 5단계이며, 모든 칸은 빈칸으로 시작합니다.
+   - `필수`로 표시된 칸은 값이 0이어도 직접 입력합니다. 0은 유효한 값이고, 빈칸을 0으로 저장하지 않습니다.
+   - 부채와 목표는 `없음` 또는 `있음`을 고릅니다. `없음`이면 저장에서 제외되고, 다시 `있음`을 고르면 입력해 둔 항목이 돌아옵니다.
+   - 값을 넣어 보고 싶으면 1단계의 `테스트 프로필 불러오기`를 누릅니다. 합성 예시 값이 입력칸에만 채워지고 프로필은 저장되지 않으며, 화면에 `예시 데이터로 진행 중`이 표시됩니다.
+
+3. 5단계에서 입력 요약과 적용되는 계산 조건을 확인하고 `진단 실행·저장`을 한 번 누릅니다. 새 프로필 저장, 진단 실행과 실행 기록 저장, 리포트 보관이 차례로 이어지며 기존 프로필은 바뀌지 않습니다. 완료되면 `저장된 리포트 열기`와 `실행 기록 보기`로 결과를 엽니다.
+   - 중간에 멈추면 멈춘 단계와 이미 저장된 기록을 보여 줍니다. 자동으로 다시 보내거나 되돌리지 않습니다. 표시된 링크에서 기존 프로필·실행 기록 화면으로 이어 가세요.
+   - `저장 여부 미확인`이 표시되면 같은 내용을 다시 보내지 않습니다. 실행 기록과 프로필 목록에서 저장 여부를 확인한 뒤 `새 진단 시작`으로 다시 시작합니다.
+   - 입력 중인 내용은 이 브라우저 탭에만 임시로 남습니다. 화면을 오가도 유지되지만 새로고침하거나 창을 닫으면 사라지며, 나가기 전에 브라우저가 경고합니다.
+
+4. 저장된 프로필을 고치거나 세부 조건을 바꾸려면 1단계의 `저장된 프로필 열기` 또는 `전체 입력 화면`(`/planning?view=full`)을 엽니다. 대시보드 등에서 특정 프로필로 들어온 경우(`/planning?profileId=...`)와 초보자 모드를 끈 경우에도 전체 입력 화면이 열립니다.
+   - 전체 입력 화면에서는 프로필을 저장하고 `첫 실행·기록 저장`(또는 실행 영역의 `플래닝 실행·기록 저장`)으로 진단을 실행합니다. 처음 자동으로 만들어진 빈 `기본 프로필`을 그대로 쓰려면 `저장`을 누릅니다. `새로 만들기`로 저장하면 대시보드에서 표시할 프로필을 한 번 고르게 됩니다.
+   - 이 화면의 `간단 시작`에서 `초안 미리보기`를 확인한 뒤 `이 초안으로 시작`을 눌러도 됩니다. 입력한 목표만 진단에 반영되며, 아래 목표 목록에서 추가·수정·삭제할 수 있습니다. 목표를 모두 삭제해 저장하면 다시 열어도 빈 목록이 유지됩니다.
+   - 전체 입력 화면에서 실행한 결과는 리포트 화면(`/planning/reports`)에서 `저장된 리포트로 보관`을 눌러 보관합니다.
+
+5. 보관한 리포트 화면의 `고급 원본 분석`에서 `마크다운 원문 다운로드`로 파일을 받을 수 있고, `PDF 인쇄`로 인쇄할 수 있습니다.
+
+6. 저장한 결과는 `/planning/runs`, `/planning/reports`, `/dashboard`에서 다시 확인합니다.
+
+개발 서버(`pnpm dev`)는 개발용입니다. 기본 설정에서 재무 진단 화면과 API는 로그인이 필요하고, 예시 설정(`.env.local.example`)에는 로그인 제공자가 없으므로 개발자가 인증 설정을 따로 준비해야 합니다.
+
+## 3. 주요 사용자 화면
+
+- `/dashboard`: 선택한 프로필의 현재 지표와 최근 플랜, 모든 프로필의 최근 기록, 데이터 상태 요약
+  - 처음에는 기본 프로필을 보여 줍니다. 다른 프로필을 보려면 `표시할 프로필`에서 고르고 `이 프로필 보기`를 누르세요. 주소가 `/dashboard?profileId=...`로 바뀌어 새로고침이나 다시 열기에도 같은 프로필이 유지되며, 기본 프로필 설정은 바뀌지 않습니다.
+  - 자동으로 만들어진 빈 `기본 프로필` 대신 `새로 만들기`로 저장한 프로필이 있으면, 대시보드가 표시할 프로필을 먼저 고르라고 안내합니다.
+  - 찾을 수 없는 프로필 주소이면 다른 프로필로 바꿔 보여 주지 않고 다시 선택하라고 안내합니다.
+- `/planning`: 단계별 새 진단. `/planning?view=full`은 프로필 입력, 시나리오 계산, 실행 기록 저장을 다루는 전체 입력 화면
+  - 거래내역으로 상담 초안을 만들려면 상단의 `거래 기반 상담 초안(베타)`를 누릅니다. 재무 진단을 시작하는 데 꼭 필요한 단계는 아닙니다.
+  - 거래내역 화면의 `CSV 업로드`에서 `계좌 관리`로 계좌를 먼저 만들고, 필요하면 `분류 규칙(베타)`에서 규칙을 저장한 뒤 `배치 목록`으로 돌아와 CSV를 올립니다.
+  - 업로드한 배치 상세에서 `Draft 리뷰로 이동`을 누르고, 초안 화면에서 `기준 프로필 선택`으로 프로필을 고르고 `프리플라이트 실행`으로 영향 범위를 확인한 뒤 `선택한 프로필 갱신` 또는 `새 프로필로 만들기`를 고릅니다.
+- `/recommend`: 저장된 플랜을 바탕으로 비교 후보 탐색
+- `/products/catalog`: 예금·적금 통합 상품 탐색
+- `/public/dart`: 기업 검색과 DART 공시 확인
+- `/settings/data-sources`: 데이터 연결 여부와 기준일 확인
+- `/settings/backup`: 현재 사용자의 재무설계 기록 암호화 백업·복원과 브라우저 화면 설정 백업
+- `/settings/recovery`: 브라우저 화면 설정 초기화와 복구 경로 안내
+
+## 4. 데이터와 백업
+
+- 개인 재무 데이터는 로컬 저장소와 사용자 범위 안에서 관리됩니다.
+- 데이터 소스가 설정됐더라도 최근 확인 기록이나 기준일이 없으면 `연결됨` 또는 `최신`으로 간주하지 않습니다.
+- 외부 데이터가 없거나 오래됐을 때도 입력·저장 흐름은 유지되지만, 해당 데이터는 핵심 판단 근거로 사용하지 마세요.
+- 업데이트 전에는 `/settings/backup`에서 전체 암호화 백업을 내려받아 보관하세요. 여기에는 현재 사용자의 프로필·실행 기록이 포함되고, 공용 가정·운영 정책과 브라우저 화면 설정은 포함되지 않습니다. Planning v3 계좌·거래·분류 데이터는 사용자별 저장을 쓰는 실행(`pnpm start`의 Desktop Local 포함)에서만 함께 포함됩니다.
+- 백업을 받은 뒤에는 미리보기에서 `Planning v3 영역`·`Planning v3 파일` 개수와 경고를 확인하세요. 상세 데이터가 포함되지 않았다는 경고가 있으면 그 파일로는 계좌·거래·분류 데이터를 복구할 수 없습니다.
+- 다운로드가 시작된 뒤 실제 파일이 저장됐는지 확인하고 `파일 저장을 확인했습니다`를 눌러 주세요. 이 확인 전에는 변경분 백업의 기준 시점이 이동하지 않아 같은 내용이 다음 변경분 백업에 다시 포함될 수 있습니다.
+- 복원은 같은 파일과 암호로 미리보기를 확인한 뒤에만 실행됩니다. `merge`는 현재 기록을 유지하지만 Planning v3 데이터는 건너뛰며, Planning v3까지 백업 시점으로 되돌리려면 미리보기 범위를 확인한 후 `replace`를 선택해야 합니다. Planning v3가 포함되지 않은 백업을 `replace`하면 백업에 담긴 기록만 교체되고 현재 Planning v3 데이터는 바뀌지 않습니다.
+- 백업 암호를 잊으면 파일을 복원할 수 없습니다. 백업 파일과 암호를 같은 위치에 보관하지 마세요.
+
+개발·운영용 v3 데이터 보관 명령은 아래와 같습니다.
+
 ```bash
 pnpm v3:export
-```
-Optional output path:
-```bash
-pnpm v3:export -- --out=.data/exports/my-v3-backup.zip
-```
-
-### Restore validation (preview only)
-Preview/validate archive structure and schemas:
-```bash
 pnpm v3:restore -- --in=.data/exports/v3-data-backup-YYYYMMDDHHMMSS.zip
-```
-
-Restore apply is temporarily disabled and exits with `V3_RESTORE_APPLY_DISABLED` until owner-aware staging, checksums, and rollback are implemented. Do not bypass this protection by manually renaming or copying `.data` or `PLANNING_DATA_DIR`.
-
-### Health check and maintenance
-```bash
-pnpm v3:doctor
-pnpm v3:trim            # preview
-pnpm v3:trim -- --apply # apply retention trim
-pnpm v3:migrate         # preview
-pnpm v3:migrate -- --apply
-```
-
-## 5) Troubleshooting
-### A) `403` on planning v3 APIs
-Common cause:
-- Accessing from non-local host, or missing same-origin/CSRF requirements on write routes.
-
-Check:
-- Use `http://localhost:3100` or `http://127.0.0.1:3100`.
-- WSL에서 dev 서버가 `Bind: host=::`로 시작되면 `http://[::1]:3100`도 같은 로컬 경로입니다.
-- Windows 브라우저에서 localhost forwarding이 막히면 터미널의 `Open (LAN)` URL을 사용합니다.
-- Trigger write actions from app UI (not cross-origin clients).
-
-### B) News page shows no data
-Run refresh first:
-```bash
-pnpm news:refresh
-```
-Then reload:
-- `/planning/v3/start`
-- `/planning/v3/news`
-
-### C) Indicator-based fields show `Unknown`
-Common cause:
-- Indicator series not refreshed yet, or insufficient history.
-
-Run:
-```bash
-pnpm indicators:refresh
-```
-
-### D) Refresh/CLI exits with error
-Run doctor to identify invalid local files:
-```bash
 pnpm v3:doctor
 ```
-If needed, restore from backup archive (dry-run first).
 
-### E) Build issues before deploy
+위 개발·운영용 `v3:restore --apply`는 현재 `V3_RESTORE_APPLY_DISABLED`로 차단되어 있습니다. 사용자 화면의 암호화 백업 v2 복원은 별도의 현재 사용자 owner whitelist와 rollback 경계를 사용합니다. `.data` 또는 `PLANNING_DATA_DIR`을 직접 복사하거나 이름을 바꿔 우회하지 마세요.
+
+## 5. 문제 해결
+
+### 로그인이 필요하다고 표시되는 경우
+
+- Desktop Local production에서는 앱을 `pnpm start` 또는 설치 바로가기로 실행해야 합니다. URL만 직접 열거나 `next_prod_safe.mjs`를 직접 실행하면 세션이 만들어지지 않습니다.
+- 브라우저 cookie를 지웠거나 다른 브라우저 프로필에서 기존 instance를 열었다면, 실행 중인 상태에서 `pnpm start` 또는 설치 바로가기를 한 번 더 실행합니다. 기존 앱의 로컬 broker가 새 one-shot session을 발급하며 앱을 종료할 필요는 없습니다.
+- 개인 로컬 실행은 `127.0.0.1` loopback 주소를 사용합니다. `dev:lan`, 원격 주소, reverse proxy에서는 Desktop Local session을 사용하지 않습니다.
+
+### 데이터가 없거나 오래됐다고 표시되는 경우
+
+- `/settings/data-sources`에서 `설정됨`, `최근 확인 없음`, `오래됨`, `확인 실패` 상태를 구분해 확인합니다.
+- DART 기업 인덱스와 상품 데이터는 표시된 기준일을 확인한 뒤 사용합니다.
+- 일부 소스가 실패해도 다른 검색과 저장 기능은 계속 사용할 수 있습니다.
+- `/dashboard`의 환율은 출처·기준일과 함께 `실시간 원천 조회`, `응답 캐시 사용`, `최신 조회 실패 · 저장된 응답 표시`, `조회 재시도 대기 · 저장된 응답 표시`, `예시 데이터`, `출처 확인 필요`, `환율 연결 설정 필요`, `환율 조회 실패` 등으로 상태를 구분해 표시합니다. `예시 데이터`는 실제 환율이 아니고, `출처 확인 필요`는 출처를 확인할 수 없어 숫자를 숨긴 상태이며, `저장된 응답 표시`는 최신 조회가 아닌 이전 기준일 값입니다. 이 경우 판단에 바로 사용하지 말고 `/settings/data-sources`에서 연결 상태를 확인하세요.
+- `/dashboard`에서 `앱 실행 경로로 다시 열어 주세요`가 보이면 저장 데이터 문제가 아니라 세션 문제입니다. 위 로그인 안내대로 앱을 다시 실행하면 세션이 발급된 새 창이 열리고, 기존 화면에서는 `세션 다시 확인`으로 대시보드에 돌아올 수 있습니다.
+
+### 빌드 또는 실행 문제가 있는 경우
+
 ```bash
+pnpm lint
 pnpm test
 pnpm build
 ```
 
----
-Scope of this guide is current implemented behavior only.
+화면 경로의 단일 기준 문서는 `docs/current-screens.md`입니다.

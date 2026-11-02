@@ -8,6 +8,8 @@ import { type CreatePlanningRunCommand } from "../../src/lib/planning/server/run
 import { type CurrentUserRunRecord } from "../../src/lib/planning/server/runs/routeService";
 import { type CurrentUserPlanningProfileRecord } from "../../src/lib/planning/server/profiles/repository";
 import { type ProfileV2 } from "../../src/lib/planning/v2/types";
+import { computeAssumptionsHash } from "../../src/lib/planning/v2/reproducibility";
+import { createPlanningRun, parseCreatePlanningRunCommand } from "../../src/lib/planning/server/runs/createRunService";
 
 function sampleProfile(): ProfileV2 {
   return {
@@ -102,6 +104,36 @@ function assumptionsContext(): CreateRunAssumptionsContext {
 }
 
 describe("create run input context", () => {
+  it.each(["overrides", "missing-hash", "missing-snapshot-id", "unverified", "failed-source", "other-profile", "missing-source"])("blocks rerun %s before stages and run writes", async (failure) => {
+    const assumptions = assumptionsContext();
+    assumptions.snapshot = { version: 1, asOf: "2026-09-07", fetchedAt: "2026-09-07T00:00:00.000Z", korea: {}, sources: [], warnings: [] };
+    assumptions.snapshotId = "fixed-snapshot";
+    const source = {
+      id: "old-run", profileId: "profile-1", overallStatus: "SUCCESS",
+      input: { horizonMonths: 12, snapshotId: "fixed-snapshot", policyId: "balanced", runScenarios: false, getActions: false, analyzeDebt: false },
+      reproducibility: { profileHash: "old-profile", assumptionsHash: computeAssumptionsHash(assumptions.snapshot), effectiveAssumptionsHash: computeAssumptionsHash(assumptions.baseAssumptions) },
+    };
+    if (failure === "overrides") assumptions.baseAssumptions = { ...assumptions.baseAssumptions, inflationPct: 9 };
+    if (failure === "missing-hash") source.reproducibility.effectiveAssumptionsHash = undefined;
+    if (failure === "missing-snapshot-id") source.input.snapshotId = "";
+    if (failure === "unverified") source.reproducibility.profileHash = "";
+    if (failure === "failed-source") source.overallStatus = "FAILED";
+    if (failure === "other-profile") source.profileId = "profile-b";
+    const parsed = parseCreatePlanningRunCommand({ profileId: "profile-1", rerunOfRunId: "old-run", input: source.input });
+    if (!parsed.ok) throw new Error("fixture parse failed");
+    const runPipeline = vi.fn();
+    const createRunRecord = vi.fn();
+    const result = await createPlanningRun(parsed.command, { requestBaseUrl: "http://localhost:3000" }, {
+      getProfile: vi.fn(async () => profileRecord()),
+      getRun: vi.fn(async () => failure === "missing-source" ? null : source as unknown as CurrentUserRunRecord),
+      resolveAssumptions: vi.fn(async () => assumptions),
+      runPipeline, createRunRecord, recordAudit: vi.fn(),
+    });
+    expect(result).toMatchObject({ ok: false, code: "RERUN_CONDITIONS_CHANGED" });
+    expect(runPipeline).not.toHaveBeenCalled();
+    expect(createRunRecord).not.toHaveBeenCalled();
+  });
+
   it("maps a missing profile before resolving scenario or assumptions", async () => {
     const getRun = vi.fn(async () => null);
     const resolveAssumptions = vi.fn(async () => assumptionsContext());

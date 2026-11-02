@@ -14,6 +14,7 @@ import {
   buildWorkspaceScenarioVm,
   buildWorkspaceWarningsGoalsDebugSections,
 } from "../../../src/lib/planning/ui/workspaceResultInsights";
+import { buildResultDtoV1 } from "../../../src/lib/planning/v2/resultDto";
 
 describe("workspaceResultInsights", () => {
   it("marks risk when cash is depleted", () => {
@@ -322,6 +323,8 @@ describe("workspaceResultInsights", () => {
               incomeKrw: 4_000_000,
               expensesKrw: 2_000_000,
               debtPaymentKrw: 500_000,
+              // Canonical DTOs carry the engine's recurring cashflow (income - expenses - minimum payment).
+              operatingCashflowKrw: 1_500_000,
               cashKrw: 6_000_000,
               netWorthKrw: 30_000_000,
               totalDebtKrw: 20_000_000,
@@ -357,6 +360,21 @@ describe("workspaceResultInsights", () => {
     expect(vm.aggregatedWarnings[0]?.firstMonth).toBe(1);
     expect(vm.summaryMonthlySurplusKrw).toBe(1_500_000);
     expect(vm.summaryEmergencyFundMonths).toBe(3);
+  });
+
+  it("omits monthly surplus for a legacy dto without operating cashflow and keeps a finite zero", () => {
+    const startRow = { income: 4_000_000, expenses: 2_000_000, debtPayment: 500_000, liquidAssets: 6_000_000, netWorth: 30_000_000, totalDebt: 20_000_000 };
+    const legacy = buildWorkspaceResultSummaryVm({
+      resultDto: buildResultDtoV1({ simulate: { keyTimelinePoints: [{ monthIndex: 0, row: startRow }] } }),
+      debtMonthlyPaymentKrw: 500_000,
+    });
+    expect(legacy.summaryMonthlySurplusKrw).toBeUndefined();
+
+    const zero = buildWorkspaceResultSummaryVm({
+      resultDto: buildResultDtoV1({ simulate: { keyTimelinePoints: [{ monthIndex: 0, row: { ...startRow, operatingCashflow: 0 } }] } }),
+      debtMonthlyPaymentKrw: 500_000,
+    });
+    expect(zero.summaryMonthlySurplusKrw).toBe(0);
   });
 
   it("builds warnings/goals and scenario debug sections outside beginner mode", () => {

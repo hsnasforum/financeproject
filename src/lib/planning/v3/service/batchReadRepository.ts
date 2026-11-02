@@ -1,10 +1,25 @@
 import { sanitizeRecordId } from "../../store/paths";
 import { deleteBatch as deleteStoredBatch } from "../store/batchesStore";
-import { getBatchTxnOverrides } from "../store/txnOverridesStore";
+import {
+  deleteBatchTxnOverrides,
+  getBatchTxnOverrides,
+  restoreBatchTxnOverrides,
+} from "../store/txnOverridesStore";
+import {
+  deleteBatchAccountMappingOverrides,
+  getAccountMappingOverrides,
+  restoreBatchAccountMappingOverrides,
+} from "../store/accountMappingOverridesStore";
+import {
+  deleteBatchTransferOverrides,
+  getTransferOverrides,
+  restoreBatchTransferOverrides,
+} from "../store/txnTransferOverridesStore";
 import {
   loadStoredFirstBatchTransactions,
 } from "../transactions/store";
 import { GetBatchSummaryError, getBatchSummary as getStoredFirstBatchSummary } from "./getBatchSummary";
+import { withExistingCurrentUserBatchLifecycleMutation } from "./batchLifecycleMutation";
 import { getStoredBatchDeleteSurfaceState } from "./storedBatchCommandSurface";
 import { isUserFacingStoredBatchRead } from "./userFacingBatchReadPolicy";
 
@@ -41,6 +56,27 @@ export async function getCurrentUserBatchDeleteSurface(batchIdInput: string) {
 }
 
 export async function deleteCurrentUserStoredBatch(batchIdInput: string) {
-  const batchId = sanitizeRecordId(batchIdInput);
-  await deleteStoredBatch(batchId);
+  return withExistingCurrentUserBatchLifecycleMutation(batchIdInput, async (batchId) => {
+    const [txnOverrides, accountOverrides, transferOverrides] = await Promise.all([
+      getBatchTxnOverrides(batchId),
+      getAccountMappingOverrides(batchId),
+      getTransferOverrides(batchId),
+    ]);
+
+    try {
+      await deleteBatchTxnOverrides(batchId);
+      await deleteBatchAccountMappingOverrides(batchId);
+      await deleteBatchTransferOverrides(batchId);
+      await deleteStoredBatch(batchId);
+    } catch (error) {
+      const rollbackResults = await Promise.allSettled([
+        restoreBatchTxnOverrides(batchId, txnOverrides),
+        restoreBatchAccountMappingOverrides(batchId, accountOverrides),
+        restoreBatchTransferOverrides(batchId, transferOverrides),
+      ]);
+      const rollbackFailure = rollbackResults.find((result) => result.status === "rejected");
+      if (rollbackFailure?.status === "rejected") throw rollbackFailure.reason;
+      throw error;
+    }
+  }, { allowSyntheticStoredOnly: true });
 }

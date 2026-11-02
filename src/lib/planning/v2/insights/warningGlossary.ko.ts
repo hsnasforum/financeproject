@@ -73,6 +73,24 @@ export const WARNING_GLOSSARY_KO: Record<string, WarningGlossaryEntry> = {
     impact: "결과 해석이 현재 환경과 크게 어긋날 수 있습니다.",
     suggestion: "우선 스냅샷을 갱신한 뒤 결과를 다시 확인해 주세요.",
   },
+  SNAPSHOT_SOURCE_WARNINGS: {
+    title: "스냅샷 확인 필요",
+    meaning: "외부 지표를 가져오거나 해석하는 과정에서 확인할 항목이 남았습니다.",
+    impact: "일부 지표에 보조 출처나 기본 가정이 사용되어 결과 기준이 달라질 수 있습니다.",
+    suggestion: "스냅샷 경고 수와 사용한 가정값을 확인한 뒤 필요하면 다시 동기화해 주세요.",
+  },
+  INFLATION_NOT_FROM_SNAPSHOT: {
+    title: "물가 지표 누락",
+    meaning: "스냅샷에 소비자물가 상승률이 포함되지 않았습니다.",
+    impact: "물가 가정이 기본값 또는 별도 입력값을 사용해 현재 지표와 차이가 날 수 있습니다.",
+    suggestion: "물가 가정값을 확인하고, 최신 스냅샷을 동기화한 결과와 비교해 보세요.",
+  },
+  CASH_RETURN_NOT_FROM_SNAPSHOT: {
+    title: "현금수익률 지표 누락",
+    meaning: "스냅샷에 예금 평균금리와 사용할 수 있는 대체 지표가 없습니다.",
+    impact: "현금수익률이 기본값 또는 별도 입력값을 사용해 실제 조건과 차이가 날 수 있습니다.",
+    suggestion: "현금수익률 가정값을 확인하고, 최신 스냅샷을 동기화한 결과와 비교해 보세요.",
+  },
   OPTIMISTIC_RETURN_HIGH: {
     title: "수익률 가정 과도",
     meaning: "입력한 기대수익률이 다소 낙관적으로 설정되었을 수 있습니다.",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recommendFinlifeProducts } from "../src/lib/recommend/score";
+import { recommendCandidates, recommendFinlifeProducts } from "../src/lib/recommend/score";
 import { type NormalizedProduct } from "../src/lib/finlife/types";
 import { type UserRecommendProfile } from "../src/lib/recommend/types";
 
@@ -120,5 +120,57 @@ describe("recommend score engine", () => {
     });
 
     expect(result.weights.rate + result.weights.term + result.weights.liquidity).toBe(1);
+  });
+});
+
+describe("recommend deposit protection ranking", () => {
+  const profile: UserRecommendProfile = {
+    purpose: "seed-money",
+    kind: "deposit",
+    preferredTerm: 12,
+    liquidityPref: "mid",
+    rateMode: "max",
+    topN: 1,
+  };
+
+  function rank(products: NormalizedProduct[], depositProtection?: Parameters<typeof recommendCandidates>[0]["depositProtection"]) {
+    return recommendCandidates({
+      kind: "deposit",
+      profile,
+      candidates: products.map((product) => ({ sourceId: "finlife" as const, product })),
+      depositProtection,
+    }).items;
+  }
+
+  const unprotectedLeader = makeProduct({ code: "LEADER", name: "보호 미확인 1위", term: "12", intrRate: 3.0, intrRate2: 3.0 });
+  const protectedRunnerUp = makeProduct({ code: "PROTECTED", name: "보호 확인 2위", term: "12", intrRate: 2.98, intrRate2: 2.98 });
+  const unprotectedTail = makeProduct({ code: "TAIL", name: "보호 미확인 하위", term: "12", intrRate: 2.0, intrRate2: 2.0 });
+  const products = [unprotectedLeader, protectedRunnerUp, unprotectedTail];
+  const matchedFinPrdtCdSet = new Set(["PROTECTED"]);
+
+  it("keeps a protected candidate ranked outside topN when protection is required", () => {
+    const items = rank(products, { mode: "require", matchedFinPrdtCdSet });
+
+    expect(items.map((item) => item.finPrdtCd)).toEqual(["PROTECTED"]);
+    expect(items[0]?.signals?.depositProtection).toBe("matched");
+  });
+
+  it("lets the prefer bonus promote a protected candidate from outside topN", () => {
+    expect(rank(products, { mode: "any", matchedFinPrdtCdSet }).map((item) => item.finPrdtCd)).toEqual(["LEADER"]);
+
+    const preferred = rank(products, { mode: "prefer", matchedFinPrdtCdSet });
+    expect(preferred.map((item) => item.finPrdtCd)).toEqual(["PROTECTED"]);
+    expect(preferred[0]?.signals?.depositProtection).toBe("matched");
+  });
+
+  it("returns no items when protection is required and no candidate is matched", () => {
+    expect(rank(products, { mode: "require", matchedFinPrdtCdSet: new Set() })).toEqual([]);
+  });
+
+  it("keeps the unprotected ranking unchanged when no protection policy is passed", () => {
+    const items = rank(products);
+
+    expect(items.map((item) => item.finPrdtCd)).toEqual(["LEADER"]);
+    expect(items[0]?.signals).toBeUndefined();
   });
 });

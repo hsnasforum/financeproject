@@ -4,7 +4,7 @@ const steps = [
   ["deps:approve-builds"],
   ["rebuild"],
   ["prisma:generate"],
-  ["prisma", "db", "push"],
+  ["prisma:db:push"],
   ["products:sync"],
 ];
 

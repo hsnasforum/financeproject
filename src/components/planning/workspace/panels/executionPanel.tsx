@@ -66,6 +66,7 @@ export function PlanningWorkspaceExecutionPanel({
 }) {
   const {
     locale,
+    debugEnabled,
     beginnerMode,
     selectedProfileId,
     snapshotItemsWarning,
@@ -154,22 +155,21 @@ export function PlanningWorkspaceExecutionPanel({
   } = actions;
 
   return (
-    <Card className="space-y-8 p-8">
+    <Card className="min-w-0 space-y-5 p-5 sm:p-6">
       <SubSectionHeader
-        title="실행 옵션"
-        description="기본값만으로도 실행 가능합니다."
+        title="계산하고 기록 저장"
+        description="프로필을 저장한 뒤 조건과 경고를 확인해 주세요."
       />
 
-      <div className="space-y-6">
+      <details open={!beginnerMode} className="rounded-xl border border-slate-200 p-4" data-testid="planning-calculation-options">
+        <summary className="cursor-pointer text-sm font-semibold leading-6 text-navy">계산 조건 확인·변경 <span className="ml-2 font-normal text-slate-600">{horizonMonths}개월 · {ALLOCATION_POLICIES.find((item) => item.id === policyId)?.label ?? policyId}</span></summary>
+        <div className="mt-4 space-y-5">
         <SnapshotPicker
-          advancedEnabled={!beginnerMode}
+          advancedEnabled={debugEnabled && !beginnerMode}
           items={availableSnapshotItems}
           value={effectiveSnapshotSelection}
           onChange={(next) => setSnapshotSelection(next)}
         />
-        {snapshotItemsWarning ? (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-600">{snapshotItemsWarning}</p>
-        ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className={`block text-xs ${bodyLabelClassName}`}>
@@ -278,7 +278,7 @@ export function PlanningWorkspaceExecutionPanel({
         ) : null}
 
         <div className="rounded-2xl border border-slate-100 bg-surface-muted p-6">
-          <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Pipeline 설정</p>
+          <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">계산 단계 설정</p>
           {beginnerMode ? (
             <div className="grid grid-cols-2 gap-y-2 px-1 text-[11px] font-bold text-slate-600">
               <p className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-primary" /> 시나리오: ON</p>
@@ -422,6 +422,7 @@ export function PlanningWorkspaceExecutionPanel({
           </div>
         ) : null}
       </div>
+      </details>
 
       {!beginnerMode && runOptimizeEnabled ? (
         <div className="mt-6 space-y-4 rounded-2xl border border-indigo-100 bg-indigo-50/30 p-6">
@@ -456,7 +457,7 @@ export function PlanningWorkspaceExecutionPanel({
         </div>
       ) : null}
 
-      {!beginnerMode ? (
+      {debugEnabled && !beginnerMode ? (
         <details className="group mt-6 rounded-[2rem] border border-slate-200 bg-surface-muted/50 p-6">
           <summary className="flex cursor-pointer items-center justify-between text-xs font-black uppercase tracking-widest text-slate-400">
             <span>고급(개발자): JSON 편집기</span>
@@ -487,6 +488,7 @@ export function PlanningWorkspaceExecutionPanel({
       ) : null}
 
       <div className="mt-6 space-y-4">
+        {snapshotItemsWarning ? <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm leading-6 text-amber-900">{snapshotItemsWarning}</p> : null}
         {healthWarnings.length > 0 ? (
           <div className="space-y-2 rounded-2xl border border-amber-100 bg-amber-50 p-4">
             <p className="text-sm font-black text-amber-800">가정 건강도 경고 ({healthWarnings.length})</p>
@@ -497,7 +499,7 @@ export function PlanningWorkspaceExecutionPanel({
             </div>
             {healthWarnings.some((warning) => warning.code === "SNAPSHOT_STALE" || warning.code === "SNAPSHOT_VERY_STALE" || warning.code === "SNAPSHOT_MISSING") ? (
               <div className="mt-2">
-                <Link href="/ops/assumptions" className="text-xs font-black text-amber-900 underline decoration-amber-200 underline-offset-4 decoration-2 transition-all hover:decoration-amber-400">스냅샷 동기화하러 가기 →</Link>
+                <Link href="/settings/data-sources" className="text-xs font-black text-amber-900 underline decoration-amber-200 underline-offset-4 decoration-2 transition-all hover:decoration-amber-400">데이터 상태 확인하기 →</Link>
               </div>
             ) : null}
           </div>
@@ -524,7 +526,7 @@ export function PlanningWorkspaceExecutionPanel({
           <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
             <label className="flex cursor-pointer items-start gap-3">
               <input checked={healthAck} onChange={(event) => setHealthAck(event.target.checked)} type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
-              <span className="text-xs font-bold leading-relaxed text-rose-800">위 경고를 확인했고, 이 가정으로 계산 결과가 왜곡될 수 있음을 이해했습니다.</span>
+              <span className="text-sm font-medium leading-6 text-rose-800">위 경고를 확인했고, 이 가정으로 계산 결과가 왜곡될 수 있음을 이해했습니다.</span>
             </label>
           </div>
         ) : null}
@@ -537,7 +539,9 @@ export function PlanningWorkspaceExecutionPanel({
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-600">Monte Carlo는 예산 초과로 생략되었습니다.</p>
       ) : null}
 
-      <div className="space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6">
+      <details className="rounded-xl border border-slate-200 p-4" data-testid="planning-what-if-options">
+        <summary className="cursor-pointer text-sm font-semibold leading-6 text-slate-700">조건을 바꿔 비교하기 (선택)</summary>
+        <div className="mt-4 space-y-4">
         <SubSectionHeader
           title="What-if 시나리오"
           description="추천이 아닌 특정 조건을 가정하여 비교 실행합니다."
@@ -576,7 +580,7 @@ export function PlanningWorkspaceExecutionPanel({
         {loadingBaselineRuns ? <p className="px-1 text-[10px] font-bold text-slate-400 animate-pulse">기준 실행 목록 로딩 중...</p> : null}
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">적용 PATCH 미리보기</p>
+          <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">적용할 변경 내용 미리보기</p>
           {scenarioPatchesPreview.length < 1 ? (
             <p className="py-2 text-xs font-bold italic text-slate-300">적용할 항목이 없습니다.</p>
           ) : (
@@ -593,10 +597,20 @@ export function PlanningWorkspaceExecutionPanel({
           )}
         </div>
       </div>
+        <Button
+          disabled={running || !selectedProfileId || preflightHasBlockers || runNeedsWarningConfirmation || scenarioPatchesPreview.length < 1}
+          onClick={() => void runScenarioAction()}
+          variant="outline"
+          className="h-12 rounded-full bg-white px-6 text-sm font-bold"
+        >
+          {running ? "실행 중..." : "시나리오 실행·기록 저장"}
+        </Button>
+      </details>
 
-      <div className="rounded-[2rem] border border-slate-100 bg-surface-muted p-6 shadow-sm" data-testid="run-stages-timeline">
+      {running || currentStepStatuses.some((step) => step.state === "SUCCESS" || step.state === "FAILED" || step.state === "RUNNING") ? (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4" data-testid="run-stages-timeline">
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Execution Pipeline</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">계산 진행 단계</p>
           <Badge variant="secondary" className="border border-slate-200 bg-white text-[9px] text-slate-500 shadow-sm">
             {running ? "단계 실행 중" : "최근 실행 상태"}
           </Badge>
@@ -629,6 +643,8 @@ export function PlanningWorkspaceExecutionPanel({
         </div>
       </div>
 
+      ) : null}
+
       {preflightWarnIssues.length > 0 ? (
         <label className="cursor-pointer rounded-2xl border border-amber-100 bg-amber-50 p-4" id="planning-run-warning-confirm-hint">
           <span className="flex items-start gap-3">
@@ -640,7 +656,7 @@ export function PlanningWorkspaceExecutionPanel({
               type="checkbox"
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
             />
-            <span className="text-xs font-bold leading-relaxed text-amber-800">사전 점검 경고를 확인했고, 이 상태로 실행하고 기록을 저장합니다.</span>
+            <span className="text-sm font-medium leading-6 text-amber-800">사전 점검 경고를 확인했고, 이 상태로 실행하고 기록을 저장합니다.</span>
           </span>
         </label>
       ) : null}
@@ -655,14 +671,6 @@ export function PlanningWorkspaceExecutionPanel({
           className="h-12 rounded-full px-8 text-base font-black shadow-lg shadow-primary/20"
         >
           {running ? "실행 중..." : "플래닝 실행·기록 저장"}
-        </Button>
-        <Button
-          disabled={running || !selectedProfileId || preflightHasBlockers || runNeedsWarningConfirmation || scenarioPatchesPreview.length < 1}
-          onClick={() => void runScenarioAction()}
-          variant="outline"
-          className="h-12 rounded-full bg-white px-6 text-sm font-bold"
-        >
-          {running ? "실행 중..." : "시나리오 실행·기록 저장"}
         </Button>
       </div>
     </Card>

@@ -85,7 +85,7 @@ async function mockRecommendResult(page: Page, fixture: RecommendResultFixture =
             finPrdtCd: "E2E-D001",
             providerName: "검증은행",
             productName: "결과 패널 검증 예금",
-            finalScore: 82.5,
+            finalScore: 0.825,
             selectedOption: fixture.selectedOption ?? {
               saveTrm: "12",
               termMonths: 12,
@@ -151,7 +151,7 @@ test("public page titles resolve through the active Next.js metadata hierarchy",
 
 test("planning page renders", async ({ page }) => {
   await page.goto("/planning");
-  await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /재무 진단|Planning v2/i })).toBeVisible({ timeout: 30_000 });
 });
 
 test("recommend page renders", async ({ page }) => {
@@ -421,6 +421,8 @@ test("dart page shows missing index guidance when index absent", async ({ page, 
 });
 
 test("production CSP routes hydrate without CSP console violations", async ({ page }) => {
+  // Four routes are compiled cold on the dev webserver in CI; ~35s on a fast machine against the 60s default.
+  test.slow();
   for (const routePath of ["/dashboard", "/planning", "/planning/reports", "/ops"]) {
     await expectNoCspConsoleErrors(page, routePath);
   }
@@ -502,7 +504,7 @@ for (const viewport of [
   test(`mobile primary navigation owns ${viewport.width}x${viewport.height} without covering main content`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto("/planning");
-    await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: /재무 진단|Planning v2/i })).toBeVisible({ timeout: 30_000 });
 
     const nav = page.getByRole("navigation", { name: "모바일 주 메뉴" });
     await expect(nav).toBeVisible();

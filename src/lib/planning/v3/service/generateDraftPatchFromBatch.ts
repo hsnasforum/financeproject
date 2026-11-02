@@ -23,6 +23,7 @@ import {
   loadStoredFirstBatchTransactions,
 } from "../transactions/store";
 import { isUserFacingStoredBatchRead } from "./userFacingBatchReadPolicy";
+import { medianNonDebtFixedExpense } from "./profileDraftExpenseSemantics";
 
 type YmStat = {
   ym: string;
@@ -266,14 +267,21 @@ export async function generateDraftPatchFromBatch(
   const incomeMedianKrw = medianRounded(ymStats.map((row) => row.incomeKrw));
   const expenseMedianKrw = medianRounded(ymStats.map((row) => row.expenseKrw));
   const fixedMedianKrw = medianRounded(ymStats.map((row) => row.fixedExpenseKrw));
+  // Stable ProfileV2 subtracts debts.minimumPayment separately. Keep the v3
+  // fixed evidence (which includes debt), but take the median AFTER removing
+  // debt within each month; subtracting the two medians is not equivalent.
+  const nonDebtFixedMedianKrw = medianNonDebtFixedExpense(ymStats);
   const variableMedianKrw = medianRounded(ymStats.map((row) => row.variableExpenseKrw));
   const debtMedianKrw = medianRounded(ymStats.map((row) => row.debtExpenseKrw));
   const assumptions = buildAssumptions(ymStats.length, [...expenseFlowPolicy.fixedExpenseCategoryIds]);
+  if (ymStats.some((row) => row.debtExpenseKrw > 0)) {
+    assumptions.push("fixed expense evidence includes debt; stable profile living expenses exclude debt payments");
+  }
 
   return {
     draftPatch: {
       monthlyIncomeNet: incomeMedianKrw,
-      monthlyEssentialExpenses: fixedMedianKrw,
+      monthlyEssentialExpenses: nonDebtFixedMedianKrw,
       monthlyDiscretionaryExpenses: variableMedianKrw,
       assumptions,
       monthsConsidered: ymStats.length,

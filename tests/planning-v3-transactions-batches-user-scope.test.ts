@@ -1,7 +1,8 @@
 import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DELETE as batchDELETE, GET as batchGET } from "../src/app/api/planning/v3/transactions/batches/[id]/route";
 import { POST as legacyImportCsvPOST } from "../src/app/api/planning/v3/transactions/import/csv/route";
 import { POST as importCsvPOST } from "../src/app/api/planning/v3/transactions/batches/import-csv/route";
@@ -32,9 +33,59 @@ type ApiPayload = {
   items?: Array<{ id?: string }>;
   data?: Array<{ id?: string; batchId?: string }>;
   batch?: { id?: string };
+  transactions?: Array<{ txnId?: string; category?: string }>;
+  deleted?: boolean;
   error?: { code?: string };
   meta?: { userId?: string; authSource?: string };
 };
+
+function writeBatchOverrideSidecars(input: {
+  root: string;
+  userId: string;
+  batchId: string;
+  txnId: string;
+}): string[] {
+  const baseDir = path.join(input.root, "users", input.userId, "planning-v3");
+  const updatedAt = "2026-08-24T00:00:00.000Z";
+  const fixtures = [
+    {
+      filePath: path.join(baseDir, "txn-overrides", `${input.batchId}.json`),
+      row: {
+        batchId: input.batchId,
+        txnId: input.txnId,
+        categoryId: "education",
+        updatedAt,
+      },
+    },
+    {
+      filePath: path.join(baseDir, "txn-account-overrides", `${input.batchId}.json`),
+      row: {
+        batchId: input.batchId,
+        txnId: input.txnId,
+        accountId: "override-account",
+        updatedAt,
+      },
+    },
+    {
+      filePath: path.join(baseDir, "txn-transfer-overrides", `${input.batchId}.json`),
+      row: {
+        batchId: input.batchId,
+        txnId: input.txnId,
+        forceTransfer: true,
+        updatedAt,
+      },
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    fs.mkdirSync(path.dirname(fixture.filePath), { recursive: true });
+    fs.writeFileSync(fixture.filePath, `${JSON.stringify({
+      version: 1,
+      items: { [input.txnId]: fixture.row },
+    })}\n`, "utf-8");
+  }
+  return fixtures.map((fixture) => fixture.filePath);
+}
 
 function restoreEnv() {
   for (const key of ENV_KEYS) {
@@ -133,6 +184,7 @@ describe("planning v3 transaction batches API user scope", () => {
 
   afterEach(() => {
     restoreEnv();
+    vi.restoreAllMocks();
     fs.rmSync(root, { recursive: true, force: true });
   });
 
@@ -187,6 +239,160 @@ describe("planning v3 transaction batches API user scope", () => {
     expect(aliceDetail.status).toBe(200);
     const aliceDetailPayload = await aliceDetail.json() as ApiPayload;
     expect(aliceDetailPayload.batch?.id).toBe(aliceBatchId);
+  });
+
+  it("deletes only the current user's batch sidecars and does not revive them after the same CSV is reimported", async () => {
+    const batchId = await createBatchFixture("alice");
+    const detailBefore = await batchGET(
+      buildGetRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(detailBefore.status).toBe(200);
+    const detailBeforePayload = await detailBefore.json() as ApiPayload;
+    const txnId = String(detailBeforePayload.transactions?.[0]?.txnId ?? "");
+    expect(txnId).toBeTruthy();
+
+    const aliceSidecars = writeBatchOverrideSidecars({ root, userId: "alice", batchId, txnId });
+    const bobSidecars = writeBatchOverrideSidecars({ root, userId: "bob", batchId, txnId });
+    const profileDraftPath = path.join(
+      root,
+      "users",
+      "alice",
+      "planning-v3",
+      "drafts",
+      "profile",
+      "independent-profile-draft.json",
+    );
+    fs.mkdirSync(path.dirname(profileDraftPath), { recursive: true });
+    fs.writeFileSync(profileDraftPath, '{"preserve":true}\n', "utf-8");
+
+    const sharedLegacyPath = path.join(root, "v3", "transactions", "batches.ndjson");
+    fs.mkdirSync(path.dirname(sharedLegacyPath), { recursive: true });
+    const sharedLegacyRaw = `${JSON.stringify({
+      id: batchId,
+      createdAt: "2026-08-24T00:00:00.000Z",
+      kind: "csv",
+      fileName: "shared-legacy.csv",
+      total: 1,
+      ok: 1,
+      failed: 0,
+      accountId: "shared-account",
+      accountHint: "shared-account",
+    })}\n`;
+    fs.writeFileSync(sharedLegacyPath, sharedLegacyRaw, "utf-8");
+
+    const overridden = await batchGET(
+      buildGetRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(overridden.status).toBe(200);
+    const overriddenPayload = await overridden.json() as ApiPayload;
+    expect(overriddenPayload.transactions?.find((row) => row.txnId === txnId)?.category).toBe("education");
+
+    const deleted = await batchDELETE(
+      buildDeleteRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toMatchObject({
+      ok: true,
+      deleted: true,
+      meta: { userId: "alice", authSource: "trusted-header" },
+    });
+
+    expect(aliceSidecars.every((filePath) => !fs.existsSync(filePath))).toBe(true);
+    expect(bobSidecars.every((filePath) => fs.existsSync(filePath))).toBe(true);
+    expect(fs.existsSync(profileDraftPath)).toBe(true);
+    expect(fs.readFileSync(sharedLegacyPath, "utf-8")).toBe(sharedLegacyRaw);
+
+    const reimportedBatchId = await createBatchFixture("alice");
+    expect(reimportedBatchId).toBe(batchId);
+    const detailAfterReimport = await batchGET(
+      buildGetRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(detailAfterReimport.status).toBe(200);
+    const detailAfterReimportPayload = await detailAfterReimport.json() as ApiPayload;
+    expect(detailAfterReimportPayload.transactions?.find((row) => row.txnId === txnId)?.category).not.toBe("education");
+  });
+
+  it("returns a storage error instead of deleting a batch when a sidecar is corrupted", async () => {
+    const batchId = await createBatchFixture("alice");
+    const corruptSidecarPath = path.join(
+      root,
+      "users",
+      "alice",
+      "planning-v3",
+      "txn-overrides",
+      `${batchId}.json`,
+    );
+    fs.mkdirSync(path.dirname(corruptSidecarPath), { recursive: true });
+    fs.writeFileSync(corruptSidecarPath, '{"version":1,"items":', "utf-8");
+
+    const deleted = await batchDELETE(
+      buildDeleteRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(deleted.status).toBe(500);
+    expect(await deleted.json()).toMatchObject({
+      ok: false,
+      error: { code: "STORAGE_CORRUPT" },
+      meta: { userId: "alice", authSource: "trusted-header" },
+    });
+
+    const detailAfterFailure = await batchGET(
+      buildGetRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(detailAfterFailure.status).toBe(500);
+  });
+
+  it("maps batch transaction unlink failures without removing the batch index entry", async () => {
+    const batchId = await createBatchFixture("alice");
+    const detailBefore = await batchGET(
+      buildGetRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    const detailBeforePayload = await detailBefore.json() as ApiPayload;
+    const txnId = String(detailBeforePayload.transactions?.[0]?.txnId ?? "");
+    expect(txnId).toBeTruthy();
+    const sidecarPaths = writeBatchOverrideSidecars({ root, userId: "alice", batchId, txnId });
+    const batchFilePath = path.join(
+      root,
+      "users",
+      "alice",
+      "planning-v3",
+      "batches",
+      `${batchId}.ndjson`,
+    );
+    const originalUnlink = fsPromises.unlink.bind(fsPromises);
+    vi.spyOn(fsPromises, "unlink").mockImplementation(async (candidate) => {
+      if (path.resolve(String(candidate)) === path.resolve(batchFilePath)) {
+        throw Object.assign(new Error("injected batch unlink failure"), { code: "EACCES" });
+      }
+      return originalUnlink(candidate);
+    });
+
+    const deleted = await batchDELETE(
+      buildDeleteRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(deleted.status).toBe(503);
+    expect(await deleted.json()).toMatchObject({
+      ok: false,
+      error: { code: "STORAGE_UNAVAILABLE" },
+      meta: { userId: "alice", authSource: "trusted-header" },
+    });
+
+    expect(fs.existsSync(batchFilePath)).toBe(true);
+    expect(sidecarPaths.every((filePath) => fs.existsSync(filePath))).toBe(true);
+    const detailAfterFailure = await batchGET(
+      buildGetRequest(`/api/planning/v3/transactions/batches/${batchId}?csrf=test`, "alice"),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+    expect(detailAfterFailure.status).toBe(200);
+    const detailAfterFailurePayload = await detailAfterFailure.json() as ApiPayload;
+    expect(detailAfterFailurePayload.transactions?.find((row) => row.txnId === txnId)?.category).toBe("education");
   });
 
   it("keeps the legacy import URL on the user-scoped canonical store", async () => {

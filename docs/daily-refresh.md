@@ -9,6 +9,7 @@ pnpm daily:refresh
 - 기본 순서:
   - `pnpm warm:if-stale -- --exchange-only` (환율 snapshot만 확인하며, FinLife/Gov24는 아래 canonical 단계를 한 번씩 실행)
   - `pnpm finlife:sync:if-stale`
+  - `pnpm pension:sync:if-stale` (통합연금포털 연금저축, 수집 기록이 3일 이내면 skip)
   - `pnpm datago:sync`
   - `pnpm gov24:sync:if-stale`
   - `pnpm news:refresh`
@@ -46,6 +47,7 @@ pnpm daily:refresh
 - 워크플로: `.github/workflows/daily-refresh.yml`
 - 스케줄: `5 0 * * *` (UTC 00:05, KST 09:05)
 - 저장소 Secrets에는 `FINLIFE_API_KEY`와 `FINLIFE_TOPFIN_GRP_LIST`를 모두 등록해야 합니다. daily if-stale wrapper는 업권별 목록만으로 공통 목록을 대체하지 않습니다.
+- 연금저축 수집에는 금감원 통합연금포털 OpenAPI 인증키 `FSS_PENSION_API_KEY`(32자)가 필요합니다. FINLIFE 키와 다른 키이며, 없으면 strict preflight가 실행 전에 실패합니다.
 - DataGo 인증은 `KDB_DATAGO_SERVICE_KEY` 또는 `DATAGO_SERVICE_KEY` 중 하나가 필요합니다.
 - 지표 수집에는 `BOK_ECOS_API_KEY` 또는 `ECOS_API_KEY` 중 하나가 필요합니다.
 - 환율 수집에는 `EXIM_EXCHANGE_API_KEY`와 HTTPS 형식의 `EXIM_EXCHANGE_API_URL`이 모두 필요합니다.
@@ -59,16 +61,17 @@ pnpm daily:refresh
 
 ### 자동 PR 승인 경로
 
-PR commit 대상은 아래 13개 tracked canonical 산출물만 허용합니다.
+PR commit 대상은 아래 14개 tracked canonical 산출물만 허용합니다.
 
 - `.data/benefits_snapshot.json`
 - `.data/exchange_snapshot.json`
 - `.data/finlife_credit-loan_snapshot.json`
 - `.data/finlife_deposit_snapshot.json`
 - `.data/finlife_mortgage-loan_snapshot.json`
-- `.data/finlife_pension_snapshot.json`
 - `.data/finlife_rent-house-loan_snapshot.json`
 - `.data/finlife_saving_snapshot.json`
+- `.data/fss_pension_guaranteed_snapshot.json`
+- `.data/fss_pension_products_snapshot.json`
 - `docs/dart-daily-brief.md`
 - `docs/dart-disclosure-alerts.md`
 - `docs/dart-disclosure-digest.md`

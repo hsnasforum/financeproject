@@ -146,6 +146,32 @@ function summarizeScenario(seed: number) {
 }
 
 describe("planning v2 monthly simulation snapshots", () => {
+  it("keeps goal funding and achievement months under permutations of the same 30 scenarios", () => {
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const scenario = makeScenario(seed);
+      const goals = scenario.profile.goals;
+      const baseline = simulateMonthly(scenario.profile, scenario.assumptions, scenario.horizonMonths);
+      const orders = goals.length === 3
+        ? [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+        : [goals.map((_, index) => index), goals.map((_, index) => goals.length - index - 1)];
+      for (const order of orders) {
+        const result = simulateMonthly({ ...scenario.profile, goals: order.map((index) => goals[index]) }, scenario.assumptions, scenario.horizonMonths);
+        for (const expected of baseline.goalStatus) {
+          const actual = result.goalStatus.find((goal) => goal.goalId === expected.goalId)!;
+          expect(actual.achievedMonth).toBe(expected.achievedMonth);
+          expect(actual.achieved).toBe(expected.achieved);
+          expect(Math.abs(actual.currentAmount - expected.currentAmount)).toBeLessThanOrEqual(0.01);
+        }
+        result.timeline.forEach((row, index) => {
+          const expected = baseline.timeline[index];
+          for (const field of ["goalContribution", "goalFundAssets", "liquidAssets", "netWorth"] as const) {
+            expect(Math.abs(row[field] - expected[field])).toBeLessThanOrEqual(0.01);
+          }
+        });
+      }
+    }
+  });
+
   it("matches snapshot for 30 deterministic scenarios", () => {
     const seeds = Array.from({ length: 30 }, (_, index) => index + 1);
     expect(seeds.length).toBe(30);

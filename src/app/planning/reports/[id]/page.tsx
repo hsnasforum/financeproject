@@ -1,8 +1,11 @@
 import PlanningReportDetailClient, { type PlanningReportDetail } from "@/components/PlanningReportDetailClient";
+import { PUBLIC_PAGE_METADATA } from "@/lib/navigation/publicMetadata";
 import {
   loadPlanningReportDetailPageInitialData,
   type PlanningReportDetailPageInitialData,
 } from "@/lib/planning/server/pages/planningRscLoaders";
+
+export const metadata = PUBLIC_PAGE_METADATA["/planning/reports/[id]"];
 
 type PlanningReportDetailPageProps = {
   params: Promise<{ id: string }>;

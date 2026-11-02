@@ -31,6 +31,9 @@ const SEVERITY_ORDER = new Map([
   ["low", 3],
   ["info", 4],
 ]);
+const GHSA_ID_PATTERN = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/iu;
+const MAX_EXCEPTION_DAYS = 90;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -194,6 +197,153 @@ export function collectBulkAdvisories(payload) {
   });
 }
 
+function readTrimmedString(value, property) {
+  return readStringProperty(value, property).trim();
+}
+
+function exceptionKey(packageName, advisoryId) {
+  return `${packageName}\u0000${advisoryId.toLowerCase()}`;
+}
+
+export function readAdvisoryId(advisory) {
+  const match = readStringProperty(advisory, "url").match(GHSA_ID_PATTERN);
+  return match ? match[0] : "";
+}
+
+// Mirrors config/data-freshness-exceptions.json: every exception needs a reason, a mitigation and
+// an expiry; expired, duplicate or unused exceptions fail the gate instead of being ignored.
+export function parseDependencyAuditExceptions(source, now = new Date()) {
+  let parsed;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new Error("dependency audit exceptions must be valid JSON");
+  }
+  if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.exceptions)) {
+    throw new Error("dependency audit exceptions must use schemaVersion=1 and an exceptions array");
+  }
+  const out = new Map();
+  for (const entry of parsed.exceptions) {
+    const advisory = readTrimmedString(entry, "advisory");
+    const packageName = readTrimmedString(entry, "package");
+    const scope = readTrimmedString(entry, "scope");
+    const reason = readTrimmedString(entry, "reason");
+    const mitigation = readTrimmedString(entry, "mitigation");
+    const expiresAt = readTrimmedString(entry, "expiresAt");
+    const expiresAtMs = Date.parse(expiresAt);
+    const label = advisory || "<missing advisory>";
+    if (
+      advisory.match(GHSA_ID_PATTERN)?.[0] !== advisory
+      || !packageName
+      || scope !== "dev"
+      || !reason
+      || !mitigation
+      || !Number.isFinite(expiresAtMs)
+    ) {
+      throw new Error(`invalid dependency audit exception entry: ${label}`);
+    }
+    if (expiresAtMs <= now.getTime()) {
+      throw new Error(`expired dependency audit exception: ${advisory} ${packageName} expiresAt=${expiresAt}`);
+    }
+    if (expiresAtMs - now.getTime() > MAX_EXCEPTION_DAYS * DAY_MS) {
+      throw new Error(`dependency audit exception must expire within ${MAX_EXCEPTION_DAYS} days: ${advisory} ${packageName}`);
+    }
+    const key = exceptionKey(packageName, advisory);
+    if (out.has(key)) throw new Error(`duplicate dependency audit exception: ${advisory} ${packageName}`);
+    out.set(key, { advisory, packageName, scope, reason, mitigation, expiresAt });
+  }
+  return out;
+}
+
+// Package names reachable from the importers' runtime dependencies. A missing snapshot fails
+// closed so a "dev" exception can never hide a package that also ships at runtime.
+export function collectProductionPackageNames(lockfileSource) {
+  const parsed = asObject(loadYaml(lockfileSource));
+  const importers = asObject(parsed?.importers);
+  const snapshots = asObject(parsed?.snapshots);
+  if (!importers || !snapshots) throw new Error("pnpm-lock.yaml importers or snapshots map is missing");
+
+  const names = new Set();
+  const seen = new Set();
+  const queue = [];
+  const enqueue = (name, version) => {
+    if (typeof version !== "string" || version.startsWith("link:") || version.startsWith("file:")) return;
+    const isAlias = !/^\d/u.test(version) && version.lastIndexOf("@") > 0;
+    const key = isAlias ? version : `${name}@${version}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (!Object.hasOwn(snapshots, key)) throw new Error(`pnpm-lock.yaml snapshot is missing for runtime dependency ${key}`);
+    names.add(parsePackageKey(key)?.name ?? name);
+    queue.push(key);
+  };
+  for (const importer of Object.values(importers)) {
+    for (const group of ["dependencies", "optionalDependencies"]) {
+      for (const [name, entry] of Object.entries(asObject(asObject(importer)?.[group]) ?? {})) {
+        enqueue(name, readStringProperty(entry, "version"));
+      }
+    }
+  }
+  while (queue.length > 0) {
+    const snapshot = asObject(snapshots[queue.pop()]);
+    for (const group of ["dependencies", "optionalDependencies"]) {
+      for (const [name, version] of Object.entries(asObject(snapshot?.[group]) ?? {})) enqueue(name, version);
+    }
+  }
+  return names;
+}
+
+export function applyDependencyAuditExceptions({ advisories, exceptions, productionPackageNames }) {
+  const blocking = [];
+  const excepted = [];
+  const usedKeys = new Set();
+  for (const advisory of advisories) {
+    const advisoryId = readAdvisoryId(advisory);
+    const key = advisoryId ? exceptionKey(advisory.packageName, advisoryId) : "";
+    const exception = key ? exceptions.get(key) : undefined;
+    if (!exception) {
+      blocking.push(advisory);
+      continue;
+    }
+    usedKeys.add(key);
+    if (productionPackageNames.has(advisory.packageName)) {
+      throw new Error(
+        `dependency audit exception ${exception.advisory} for ${advisory.packageName} is scoped to dev, but the package is reachable from runtime dependencies`,
+      );
+    }
+    excepted.push({ ...advisory, exception });
+  }
+  const unused = [...exceptions.entries()]
+    .filter(([key]) => !usedKeys.has(key))
+    .map(([, exception]) => `${exception.advisory} ${exception.packageName}`);
+  if (unused.length > 0) throw new Error(`unused dependency audit exceptions: ${unused.join(", ")}`);
+  return { blocking, excepted };
+}
+
+function parseNow(args) {
+  const option = args.find((arg) => arg.startsWith("--now="));
+  if (!option) return new Date();
+  const configuredNow = option.slice("--now=".length).trim();
+  const configuredNowMs = Date.parse(configuredNow);
+  if (!configuredNow || !Number.isFinite(configuredNowMs)) {
+    throw new Error("--now requires a valid ISO date-time");
+  }
+  return new Date(configuredNowMs);
+}
+
+async function readDependencyAuditExceptions(args, cwd, now) {
+  const option = args.find((arg) => arg.startsWith("--exceptions="));
+  if (!option) return new Map();
+  const configuredPath = option.slice("--exceptions=".length).trim();
+  if (!configuredPath) throw new Error("--exceptions requires a JSON file path");
+  let source;
+  try {
+    source = await fs.readFile(path.resolve(cwd, configuredPath), "utf8");
+  } catch {
+    throw new Error(`dependency audit exceptions file not found: ${configuredPath}`);
+  }
+  return parseDependencyAuditExceptions(source, now);
+}
+
 function resolveRegistryUrl(env) {
   const configured = env.NPM_CONFIG_REGISTRY || env.npm_config_registry || DEFAULT_REGISTRY;
   const registry = new URL(configured);
@@ -350,15 +500,29 @@ export async function runDependencyAudit(options = {}) {
 }
 
 async function main() {
-  const result = await runDependencyAudit({ logger: (message) => console.log(message) });
-  for (const advisory of result.advisories) {
+  const args = process.argv.slice(2);
+  const cwd = process.cwd();
+  const now = parseNow(args);
+  const exceptions = await readDependencyAuditExceptions(args, cwd, now);
+  const result = await runDependencyAudit({ cwd, logger: (message) => console.log(message) });
+  const { blocking, excepted } = applyDependencyAuditExceptions({
+    advisories: result.advisories,
+    exceptions,
+    productionPackageNames: collectProductionPackageNames(await fs.readFile(path.join(cwd, "pnpm-lock.yaml"), "utf8")),
+  });
+  for (const advisory of excepted) {
+    console.log(
+      `[deps:audit] EXCEPTION ${advisory.severity.toUpperCase()} ${advisory.packageName} ${advisory.exception.advisory} scope=${advisory.exception.scope} expiresAt=${advisory.exception.expiresAt} reason=${advisory.exception.reason}`,
+    );
+  }
+  for (const advisory of blocking) {
     const link = advisory.url ? ` ${advisory.url}` : "";
     console.error(
       `[deps:audit] ${advisory.severity.toUpperCase()} ${advisory.packageName} vulnerable=${advisory.vulnerableVersions} ${advisory.title}${link}`,
     );
   }
-  if (!result.ok) process.exit(1);
-  console.log("[deps:audit] PASS");
+  if (blocking.length > 0) process.exit(1);
+  console.log(`[deps:audit] PASS${excepted.length > 0 ? ` exceptions=${excepted.length}` : ""}`);
 }
 
 const directPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";

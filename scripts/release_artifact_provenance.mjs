@@ -17,19 +17,40 @@ import { runPnpmSync } from "./pnpm_runner.mjs";
 export const RELEASE_PROVENANCE_SCHEMA_VERSION = 1;
 export const RELEASE_PROVENANCE_KIND = "planning-v2-desktop-release";
 export const RELEASE_INVENTORY_KIND = "planning-v2-desktop-inventory";
+const INVENTORY_HASH_BATCH_SIZE = 32;
 
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const REQUIRED_RELEASE_ARTIFACT_FILES = [
+  ".env.local.example",
   ".next/standalone/server.js",
   ".next/standalone/.next/BUILD_ID",
   ".next/standalone/.next/required-server-files.json",
   ".next/standalone/.next/server/app-paths-manifest.json",
+  "install.cmd",
+  "install.sh",
   "package.json",
   "pnpm-lock.yaml",
+  "prisma.config.mjs",
+  "prisma/schema.prisma",
   "run.sh",
   "run.cmd",
+  "scripts/planning_desktop_install_state.mjs",
+  "scripts/planning_v2_desktop_env.mjs",
+  "scripts/planning_v2_desktop_install.mjs",
+  "scripts/planning_v2_desktop_launch.mjs",
+  "scripts/planning_v2_desktop_provenance.mjs",
+  "scripts/planning_v2_desktop_uninstall.mjs",
+  "scripts/planning_v2_desktop_verify.mjs",
+  "scripts/pnpm_runner.mjs",
+  "scripts/prisma_cli_safe.mjs",
+  "scripts/finlife_identity_migrate.mjs",
+  "src/lib/finlife/sqliteIdentityMigration.mjs",
+  "src/lib/planning/deployment/runtimeDatabase.mjs",
+  "src/lib/planning/deployment/runtimeRoot.mjs",
+  "uninstall.cmd",
+  "uninstall.sh",
   DESKTOP_MANIFEST_FILENAME,
 ];
 const REQUIRED_NON_EMPTY_RUNTIME_DIRECTORIES = [
@@ -200,11 +221,17 @@ function normalizeDesktopManifest(value) {
   if (artifactChecksum.excludes.length !== 1 || artifactChecksum.excludes[0] !== DESKTOP_MANIFEST_FILENAME) {
     throw new Error("desktop provenance artifactChecksum excludes are invalid");
   }
+  const platform = requireString(value.platform, "desktop platform");
+  const arch = requireString(value.arch, "desktop arch");
+  const nodeAbi = requireString(value.nodeAbi, "desktop nodeAbi");
   return {
     version,
     packageVersion,
     gitSha,
     lockfileSha256,
+    platform,
+    arch,
+    nodeAbi,
     artifactChecksum,
   };
 }
@@ -218,16 +245,19 @@ function releaseAssetNames(tag) {
 }
 
 async function createArchive(artifactDir, archivePath) {
-  const result = spawnSync("tar", [
-    "--sort=name",
-    "--owner=0",
-    "--group=0",
-    "--numeric-owner",
+  const portableArgs = [
     "-czf",
     archivePath,
     "-C",
     path.dirname(artifactDir),
     path.basename(artifactDir),
+  ];
+  const result = spawnSync("tar", process.platform === "win32" ? portableArgs : [
+    "--sort=name",
+    "--owner=0",
+    "--group=0",
+    "--numeric-owner",
+    ...portableArgs,
   ], {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -259,14 +289,18 @@ async function buildInventory(artifactDir, sourceSha, artifactChecksum) {
   }
 
   const files = [];
-  for (const relativePath of relativePaths) {
-    const absolutePath = path.join(artifactDir, ...relativePath.split("/"));
-    const stats = await requirePlainFile(absolutePath, "release inventory input");
-    files.push({
-      path: relativePath,
-      bytes: stats.size,
-      sha256: await fileSha256(absolutePath),
-    });
+  for (let offset = 0; offset < relativePaths.length; offset += INVENTORY_HASH_BATCH_SIZE) {
+    const batch = relativePaths.slice(offset, offset + INVENTORY_HASH_BATCH_SIZE);
+    const rows = await Promise.all(batch.map(async (relativePath) => {
+      const absolutePath = path.join(artifactDir, ...relativePath.split("/"));
+      const stats = await requirePlainFile(absolutePath, "release inventory input");
+      return {
+        path: relativePath,
+        bytes: stats.size,
+        sha256: await fileSha256(absolutePath),
+      };
+    }));
+    files.push(...rows);
   }
   return {
     schemaVersion: RELEASE_PROVENANCE_SCHEMA_VERSION,
@@ -421,6 +455,14 @@ export async function createReleaseArtifactProvenance(options) {
   if (tag !== `v${desktopManifest.packageVersion}`) {
     throw new Error("release tag does not match desktop package version");
   }
+  const releasePlatform = requireString(options.platform ?? process.platform, "toolchain.platform");
+  const releaseArch = requireString(options.arch ?? process.arch, "toolchain.arch");
+  if (desktopManifest.platform !== releasePlatform || desktopManifest.arch !== releaseArch) {
+    throw new Error("desktop provenance target does not match release toolchain platform/arch");
+  }
+  if (desktopManifest.nodeAbi !== process.versions.modules) {
+    throw new Error("desktop provenance Node ABI does not match the release runtime");
+  }
   const actualChecksum = normalizeChecksum(
     await computeArtifactChecksum(artifactDir),
     "recomputed desktop artifactChecksum",
@@ -447,8 +489,8 @@ export async function createReleaseArtifactProvenance(options) {
     toolchain: {
       node: requireString(options.nodeVersion ?? process.version, "toolchain.node"),
       pnpm: requireString(options.pnpmVersion ?? detectPnpmVersion(), "toolchain.pnpm"),
-      platform: requireString(options.platform ?? process.platform, "toolchain.platform"),
-      arch: requireString(options.arch ?? process.arch, "toolchain.arch"),
+      platform: releasePlatform,
+      arch: releaseArch,
     },
     desktopArtifact: {
       directory: path.basename(artifactDir),

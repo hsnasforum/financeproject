@@ -188,16 +188,31 @@ describe("planning create run service modules", () => {
     expect(preflight.meta.preflight.blocks.length).toBeGreaterThan(0);
   });
 
-  it("assembles persistence record input without calling the repository", async () => {
-    const profile = sampleProfile();
-    const command = parseCommand();
+  it.each([
+    { budget: 100_000, minima: [0, 0], expected: { a: 50_000, b: 50_000 } },
+    { budget: 200_000, minima: [100_000, 100_000], expected: { a: 100_000, b: 100_000 } },
+    { budget: 100_000, minima: [120_000, 80_000], expected: { a: 60_000, b: 40_000 } },
+  ])("assembles actual goal funding into record and DTO without repository writes: $budget / $minima", async ({ budget, minima, expected }) => {
+    const profile: ProfileV2 = {
+      monthlyIncomeNet: budget,
+      monthlyEssentialExpenses: 0,
+      monthlyDiscretionaryExpenses: 0,
+      liquidAssets: 0,
+      investmentAssets: 0,
+      debts: [],
+      goals: ["b", "a"].map((id) => ({
+        id, name: id, targetAmount: 10_000_000, targetMonth: 12, priority: 3,
+        minimumMonthlyContribution: minima[id === "a" ? 0 : 1],
+      })),
+    };
+    const command = parseCommand({ horizonMonths: 1 });
     const state = createPlanningStagePlanState();
     const pipeline = await runStagePipeline(buildPlanningStagePlan({
       profile,
       horizonMonths: command.horizonMonths,
       policyId: command.policyId,
       baseAssumptions,
-      finalSimulationAssumptions: simulationAssumptions,
+      finalSimulationAssumptions: { inflation: 0, expectedReturn: 0 },
       riskTolerance: "mid",
       snapshotAsOf: "2026-07-01",
       runScenariosEnabled: command.runScenariosEnabled,
@@ -211,8 +226,14 @@ describe("planning create run service modules", () => {
       state,
     }));
     const stageOutputs = resolvePlanningStageOutputs(pipeline, state);
+    expect(pipeline.overallStatus).toBe("SUCCESS");
     expect(stageOutputs.simulatePlan).toBeTruthy();
     if (!stageOutputs.simulatePlan) return;
+    expect(Object.fromEntries(stageOutputs.simulatePlan.goalStatus.map((item) => [item.goalId, item.currentAmount])))
+      .toEqual(expected);
+    expect(stageOutputs.simulatePlan.timeline[0]).toMatchObject({
+      goalContribution: budget, goalFundAssets: budget, liquidAssets: 0, netWorth: budget,
+    });
 
     const assembled = assemblePlanningRunRecordInput({
       command,
@@ -236,17 +257,23 @@ describe("planning create run service modules", () => {
 
     expect(assembled.recordInput.profileId).toBe("profile-1");
     expect(assembled.recordInput.input).toMatchObject({
-      horizonMonths: 12,
+      horizonMonths: 1,
       policyId: "balanced",
       snapshotId: "snapshot-1",
       runScenarios: false,
       getActions: false,
       analyzeDebt: false,
     });
-    expect(assembled.recordInput.outputs).toMatchObject({
-      resultDto: expect.any(Object),
-      simulate: expect.any(Object),
-    });
+    expect(assembled.recordInput.outputs.simulate).toEqual(assembled.outputs.simulate);
+    expect(assembled.recordInput.outputs.resultDto).toEqual(assembled.resultDto);
+    expect(assembled.outputs.simulate.goalsStatus).toEqual(stageOutputs.simulatePlan.goalStatus);
+    expect(assembled.outputs.simulate.keyTimelinePoints).toEqual([{ monthIndex: 0, row: stageOutputs.simulatePlan.timeline[0] }]);
+    expect(Object.fromEntries(assembled.resultDto.goals.map((item) => [item.id, item.currentKrw]))).toEqual(expected);
+    // DTO retains the report's name ordering; engine and stored simulation retain input order.
+    expect(assembled.resultDto.goals.map((item) => item.id)).toEqual(["a", "b"]);
+    expect(assembled.resultDto.summary).toMatchObject({ endNetWorthKrw: budget });
+    expect(assembled.resultDto.timeline.points).toHaveLength(1);
+    expect(assembled.resultDto.timeline.points[0]).toMatchObject({ monthIndex: 0, cashKrw: 0, netWorthKrw: budget });
     expect(assembled.recordInput.reproducibility?.assumptionsSnapshotId).toBe("snapshot-1");
     expect(totalStageDurationMs(pipeline.stages)).toBeGreaterThanOrEqual(0);
   });

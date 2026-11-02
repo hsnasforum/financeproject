@@ -25,7 +25,7 @@ export const ApiOkSchema = z.object({
 export const ApiErrSchema = z.object({
   ok: z.literal(false),
   error: ApiErrorSchema,
-  meta: z.record(z.unknown()).optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const ApiResponseSchema = z.union([ApiOkSchema, ApiErrSchema]);

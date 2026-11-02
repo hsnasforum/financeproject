@@ -12,6 +12,7 @@ const test = base.extend({
         const pathname = window.location.pathname;
         if (
           pathname === "/planning"
+          || pathname === "/dashboard"
           || pathname === "/gov24"
           || pathname === "/planning/runs"
           || pathname === "/planning/reports"

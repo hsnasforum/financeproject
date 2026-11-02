@@ -3,6 +3,7 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
+import { planningStorageErrorResponse, planningProfileStorageErrorMessage } from "../../../../../../lib/planning/api/storageErrorResponse";
 import { assertPlanningWriteGuard } from "../../../../../../lib/planning/api/writeGuard";
 import {
   planningUserMeta,
@@ -104,7 +105,9 @@ export async function GET(request: Request, context: RouteContext) {
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;
-    const message = error instanceof Error ? error.message : "프로필 조회에 실패했습니다.";
+    const storageError = planningStorageErrorResponse(error, undefined, { recoveryHref: null });
+    if (storageError) return storageError;
+    const message = planningProfileStorageErrorMessage(error, "프로필 조회에 실패했습니다.");
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }
@@ -177,6 +180,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;
+    const storageError = planningStorageErrorResponse(error, undefined, { recoveryHref: null });
+    if (storageError) return storageError;
     if (error instanceof PlanningV2ValidationError) {
       const message = error.issues.map((issue) => `${issue.path}: ${issue.message}`).join(", ");
       appendProfileAudit({
@@ -191,7 +196,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       });
     }
 
-    const message = error instanceof Error ? error.message : "프로필 수정에 실패했습니다.";
+    const message = planningProfileStorageErrorMessage(error, "프로필 수정에 실패했습니다.");
     appendProfileAudit({
       event: "PLANNING_PROFILE_UPDATE",
       route: "/api/planning/v2/profiles/[id]",
@@ -267,7 +272,9 @@ export async function DELETE(request: Request, context: RouteContext) {
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;
-    const message = error instanceof Error ? error.message : "프로필 삭제에 실패했습니다.";
+    const storageError = planningStorageErrorResponse(error, undefined, { recoveryHref: null });
+    if (storageError) return storageError;
+    const message = planningProfileStorageErrorMessage(error, "프로필 삭제에 실패했습니다.");
     appendProfileAudit({
       event: "PLANNING_PROFILE_DELETE",
       route: "/api/planning/v2/profiles/[id]",

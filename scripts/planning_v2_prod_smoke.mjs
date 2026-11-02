@@ -1,5 +1,11 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { createPlanningDesktopE2EEnvironment } from "./planning_v2_e2e_isolation.mjs";
+import { preparePlanningSmokeDatabase } from "./planning_smoke_database.mjs";
+import { stopServer as stopDesktopLauncher } from "./planning_v2_desktop_smoke.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -57,51 +63,6 @@ function pickResolvedPort(text) {
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : null;
 }
 
-function waitForExit(child, timeoutMs) {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
-  }
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = (value) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-    const timer = setTimeout(() => done(null), timeoutMs);
-    child.once("exit", (code, signal) => {
-      clearTimeout(timer);
-      done({ code, signal });
-    });
-  });
-}
-
-async function stopServer(child) {
-  if (child.killed) return;
-  if (process.platform !== "win32" && typeof child.pid === "number") {
-    try {
-      process.kill(-child.pid, "SIGTERM");
-    } catch {
-      // ignore
-    }
-  } else {
-    child.kill("SIGTERM");
-  }
-  const graceful = await waitForExit(child, 5_000);
-  if (graceful) return;
-
-  if (process.platform !== "win32" && typeof child.pid === "number") {
-    try {
-      process.kill(-child.pid, "SIGKILL");
-    } catch {
-      // ignore
-    }
-  } else {
-    child.kill("SIGKILL");
-  }
-  await waitForExit(child, 2_000);
-}
-
 async function waitForUrl(url, timeoutMs) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -129,6 +90,28 @@ async function fetchOk(url, label) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const appDir = path.resolve(args.appDir);
+  const smokeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "planning-prod-smoke-"));
+  const smokeDatabase = await preparePlanningSmokeDatabase({
+    appDir,
+    databasePath: path.join(smokeRoot, "database", "finance.db"),
+  });
+  const smokeEnv = createPlanningDesktopE2EEnvironment({
+    ...process.env,
+    NODE_ENV: "production",
+    PLANNING_AUTH_REQUIRED: "true",
+    PLANNING_DEPLOYMENT_MODE: "desktop-local",
+    PLANNING_FORWARDED_HEADERS_TRUSTED: "false",
+    PLANNING_NAMESPACE_ENABLED: "false",
+    PLANNING_SINGLE_USER_MODE: "true",
+    PLANNING_TRUST_AUTH_HEADERS: "false",
+  }, {
+    databaseUrl: smokeDatabase.databaseUrl,
+    planningDataDir: path.join(smokeRoot, "planning"),
+    sessionToken: randomBytes(32).toString("base64url"),
+  });
+  delete smokeEnv.DATABASE_URL;
+  delete smokeEnv.PLANNING_APP_NAME;
+  delete smokeEnv.PLANNING_DATA_DIR;
   let runtimePort = null;
   const baseUrl = () => {
     if (runtimePort === null) {
@@ -139,11 +122,20 @@ async function main() {
   const readinessPath = "/public/dart";
 
   let exited = null;
-  const server = spawn(process.execPath, ["scripts/next_prod_safe.mjs", "--port", String(args.port)], {
+  const server = spawn(process.execPath, [
+    "scripts/planning_v2_desktop_launch.mjs",
+    "--runtime",
+    "prod",
+    "--port",
+    String(args.port),
+    "--no-open",
+  ], {
     cwd: appDir,
-    env: process.env,
+    env: smokeEnv,
     detached: process.platform !== "win32",
-    stdio: ["ignore", "pipe", "pipe"],
+    // The IPC channel lets the launcher stop its runtime tree gracefully; on Windows a plain
+    // kill ends only the launcher and the orphaned server can keep the smoke database locked.
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   server.on("exit", (code, signal) => {
     exited = { code, signal };
@@ -198,10 +190,25 @@ async function main() {
     await fetchOk(`${baseUrl()}/next.svg`, "/next.svg");
     process.stdout.write("[planning:v2:prod:smoke] ok public asset reachable\n");
 
+    const productsResponse = await fetchOk(
+      `${baseUrl()}/api/products/unified?kind=deposit&limit=1`,
+      "/api/products/unified",
+    );
+    const productsPayload = await productsResponse.json();
+    if (productsPayload?.ok !== true || !Array.isArray(productsPayload?.data?.items)) {
+      throw new Error("/api/products/unified did not return the product catalog contract");
+    }
+    process.stdout.write("[planning:v2:prod:smoke] ok product catalog database contract\n");
+
+    const catalogResponse = await fetchOk(`${baseUrl()}/products/catalog`, "/products/catalog");
+    const catalogHtml = await catalogResponse.text();
+    assertContains(catalogHtml, "통합 상품 탐색", "/products/catalog");
+    process.stdout.write("[planning:v2:prod:smoke] ok /products/catalog render\n");
+
     const dataSourcesResponse = await fetchOk(`${baseUrl()}/settings/data-sources`, "/settings/data-sources");
     const dataSourcesHtml = await dataSourcesResponse.text();
     const requiredDataSourcesTexts = [
-      "데이터 소스 연동 상태",
+      "데이터 신뢰 및 연동 상태",
       "운영 최신 기준",
       "data-source-impact-health-dart",
       "data-source-impact-health-planning",
@@ -235,7 +242,8 @@ async function main() {
 
     process.stdout.write("[planning:v2:prod:smoke] PASS\n");
   } finally {
-    await stopServer(server);
+    await stopDesktopLauncher(server, smokeEnv.PLANNING_E2E_DESKTOP_SESSION_TOKEN);
+    await fs.rm(smokeRoot, { recursive: true, force: true });
   }
 }
 

@@ -12,6 +12,8 @@ import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import { upsertAccountMappingOverride } from "../src/lib/planning/v3/store/accountMappingOverridesStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
+import { aggregateMonthlyCashflow } from "../src/lib/planning/v3/service/aggregateMonthlyCashflow";
+import { getBatchTxnOverrides } from "../src/lib/planning/v3/transactions/store";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -104,6 +106,40 @@ describe("generateDraftPatchFromBatch", () => {
     expect(first).toEqual(second);
     expect(first.draftPatch.monthlyIncomeNet).toBe(3_100_000);
     expect(first.evidence.monthsUsed).toEqual(["2026-01", "2026-02", "2026-03"]);
+  });
+
+  it.each([0, 500_000])("keeps observed debt %i out of stable living expenses without changing evidence", async (debt) => {
+    const created = await importStoredCsvFixture({ accountId, csvText: [
+      "date,amount,description", "2026-08-01,5200000,salary", "2026-08-02,-2100000,rent",
+      "2026-08-03,-700000,food", ...(debt > 0 ? [`2026-08-04,-${debt},loan`] : []),
+    ].join("\n") });
+    for (const row of created.transactions) {
+      await upsertOverride({ batchId: created.batch.id, txnId: row.txnId,
+        categoryId: row.amountKrw > 0 ? "income" : row.amountKrw === -2_100_000 ? "housing" : row.amountKrw === -700_000 ? "food" : "debt" });
+    }
+    const result = await generateDraftPatchFromBatch({ batchId: created.batch.id });
+    expect(result.draftPatch).toMatchObject({ monthlyIncomeNet: 5_200_000, monthlyEssentialExpenses: 2_100_000, monthlyDiscretionaryExpenses: 700_000 });
+    const cashflow = aggregateMonthlyCashflow(created.transactions, { overridesByTxnId: await getBatchTxnOverrides(created.batch.id) });
+    expect(cashflow[0]).toMatchObject({ fixedOutflowKrw: 2_100_000 + debt, variableOutflowKrw: 700_000 });
+    expect(result.evidence.medians).toMatchObject({ expenseKrw: 2_800_000 + debt, fixedExpenseKrw: 2_100_000 + debt, variableExpenseKrw: 700_000, debtExpenseKrw: debt });
+    expect(result.evidence.ymStats[0]).toEqual({ ym: "2026-08", incomeKrw: 5_200_000, expenseKrw: 2_800_000 + debt,
+      fixedExpenseKrw: 2_100_000 + debt, variableExpenseKrw: 700_000, debtExpenseKrw: debt, transferKrw: 0 });
+  });
+
+  it("takes the median of monthly non-debt fixed amounts, not the difference of medians", async () => {
+    const created = await importStoredCsvFixture({ accountId, csvText: [
+      "date,amount,description", "2026-06-01,-1000000,rent", "2026-06-02,-9000000,loan",
+      "2026-07-01,-2000000,rent", "2026-08-01,-3000000,rent", "2026-08-02,-1000000,loan",
+    ].join("\n") });
+    for (const row of created.transactions) {
+      await upsertOverride({ batchId: created.batch.id, txnId: row.txnId, categoryId: row.date.endsWith("02") ? "debt" : "housing" });
+    }
+    const result = await generateDraftPatchFromBatch({ batchId: created.batch.id });
+    // fixed=[10m,2m,4m], debt=[9m,0,1m], non-debt=[1m,2m,3m].
+    // median(fixed)-median(debt)=3m, while median(non-debt)=2m.
+    expect(result.draftPatch.monthlyEssentialExpenses).toBe(2_000_000);
+    expect(result.evidence.medians.fixedExpenseKrw).toBe(4_000_000);
+    expect(result.evidence.medians.debtExpenseKrw).toBe(1_000_000);
   });
 
   it("excludes detected transfers from expense/fixed/variable stats", async () => {

@@ -1,9 +1,20 @@
 import { append as appendAuditLog } from "../../audit/auditLogStore";
 import { consumeVaultCsrfOrThrow, ensureVaultCsrfCookie } from "../../planning/security/vaultCsrf";
+import { resolvePlanningUserId } from "../../planning/store/namespace";
 import { appendOpsMetricEvent } from "../metricsLog";
+import { loadOpsPolicy } from "../opsPolicy";
 import { appendOpsAuditEvent } from "../securityAuditLog";
 import { toBackupExportClientError, type BackupClientError } from "./clientErrors";
-import { buildPlanningDataVaultZip, encryptPlanningDataVaultArchive } from "./planningDataVault";
+import {
+  createBackupExportReceipt,
+  finalizeBackupExportReceipt,
+  type BackupExportFinalizeResult,
+} from "./backupExportReceipt";
+import {
+  buildPlanningDataVaultZip,
+  encryptPlanningDataVaultArchive,
+  type PlanningDataVaultScope,
+} from "./planningDataVault";
 
 export type OpsBackupExportMode = "full" | "delta";
 
@@ -14,6 +25,7 @@ export type OpsBackupExportPayload = {
   gzipRequested: boolean;
   rawSizeBytes: number;
   encryptedSizeBytes: number;
+  receipt: string;
 };
 
 function appendBackupExportAudit(result: "SUCCESS" | "ERROR", detail: Record<string, unknown>): void {
@@ -45,49 +57,108 @@ export async function exportOpsBackupArchive(input: {
   mode: OpsBackupExportMode;
   gzipRequested: boolean;
   startedAt: number;
+  scope: PlanningDataVaultScope;
 }): Promise<OpsBackupExportPayload> {
-  const exported = await buildPlanningDataVaultZip({ mode: input.mode });
-  const encryptedBytes = await encryptPlanningDataVaultArchive(exported.bytes, input.passphrase);
-  const stamp = exported.fileName.replace(/\.zip$/i, "");
-  const fileName = `${stamp}.enc.json`;
-
-  appendBackupExportAudit("SUCCESS", {
-    fileName,
+  const policy = loadOpsPolicy();
+  const encryptedEnvelopeReserveBytes = Math.min(16 * 1024, Math.floor(policy.backup.maxUploadBytes / 4));
+  const maxZipBytes = Math.max(
+    1,
+    Math.floor((policy.backup.maxUploadBytes - encryptedEnvelopeReserveBytes) * 3 / 4),
+  );
+  const exported = await buildPlanningDataVaultZip({
     mode: input.mode,
-    gzipRequested: input.gzipRequested,
-    rawSizeBytes: exported.bytes.length,
-    encryptedSizeBytes: encryptedBytes.length,
-    counts: exported.manifest.counts,
+    scope: input.scope,
+    userId: resolvePlanningUserId(),
+    maxEntries: policy.backup.maxEntries,
+    maxBytes: maxZipBytes,
   });
-  await appendOpsAuditEvent({
-    eventType: "OPS_BACKUP_EXPORT_SUCCESS",
-    meta: {
+  const rawSizeBytes = exported.bytes.length;
+  let encryptedBytes: Buffer | undefined;
+  let completed = false;
+  try {
+    encryptedBytes = await encryptPlanningDataVaultArchive(exported.bytes, input.passphrase);
+    if (encryptedBytes.length > policy.backup.maxUploadBytes) {
+      throw new Error("BACKUP_EXPORT_LIMIT_EXCEEDED");
+    }
+    const receipt = await createBackupExportReceipt({
+      checkpoint: exported.checkpoint,
+      scope: input.scope,
+      userId: resolvePlanningUserId(),
+    });
+    const stamp = exported.fileName.replace(/\.zip$/i, "");
+    const fileName = `${stamp}.enc.json`;
+
+    appendBackupExportAudit("SUCCESS", {
       fileName,
       mode: input.mode,
       gzipRequested: input.gzipRequested,
-      rawSizeBytes: exported.bytes.length,
+      rawSizeBytes,
       encryptedSizeBytes: encryptedBytes.length,
-    },
-  }).catch(() => undefined);
-  await appendOpsMetricEvent({
-    type: "BACKUP_EXPORT",
-    meta: {
-      status: "SUCCESS",
-      mode: input.mode,
-      gzip: input.gzipRequested,
-      durationMs: Math.max(0, Date.now() - input.startedAt),
-      sizeBytes: encryptedBytes.length,
-    },
-  }).catch(() => undefined);
+      counts: exported.manifest.counts,
+      checkpointPending: true,
+    });
+    await appendOpsAuditEvent({
+      eventType: "OPS_BACKUP_EXPORT_SUCCESS",
+      meta: {
+        fileName,
+        mode: input.mode,
+        gzipRequested: input.gzipRequested,
+        rawSizeBytes,
+        encryptedSizeBytes: encryptedBytes.length,
+      },
+    }).catch(() => undefined);
+    await appendOpsMetricEvent({
+      type: "BACKUP_EXPORT",
+      meta: {
+        status: "SUCCESS",
+        mode: input.mode,
+        gzip: input.gzipRequested,
+        durationMs: Math.max(0, Date.now() - input.startedAt),
+        sizeBytes: encryptedBytes.length,
+      },
+    }).catch(() => undefined);
 
-  return {
-    encryptedBytes,
-    fileName,
-    mode: input.mode,
-    gzipRequested: input.gzipRequested,
-    rawSizeBytes: exported.bytes.length,
-    encryptedSizeBytes: encryptedBytes.length,
-  };
+    completed = true;
+    return {
+      encryptedBytes,
+      fileName,
+      mode: input.mode,
+      gzipRequested: input.gzipRequested,
+      rawSizeBytes,
+      encryptedSizeBytes: encryptedBytes.length,
+      receipt,
+    };
+  } finally {
+    exported.bytes.fill(0);
+    if (!completed) encryptedBytes?.fill(0);
+  }
+}
+
+function finalizeFailureMessage(result: Exclude<BackupExportFinalizeResult, { ok: true }>): string {
+  if (result.reason === "expired") return "BACKUP_EXPORT_RECEIPT_EXPIRED";
+  if (result.reason === "missing") return "BACKUP_EXPORT_RECEIPT_MISSING";
+  if (result.reason === "context-mismatch") return "BACKUP_EXPORT_RECEIPT_CONTEXT_MISMATCH";
+  return "BACKUP_EXPORT_RECEIPT_INVALID";
+}
+
+export async function finalizeOpsBackupExport(input: {
+  receipt: string;
+  scope: PlanningDataVaultScope;
+}): Promise<Extract<BackupExportFinalizeResult, { ok: true }>> {
+  const result = await finalizeBackupExportReceipt({
+    receipt: input.receipt,
+    scope: input.scope,
+    userId: resolvePlanningUserId(),
+  });
+  if (!result.ok) throw new Error(finalizeFailureMessage(result));
+  await appendOpsAuditEvent({
+    eventType: "OPS_BACKUP_EXPORT_FINALIZE_SUCCESS",
+    meta: {
+      scope: input.scope,
+      status: result.status,
+    },
+  }).catch(() => undefined);
+  return result;
 }
 
 export function toOpsBackupExportClientError(error: unknown): BackupClientError {

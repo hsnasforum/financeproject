@@ -1,6 +1,8 @@
 import { type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
+import { applyDepositProtectionPolicy } from "./depositProtection";
 import { selectBestOption } from "./selectOption";
 import {
+  type DepositProtectionMode,
   type RecommendDebug,
   type RecommendationAssumptions,
   type RecommendDetailProduct,
@@ -447,6 +449,7 @@ export function getRecommendAssumptions(rateMode: UserRecommendProfile["rateMode
 
 type RecommendCandidate = {
   sourceId: RecommendedItem["sourceId"];
+  sourceIds?: RecommendedItem["sourceIds"];
   product: NormalizedProduct;
   badges?: string[];
   extraReasons?: string[];
@@ -481,6 +484,10 @@ export function recommendCandidates(input: {
   kind: RecommendKind;
   candidates: RecommendCandidate[];
   profile: UserRecommendProfile;
+  depositProtection?: {
+    mode: DepositProtectionMode;
+    matchedFinPrdtCdSet: Set<string>;
+  };
 }): { items: RecommendedItem[]; debug: RecommendDebug; weights: RecommendWeights; assumptions: RecommendationAssumptions } {
   const { kind, candidates: rawCandidates, profile } = input;
   const weights = normalizeRecommendWeights(profile.weights).weights;
@@ -499,7 +506,7 @@ export function recommendCandidates(input: {
   const rateMin = rates.length ? Math.min(...rates) : 0;
   const rateMax = rates.length ? Math.max(...rates) : 0;
 
-  const scored = candidates.map(({ sourceId, product, badges, extraReasons, selected }) => {
+  const scored = candidates.map(({ sourceId, sourceIds, product, badges, extraReasons, selected }) => {
     const termMonths = selected.termMonths as number;
     const rateScore = normalizeRate(selected.appliedRate, rateMin, rateMax);
     const termFit = clamp01(1 - Math.abs(termMonths - profile.preferredTerm) / 36);
@@ -520,6 +527,7 @@ export function recommendCandidates(input: {
 
     return {
       sourceId,
+      sourceIds: sourceIds ?? [sourceId],
       kind,
       finPrdtCd: product.fin_prdt_cd,
       providerName,
@@ -533,9 +541,17 @@ export function recommendCandidates(input: {
     } satisfies RecommendedItem;
   });
 
+  // Deposit protection can filter (require) or re-rank (prefer), so it must see every scored candidate before the top-N cut.
+  const ranked = input.depositProtection
+    ? applyDepositProtectionPolicy({
+      items: scored,
+      mode: input.depositProtection.mode,
+      matchedFinPrdtCdSet: input.depositProtection.matchedFinPrdtCdSet,
+    })
+    : scored;
   const topN = Math.max(1, Math.min(50, profile.topN));
   return {
-    items: scored.sort((a, b) => b.finalScore - a.finalScore).slice(0, topN),
+    items: ranked.sort((a, b) => b.finalScore - a.finalScore).slice(0, topN),
     debug: {
       candidateCount: rawCandidates.length,
       rateMin: round6(rateMin),

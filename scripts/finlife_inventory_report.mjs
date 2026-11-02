@@ -1,3 +1,4 @@
+import { finlifeIdentity } from "../src/lib/finlife/identity.mjs";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
@@ -33,13 +34,19 @@ function toIsoString(value) {
 
 function productCode(value) {
   const row = asRecord(value);
-  return String(row.fin_prdt_cd ?? row.finPrdtCd ?? "").trim();
+  if (typeof row.identityKey === "string" && row.identityKey) return row.identityKey;
+  const code = String(row.fin_prdt_cd ?? row.finPrdtCd ?? "").trim();
+  if (row.kind) {
+    try { return finlifeIdentity(row.kind, { ...asRecord(row.raw), fin_prdt_cd: code, fin_co_no: row.fin_co_no ?? row.raw?.fin_co_no ?? row.provider?.code }); }
+    catch { /* Legacy identities remain explicitly unresolved. */ }
+  }
+  return code;
 }
 
-export function extractCandidateCodes(items) {
+export function extractCandidateCodes(items, kind) {
   const codes = new Set();
   for (const item of Array.isArray(items) ? items : []) {
-    const code = productCode(item);
+    const code = productCode({ ...item, kind: kind ?? item.kind });
     if (code) codes.add(code);
   }
   return [...codes].sort((a, b) => a.localeCompare(b));
@@ -79,7 +86,7 @@ export function loadFinlifeInventoryCandidateSource(kind, options = {}) {
       fileName: path.basename(loaded.absolute),
       generatedAt: toIsoString(loaded.payload.meta?.dumpedAt),
       qualityVerified: null,
-      candidateCodes: extractCandidateCodes(loaded.payload.products),
+      candidateCodes: extractCandidateCodes(loaded.payload.products, kind),
     };
   }
 
@@ -91,7 +98,7 @@ export function loadFinlifeInventoryCandidateSource(kind, options = {}) {
     fileName: path.basename(filePath),
     generatedAt: toIsoString(meta.generatedAt),
     qualityVerified: snapshotQuality(meta),
-    candidateCodes: extractCandidateCodes(parsed.items),
+    candidateCodes: extractCandidateCodes(parsed.items, kind),
   };
 }
 
@@ -241,6 +248,7 @@ export function buildFinlifeInventoryReport(input) {
   const storedKindItems = storedRows.filter((row) => row.kind === input.kind).length;
   const ready = storedKindItems > 0 || evidence.status === "found";
   const warnings = [];
+  if (storedRows.some(row => !productCode(row).startsWith("finlife:"))) warnings.push("legacy_identity_unresolved");
   if (!alignment.aligned) warnings.push(alignment.reason);
   if (alignment.aligned && alignment.basis === "replay-basename") {
     warnings.push("replay_alignment_uses_basename_only");
@@ -301,6 +309,9 @@ export async function collectFinlifeInventoryReport(input) {
     input.prisma.product.findMany({
       select: {
         finPrdtCd: true,
+        identityKey: true,
+        raw: true,
+        provider: { select: { code: true } },
         kind: true,
         _count: {
           select: {

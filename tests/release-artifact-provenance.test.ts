@@ -55,8 +55,28 @@ async function seedArtifact(root: string, overrides: Record<string, unknown> = {
   write(artifactDir, ".next/standalone/.next/static/chunks/app.js", "console.log('fixture');\n");
   write(artifactDir, "package.json", `${JSON.stringify({ name: "finance", version: "1.0.4" })}\n`);
   write(artifactDir, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+  write(artifactDir, ".env.local.example", "DATABASE_URL=file:./prisma/dev.db\n");
+  write(artifactDir, "install.sh", "#!/usr/bin/env bash\n");
+  write(artifactDir, "install.cmd", "@echo off\r\n");
+  write(artifactDir, "uninstall.sh", "#!/usr/bin/env bash\n");
+  write(artifactDir, "uninstall.cmd", "@echo off\r\n");
+  write(artifactDir, "prisma.config.mjs", "export default {};\n");
+  write(artifactDir, "prisma/schema.prisma", "datasource db { provider = \"sqlite\" }\n");
   write(artifactDir, "run.sh", "#!/usr/bin/env bash\n");
   write(artifactDir, "run.cmd", "@echo off\r\n");
+  write(artifactDir, "scripts/planning_desktop_install_state.mjs", "export {};\n");
+  write(artifactDir, "scripts/planning_v2_desktop_env.mjs", "export {};\n");
+  write(artifactDir, "scripts/planning_v2_desktop_install.mjs", "export {};\n");
+  write(artifactDir, "scripts/planning_v2_desktop_launch.mjs", "export {};\n");
+  write(artifactDir, "scripts/planning_v2_desktop_provenance.mjs", "export {};\n");
+  write(artifactDir, "scripts/planning_v2_desktop_uninstall.mjs", "export {};\n");
+  write(artifactDir, "scripts/planning_v2_desktop_verify.mjs", "export {};\n");
+  write(artifactDir, "scripts/pnpm_runner.mjs", "export {};\n");
+  write(artifactDir, "scripts/prisma_cli_safe.mjs", "export {};\n");
+  write(artifactDir, "scripts/finlife_identity_migrate.mjs", "export {};\n");
+  write(artifactDir, "src/lib/finlife/sqliteIdentityMigration.mjs", "export {};\n");
+  write(artifactDir, "src/lib/planning/deployment/runtimeDatabase.mjs", "export {};\n");
+  write(artifactDir, "src/lib/planning/deployment/runtimeRoot.mjs", "export {};\n");
   write(artifactDir, "public/fixture.txt", "fixture\n");
   const artifactChecksum = await computeArtifactChecksum(artifactDir);
   const manifest = {
@@ -66,6 +86,9 @@ async function seedArtifact(root: string, overrides: Record<string, unknown> = {
     packageVersion: "1.0.4",
     gitSha: SOURCE_SHA,
     lockfileSha256: await fileSha256(path.join(artifactDir, "pnpm-lock.yaml")),
+    platform: "linux",
+    arch: "x64",
+    nodeAbi: process.versions.modules,
     artifactChecksum,
     ...overrides,
   };
@@ -284,7 +307,8 @@ describe("release artifact provenance", () => {
     const cases: Array<{ overrides: Record<string, unknown>; pattern: RegExp }> = [
       { overrides: { gitSha: "b".repeat(40) }, pattern: /source SHA/ },
       { overrides: { kind: "wrong-kind" }, pattern: /schema is unsupported/ },
-      { overrides: { provenanceVersion: 2 }, pattern: /schema is unsupported/ },
+      { overrides: { provenanceVersion: DESKTOP_PROVENANCE_VERSION + 1 }, pattern: /schema is unsupported/ },
+      { overrides: { platform: "win32" }, pattern: /target does not match/ },
       { overrides: { lockfileSha256: "invalid" }, pattern: /lockfileSha256 is invalid/ },
       {
         overrides: {
@@ -309,23 +333,18 @@ describe("release artifact provenance", () => {
         sourceSha: SOURCE_SHA,
         tag: TAG,
         pnpmVersion: "9.15.0",
+        platform: "linux",
+        arch: "x64",
       })).rejects.toThrowError(testCase.pattern);
     }
   });
 
-  it("rejects missing runtime files, symlinks, and tag-derived filename drift", async () => {
+  it("rejects missing runtime files and tag-derived filename drift", async () => {
     const missingRoot = makeRoot();
-    const symlinkRoot = makeRoot();
     const filenameRoot = makeRoot();
     const missing = await seedArtifact(missingRoot);
-    const symlinked = await seedArtifact(symlinkRoot);
     const filename = await seedArtifact(filenameRoot);
     fs.rmSync(path.join(missing.artifactDir, ".next/standalone/server.js"));
-    fs.symlinkSync(
-      path.join(symlinked.artifactDir, "public/fixture.txt"),
-      path.join(symlinked.artifactDir, "linked.txt"),
-      "file",
-    );
 
     await expect(createReleaseArtifactProvenance({
       artifactDir: missing.artifactDir,
@@ -335,13 +354,6 @@ describe("release artifact provenance", () => {
       pnpmVersion: "9.15.0",
     })).rejects.toThrowError(/required release artifact.*server.js/);
     await expect(createReleaseArtifactProvenance({
-      artifactDir: symlinked.artifactDir,
-      ...releasePaths(symlinkRoot),
-      sourceSha: SOURCE_SHA,
-      tag: TAG,
-      pnpmVersion: "9.15.0",
-    })).rejects.toThrowError(/unsupported symlink/);
-    await expect(createReleaseArtifactProvenance({
       artifactDir: filename.artifactDir,
       ...releasePaths(filenameRoot),
       archivePath: path.join(filenameRoot, "release", "wrong.tar.gz"),
@@ -349,6 +361,53 @@ describe("release artifact provenance", () => {
       tag: TAG,
       pnpmVersion: "9.15.0",
     })).rejects.toThrowError(/filenames do not match the tag/);
+  });
+
+  it("rejects missing or empty installer, updater, uninstaller, and packaged Prisma contracts", async () => {
+    const cases = [
+      { relativePath: "install.cmd", mutation: "missing" },
+      { relativePath: "uninstall.cmd", mutation: "empty" },
+      { relativePath: "scripts/planning_v2_desktop_install.mjs", mutation: "missing" },
+      { relativePath: "scripts/planning_desktop_install_state.mjs", mutation: "empty" },
+      { relativePath: "scripts/planning_v2_desktop_uninstall.mjs", mutation: "missing" },
+      { relativePath: "prisma.config.mjs", mutation: "empty" },
+      { relativePath: "scripts/finlife_identity_migrate.mjs", mutation: "missing" },
+      { relativePath: "src/lib/finlife/sqliteIdentityMigration.mjs", mutation: "empty" },
+    ];
+
+    for (const testCase of cases) {
+      const root = makeRoot();
+      const seeded = await seedArtifact(root);
+      const target = path.join(seeded.artifactDir, testCase.relativePath);
+      if (testCase.mutation === "missing") fs.rmSync(target);
+      else fs.writeFileSync(target, "");
+
+      await expect(createReleaseArtifactProvenance({
+        artifactDir: seeded.artifactDir,
+        ...releasePaths(root),
+        sourceSha: SOURCE_SHA,
+        tag: TAG,
+        pnpmVersion: "9.15.0",
+      })).rejects.toThrowError(/required release artifact/);
+    }
+  });
+
+  it.runIf(process.platform !== "win32")("rejects symlinks without requiring Windows Developer Mode", async () => {
+    const root = makeRoot();
+    const seeded = await seedArtifact(root);
+    fs.symlinkSync(
+      path.join(seeded.artifactDir, "public/fixture.txt"),
+      path.join(seeded.artifactDir, "linked.txt"),
+      "file",
+    );
+
+    await expect(createReleaseArtifactProvenance({
+      artifactDir: seeded.artifactDir,
+      ...releasePaths(root),
+      sourceSha: SOURCE_SHA,
+      tag: TAG,
+      pnpmVersion: "9.15.0",
+    })).rejects.toThrowError(/unsupported symlink/);
   });
 
   it("rejects missing server payload and static assets", async () => {

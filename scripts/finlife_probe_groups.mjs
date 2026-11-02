@@ -8,14 +8,12 @@ import {
   isFinlifeSuccess,
   parsePositiveInt,
 } from "./finlife_cli_common.mjs";
-import { finlifeGroupEnvKey } from "./finlife_sync.mjs";
 
 ensureFetchAvailable();
 const { baseUrl, apiKey } = getFinlifeConfig();
 const PROBE_KIND_ENDPOINTS = {
   deposit: "depositProductsSearch.json",
   saving: "savingProductsSearch.json",
-  pension: "annuitySavingProductsSearch.json",
 };
 
 function endpointFor(kind) {
@@ -119,9 +117,6 @@ async function main() {
   }
   if (debugLines.length > 0) debugLines.forEach((line) => console.log(line));
   console.log(`Recommended FINLIFE_TOPFIN_GRP_LIST=${recommended.join(",")}`);
-  for (const kind of Object.keys(PROBE_KIND_ENDPOINTS).filter((value) => value !== "deposit" && value !== "saving")) {
-    console.log(`Recommended ${finlifeGroupEnvKey(kind)}=${result[kind].valid.join(",")}`);
-  }
 
   if (recommended.length === 0) {
     console.log(`[finlife:probe] Summary: ${summarizeBuckets(statusBuckets, "status") || "status:(none)"}`);

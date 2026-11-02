@@ -407,7 +407,8 @@ describe("unified source loaders", () => {
     const releaseFirstPage = deferred<void>();
     const finlife = createLoader("finlife", {
       count: 1,
-      items: [product({ stableId: "AF-1", sourceId: "finlife", externalKey: "AF-1" })],
+      items: [product({ stableId: "AF-1",
+          productName: "AF-1", sourceId: "finlife", externalKey: "AF-1" })],
       pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
     });
     const originalFinlifeQuery = vi.mocked(finlife.query).getMockImplementation();
@@ -420,7 +421,8 @@ describe("unified source loaders", () => {
     });
     const kdb = createLoader("datago_kdb", {
       count: 1,
-      items: [product({ stableId: "AK-1", sourceId: "datago_kdb", externalKey: "AK-1" })],
+      items: [product({ stableId: "AK-1",
+          productName: "AK-1", sourceId: "datago_kdb", externalKey: "AK-1" })],
       pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "datago_kdb" },
     });
     const firstController = new AbortController();
@@ -480,7 +482,8 @@ describe("unified source loaders", () => {
     let queryInvocation = 0;
     const finlife = createLoader("finlife", {
       count: 1,
-      items: [product({ stableId: "RF-1", sourceId: "finlife", externalKey: "RF-1" })],
+      items: [product({ stableId: "RF-1",
+          productName: "RF-1", sourceId: "finlife", externalKey: "RF-1" })],
       pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
     });
     const retryPage = vi.mocked(finlife.query).getMockImplementation();
@@ -498,7 +501,8 @@ describe("unified source loaders", () => {
     });
     const kdb = createLoader("datago_kdb", {
       count: 1,
-      items: [product({ stableId: "RK-1", sourceId: "datago_kdb", externalKey: "RK-1" })],
+      items: [product({ stableId: "RK-1",
+          productName: "RK-1", sourceId: "datago_kdb", externalKey: "RK-1" })],
       pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "datago_kdb" },
     });
     const firstController = new AbortController();
@@ -695,7 +699,8 @@ describe("unified source loaders", () => {
     const releaseFirstPage = deferred<void>();
     const finlife = createLoader("finlife", {
       count: 1,
-      items: [product({ stableId: "LF-1", sourceId: "finlife", externalKey: "LF-1" })],
+      items: [product({ stableId: "LF-1",
+          productName: "LF-1", sourceId: "finlife", externalKey: "LF-1" })],
       pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "finlife" },
     });
     const firstPage = vi.mocked(finlife.query).getMockImplementation();
@@ -707,7 +712,8 @@ describe("unified source loaders", () => {
     });
     const kdb = createLoader("datago_kdb", {
       count: 1,
-      items: [product({ stableId: "LK-1", sourceId: "datago_kdb", externalKey: "LK-1" })],
+      items: [product({ stableId: "LK-1",
+          productName: "LK-1", sourceId: "datago_kdb", externalKey: "LK-1" })],
       pageInfo: { hasMore: false, nextCursor: null, limit: 1, sourceId: "datago_kdb" },
     });
     const query = baseInput({ limit: 1 });
@@ -799,12 +805,14 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "QUEUED-CURSOR-1",
+          productName: "QUEUED-CURSOR-1",
           sourceId: "finlife",
           externalKey: "QUEUED-CURSOR-1",
           providerName: "경합은행",
         }),
         product({
           stableId: "QUEUED-CURSOR-2",
+          productName: "QUEUED-CURSOR-2",
           sourceId: "finlife",
           externalKey: "QUEUED-CURSOR-2",
           providerName: "경합은행",
@@ -919,12 +927,14 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "CACHED-FIRST-1",
+          productName: "CACHED-FIRST-1",
           sourceId: "finlife",
           externalKey: "CACHED-FIRST-1",
           providerName: "완료캐시은행",
         }),
         product({
           stableId: "CACHED-FIRST-2",
+          productName: "CACHED-FIRST-2",
           sourceId: "finlife",
           externalKey: "CACHED-FIRST-2",
           providerName: "완료캐시은행",
@@ -1015,12 +1025,14 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "CACHED-CURSOR-1",
+          productName: "CACHED-CURSOR-1",
           sourceId: "finlife",
           externalKey: "CACHED-CURSOR-1",
           providerName: "커서캐시은행",
         }),
         product({
           stableId: "CACHED-CURSOR-2",
+          productName: "CACHED-CURSOR-2",
           sourceId: "finlife",
           externalKey: "CACHED-CURSOR-2",
           providerName: "커서캐시은행",
@@ -1093,6 +1105,7 @@ describe("unified source loaders", () => {
       count: 1,
       items: [product({
         stableId: "RESOURCE-FINAL-1",
+          productName: "RESOURCE-FINAL-1",
         sourceId: "finlife",
         externalKey: "RESOURCE-FINAL-1",
       })],
@@ -1102,6 +1115,7 @@ describe("unified source loaders", () => {
       count: 1,
       items: [product({
         stableId: "RESOURCE-FINAL-2",
+          productName: "RESOURCE-FINAL-2",
         sourceId: "datago_kdb",
         externalKey: "RESOURCE-FINAL-2",
       })],
@@ -1739,6 +1753,7 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "REUSE-1",
+          productName: "REUSE-1",
           sourceId: "finlife",
           externalKey: "REUSE-1",
           providerName: "재사용은행",
@@ -1746,6 +1761,7 @@ describe("unified source loaders", () => {
         }),
         product({
           stableId: "REUSE-2",
+          productName: "REUSE-2",
           sourceId: "finlife",
           externalKey: "REUSE-2",
           providerName: "재사용은행",
@@ -1775,6 +1791,7 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "PIN-1",
+          productName: "PIN-1",
           sourceId: "finlife",
           externalKey: "PIN-1",
           providerName: "고정은행",
@@ -1782,6 +1799,7 @@ describe("unified source loaders", () => {
         }),
         product({
           stableId: "PIN-2",
+          productName: "PIN-2",
           sourceId: "finlife",
           externalKey: "PIN-2",
           providerName: "고정은행",
@@ -1824,6 +1842,7 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "CURSOR-1",
+          productName: "CURSOR-1",
           sourceId: "finlife",
           externalKey: "CURSOR-1",
           providerName: "커서은행",
@@ -1831,6 +1850,7 @@ describe("unified source loaders", () => {
         }),
         product({
           stableId: "CURSOR-2",
+          productName: "CURSOR-2",
           sourceId: "finlife",
           externalKey: "CURSOR-2",
           providerName: "커서은행",
@@ -1869,12 +1889,14 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "LIMIT-1",
+          productName: "LIMIT-1",
           sourceId: "finlife",
           externalKey: "LIMIT-1",
           providerName: "한도은행",
         }),
         product({
           stableId: "LIMIT-2",
+          productName: "LIMIT-2",
           sourceId: "finlife",
           externalKey: "LIMIT-2",
           providerName: "한도은행",
@@ -1923,12 +1945,14 @@ describe("unified source loaders", () => {
       items: [
         product({
           stableId: "TTL-1",
+          productName: "TTL-1",
           sourceId: "finlife",
           externalKey: "TTL-1",
           providerName: "만료은행",
         }),
         product({
           stableId: "TTL-2",
+          productName: "TTL-2",
           sourceId: "finlife",
           externalKey: "TTL-2",
           providerName: "만료은행",
@@ -2178,7 +2202,8 @@ describe("unified source loaders", () => {
 
     const result = await getUnifiedProductsWithLoaders(baseInput({ refresh: true }), { finlife, datago_kdb: kdb });
 
-    expect(result.items.map((item) => item.stableId).sort()).toEqual(["F1", "K1"]);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ stableId: "F1", sourceIds: ["finlife", "datago_kdb"] });
     expect(result.sourceIssues).toEqual([expect.objectContaining({
       sourceId: "datago_kdb",
       phase: "refresh",
