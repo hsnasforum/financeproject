@@ -1,4 +1,5 @@
 import { isApiBaseResponse } from "@/lib/http/apiContract";
+import { roundKrw } from "@/lib/planning/calc";
 import { appendProfileIdQuery, normalizeProfileId } from "@/lib/planning/profileScope";
 import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
 import {
@@ -531,7 +532,7 @@ export function estimateDiagnosisDebtPayment(row: DiagnosisDebtDraft): number | 
 }
 
 function formatKrw(value: number): string {
-  return `${new Intl.NumberFormat("ko-KR").format(Math.round(value))}원`;
+  return `${new Intl.NumberFormat("ko-KR").format(roundKrw(value))}원`;
 }
 
 export function buildDiagnosisSummary(draft: DiagnosisDraft): DiagnosisSummaryRow[] {
