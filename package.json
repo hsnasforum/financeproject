@@ -104,6 +104,7 @@
     "products:sync": "node scripts/finlife_sync.mjs && node scripts/datago_sync.mjs",
     "gov24:sync": "tsx scripts/gov24_sync.ts",
     "gov24:sync:if-stale": "tsx scripts/gov24_sync_if_stale.ts",
+    "journey:strict": "node --import tsx scripts/journey_strict.mts",
     "news:refresh": "node scripts/planning_writer_entry.mjs news:refresh -- node --import tsx scripts/news_refresh.mjs",
     "indicators:refresh": "node scripts/planning_writer_entry.mjs indicators:refresh -- node --import tsx scripts/indicators_refresh.mjs",
     "provider:scaffold": "node scripts/provider_scaffold.mjs",
