@@ -39,6 +39,7 @@ import {
   resolveProspectiveDesktopCanonicalPath,
 } from "./planning_desktop_install_state.mjs";
 import { openInDefaultBrowser } from "./planning_desktop_browser.mjs";
+import { captureLauncherReadyTimeout, emitReadyDiag } from "./planning_ready_timeout_diag.mjs";
 
 const E2E_BOOTSTRAP_FILE_ENV = "PLANNING_E2E_DESKTOP_BOOTSTRAP_FILE";
 const E2E_DATABASE_URL_ENV = "PLANNING_E2E_DESKTOP_DATABASE_URL";
@@ -607,6 +608,7 @@ async function main() {
       env,
     });
     server = await serverStartup;
+    emitReadyDiag("LA_SERVER_STARTUP_RESOLVED", { target: server.pid });
     earlyExit = new Promise((resolve) => {
       server.once("exit", (code, signal) => resolve({ code, signal }));
     });
@@ -617,6 +619,7 @@ async function main() {
         throw new Error(`server exited before ready (code=${exited.code ?? "?"}, signal=${exited.signal ?? "none"})`);
       })(),
     ]);
+    emitReadyDiag("LA_READY_REACHED", { target: server.pid });
     const bootstrapUrl = await sessionBootstrap.issueBootstrapUrl();
     await writeLockPayload(lockPath, {
       pid: process.pid,
@@ -637,6 +640,9 @@ async function main() {
     }
   } catch (error) {
     process.stderr.write(`[planning:v2:desktop:launch] failed ${error instanceof Error ? error.message : String(error)}\n`);
+    // #306: acts only for waitForReady's own deadline error; one immediate
+    // bounded snapshot before the unchanged graceful stop. It never throws.
+    captureLauncherReadyTimeout({ error, targetUrl, port: args.port, server });
     if (server) await stopServerGracefully(server, "SIGTERM", 10_000);
     await cleanup();
     process.exit(1);
