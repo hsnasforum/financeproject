@@ -6,6 +6,7 @@ import path from "node:path";
 import { createPlanningDesktopE2EEnvironment } from "./planning_v2_e2e_isolation.mjs";
 import { preparePlanningSmokeDatabase } from "./planning_smoke_database.mjs";
 import { stopServer as stopDesktopLauncher } from "./planning_v2_desktop_smoke.mjs";
+import { createReadyDiagCollector, READY_DIAG_CORR_ENV } from "./planning_ready_timeout_diag.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -112,6 +113,12 @@ async function main() {
   delete smokeEnv.DATABASE_URL;
   delete smokeEnv.PLANNING_APP_NAME;
   delete smokeEnv.PLANNING_DATA_DIR;
+  // #306: active only when CI sets FINANCE_READY_DIAG_DIR. Lifecycle markers and
+  // masked stdio tails stay in bounded memory; files are written only after a
+  // readiness timeout.
+  const readyDiag = createReadyDiagCollector();
+  if (readyDiag) smokeEnv[READY_DIAG_CORR_ENV] = readyDiag.corr;
+  let readyTimeoutTrigger = null;
   let runtimePort = null;
   const baseUrl = () => {
     if (runtimePort === null) {
@@ -139,10 +146,13 @@ async function main() {
   });
   server.on("exit", (code, signal) => {
     exited = { code, signal };
+    readyDiag?.record("SM_LAUNCHER_EXIT", { target: server.pid, code, signal });
   });
+  readyDiag?.record("SM_LAUNCHER_SPAWNED", { target: server.pid });
 
   server.stdout.on("data", (chunk) => {
     const text = String(chunk);
+    readyDiag?.ingestStdout(text);
     const resolvedPort = pickResolvedPort(text);
     if (resolvedPort !== null) {
       runtimePort = resolvedPort;
@@ -150,8 +160,18 @@ async function main() {
     process.stdout.write(`[prod-smoke][server] ${text}`);
   });
   server.stderr.on("data", (chunk) => {
-    process.stderr.write(`[prod-smoke][server] ${String(chunk)}`);
+    // Only complete, valid markers with this run's corr are removed; all other text is forwarded.
+    const text = readyDiag ? readyDiag.filterStderr(String(chunk)) : String(chunk);
+    if (!text) return;
+    process.stderr.write(`[prod-smoke][server] ${text}`);
   });
+  if (readyDiag) {
+    server.stdout.once("end", () => readyDiag.markStdoutEnd());
+    server.stderr.once("end", () => {
+      const rest = readyDiag.flushStderr();
+      if (rest) process.stderr.write(`[prod-smoke][server] ${rest}`);
+    });
+  }
 
   try {
     const startedAt = Date.now();
@@ -161,6 +181,7 @@ async function main() {
       }
       if (runtimePort === null) {
         if (Date.now() - startedAt > args.timeoutMs) {
+          readyTimeoutTrigger = "SMOKE_BIND_PORT_TIMEOUT";
           throw new Error(`server did not report a bind port within ${args.timeoutMs}ms`);
         }
         await sleep(300);
@@ -171,6 +192,7 @@ async function main() {
         break;
       } catch {
         if (Date.now() - startedAt > args.timeoutMs) {
+          readyTimeoutTrigger = "SMOKE_READINESS_TIMEOUT";
           throw new Error(`${readinessPath} did not respond within ${args.timeoutMs}ms`);
         }
       }
@@ -241,6 +263,14 @@ async function main() {
     }
 
     process.stdout.write("[planning:v2:prod:smoke] PASS\n");
+  } catch (error) {
+    // Writes only for a readiness timeout, never throws, and the original error is rethrown unchanged.
+    readyDiag?.writeReadyTimeoutEvidence({
+      trigger: readyTimeoutTrigger,
+      launcherPid: server.pid,
+      port: runtimePort ?? args.port,
+    });
+    throw error;
   } finally {
     await stopDesktopLauncher(server, smokeEnv.PLANNING_E2E_DESKTOP_SESSION_TOKEN);
     await fs.rm(smokeRoot, { recursive: true, force: true });

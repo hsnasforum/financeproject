@@ -20,6 +20,10 @@ jobs:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
       DATABASE_URL: "file:./prisma/ci.db"
+      # #306: only the prod smoke (via release:verify) writes readiness-timeout
+      # evidence here, and only after a readiness timeout. Specific to this
+      # run, attempt and job.
+      FINANCE_READY_DIAG_DIR: /tmp/finance-ready-timeout-${{ github.run_id }}-${{ github.run_attempt }}-verify
 
     steps:
       - name: Checkout
@@ -72,6 +76,29 @@ jobs:
           test -f .dist/planning-v2-desktop/desktop-manifest.json
           install_root="$(mktemp -d)"
           pnpm planning:v2:desktop:install -- --skip-install --skip-shortcuts --from=.dist/planning-v2-desktop --to="$install_root/planning-v2-desktop"
+
+      # Upload only when a step failed and this run/attempt/job recorded a
+      # readiness timeout; success and other failures upload nothing.
+      - name: Check prod smoke ready-timeout evidence
+        id: ready_timeout_diag
+        if: failure()
+        run: |
+          diag_dir="$FINANCE_READY_DIAG_DIR"
+          if [ -f "$diag_dir/READY_TIMEOUT" ] && grep -qF "ready_timeout_v1 run=${GITHUB_RUN_ID} attempt=${GITHUB_RUN_ATTEMPT} job=${GITHUB_JOB} corr=" "$diag_dir/READY_TIMEOUT"; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload prod smoke ready-timeout evidence
+        if: failure() && steps.ready_timeout_diag.outputs.present == 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: prod-smoke-ready-timeout-${{ github.run_attempt }}
+          path: |
+            ${{ env.FINANCE_READY_DIAG_DIR }}/READY_TIMEOUT
+            ${{ env.FINANCE_READY_DIAG_DIR }}/launcher-timeout-snapshot-*.json
+            ${{ env.FINANCE_READY_DIAG_DIR }}/ready-timeout-evidence-*.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   windows_native:
     runs-on: windows-latest

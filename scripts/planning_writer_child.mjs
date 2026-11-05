@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 import {
   registerPlanningWriterLeaseChild,
 } from "../src/lib/planning/deployment/writerLease.mjs";
+import {
+  emitReadyDiag,
+  observeReadyDiagChild,
+  readyDiagErrorEnum,
+} from "./planning_ready_timeout_diag.mjs";
 
 const BOOTSTRAP_READY = "planning-writer-bootstrap-ready";
 const BOOTSTRAP_CONTINUE = "planning-writer-bootstrap-continue";
@@ -162,30 +167,40 @@ async function stopRuntimeAndConfirmExit(runtime, options = {}) {
   return Boolean(await waitForChildExit(runtime, forceTimeoutMs));
 }
 
+// Returns a fixed outcome enum for diagnostics only; callers' behavior is unchanged.
 function killChildGroup(child, signal = "SIGTERM") {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (!child || child.exitCode !== null || child.signalCode !== null) return "SKIPPED_EXITED";
+  const mode = process.platform !== "win32" && typeof child.pid === "number" ? "GROUP_KILL" : "CHILD_KILL";
   try {
-    if (process.platform !== "win32" && typeof child.pid === "number") {
+    if (mode === "GROUP_KILL") {
       process.kill(-child.pid, signal);
     } else {
       child.kill(signal);
     }
-  } catch {
+    return `${mode}_SENT`;
+  } catch (error) {
     // The child may have exited between the state check and signal.
+    return `${mode}_${error?.code === "ESRCH" ? "ESRCH" : "ERROR"}`;
   }
 }
 
-export function requestRegisteredPlanningWriterChildShutdown(child, signal = "SIGTERM") {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+// Same steps as the exported function below, plus a diagnostic outcome enum.
+function requestRegisteredShutdownWithOutcome(child, signal) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return "SKIPPED_EXITED";
   if (child.connected && typeof child.send === "function") {
     try {
       child.send({ type: BOOTSTRAP_SHUTDOWN, signal });
-      return;
+      return "IPC_SENT";
     } catch {
       // Fall through to the process signal when IPC is already closing.
     }
   }
-  killChildGroup(child, signal);
+  return killChildGroup(child, signal);
+}
+
+export function requestRegisteredPlanningWriterChildShutdown(child, signal = "SIGTERM") {
+  // The exported contract still returns undefined.
+  requestRegisteredShutdownWithOutcome(child, signal);
 }
 
 export async function spawnRegisteredPlanningWriterChild(input) {
@@ -206,6 +221,7 @@ export async function spawnRegisteredPlanningWriterChild(input) {
     PLANNING_WRITER_DATA_ROOT: dataRoot,
     PLANNING_WRITER_LEASE_CAPABILITY: capability,
   };
+  emitReadyDiag("WC_SPAWN_CALL");
   const bootstrap = spawn(process.execPath, [fileURLToPath(import.meta.url), "--bootstrap"], {
     cwd,
     env,
@@ -214,19 +230,27 @@ export async function spawnRegisteredPlanningWriterChild(input) {
       : process.platform !== "win32",
     stdio: ["inherit", "inherit", "inherit", "ipc"],
   });
+  observeReadyDiagChild(bootstrap, "WC_BOOTSTRAP");
   let bootstrapRegistered = false;
+  let diagPhase = "READY_WAIT";
 
   try {
     const ready = await waitForChildMessage(bootstrap, new Set([BOOTSTRAP_READY]), timeoutMs);
+    emitReadyDiag("WC_READY_RECEIVED", { target: bootstrap.pid });
+    diagPhase = "PID_CHECK";
     if (ready.pid !== bootstrap.pid) {
       throw new Error("registered writer bootstrap PID did not match the spawned child");
     }
+    diagPhase = "REGISTER";
+    emitReadyDiag("WC_REGISTER_BEGIN", { target: bootstrap.pid });
     await registerPlanningWriterLeaseChild({
       dataRoot,
       capability,
       childPid: bootstrap.pid,
     });
+    emitReadyDiag("WC_REGISTER_END", { target: bootstrap.pid });
     bootstrapRegistered = true;
+    diagPhase = "STARTED_WAIT";
     const startedPromise = waitForChildMessage(
       bootstrap,
       new Set([RUNTIME_STARTED, RUNTIME_FAILED]),
@@ -248,27 +272,43 @@ export async function spawnRegisteredPlanningWriterChild(input) {
         && input?.testWaitForRuntimeExitBeforeRegistrationFailure === true
         && env.NODE_ENV === "test",
     });
+    emitReadyDiag("WC_CONTINUE_SENT", { target: bootstrap.pid });
     const started = await startedPromise;
     if (started.type === RUNTIME_FAILED) {
+      diagPhase = "RUNTIME_FAILED";
       throw new Error(asString(started.message) || "registered writer runtime failed to start");
     }
+    emitReadyDiag("WC_STARTED_RECEIVED", { target: started.pid });
     Object.defineProperty(bootstrap, "runtimePid", {
       configurable: false,
       enumerable: false,
       value: started.pid,
       writable: false,
     });
+    emitReadyDiag("WC_RETURN", { target: bootstrap.pid });
     return bootstrap;
   } catch (error) {
+    emitReadyDiag("WC_CATCH_ENTER", {
+      target: bootstrap.pid,
+      result: `${diagPhase}_${bootstrapRegistered ? "REGISTERED" : "UNREGISTERED"}`,
+    });
+    let cleanupSignal;
     if (bootstrapRegistered) {
-      requestRegisteredPlanningWriterChildShutdown(bootstrap, "SIGTERM");
+      cleanupSignal = requestRegisteredShutdownWithOutcome(bootstrap, "SIGTERM");
     } else {
-      killChildGroup(bootstrap, "SIGTERM");
+      cleanupSignal = killChildGroup(bootstrap, "SIGTERM");
     }
+    emitReadyDiag("WC_CLEANUP_SIGNAL", { target: bootstrap.pid, result: cleanupSignal });
     // Never return control to a lease owner while its registered bootstrap may
     // still own an unregistered runtime. This intentionally waits without a
     // timeout so callers cannot release the writer lease prematurely.
-    await waitForChildExit(bootstrap);
+    emitReadyDiag("WC_CLEANUP_WAIT_BEGIN", { target: bootstrap.pid });
+    const cleanupExit = await waitForChildExit(bootstrap);
+    emitReadyDiag("WC_CLEANUP_WAIT_END", {
+      target: bootstrap.pid,
+      code: cleanupExit?.code,
+      signal: cleanupExit?.signal,
+    });
     throw error;
   }
 }
@@ -312,6 +352,7 @@ async function runBootstrap() {
     if (shutdownRequested) return;
     shutdownRequested = true;
     shutdownSignal = signal;
+    emitReadyDiag("BS_SHUTDOWN_REQUEST", { target: runtime?.pid, signal });
     if (!runtime || runtime.exitCode !== null || runtime.signalCode !== null) {
       if (!continued) process.exit(128);
       return;
@@ -327,6 +368,7 @@ async function runBootstrap() {
   process.on("SIGINT", () => requestRuntimeShutdown("SIGINT"));
   process.on("SIGTERM", () => requestRuntimeShutdown("SIGTERM"));
   process.once("disconnect", () => {
+    emitReadyDiag("BS_IPC_DISCONNECT", { result: continued ? "CONTINUED" : "NOT_CONTINUED" });
     if (!continued) {
       process.exit(78);
       return;
@@ -334,6 +376,7 @@ async function runBootstrap() {
     requestRuntimeShutdown("SIGTERM");
   });
   process.send({ type: BOOTSTRAP_READY, pid: process.pid });
+  emitReadyDiag("BS_READY_SENT");
 
   const launch = await new Promise((resolve, reject) => {
     process.once("message", (message) => {
@@ -345,6 +388,7 @@ async function runBootstrap() {
     });
   });
   continued = true;
+  emitReadyDiag("BS_CONTINUE_RECEIVED");
 
   const command = asString(launch.command);
   const args = Array.isArray(launch.args) ? launch.args.map(String) : [];
@@ -357,6 +401,7 @@ async function runBootstrap() {
     detached: false,
     stdio: "inherit",
   });
+  observeReadyDiagChild(runtime, "BS_RUNTIME");
   if (shutdownRequested) void stopRuntime();
   runtime.once("error", () => undefined);
 
@@ -371,13 +416,17 @@ async function runBootstrap() {
       }
       throw new Error("test-injected planning writer runtime registration failure");
     }
+    emitReadyDiag("BS_REGISTER_BEGIN", { target: runtime.pid });
     await registerPlanningWriterLeaseChild({
       dataRoot: process.env.PLANNING_WRITER_DATA_ROOT,
       capability: process.env.PLANNING_WRITER_LEASE_CAPABILITY,
       childPid: runtime.pid,
     });
+    emitReadyDiag("BS_REGISTER_END", { target: runtime.pid });
     process.send?.({ type: RUNTIME_STARTED, pid: runtime.pid });
+    emitReadyDiag("BS_STARTED_SENT", { target: runtime.pid });
   } catch (error) {
+    emitReadyDiag("BS_RUNTIME_SETUP_FAILED", { target: runtime.pid, result: readyDiagErrorEnum(error) });
     await stopRuntime({
       gracefulTimeoutMs: RUNTIME_REGISTRATION_FAILURE_SHUTDOWN_TIMEOUT_MS,
     });
