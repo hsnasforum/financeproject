@@ -2,15 +2,15 @@
 
 ## 전체 요약
 
-- Generated at: 2026-11-02T01:31:54.951Z
-- Watchlist path: /home/xpdlqj/code/finance/config/dart-watchlist.json
-- Rules path: /home/xpdlqj/code/finance/config/dart-disclosure-rules.json
-- Date range: 20261003 ~ 20261102
+- Generated at: 2026-11-05T05:55:17.879Z
+- Watchlist path: /home/xpdlqj/code/finance-refresh-wt/config/dart-watchlist.json
+- Rules path: /home/xpdlqj/code/finance-refresh-wt/config/dart-disclosure-rules.json
+- Date range: 20261006 ~ 20261105
 - finalOnly: N
 - type: (all)
 - companies: 1
-- total items: 29
-- total new: 29
+- total items: 32
+- total new: 0
 - errors: 0
 - levels(high/mid/low): 0/5/0
 
@@ -25,8 +25,8 @@
 ## 기업별 5줄 요약
 
 ### 삼성전자 (00126380)
-- checkedAt: 2026-11-02T01:31:54.951Z
-- total/new: 29/29
+- checkedAt: 2026-11-05T05:55:17.879Z
+- total/new: 32/0
 - [MID 78] 기재정정 연결재무제표기준영업 잠정 실적 공정공시 (2건)
 - [MID 70] 연결재무제표기준영업 잠정 실적 공정공시 (1건)
 - [MID 60] 임원 주요주주특정증권등소유상황보고서 (3건)
@@ -36,9 +36,9 @@
 ## 전체 목록
 
 ### 삼성전자 (00126380)
-- checkedAt: 2026-11-02T01:31:54.951Z
-- total: 29
-- new: 29
+- checkedAt: 2026-11-05T05:55:17.879Z
+- total: 32
+- new: 0
 - [MID 78] 기재정정 연결재무제표기준영업 잠정 실적 공정공시 (2건, 실적/잠정실적)
 <details>
 <summary>상세 항목 2건</summary>
@@ -53,16 +53,16 @@
 - [MID 60] 임원 주요주주특정증권등소유상황보고서 (3건, 지배구조/임원)
 <details>
 <summary>상세 항목 3건</summary>
+- 20261103 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261103000167
 - 20261030 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261030000719
 - 20261026 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261026000017
-- 20261023 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261023000478
 </details>
 - [MID 60] 임원 주요주주특정증권등소유상황보고서 (3건, 지배구조/임원)
 <details>
 <summary>상세 항목 3건</summary>
+- 20261023 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261023000478
 - 20261019 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261019000318
 - 20261016 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261016000492
-- 20261012 | 임원ㆍ주요주주특정증권등소유상황보고서 | 20261012000021
 </details>
 - [MID 60] 임원 주요주주특정증권등거래계획보고서 (1건, 지배구조/임원)
 <details>
