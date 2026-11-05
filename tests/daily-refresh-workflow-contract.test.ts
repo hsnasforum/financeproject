@@ -14,7 +14,15 @@ const { load: loadYaml } = createRequire(import.meta.url)("js-yaml") as {
 type DailyWorkflow = {
   jobs: {
     refresh: {
-      steps: Array<{ name: string; uses?: string; with?: { version?: string | number } }>;
+      steps: Array<{
+        name: string;
+        id?: string;
+        uses?: string;
+        with?: { version?: string | number };
+        env?: Record<string, unknown>;
+        run?: string;
+        shell?: string;
+      }>;
     };
   };
 };
@@ -146,7 +154,17 @@ jobs:
     expect(workflow).toContain("id: refresh");
     expect(workflow).toContain("id: preflight");
     expect(workflow).toContain("node scripts/daily_refresh_ci.mjs --check-env");
-    expect(workflow).toContain("run: pnpm daily:refresh:strict");
+    // The refresh step prepares its own SQLite schema with the canonical db push on the
+    // same DATABASE_URL, then runs strict refresh; the default bash -e shell stops on failure.
+    const refreshStep = (loadYaml(workflow) as DailyWorkflow).jobs.refresh.steps.find(
+      (step) => step.id === "refresh",
+    );
+    expect(refreshStep?.name).toBe("Run daily refresh");
+    expect(refreshStep?.env?.DATABASE_URL).toBe("file:./prisma/ci.db");
+    expect(refreshStep?.shell).toBeUndefined();
+    expect(
+      refreshStep?.run?.split("\n").map((line) => line.trim()).filter(Boolean),
+    ).toEqual(["pnpm prisma:db:push", "pnpm daily:refresh:strict"]);
     expect(workflow).toContain("id: evidence");
     expect(workflow).toContain("node scripts/daily_refresh_ci.mjs");
     expect(workflow).toContain("steps.preflight.outcome == 'success'");
