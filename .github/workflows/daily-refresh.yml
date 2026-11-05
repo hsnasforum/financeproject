@@ -58,6 +58,7 @@ jobs:
       - name: Run daily refresh
         id: refresh
         env:
+          DATABASE_URL: "file:./prisma/ci.db"
           FINLIFE_API_KEY: ${{ secrets.FINLIFE_API_KEY }}
           FINLIFE_TOPFIN_GRP_LIST: ${{ secrets.FINLIFE_TOPFIN_GRP_LIST }}
           FSS_PENSION_API_KEY: ${{ secrets.FSS_PENSION_API_KEY }}
@@ -73,7 +74,9 @@ jobs:
           MOIS_BENEFITS_API_URL: ${{ secrets.MOIS_BENEFITS_API_URL }}
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
           OPENDART_BASE_URL: "https://opendart.fss.or.kr"
-        run: pnpm daily:refresh:strict
+        run: |
+          pnpm prisma:db:push
+          pnpm daily:refresh:strict
 
       - name: Validate refresh result and build evidence
         id: evidence
