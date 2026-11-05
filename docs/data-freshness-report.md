@@ -1,6 +1,6 @@
 # Data Freshness Report
 
-- Generated at: 2026-11-02T01:33:46.102Z
+- Generated at: 2026-11-05T05:55:19.717Z
 - Mode: warn
 
 ## Source Thresholds
@@ -17,15 +17,15 @@
 
 | File | Source | generatedAt | ageDays | maxAgeDays | Status |
 | --- | --- | --- | ---: | ---: | --- |
-| benefits_snapshot.json | benefits | 2026-11-02T01:31:49.337Z | 0.00 | 7 | fresh |
-| exchange_snapshot.json | exchange | 2026-11-02T01:31:19.565Z | 0.00 | 1 | fresh |
-| finlife_credit-loan_snapshot.json | finlife | 2026-11-02T01:31:22.085Z | 0.00 | 3 | fresh |
-| finlife_deposit_snapshot.json | finlife | 2026-11-02T01:31:20.482Z | 0.00 | 3 | fresh |
-| finlife_mortgage-loan_snapshot.json | finlife | 2026-11-02T01:31:21.547Z | 0.00 | 3 | fresh |
-| finlife_rent-house-loan_snapshot.json | finlife | 2026-11-02T01:31:21.799Z | 0.00 | 3 | fresh |
-| finlife_saving_snapshot.json | finlife | 2026-11-02T01:31:21.199Z | 0.00 | 3 | fresh |
-| fss_pension_guaranteed_snapshot.json | fss_pension | 2026-10-14T18:55:21.914Z | 18.28 | 7 | stale_exception |
-| fss_pension_products_snapshot.json | fss_pension | 2026-10-14T18:55:21.914Z | 18.28 | 7 | stale_exception |
+| benefits_snapshot.json | benefits | 2026-11-05T05:53:30.152Z | 0.00 | 7 | fresh |
+| exchange_snapshot.json | exchange | 2026-11-05T05:53:04.868Z | 0.00 | 1 | fresh |
+| finlife_credit-loan_snapshot.json | finlife | 2026-11-05T05:54:59.623Z | 0.00 | 3 | fresh |
+| finlife_deposit_snapshot.json | finlife | 2026-11-05T05:54:58.119Z | 0.00 | 3 | fresh |
+| finlife_mortgage-loan_snapshot.json | finlife | 2026-11-05T05:54:59.088Z | 0.00 | 3 | fresh |
+| finlife_rent-house-loan_snapshot.json | finlife | 2026-11-05T05:54:59.380Z | 0.00 | 3 | fresh |
+| finlife_saving_snapshot.json | finlife | 2026-11-05T05:54:58.688Z | 0.00 | 3 | fresh |
+| fss_pension_guaranteed_snapshot.json | fss_pension | 2026-10-14T18:55:21.914Z | 21.46 | 7 | stale_exception |
+| fss_pension_products_snapshot.json | fss_pension | 2026-10-14T18:55:21.914Z | 21.46 | 7 | stale_exception |
 
 ## Time-limited Exceptions
 
